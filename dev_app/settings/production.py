@@ -1,0 +1,35 @@
+import os
+from .base import *
+
+DEBUG = True
+
+# # AWS S3 Settings
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME') #Media_root is this + location in storage backends
+# AWS_STORAGE_BUCKET_NAME = 'devappbucket2' #Media_root is this + location in storage backends
+# AWS_STORAGE_BUCKET_NAME = '41accoladedevbucket' #Media_root is this + location in storage backends
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+# AWS_S3_CUSTOM_DOMAIN = f'devappbucket2.s3.amazonaws.com'
+# AWS_S3_CUSTOM_DOMAIN = f'41accoladedevbucket.s3.amazonaws.com'
+STATIC_URL = os.getenv('STATIC_URL')
+# STATIC_URL = f'https://devappbucket2.s3.amazonaws.com/static/'
+# STATIC_URL = f'https://41accoladedevbucket.s3.amazonaws.com/static/'
+
+
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_DEFAULT_ACL = None
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_STATIC_LOCATION = 'static'
+PROJECT_NAME = os.getenv('PROJECT_NAME')
+STATIC_ROOT = os.getenv('STATIC_ROOT')
+STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+DEFAULT_FILE_STORAGE = 'dev_app.storagebackends.MyS3Boto3Storage'
+MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/'
+MEDIA_ROOT = os.getenv('MEDIA_ROOT')
+AWS_S3_REGION_NAME = 'us-east-1'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+# AWS_PUBLIC_MEDIA_LOCATION = ''
+
+
+
+

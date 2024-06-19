@@ -1,0 +1,197 @@
+/* static/css/styles.css */
+
+table {
+    font-family: Arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9em; /* Adjust font size to fit more rows */
+  }
+  
+  th, td {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 2.5px; /* Reduce padding to decrease space */
+  }
+  
+  tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+  
+  th {
+    background-image: linear-gradient(45deg, #A090D0, #B3E1DD);
+    color: white;
+  }
+  
+  /* Ensure the table is scrollable on smaller screens */
+  div.overflow-x:auto {
+    overflow-x: auto;
+  }
+  
+  /* Add this CSS to style custom-navbar links */
+  .custom-navbar a,
+  .custom-navbar .nav-link {
+    color: white !important;
+  }
+  
+  /* Adjust vertical spacing of custom-navbar items */
+  .custom-navbar ul,
+  .custom-navbar li {
+    margin: 0;
+    padding: 0;
+  }
+  
+  .custom-navbar a,
+  .custom-navbar .nav-link {
+    padding: 5px 10px; /* Minimal standard padding */
+  }
+  
+  .custom-navbar a:hover {
+    color: #f1f1f1;
+  }
+  
+  #pdfModal {
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+  }
+  
+  #pdfModal button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+  
+  /* Add some basic styling to the custom-navbar */
+  .custom-navbar {
+    height: 100%;
+    width: 160px; /* Width of the custom-navbar */
+    position: fixed;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    background-color: #111; /* custom-navbar background color */
+    overflow-x: hidden;
+    padding-top: 20px;
+  }
+  
+  .custom-navbar a {
+    padding: 10px 15px;
+    text-decoration: none;
+    font-size: 18px;
+    color: white;
+    display: block;
+  }
+  
+  /* Content styling */
+  .main-content {
+    margin-left: 160px; /* Same as custom-navbar width */
+    padding: 20px;
+  }
+  
+  #leftSide {
+    width: 40%;
+    float: left;
+  }
+  
+  #rightSide {
+    width: 60%;
+    float: right;
+  }
+  
+  #combinedModal {
+    position: fixed;
+    top: 10%;
+    left: 170px;
+    width: calc(100% - 170px);
+    height: 80%;
+    background-color: white;
+    padding: 20px;
+    border: 1px solid #ddd;
+    display: flex;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .pdf-viewer {
+    border-right: 1px solid #ddd;
+    padding-right: 10px;
+  }
+  
+  .pdf-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  
+  .cost-details {
+    padding-left: 10px;
+    overflow-x: auto;
+  }
+  
+  .total-cost-input {
+    margin-bottom: 10px;
+  }
+  
+  
+  /* Remove the increment/decrement arrows from the total cost field */
+  #totalCost {
+    -webkit-appearance: textfield;  /* for Chrome */
+    -moz-appearance: textfield;  /* for Firefox */
+    appearance: textfield;
+  }
+  
+  
+  /* Set the font size and weight for the 'Still to Allocate' row */
+  #stillToAllocateRow {
+    font-size: 1.2em;  /* Adjust as needed */
+    font-weight: bold;
+  }
+  
+  .delete-btn {
+    padding: 5px !important;  /* Adjust as needed to change the size of the button */
+    font-size: 0.8rem;  /* Adjust as needed to change the size of the text */
+    background-image: linear-gradient(45deg, #A090D0, #B3E1DD);
+    border: none !important;  /* Remove default button border */
+  }
+  
+  .delete-column {
+    width: 50px;  /* Adjust as needed to change the width of the column */
+    text-align: center;  /* Center the content of the cells */
+  }
+  
+  #quoteModal {
+    z-index: 1050000;  /* Increase as needed to bring the modal to the front */
+  }
+  
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+  }
+  
+  input[type="number"] {
+      -moz-appearance: textfield;
+  }
+  
+  
+  .delete-cell,
+  .delete-cell-header {
+      width: 1px;
+      white-space: nowrap;
+  }
+  
+  .delete-column {
+    width: 5%;
+  }
+  
+  .gradient-button {
+    background-image: linear-gradient(45deg, #B3E1DD, #A090D0);
+    border: 1px solid black;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 12px;
+  }

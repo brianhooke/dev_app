@@ -1,0 +1,2 @@
+your_large_file filter=lfs diff=lfs merge=lfs -text
+3d filter=lfs diff=lfs merge=lfs -text

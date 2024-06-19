@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        {% load static %} <!-- Correctly placed load static tag -->
+        <title>{% block title %}{% endblock %}</title>
+        <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+        <link rel="shortcut icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+        <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+        <!-- <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script> -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    </head>
+<body>
+
+    <div class="custom-navbar" style="background-color: white; border: 3px solid; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; padding: 10px;">
+        <ul style="list-style-type: none;">
+            <li>
+                <a href="#" id="showSPVDetailsLink" style="color: black !important; {% if current_page == 'spvDetails' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">SPV Details</a>
+            </li>
+            {% if is_homepage %}
+                <li>
+                    <a href="#" id="showContactsLink" style="color: black !important; {% if current_page == 'contacts' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Suppliers</a>
+                </li>
+            {% endif %}
+                <div style="height: 3px; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);"></div>
+            <li>
+                <a href="{% url 'main' %}" id="no_id_yet" style="color: black !important; {% if current_page == 'quotes' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Cons/Auth $</a>
+            </li>
+            <li>
+                <a href="{% url 'drawings' %}" id="drawingsLink" style="color: black !important; {% if current_page == 'drawings' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Drawings</a>
+            </li>
+            <li>
+                <a href="{% url 'model_viewer' %}" id="model_viewerLink" style="color: black !important; {% if current_page == 'model_viewer' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Model</a>
+            </li>
+        </ul>
+    </div>
+
+<div class="main-content">
+    {% block content %}
+    {% endblock %}
+</div>
+
+<div class="modal fade" id="spvDetailsModal" tabindex="-1" role="dialog" aria-labelledby="spvDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content" style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+        <div class="modal-header">
+          <h5 class="modal-title" id="spvDetailsModalLabel"><strong>SPV Details</strong></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body" style="background: transparent;">
+          <strong>Address: </strong>3 Decora Drive, Jilliby, NSW, 2261<br>
+          <strong>Lot Size: </strong>11,690sqm<br>
+          <strong>Legal Owner: </strong>3 Decora Drive Pty Ltd atf 3 Decora Drive Trust<br>
+          <strong>Folio Identifier: </strong>117/1294399<br>
+          <strong>Bill to: </strong>The Trustee for 3 Decora Drive Trust<br>
+          <strong>Email: </strong>invoices@mason.build<br>
+          <strong>Owner Address: </strong>Suite 211, 3 Eden Street, North Sydney, NSW, 2060<br>
+          <strong>Director 1: </strong>Brian Hooke<br>
+          <strong>Director 2: </strong>Tim Baker<br>
+          <strong>ABN: </strong>18 571 375 710<br>
+          <strong>ACN: </strong>not yet registered<br>
+        </div>
+        <div class="modal-footer" style="background: transparent;">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+  <script>
+    $(document).ready(function(){
+        $("#showSPVDetailsLink").click(function(){
+            $("#spvDetailsModal").modal('show');
+        });
+    });
+  </script>
+
+</body>
+</html>
