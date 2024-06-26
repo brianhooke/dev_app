@@ -121,6 +121,77 @@ class Po_order_detail(models.Model):
     # def __str__(self):
     #     return f"PO Order Detail - PK: {self.po_order_detail_pk}, PO Order PK: {self.po_order_pk.pk}, Date: {self.date}, Costing: {self.costing}, Quote: {self.quote}, Amount: {self.amount}"
 
+class Build_categories(models.Model):
+    category = models.CharField(max_length=100)
+    order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
+    def __str__(self):
+        return self.category
 
+class Build_costing(models.Model):
+    id = models.AutoField(primary_key=True)
+    category = models.ForeignKey(Build_categories, on_delete=models.CASCADE)
+    item = models.CharField(max_length=100)
+    contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
+    uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    complete_on_site = models.DecimalField(max_digits=10, decimal_places=2)
+    hc_next_claim= models.DecimalField(max_digits=10, decimal_places=2)
+    hc_received= models.DecimalField(max_digits=10, decimal_places=2)
+    sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
+    sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.CharField(max_length=500)
+    def __str__(self):
+        return f"Category: {self.category}, Item: {self.item}, Budget: {self.contract_budget}, Uncommitted: {self.uncommitted}, Complete On Site: {self.complete_on_site}, HC Next Claim: {self.hc_next_claim}, HC Received: {self.hc_received}, SC Invoiced: {self.sc_invoiced}, SC Paid: {self.sc_paid}, Notes: {self.notes}"
 
+class Committed_quotes(models.Model):
+    quote = models.AutoField(primary_key=True)
+    supplier_quote_number = models.CharField(max_length=255)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    pdf = models.FileField(upload_to='pdfs/')
+    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
+    def __str__(self):
+        return f"Quote: {self.quote}, Total Cost: {self.total_cost}, Contact PK: {self.contact_pk}, PDF: {self.pdf}"
+       
+class Committed_allocations(models.Model): #For Build Items
+    quote = models.ForeignKey(Committed_quotes, on_delete=models.CASCADE)
+    item = models.ForeignKey(Build_costing, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.CharField(max_length=100, null=True)
+    def __str__(self):
+        return f"Quote: {self.quote}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
+    
+class Hc_claims(models.Model):
+    hc_claim = models.AutoField(primary_key=True)
+    def __str__(self):
+        return f"HC Claim: {self.hc_claim}"
 
+class Hc_claim_lines(models.Model):
+    hc_claim = models.ForeignKey(Hc_claims, on_delete=models.CASCADE)
+    item_id = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    def clean(self):
+        # Check if the item exists in Costing
+        if not Costing.objects.filter(id=self.item_id).exists():
+            raise ValidationError({'item_id': "This item does not exist in Costing"})
+    def save(self, *args, **kwargs):
+        self.clean()
+        super(Hc_claim_lines, self).save(*args, **kwargs)
+    def __str__(self):
+        return f"HC CLaim: {self.hc_claim}, Item ID: {self.item_id}, Amount: {self.amount}"
+
+class Claims(models.Model):
+    claim = models.AutoField(primary_key=True)
+    supplier = models.ForeignKey(Contacts, on_delete=models.CASCADE)
+    total = models.DecimalField(max_digits=10, decimal_places=2)
+    pdf = models.FileField(upload_to='pdfs', null=True, blank=True)
+    sent_to_xero = models.BooleanField(default=False)
+    def get_supplier_name(self):
+        return self.supplier.contact_name
+    def __str__(self):
+        return f"Claim: {self.claim}, Supplier: {self.supplier}, Total: {self.total}, PDF: {self.pdf}, Sent to Xero: {self.sent_to_xero}"
+    
+class Claim_allocations(models.Model):
+    claim = models.ForeignKey(Claims, on_delete=models.CASCADE)
+    item = models.ForeignKey(Build_costing, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    def __str__(self):
+        return f"Claim: {self.claim}, Item: {self.item}, Amount: {self.amount}"

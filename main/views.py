@@ -1,6 +1,8 @@
+import csv
 from django.template import loader
+from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, Build_costing, Build_categories, Committed_allocations, Hc_claims, Hc_claim_lines, Committed_quotes, Claims, Claim_allocations
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -30,7 +32,7 @@ from io import BytesIO
 from django.core.mail import EmailMessage
 from urllib.parse import urljoin
 import textwrap
-
+from django.core import serializers
 
 
 
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 def drawings(request):
     return render(request, 'drawings.html')
+
 
 def main(request):
     costings = Costing.objects.all().order_by('category__order_in_list', 'category__category', 'item')
@@ -195,7 +198,6 @@ def commit_data(request):
             notes = item.get('notes', '')  # Get the notes, default to '' if not present
             if amount == '':
                 amount = '0'
-            costing = get_object_or_404(Costing, pk=item['item'])  # Retrieve the Costing instance with the ID item['item']
             Quote_allocations.objects.create(quotes_pk=quote, item=costing, amount=amount, notes=notes)  # Assign the Costing instance to item
             # Update the Costing.uncommitted field
             uncommitted = item['uncommitted']
@@ -241,7 +243,7 @@ def update_costing(request):
         costing_id = data.get('costing_id')
         uncommitted = data.get('uncommitted')
         # Get the Costing object and update it
-        costing = Costing.objects.get(costing_pk=costing_id)
+        costing = Build_costing.objects.get(id=costing_id)
         costing.uncommitted = uncommitted
         costing.save()
         # Return a JSON response
@@ -732,4 +734,311 @@ def send_po_email_view(request):
             return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'Error', 'message': 'Invalid request method.'}, status=400)
 
+# def (request):
+#     return render(request, 'build.html')
 
+# Build Contract Functions
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super(DecimalEncoder, self).default(obj)
+
+def build_view(request):
+    form = CSVUploadForm()
+    # Retrieve all Build_costing objects and order them
+    costings = Build_costing.objects.all().order_by('category__order_in_list', 'category__category', 'item')
+    costings = [model_to_dict(costing) for costing in costings]
+    # Replace category FK with category name
+    for costing in costings:
+        category = Build_categories.objects.get(pk=costing['category'])
+        costing['category'] = category.category
+    # Retrieve contacts
+    contacts = Contacts.objects.values()
+    contacts_list = list(contacts)
+    # Retrieve committed allocations and calculate sums
+    committed_allocations = Committed_allocations.objects.select_related('item', 'quote').all()
+    committed_allocations_list = [
+        {
+            'quote_id': allocation.quote_id,
+            'item_id': allocation.item_id,
+            'amount': str(allocation.amount),
+            'notes': allocation.notes,
+            'item_name': allocation.item.item,
+        }
+        for allocation in committed_allocations
+    ]
+    committed_allocations_json = json.dumps(committed_allocations_list, default=str)
+
+    committed_allocations_sums = Committed_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
+    committed_allocations_sums_dict = {item['item']: item['total_amount'] for item in committed_allocations_sums}
+    
+    # Add committed sums to each costing
+    for costing in costings:
+        costing['committed'] = committed_allocations_sums_dict.get(costing['id'], 0)
+    
+    # Retrieve HC claim lines and calculate sums
+    hc_claim_lines_sums = Hc_claim_lines.objects.values('item_id').annotate(total_amount=Sum('amount'))
+    hc_claim_lines_sums_dict = {item['item_id']: item['total_amount'] for item in hc_claim_lines_sums}
+    
+    # Add HC claimed amounts to each costing
+    for costing in costings:
+        hc_claimed_amount = hc_claim_lines_sums_dict.get(costing['id'])
+        if hc_claimed_amount is not None:
+            costing['hc_claimed_amount'] = str(hc_claimed_amount)
+        else:
+            costing['hc_claimed_amount'] = '0.00'
+        costing['hc_claimed'] = hc_claimed_amount or 0
+    
+    items = [{'item': costing['item'], 'uncommitted': costing['uncommitted'], 'committed': costing['committed']} for costing in costings]
+    
+    # Retrieve committed quotes and convert to JSON
+    committed_quotes = Committed_quotes.objects.all().values('quote', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk', 'contact_pk__contact_name')
+    committed_quotes_list = list(committed_quotes)
+    for quote in committed_quotes_list:
+        quote['pdf'] = settings.MEDIA_URL + quote['pdf']
+    committed_quotes_json = json.dumps(committed_quotes_list, default=str)
+    
+    # Retrieve claims and convert to JSON
+    claims = Claims.objects.all()
+    claims_list = []
+    for claim in claims:
+        claim_dict = model_to_dict(claim)
+        claim_dict['supplier_name'] = claim.get_supplier_name()
+        claims_list.append(claim_dict)
+    claims_json = json.dumps(claims_list, default=str)
+    
+    claim_allocations = Claim_allocations.objects.all()
+    claim_allocations_json = serializers.serialize('json', claim_allocations)
+    
+    # Calculate totals
+    total_committed = sum(costing['committed'] for costing in costings)
+    totals = {
+        'total_contract_budget': Build_costing.objects.aggregate(Sum('contract_budget'))['contract_budget__sum'] or 0,
+        'total_committed': total_committed,
+        'total_uncommitted': Build_costing.objects.aggregate(Sum('uncommitted'))['uncommitted__sum'] or 0,
+        'total_complete_on_site': Build_costing.objects.aggregate(Sum('complete_on_site'))['complete_on_site__sum'] or 0,
+        'total_hc_next_claim': Build_costing.objects.aggregate(Sum('hc_next_claim'))['hc_next_claim__sum'] or 0,
+        'total_hc_received': Build_costing.objects.aggregate(Sum('hc_received'))['hc_received__sum'] or 0,
+        'total_sc_invoiced': Build_costing.objects.aggregate(Sum('sc_invoiced'))['sc_invoiced__sum'] or 0,
+        'total_sc_paid': Build_costing.objects.aggregate(Sum('sc_paid'))['sc_paid__sum'] or 0,
+    }
+    totals['total_forecast_budget'] = totals['total_committed'] + totals['total_uncommitted']
+    
+    context = {
+        'current_page': 'build',
+        'form': form,
+        'costings': costings,
+        'contacts': contacts_list,
+        'items': items,
+        'totals': totals,
+        'committed_quotes': committed_quotes_json,
+        'committed_allocations': committed_allocations_json,
+        'claims': claims_json,
+        'claim_allocations': claim_allocations_json,
+        'hc_claim_lines_sums': hc_claim_lines_sums_dict,
+    }
+    return render(request, 'build.html', context)
+
+
+
+
+@csrf_exempt
+def upload_csv(request):
+    if request.method == 'POST':
+        form = CSVUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['csv_file']
+            decoded_file = csv_file.read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            print(next(reader))  # This will print the first row of the CSV to your console
+            # Delete existing data
+            Build_costing.objects.all().delete()
+            for row in reader:
+                # category, created = Build_categories.objects.get_or_create(category=row['category'])
+                category, created = Build_categories.objects.get_or_create(
+                    category=row['category'], 
+                    defaults={'order_in_list': row['category']}  # use the 'category' value from the CSV as 'order_in_list'
+                )
+                Build_costing.objects.create(
+                    category=category,
+                    item=row['item'],
+                    contract_budget=row['contract_budget'],
+                    uncommitted=row['uncommitted'],
+                    complete_on_site=row['complete_on_site'],
+                    hc_next_claim=row['hc_next_claim'],
+                    hc_received=row['hc_received'],
+                    sc_invoiced=row['sc_invoiced'],
+                    sc_paid=row['sc_paid'],
+                    notes=row['notes']
+                )
+            return JsonResponse({"message": "CSV file uploaded successfully"}, status=200)
+        else:
+            return JsonResponse({"message": str(form.errors)}, status=400)
+    else:
+        form = CSVUploadForm()
+
+@csrf_exempt
+def upload_categories(request):
+    if request.method == 'POST':
+        form = CSVUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['csv_file']
+            decoded_file = csv_file.read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            logger.info('CSV file decoded and reader created')
+            first_row = next(reader)
+            logger.info('First row of CSV: %s', first_row)
+            reader = csv.DictReader(decoded_file)  # Reset the reader after getting the first row
+            Build_categories.objects.all().delete()
+            logger.info('All existing Categories objects deleted')
+            for row in reader:
+                Build_categories.objects.create(
+                    category=row['category'],
+                    order_in_list=row['order_in_list']
+                )
+                logger.info('Created new Categories object: %s', row)
+            return JsonResponse({"message": "CSV file uploaded successfully"}, status=200)
+        else:
+            logger.error('Form is not valid: %s', form.errors)
+            return JsonResponse({"message": str(form.errors)}, status=400)
+    else:
+        form = CSVUploadForm()
+        logger.info('GET request received, CSVUploadForm created')
+
+
+def update_costs(request):
+    if request.method == 'POST':
+        costing_id = request.POST.get('id')
+        uncommitted = request.POST.get('uncommitted')
+        # Make sure you're handling type conversion and validation properly here
+        try:
+            costing = Build_costing.objects.get(id=costing_id)
+            costing.uncommitted = uncommitted
+            costing.save()
+            return JsonResponse({'status': 'success'})
+        except Build_costing.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+    
+@csrf_exempt
+def update_complete_on_site(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        costing_id = data.get('id')
+        complete_on_site_data = data.get('complete_on_site')
+        try:
+            complete_on_site = float(complete_on_site_data)
+        except ValueError:
+            return JsonResponse({'status': 'error', 'message': 'Invalid complete_on_site value'}, status=400)
+        try:
+            costing = Build_costing.objects.get(pk=costing_id)
+            costing.complete_on_site = complete_on_site
+            costing.save()
+            return JsonResponse({'status': 'success'})
+        except Build_costing.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+    
+@csrf_exempt
+def update_build_quote(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        quote_id = data.get('quote_id')
+        supplier_quote_number = data.get('supplier_quote_number')
+        total_cost = data.get('total_cost')
+        contact_pk = data.get('contact_pk')
+        allocations = data.get('allocations')
+        
+        try:
+            quote = Committed_quotes.objects.get(pk=quote_id)
+        except Committed_quotes.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Quote not found'})
+
+        quote.total_cost = total_cost
+        quote.contact_pk_id = contact_pk  # Update the contact_pk field
+        quote.supplier_quote_number = supplier_quote_number  # Update the supplier_quote_number field
+        quote.save()
+
+        # Delete the existing allocations for the quote
+        Committed_allocations.objects.filter(quote_id=quote_id).delete()
+        
+        # Save the new allocations
+        for allocation in allocations:
+            notes = allocation.get('notes', '')  # Get the notes, default to '' if not present
+            alloc = Committed_allocations(
+                quote_id=quote_id,
+                item_id=allocation['item'],
+                amount=allocation['amount'],
+                notes=notes
+            )
+            alloc.save()
+            
+            # Update the Costing.uncommitted field
+            uncommitted = allocation['uncommitted']
+            Build_costing.objects.filter(pk=allocation['item']).update(uncommitted=uncommitted)
+
+        return JsonResponse({'status': 'success'})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+@csrf_exempt
+def commit_build_data(request):
+    if request.method == 'POST':
+        try:
+            logger.info("Received POST request to commit_build_data")
+            data = json.loads(request.body)
+            logger.info("Request data: %s", data)
+
+            total_cost = data['total_cost']
+            pdf_data = data['pdf']
+            contact_pk = data['contact_pk']
+            supplier_quote_number = data['supplier_quote_number']
+            allocations = data.get('allocations')
+
+            logger.info("Parsed data - total_cost: %s, contact_pk: %s, supplier_quote_number: %s, allocations: %s", total_cost, contact_pk, supplier_quote_number, allocations)
+
+            format, imgstr = pdf_data.split(';base64,')
+            ext = format.split('/')[-1]
+            contact = get_object_or_404(Contacts, pk=contact_pk)
+            supplier = contact.contact_name
+
+            logger.info("Contact found - supplier: %s", supplier)
+
+            unique_filename = supplier + " " + str(uuid.uuid4()) + '.' + ext
+            pdf_file = ContentFile(base64.b64decode(imgstr), name=unique_filename)
+            quote = Committed_quotes.objects.create(
+                total_cost=total_cost,
+                pdf=pdf_file,
+                contact_pk=contact,
+                supplier_quote_number=supplier_quote_number
+            )
+
+            for item in allocations:
+                amount = item['amount']
+                notes = item.get('notes', '')  # Get the notes, default to '' if not present
+                if amount == '':
+                    amount = '0'
+                costing = get_object_or_404(Build_costing, pk=item['item'])  # Retrieve the Costing instance with the ID item['item']
+                Committed_allocations.objects.create(quote=quote, item=costing, amount=amount, notes=notes)  # Assign the Costing instance to item
+                # Update the Costing.uncommitted field
+                uncommitted = item['uncommitted']
+                Build_costing.objects.filter(pk=item['item']).update(uncommitted=uncommitted)
+
+                logger.info("Allocation created for item: %s, amount: %s, notes: %s", item['item'], amount, notes)
+
+            logger.info("All allocations processed successfully")
+
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            logger.error("Error processing commit_build_data: %s", str(e), exc_info=True)
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    else:
+        logger.warning("Received non-POST request to commit_build_data")
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)

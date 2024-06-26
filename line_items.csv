@@ -1,0 +1,65 @@
+category,item,contract_budget,uncommitted,complete_on_site,hc_next_claim,hc_received,sc_invoiced,sc_paid,notes
+Site Prep and Prelims,Site Shed,7500,7500,0,0,0,0,0,0
+Site Prep and Prelims,Site Toilet,2500,2500,0,0,0,0,0,0
+Site Prep and Prelims,Temp Driveway,1761,1761,0,0,0,0,0,0
+Site Prep and Prelims,Security Fencing S/I,3715,3715,0,0,0,0,0,0
+Site Prep and Prelims,Sediment/Silt Fencing S/I,2355,2355,0,0,0,0,0,0
+Site Prep and Prelims,Electrical - Temp Electrical Supply,75000,75000,0,0,0,0,0,0
+Site Prep and Prelims,Security Camera,955,955,0,0,0,0,0,0
+Site Prep and Prelims,Rubbish Removal,1744.28,1744.28,0,0,0,0,0,0
+Site Prep and Prelims,PM Fee,51200,51200,0,0,0,0,0,0
+Site Prep and Prelims,Site Sup,20000,20000,0,0,0,0,0,0
+Site Prep and Prelims,Construction Insurance,17069.32,17069.32,0,0,0,0,0,0
+Site Prep and Prelims,Unexpected Line Items,16615.37,16615.37,0,0,0,0,0,0
+Site Prep and Prelims,Builder Minor Works,16615.37,16615.37,0,0,0,0,0,0
+Site Prep and Prelims,Build Margin,206034.04,206034.04,0,0,0,0,0,0
+Earthworks,Bulk Earthworks,82539.85,82539.85,0,0,0,0,0,0
+Earthworks,Stormwater Works,45759,45759,0,0,0,0,0,0
+Earthworks,Detailed Earthworks,143632.45,143632.45,0,0,0,0,0,0
+Earthworks,Detention Tank,75000,75000,0,0,0,0,0,0
+Earthworks,Hydraulic - Retenton Tank,15000,15000,0,0,0,0,0,0
+Earthworks,Fill Disposal,28804.87,28804.87,0,0,0,0,0,0
+Earthworks,Retaining Walls,122500,122500,0,0,0,0,0,0
+Earthworks,Elec - in ground,42266.47,42266.47,0,0,0,0,0,0
+Earthworks,Plumbing Tradesman,88947.43,88947.43,0,0,0,0,0,0
+Earthworks,Fire Hydrant,42000,42000,0,0,0,0,0,0
+Foundations,Temporary Footings Piers,38000,38000,0,0,0,0,0,0
+Foundations,Permanent Piers,41399,41399,0,0,0,0,0,0
+Structure,Ground Slab,290712.5,290712.5,0,0,0,0,0,0
+Structure,Courtyards,14400,14400,0,0,0,0,0,0
+Structure,Steel - Supply,247884,247884,0,0,0,0,0,0
+Structure,Steel - Install,0,0,0,0,0,0,0,0
+Structure,Awnings,0,0,0,0,0,0,0,0
+Structure,Precast Walls,941843.7,941843.7,0,0,0,0,0,0
+Mezzanine,Full package mezz,291060,291060,0,0,0,0,0,0
+Roof,Roof Panels,219778.65,219778.65,0,0,0,0,0,0
+Roof,Downpipes,10000,10000,0,0,0,0,0,0
+Roof,Panels over/under awnings,20931.3,20931.3,0,0,0,0,0,0
+Car Park,Car Park Slab,302112.5,302112.5,0,0,0,0,0,0
+Car Park,Kerb,15000,15000,0,0,0,0,0,0
+Car Park,Crossover,10000,10000,0,0,0,0,0,0
+External Works,Landscaping,26806,26806,0,0,0,0,0,0
+External Works,Chain Mesh Fencing S/I,9660,9660,0,0,0,0,0,0
+External Works,Gate and Front Fence S/I,24933.41,24933.41,0,0,0,0,0,0
+External Works,Wheel stops S/I,1861.92,1861.92,0,0,0,0,0,0
+External Works,Bollards S/I,1896.7,1896.7,0,0,0,0,0,0
+External Works,Letterbox S/I,500,500,0,0,0,0,0,0
+External Works,Signage S/I,10000,10000,0,0,0,0,0,0
+External Works,Line Painting,4050,4050,0,0,0,0,0,0
+External Works,External Painting Install,15041.92,15041.92,0,0,0,0,0,0
+External Works,Louvres S/I,50000,50000,0,0,0,0,0,0
+Fitout,Windows Supply,51165.4,51165.4,0,0,0,0,0,0
+Fitout,Windows Install,19187.03,19187.03,0,0,0,0,0,0
+Fitout,Entry Doors Supply,13000,13000,0,0,0,0,0,0
+Fitout,Entry Doors Install,0,0,0,0,0,0,0,0
+Fitout,Roller Doors S/I,58500,58500,0,0,0,0,0,0
+Fitout,Bathroom Pods S/I,260000,260000,0,0,0,0,0,0
+Fitout,Electrical Tradesman,162500,162500,0,0,0,0,0,0
+Fitout,Kitchenettes Supply,58500,58500,0,0,0,0,0,0
+Fitout,Kitchenettes Install,0,0,0,0,0,0,0,0
+Fitout,Fire Extinguishers S/I,2756,2756,0,0,0,0,0,0
+Fitout,Instant HW Supply,16250,16250,0,0,0,0,0,0
+Fitout,Kitchen tap Supply,1300,1300,0,0,0,0,0,0
+Fitout,Paint and Mineral Supply,9401.2,9401.2,0,0,0,0,0,0
+Fitout,Solar,0,0,0,0,0,0,0,0
+Fitout,Shipping/transport above to site,10000,10000,0,0,0,0,0,0

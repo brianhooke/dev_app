@@ -49,17 +49,17 @@ $(document).ready(function() {
 
 committedQuotes.forEach(function(quote) {
     // Format total_cost with thousands separator
-    var quote_id = quote.quotes_pk;
+    var supplier_quote_number = quote.supplier_quote_number;
     var contact_pk = quote.contact_pk;
     var totalCostFormatted = parseFloat(quote.total_cost).toLocaleString();
     var supplier = quote.contact_pk__contact_name;
     // Create a new table row for each quote
     var newRow = document.createElement("tr");
-    newRow.innerHTML = `<td><a href="#" class="quote-link">${quote_id}</a></td><td>${supplier}</td><td>${totalCostFormatted}</td><td class="delete-column"><button class="btn btn-danger delete-btn">X</button></td>`;
+    newRow.innerHTML = `<td><a href="#" class="quote-link">${supplier_quote_number}</a></td><td>${supplier}</td><td>${totalCostFormatted}</td><td class="delete-column"><button class="btn btn-danger delete-btn">X</button></td>`;
     // Append the table row to the table body
     tableBody.appendChild(newRow);
-        // Add event listener to the delete button
-        newRow.children[3].children[0].addEventListener('click', function(event) {
+    // Add event listener to the delete button
+    newRow.children[3].children[0].addEventListener('click', function(event) {
         event.preventDefault();
         var confirmed = window.confirm('Are you sure you want to delete this quote?');
         if (confirmed) {
@@ -70,7 +70,7 @@ committedQuotes.forEach(function(quote) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    id: quote_id,
+                    supplier_quote_number: supplier_quote_number,
                 }),
             })
             .then(response => response.json())
@@ -87,15 +87,16 @@ committedQuotes.forEach(function(quote) {
             });
         }
     });
+
     // Add event listener to the 'Quote #' cell
     newRow.children[0].addEventListener('click', function() {
-    // Get the quote data
-    var quote = committedQuotes.find(q => q.quotes_pk == this.textContent);
-    var allocations = quote_allocations.filter(a => a.quotes_pk === quote.quotes_pk);
-    var totalCost = parseFloat(totalCostFormatted.replace(/,/g, ''));
-    $('#committedQuotesModal').modal('hide');
-    // Pass the PDF data and supplier to the displayCombinedModal function
-    displayCombinedModal(quote.pdf, quote_id, supplier, contact_pk, totalCost, allocations, true);  });
+      // Get the quote data
+      var quote = committedQuotes.find(q => q.supplier_quote_number === supplier_quote_number);
+      var allocations = committed_allocations.filter(a => a.quote_id === quote.quote);
+      var totalCost = parseFloat(totalCostFormatted.replace(/,/g, ''));
+      $('#committedQuotesModal').modal('hide');
+      console.log("Allocations are", allocations);
+      // Pass the PDF data, supplier, and supplier_quote_number to the displayCombinedModal function
+      displayCombinedModal(quote.pdf, quote.quote, supplier, contact_pk, totalCost, allocations, true, quote.supplier_quote_number);
+  });  
 });
-
-// function displayCombinedModal(pdfFilename, quote_id, supplier, totalCost, allocations, updating = false) {
