@@ -2,7 +2,7 @@
 var newDiv = document.createElement("div");
 newDiv.innerHTML = `
 <div class="modal fade" id="committedQuotesModal" tabindex="-1" role="dialog" aria-labelledby="committedQuotesModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+  <div class="modal-dialog" role="document" style="max-width: 800px;">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="committedQuotesModalLabel">Committed Quotes</h5>
@@ -14,10 +14,10 @@ newDiv.innerHTML = `
         <table id="committedQuotesTable" class="table">
           <thead>
             <tr>
-              <th>Quote #</th>
-              <th>Supplier</th>
-              <th>Total Cost</th>
-              <th rowspan="2" class="delete-cell-header delete-column">Delete</th>
+              <th style="width: 200px;">Quote #</th>
+              <th style="width: 200px;">Supplier</th>
+              <th style="width: 200px;">Total Cost</th>
+              <th style="width: 100px;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
             </tr>
           </thead>
           <tbody>
@@ -55,7 +55,7 @@ committedQuotes.forEach(function(quote) {
     var supplier = quote.contact_pk__contact_name;
     // Create a new table row for each quote
     var newRow = document.createElement("tr");
-    newRow.innerHTML = `<td><a href="#" class="quote-link">${supplier_quote_number}</a></td><td>${supplier}</td><td>${totalCostFormatted}</td><td class="delete-column"><button class="btn btn-danger delete-btn">X</button></td>`;
+    newRow.innerHTML = `<td style="width: 200px;"><a href="#" class="quote-link">${supplier_quote_number}</a></td><td style="width: 200px;">${supplier}</td><td style="width: 200px;">${totalCostFormatted}</td><td class="delete-column"><button class="btn delete-btn" style="width: 34px; height: 34px; border-radius: 0; background-color: white; color: black; border: 3px solid transparent; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; border-image-slice: 1;">X</button></td>`;
     // Append the table row to the table body
     tableBody.appendChild(newRow);
     // Add event listener to the delete button
