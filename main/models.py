@@ -78,6 +78,7 @@ class Costing(models.Model):
     item = models.CharField(max_length=100)
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    uncommitted_note = models.CharField(max_length=1000, null=True)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
     def __str__(self):

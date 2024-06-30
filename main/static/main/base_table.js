@@ -5,8 +5,6 @@ window.onload = function() {
 };
 
 document.querySelectorAll('.save-costs').forEach(function(button) {
-
-
     button.addEventListener('click', function() {
       var costing_pk = this.getAttribute('data-id');
       console.log("costing ID is: "+costing_pk);
@@ -15,6 +13,7 @@ document.querySelectorAll('.save-costs').forEach(function(button) {
           alert('Costing ID or uncommitted value is missing');
           return;
       }
+      var uncommitted_notes = document.getElementById('uncommittedNotes' + costing_pk).value;
       var data = { 'costing_pk': costing_pk, 'uncommitted': uncommitted };
         console.log(data);
         if (!data) return;

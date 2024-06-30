@@ -110,12 +110,14 @@
               <th>Uncommitted</th>
               <th>Committed</th>
               <th>Total</th>
+              <th>Notes</th>
             </tr>
             <tr>
               <td>Original</td>
               <td>{{ costing.uncommitted|floatformat:2|intcomma }}</td>
               <td>{{ costing.committed|floatformat:2|intcomma }}</td>
               <td>{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
+              <td>{{ costing.notes }}</td>
             </tr>
             <tr>
               <td>Edited</td>
