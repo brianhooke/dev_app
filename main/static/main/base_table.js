@@ -13,7 +13,7 @@ document.querySelectorAll('.save-costs').forEach(function(button) {
           alert('Costing ID or uncommitted value is missing');
           return;
       }
-      var uncommitted_notes = document.getElementById('uncommittedNotes' + costing_pk).value;
+      // var uncommitted_notes = document.getElementById('uncommittedNotes' + costing_pk).value;
       var data = { 'costing_pk': costing_pk, 'uncommitted': uncommitted };
         console.log(data);
         if (!data) return;
