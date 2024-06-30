@@ -91,14 +91,12 @@ committedQuotes.forEach(function(quote) {
 
     // Add event listener to the 'Quote #' cell
     newRow.children[0].addEventListener('click', function() {
-      // Get the quote data
       var quote = committedQuotes.find(q => q.supplier_quote_number === supplier_quote_number);
       console.log("Quote is", quote.quotes_pk);
-      var allocations = quote_allocations.filter(a => a.quote_id === quote.quote);
+      var allocations = quote_allocations.filter(a => a.quotes_pk === quote.quotes_pk);
       var totalCost = parseFloat(totalCostFormatted.replace(/,/g, ''));
       $('#committedQuotesModal').modal('hide');
       console.log("Allocations are", allocations);
-      // Pass the PDF data, supplier, and supplier_quote_number to the displayCombinedModal function
       displayCombinedModal(quote.pdf, quote.quotes_pk, supplier, contact_pk, totalCost, allocations, true, quote.supplier_quote_number);
   });  
 });
