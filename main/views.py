@@ -201,15 +201,16 @@ def commit_data(request):
         quote = Quotes.objects.create(total_cost=total_cost, supplier_quote_number=supplier_quote_number, pdf=data, contact_pk=contact)
         for allocation in allocations:
             amount = allocation['amount']
-            item = allocation['item']
-            item = Costing.objects.get(pk=item)
+            item_pk = allocation['item']
+            item = Costing.objects.get(pk=item_pk)
             notes = allocation.get('notes', '')  # Get the notes, default to '' if not present
             if amount == '':
                 amount = '0'
             Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)  # Assign the Costing instance to item
             # Update the Costing.uncommitted field
             uncommitted = allocation['uncommitted']
-            Costing.objects.filter(item=item).update(uncommitted=uncommitted)
+            item.uncommitted = uncommitted
+            item.save()
         return JsonResponse({'status': 'success'})
 
 @csrf_exempt
