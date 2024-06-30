@@ -194,7 +194,7 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
         var data = gatherData();
         if (!data) return;
         data.pdf = document.querySelector('.pdf-frame').src;
-        fetch('/commit_build_data/', {
+        fetch('/commit_data/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -215,7 +215,7 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
         var data = gatherData();
         console.log(data);
         if (!data) return;
-        fetch('/update_build_quote/', {
+        fetch('/update_quote/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -244,7 +244,7 @@ function addLineItem(item, amount, notes = '') {
     select.innerHTML = '<option value="">Select an item</option>';
     console.log("costings are: " + costings);
     costings.forEach(function(costing) {
-        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.id + '">' + costing.item + '</option>';
+        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
     });
     var firstCell = newRow.insertCell(0);
     firstCell.appendChild(select);

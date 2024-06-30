@@ -1,16 +1,13 @@
 {% extends "master.html" %}
-
 {% load humanize %}
 {% load static %}
 {% load i18n %}
-
 {% block title %}
   Developer Project Manager
 {% endblock %}
-
 {% block content %}
+
 <head>
-    <!-- Other head elements... -->
     <link rel="icon" href="{% static 'favicon.ico' %}">
 </head>
 
@@ -41,328 +38,29 @@
         <option id="existingClaimsBtn" value="existingClaims">Existing Claims</option>
     </select>
   </div>
+</div>
 
   <input type="file" id="pdfInput" style="opacity: 0; position: absolute; left: -9999px;">
-</div>
+  <input type="hidden" id="division" value="{{ division }}">
 
-<div>
-  <!-- <div>
-    <h5>Metrics <span id="arrow" style="cursor:pointer;">►</span></h5>
-  </div> -->
-
-  <!-- <table id="metrics-table" style="width:50%; display:none;">
-    <thead style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-      <tr>
-        <th style="width:60%">Metric</th>
-        <th style="width:40%">Value</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Cash Projection</td>
-      <td id="cash-projection"></td>
-    </tr>
-    <tr>
-      <td></td>
-      <td></td>
-    </tr>
-    <tr>
-      <td></td>
-      <td></td>
-    </tr>
-  </tbody>
-</table> -->
-
-<!-- <button id="uploadContactsButton">Upload Contacts</button> -->
-
-<!-- <form id="upload-form" method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ form.as_p }}
-</form>
-
-<button id="uploadButton" class="gradient-button">Upload CSV</button>
-<input type="file" id="csvFile" accept=".csv" style="display: none;" /> -->
-
-<!-- Table to display Costing data -->
-<div style="overflow-x: visible;">
-  <!-- Add this line to your template to output the value of committed_allocations_sums -->
-  {{ committed_allocations_sums }}
-  <table style="width:100%; border-collapse: collapse;">
-    <thead>
-      <tr style="height: 20px; position: sticky; top: 0;">
-        <td colspan="12" style="background-color: white; border: none;"></td>
-      </tr>
-      <tr style="background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
-        <td style="position: sticky; top: 20px;"><strong>Category</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Item</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Contract Budget</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Working Budget</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Uncommitted</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Committed</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Invoiced</strong></td>
-        <td style="position: sticky; top: 20px;"><strong>Paid</strong></td>
-        <!-- <th style="position: sticky; top: 20px;">Notes</th> -->
-      </tr>
-  </thead>
-    <tbody>
-      {% regroup costings by category as costings_by_category %}
-      {% for category in costings_by_category %}
-        <tr data-toggle="collapse" data-target=".group{{ forloop.counter }}" style="cursor: pointer;">
-          <td>
-            <strong>{{ category.grouper }}</strong>
-            <span class="dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">&#9660;</span>
-          </td>
-          <td></td> <!-- Add this -->
-          <td></td> <!-- And this -->
-          <td></td> <!-- Add this -->
-          <td></td> <!-- And this -->
-          <td></td> <!-- Add this -->
-          <td></td> <!-- And this -->
-          <td></td> <!-- And this -->
-        </tr>
-        {% for costing in category.list %}
-          <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;">
-            <td>{{ costing.category }}</td>
-            <td>{{ costing.item }}</td>
-        <td>{% if costing.contract_budget|floatformat:2 == "0.00" %}-{% else %}{{ costing.contract_budget|floatformat:2|intcomma }}{% endif %}</td>
-            <!-- Forecast Budget calculation -->
-        <td>{% with total=costing.committed|add:costing.uncommitted %}
-          {% if total|floatformat:2 == "0.00" %}-{% else %}{{ total|floatformat:2|intcomma }}{% endif %}
-        {% endwith %}</td>
-        <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
-        <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-        <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if costing.sc_paid|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_paid|floatformat:2|intcomma }}{% endif %}</td>
-        <!-- <td>{{ costing.notes }}</td> -->
-      </tr>
-      {% endfor %}
-    {% endfor %}
-    <!-- Total row -->
-      <tr style="font-weight: bold; background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;"> <!-- Make text bold -->
-        <td>Total</td>
-        <td></td> <!-- Placeholder for non-sum columns -->
-        <td>{% if totals.total_contract_budget == 0 %}-{% else %}{{ totals.total_contract_budget|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if totals.total_forecast_budget == 0 %}-{% else %}{{ totals.total_forecast_budget|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if totals.total_uncommitted == 0 %}-{% else %}{{ totals.total_uncommitted|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if totals.total_committed == 0 %}-{% else %}{{ totals.total_committed|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if totals.total_sc_invoiced == 0 %}-{% else %}{{ totals.total_sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-        <td>{% if totals.total_sc_paid == 0 %}-{% else %}{{ totals.total_sc_paid|floatformat:2|intcomma }}{% endif %}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-{% for costing in costings %}
-<div class="modal fade" id="editModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="editModalLabel{{ costing.costing_pk }}" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content" style="border: 3px solid black;">
-      <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-        <h5 class="modal-title" id="editModalLabel{{ costing.costing_pk }}">{{costing.item}}</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <table>
-          <tr>
-            <th></th>
-            <th>Uncommitted</th>
-            <th>Committed</th>
-            <th>Total</th>
-          </tr>
-          <tr>
-            <td>Original</td>
-            <td>{{ costing.uncommitted|floatformat:2|intcomma }}</td>
-            <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-            <td>{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
-          </tr>
-          <!-- Editable costs -->
-          <tr>
-            <td>Edited</td>
-            <td>
-              <input type="number" class="form-control committed-input" id="uncommittedInput{{ costing.costing_pk }}" value="{{ costing.uncommitted }}">
-            </td>
-            <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-            <td id="total{{ costing.costing_pk }}">{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
-          </tr>
-        </table>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary save-costs" data-id="{{ costing.costing_pk }}">Save</button>
-    </div>    
-    </div>
-  </div>
-</div>
-
-<!--Create Purchase Order Supplier Select Modal-->
-<div class="modal fade" id="createPoSelectModal" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document" style="max-width: 300px;">
-      <div class="modal-content" style="border: 3px solid black;">
-          <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-              <h5 class="modal-title">Create Purchase Order</h5>
-          </div>
-          <div class="modal-body">
-            <select class="form-control" id="poSupplierSelect">
-                <option selected>Select Supplier...</option>
-                {% for contact in contacts_in_quotes %}
-                    <option value="{{ contact.contact_pk }}">{{ contact.contact_name }}</option>
-                {% endfor %}
-                {% for contact in contacts_not_in_quotes %}
-                    <option value="{{ contact.contact_pk }}" disabled style="color: grey;">{{ contact.contact_name }}</option>
-                {% endfor %}
-            </select>
-          </div>
-          <div class="modal-footer">
-              <div class="col-6">
-                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-              </div>
-              <div class="col-6 text-right">
-                  <button type="button" class="btn btn-primary" id="saveCategoryButton">Select</button>
-              </div>
-          </div>
-      </div>
-  </div>
-</div>
-
-<!-- Create Purchase Order Modal -->
-<div class="modal fade" id="createPoModal" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document" style="max-width: 750px; max-height: calc(100vh - 60px); overflow-y: auto;">
-      <div class="modal-content" style="border: 3px solid black;">
-          <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-              <h5 class="modal-title">Create Purchase Order</h5>
-          </div>
-          <div class="modal-body">
-            <p>Supplier: XXX</p>
-            <table class="table">
-                <thead>
-                    <tr style="padding: 0; margin: 0;">
-                        <th>Item</th>
-                        <th>Variation</th>
-                        <th>quote 1 $</th>
-                        <th>quote 2 $</th>
-                        <th>quote 3 (& so on) $</th>
-                        <th>total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr style="line-height: 10px;">
-                      <td><button type="button" class="btn btn-small">+</button></td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                  </tr>
-                  <tr style="line-height: 10px;">
-                      <td><strong>Total</strong></td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                  </tr>
-                </tbody>
-            </table>
-          </div>
-          <div class="modal-footer">
-              <div class="col-6">
-                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-              </div>
-              <div class="col-6 text-right">
-                  <button type="button" class="btn btn-primary" id="createPoButton">Create</button>
-              </div>
-          </div>
-      </div>
-  </div>
-</div>
-
-<!--Create Purchase Order View and Email Modal-->
-<div class="modal fade" id="createPoViewSendModal" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document" style="max-width: 800px;">
-      <div class="modal-content" style="border: 3px solid black;">
-          <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-              <h5 class="modal-title">View and Send Purchase Orders</h5>
-          </div>
-          <div class="modal-body">
-            <table class="table table-striped">
-              <thead>
-                <tr>
-                  <th>Supplier</th>
-                  <th>Email</th>
-                  <th>Send/Sent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for po_order in po_orders %}
-                <tr>
-                  <td>
-                    <a href="{% url 'view_po_pdf' po_order.po_order_pk %}" target="po-pdf-iframe">{{ po_order.supplier_name }}</a>
-                    <input type="hidden" class="po-order-pk" value="{{ po_order.po_order_pk }}">
-                  </td>
-                  <td>{{ po_order.supplier_email }}</td> <!-- Add this line -->
-                  <td>
-                    {% if po_order.po_sent %}
-                      <span style="color: green;">&#10004;</span>
-                    {% else %}
-                      <input type="checkbox" class="sent-checkbox">
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-            <iframe name="po-pdf-iframe" style="width: 100%; height: 500px; border: none;"></iframe>
-          </div>
-          <div class="modal-footer">
-              <div class="col-6">
-                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-              </div>
-              <div class="col-6 text-right">
-                  <button type="button" class="btn btn-primary" id="sendEmailButton">Email Selected</button>
-              </div>
-          </div>
-      </div>
-  </div>
-</div>
-
-
-
-{% endfor %}
-
+{% include 'base_table.html' %}
+{% include 'po_modals.html' %}
 {{ contacts|json_script:"contacts" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ costings|json_script:"costings" }}
 {{ items|json_script:"items-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
 
-<style>
-  .dropdown-arrow {
-  transform: rotate(0);
-  transition: transform 0s ease;
-}
-
-.collapsed .dropdown-arrow {
-  transform: rotate(-90deg);
-}
-
-</style>
-
-
 <script type="text/javascript">
     var contacts = JSON.parse(document.getElementById('contacts').textContent);
     var committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
     var costings = JSON.parse(document.getElementById('costings').textContent);
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
-    var costings = JSON.parse(document.getElementById('costings').textContent);
-  </script>
+</script>
+<script src="{% static 'main/base_table.js' %}"></script>
 <script src="{% static 'main/commit_costs.js' %}"></script>
 <script src="{% static 'main/committed_costs.js' %}"></script>
 <script src="{% static 'main/contacts.js' %}"></script>
 <script src="{% static 'main/po.js' %}"></script>
 <script src="{% static 'main/view_send_po.js' %}"></script>
-
-
-<script src="{% static 'main/homepage.js' %}"></script>
-
-
-
 {% endblock %}

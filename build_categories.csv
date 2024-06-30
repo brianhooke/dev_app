@@ -1,10 +1,10 @@
-category,order_in_list
-Site Prep and Prelims,1
-Earthworks,2
-Foundations,3
-Structure,4
-Mezzanine,5
-Roof,6
-Car Park,7
-External Works,8
-Fitout,9
+category,division,order_in_list
+Site Prep and Prelims,2,1
+Earthworks,2,2
+Foundations,2,3
+Structure,2,4
+Mezzanine,2,5
+Roof,2,6
+Car Park,2,7
+External Works,2,8
+Fitout,2,9

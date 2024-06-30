@@ -104,6 +104,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 email: document.getElementById('newContactEmail' + rowIndex).value
             };
         });
+        // Get the division value
+        var division = Number(document.getElementById('division').value);
         // Send the new contacts to the server
         fetch('/create_contacts/', {
             method: 'POST',
@@ -111,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify({ contacts: newContacts })  // Wrap the array in an object
+            body: JSON.stringify({ contacts: newContacts, division: division })  // Include division in the object
         }).then(function(response) {
             if (response.ok) {
                 alert('Contacts saved successfully');

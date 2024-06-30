@@ -1,23 +1,24 @@
-  document.querySelectorAll('.save-costs').forEach(function(button) {
-    //dropdown arrows are collapsed on page load
-    window.onload = function() {
-        document.querySelectorAll('tr[data-toggle="collapse"]').forEach((row) => {
-        row.click();
-        });
-  };
+window.onload = function() {
+  document.querySelectorAll('tr[data-toggle="collapse"]').forEach((row) => {
+  row.click();
+  });
+};
+
+document.querySelectorAll('.save-costs').forEach(function(button) {
+
 
     button.addEventListener('click', function() {
-      var costing_id = this.getAttribute('data-id');
-      console.log("costing ID is: "+costing_id);
-      var uncommitted = document.getElementById('uncommittedInput' + costing_id).value;
-      if (!costing_id || !uncommitted) {
+      var costing_pk = this.getAttribute('data-id');
+      console.log("costing ID is: "+costing_pk);
+      var uncommitted = document.getElementById('uncommittedInput' + costing_pk).value;
+      if (!costing_pk || !uncommitted) {
           alert('Costing ID or uncommitted value is missing');
           return;
       }
-      var data = { 'costing_id': costing_id, 'uncommitted': uncommitted };
+      var data = { 'costing_pk': costing_pk, 'uncommitted': uncommitted };
         console.log(data);
         if (!data) return;
-        fetch('/update_costing/', {
+        fetch('/update_uncommitted/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

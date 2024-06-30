@@ -50,6 +50,7 @@ $(document).ready(function() {
 committedQuotes.forEach(function(quote) {
     // Format total_cost with thousands separator
     var supplier_quote_number = quote.supplier_quote_number;
+    console.log("Supplier quote number is: "+supplier_quote_number);
     var contact_pk = quote.contact_pk;
     var totalCostFormatted = parseFloat(quote.total_cost).toLocaleString();
     var supplier = quote.contact_pk__contact_name;
@@ -92,11 +93,12 @@ committedQuotes.forEach(function(quote) {
     newRow.children[0].addEventListener('click', function() {
       // Get the quote data
       var quote = committedQuotes.find(q => q.supplier_quote_number === supplier_quote_number);
-      var allocations = committed_allocations.filter(a => a.quote_id === quote.quote);
+      console.log("Quote is", quote.quotes_pk);
+      var allocations = quote_allocations.filter(a => a.quote_id === quote.quote);
       var totalCost = parseFloat(totalCostFormatted.replace(/,/g, ''));
       $('#committedQuotesModal').modal('hide');
       console.log("Allocations are", allocations);
       // Pass the PDF data, supplier, and supplier_quote_number to the displayCombinedModal function
-      displayCombinedModal(quote.pdf, quote.quote, supplier, contact_pk, totalCost, allocations, true, quote.supplier_quote_number);
+      displayCombinedModal(quote.pdf, quote.quotes_pk, supplier, contact_pk, totalCost, allocations, true, quote.supplier_quote_number);
   });  
 });

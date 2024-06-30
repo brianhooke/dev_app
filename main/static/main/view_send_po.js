@@ -25,7 +25,7 @@ $(document).ready(function() {
                 success: function(response) {
                     console.log('Success Response:', response);
                     alert('Emails sent successfully!');
-                    location.reload();
+                    // location.reload();
                 },
                 error: function(error) {
                     console.error('Error sending emails:', error);

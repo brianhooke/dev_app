@@ -32,14 +32,12 @@ $(document).ready(function() {
                         }
                     });
                 }
-
                 var headerRow = '<tr><th>Item</th>'; // Start with Item column header
                 for (var i = 0; i < quoteNumbers.length; i++) {
                     headerRow += '<th>Quote # ' + quoteNumbers[i] + '</th>';
                 }
                 headerRow += '<th>Variations</th><th>Total</th></tr>'; // Add Variation and Total column headers
                 tableHead.append(headerRow);
-
                 var columnTotals = new Array(quoteNumbers.length).fill(0); // Initialize column totals
 
                 for (var item in data) {
@@ -233,12 +231,10 @@ $(document).ready(function() {
                             }
                         });
                     });
-                
                     // Retrieve notes from input fields
                     var note1 = $('#note1').val().trim();
                     var note2 = $('#note2').val().trim();
                     var note3 = $('#note3').val().trim();
-                
                     // Add notes and supplier to the data
                     var postData = {
                         supplierPk: selectedSupplierPk,
