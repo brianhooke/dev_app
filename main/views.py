@@ -824,8 +824,10 @@ def upload_letterhead(request):
         file.name = 'letterhead.pdf'  # Set the filename
         # Delete all existing letterheads
         Letterhead.objects.all().delete()
+        # Save the file to S3
+        file_path = default_storage.save(file.name, file)
         # Create a new letterhead with the uploaded file
-        letterhead = Letterhead(letterhead_path=file)
+        letterhead = Letterhead(letterhead_path=file_path)
         letterhead.save()
         return JsonResponse({'message': 'File uploaded successfully'})
     else:

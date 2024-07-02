@@ -35,7 +35,7 @@ class PlanPdfs(models.Model):
     rev_number = models.CharField(max_length=255)
 
 class Letterhead(models.Model):
-    letterhead_path = models.FileField(upload_to='letterhead')
+    letterhead_path = models.FileField(upload_to='letterhead/')
 
 class ReportCategories(models.Model):
     report_category_pk = models.AutoField(primary_key=True)
