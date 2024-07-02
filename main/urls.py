@@ -36,6 +36,7 @@ urlpatterns = [
     path('send_po_emails/', send_po_email_view, name='send_po_emails'),
     path('upload_categories/', views.upload_categories, name='upload_categories'),
     path('upload_costings/', upload_costings, name='upload_costings'),
+    path('upload_letterhead/', views.upload_letterhead, name='upload_letterhead'),
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]

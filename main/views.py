@@ -2,7 +2,7 @@ import csv
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -515,7 +515,11 @@ def generate_po_pdf(request, po_order_pk):
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk).select_related('costing', 'quote')
     company_details = Po_globals.objects.first()
     # letterhead_path = os.path.join(settings.MEDIA_ROOT, 'letterhead/letterhead.pdf')
-    letterhead_path = settings.LETTERHEAD_PATH  # Use the new settings.py variable
+    letterhead = Letterhead.objects.first()
+    if letterhead is not None:
+        letterhead_path = letterhead.letterhead_path.path
+    else:
+        raise Exception("No Letterhead instance found.")
     content_buffer = BytesIO()
     p = canvas.Canvas(content_buffer, pagesize=A4)
     if company_details:
@@ -709,6 +713,7 @@ Brian Hooke.
                 with default_storage.open(quote_pdf_path, 'rb') as f:
                     email.attach(f'Quote_{po_order_detail.quote.quotes_pk}.pdf', f.read(), 'application/pdf')
                 processed_quotes.add(po_order_detail.quote.quotes_pk)
+
     # Add CC addresses
     cc_addresses = settings.EMAIL_CC.split(';')
     email.cc = cc_addresses
@@ -811,3 +816,17 @@ def upload_costings(request):
 
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+
+@csrf_exempt
+def upload_letterhead(request):
+    if request.method == 'POST':
+        file = request.FILES['letterhead_path']
+        file.name = 'letterhead.pdf'  # Set the filename
+        # Delete all existing letterheads
+        Letterhead.objects.all().delete()
+        # Create a new letterhead with the uploaded file
+        letterhead = Letterhead(letterhead_path=file)
+        letterhead.save()
+        return JsonResponse({'message': 'File uploaded successfully'})
+    else:
+        return JsonResponse({'error': 'Invalid request method'})

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData
+from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead
 
 class CategoriesAdmin(admin.ModelAdmin):
     list_display = ("categories_pk", "division", "category", "order_in_list")
@@ -46,6 +46,8 @@ class Po_order_detailAdmin(admin.ModelAdmin):
 class SPVDataAdmin(admin.ModelAdmin):
     list_display = ("address", "lot_size", "legal_owner", "folio_identifier", "bill_to", "email", "owner_address", "director_1", "director_2", "abn", "acn")
 
+class LetterheadAdmin(admin.ModelAdmin):
+    list_display = ("letterhead_path",)
 
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
@@ -62,3 +64,4 @@ admin.site.register(Po_globals, Po_globalsAdmin)
 admin.site.register(Po_orders, Po_ordersAdmin)
 admin.site.register(Po_order_detail, Po_order_detailAdmin)
 admin.site.register(SPVData, SPVDataAdmin)
+admin.site.register(Letterhead, LetterheadAdmin)
