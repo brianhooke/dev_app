@@ -108,19 +108,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 EMAIL_BACKEND = 'dev_app.email_backends.CustomEmailBackend'
 EMAIL_HOST = 'smtp.office365.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'invoices@mason.build'
-EMAIL_HOST_PASSWORD = '11_mathry'
-DEFAULT_FROM_EMAIL = 'invoices@mason.build'
-# EMAIL_HOST_USER = env('EMAIL_HOST_USER')
-# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')

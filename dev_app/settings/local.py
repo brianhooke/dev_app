@@ -20,6 +20,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 PROJECT_NAME = '123 Fake Street'
+LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
 
 LOGGING = {
     'version': 1,
@@ -34,3 +35,7 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+EMAIL_HOST_USER = 'invoices@mason.build'
+# EMAIL_HOST_PASSWORD = 'password'
+DEFAULT_FROM_EMAIL = 'invoices@mason.build'

@@ -132,7 +132,6 @@ def homepage_view(request):
 def build_view(request):
     return main(request, 2)
 
-
 def alphanumeric_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split('([0-9]+)', s)]
 
@@ -299,7 +298,6 @@ def get_quote_allocations(request, supplier_id):
     return JsonResponse(data, safe=False)
 
 
-    
 # create new design or report category
 @csrf_exempt
 def create_plan(request):
@@ -516,7 +514,8 @@ def generate_po_pdf(request, po_order_pk):
     po_order = Po_orders.objects.get(pk=po_order_pk)
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk).select_related('costing', 'quote')
     company_details = Po_globals.objects.first()
-    letterhead_path = os.path.join(settings.MEDIA_ROOT, 'letterhead/letterhead.pdf')
+    # letterhead_path = os.path.join(settings.MEDIA_ROOT, 'letterhead/letterhead.pdf')
+    letterhead_path = settings.LETTERHEAD_PATH  # Use the new settings.py variable
     content_buffer = BytesIO()
     p = canvas.Canvas(content_buffer, pagesize=A4)
     if company_details:
@@ -681,7 +680,6 @@ def send_po_email(request, po_order_pk, recipient_list):
     # Retrieve the Po_orders instance
     po_order = Po_orders.objects.get(po_order_pk=po_order_pk)
     contact_name = po_order.po_supplier.contact_name  # Get the contact name
-
     subject = 'Purchase Order'
     message = f'''Dear {contact_name},
 
@@ -693,14 +691,14 @@ Best regards,
 Brian Hooke.
     '''
     from_email = settings.DEFAULT_FROM_EMAIL
-    
+
     # Generate the PO PDF
     pdf_buffer = generate_po_pdf_bytes(request, po_order_pk)
-    
+
     # Create the email
     email = EmailMessage(subject, message, from_email, recipient_list)
     email.attach(f'PO_{po_order_pk}.pdf', pdf_buffer, 'application/pdf')
-    
+
     # Attach additional PDFs
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk)
     processed_quotes = set()
@@ -711,7 +709,10 @@ Brian Hooke.
                 with default_storage.open(quote_pdf_path, 'rb') as f:
                     email.attach(f'Quote_{po_order_detail.quote.quotes_pk}.pdf', f.read(), 'application/pdf')
                 processed_quotes.add(po_order_detail.quote.quotes_pk)
-    
+    # Add CC addresses
+    cc_addresses = settings.EMAIL_CC.split(';')
+    email.cc = cc_addresses
+
     # Send the email and update po_sent if successful
     try:
         email.send()
