@@ -34,6 +34,8 @@ from urllib.parse import urljoin
 import textwrap
 from django.core import serializers
 from reportlab.lib import colors
+import requests
+
 
 
 logger = logging.getLogger(__name__)
@@ -297,7 +299,6 @@ def get_quote_allocations(request, supplier_id):
     data['costings'] = costings
     return JsonResponse(data, safe=False)
 
-
 # create new design or report category
 @csrf_exempt
 def create_plan(request):
@@ -514,14 +515,24 @@ def generate_po_pdf(request, po_order_pk):
     po_order = Po_orders.objects.get(pk=po_order_pk)
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk).select_related('costing', 'quote')
     company_details = Po_globals.objects.first()
-    # letterhead_path = os.path.join(settings.MEDIA_ROOT, 'letterhead/letterhead.pdf')
+    
     letterhead = Letterhead.objects.first()
     if letterhead is not None:
-        letterhead_path = letterhead.letterhead_path.path
+        letterhead_path = letterhead.letterhead_path.name  # Get the file name or path as a string
+        if settings.DEBUG:  # Assuming DEBUG=True means local development
+            letterhead_full_path = default_storage.path(letterhead_path)
+            with open(letterhead_full_path, "rb") as f:
+                letterhead_pdf_content = f.read()
+            letterhead_pdf = PdfReader(BytesIO(letterhead_pdf_content))
+        else:
+            letterhead_url = letterhead.letterhead_path.url
+            response = requests.get(letterhead_url)
+            letterhead_pdf = PdfReader(BytesIO(response.content))
     else:
         raise Exception("No Letterhead instance found.")
     content_buffer = BytesIO()
     p = canvas.Canvas(content_buffer, pagesize=A4)
+
     if company_details:
         details = [
             ("PO Reference: ", company_details.reference),
@@ -550,6 +561,7 @@ def generate_po_pdf(request, po_order_pk):
         p.setFont("Helvetica", 12)
         p.drawString(inch/2, y_position, today)
         y_position -= 12  # Move to the next line
+
     p.setFont("Helvetica-Bold", 15)
     supplier_name = po_order.po_supplier.contact_name  # Get the supplier's name
     project_address = po_globals.project_address  # Get the job address
@@ -562,9 +574,11 @@ def generate_po_pdf(request, po_order_pk):
     for line in wrapped_po_text:
         p.drawString(x_position, y_position, line)
         y_position -= 22  # Adjust for line height
+
     p.setLineWidth(1)
     p.line(x_position, y_position - 2, x_position + max_text_width, y_position - 2)
     y_position -= 36
+
     p.setFont("Helvetica-Bold", 12)
     table_headers = ["Claim Category", "Quote # or Variation", "Amount ($)*"]
     col_widths = [2.5 * inch, 3.5 * inch, 1 * inch]  # Adjusted column widths
@@ -576,6 +590,7 @@ def generate_po_pdf(request, po_order_pk):
             header_x_position = x_start + sum(col_widths[:i]) + col_widths[i] / 2 - p.stringWidth(header, "Helvetica-Bold", 12) / 2
         p.drawString(header_x_position, y_position + 2, header)  # Adjust for padding
         p.line(header_x_position, y_position, header_x_position + p.stringWidth(header, "Helvetica-Bold", 12), y_position)  # Draw underline
+
     y_position -= cell_height
     total_amount = 0  # Initialize total amount
     p.setFont("Helvetica", 10)  # Smaller font size for table contents
@@ -607,7 +622,9 @@ def generate_po_pdf(request, po_order_pk):
                     p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding and right alignment
                 else:
                     p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding
+
         y_position -= max_row_height
+
     p.setFont("Helvetica-Bold", 12)
     total_row_data = [
         "Total",
@@ -621,12 +638,14 @@ def generate_po_pdf(request, po_order_pk):
             p.line(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position, x_start + sum(col_widths[:i+1]) - line_width - 2 + p.stringWidth(cell, "Helvetica-Bold", 12), y_position)  # Draw underline
         else:
             p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2, cell)  # Adjust for padding
+
     y_position -= (cell_height * 2.5)
     p.setFont("Helvetica", 10)
     fixed_text = "* All amounts are net of GST. Supplier to add GST if applicable."
     for line in wrap_text(fixed_text, 110):
         p.drawString(x_start, y_position, line)
         y_position -= (cell_height) * 0.75  # Consistent line break
+
     y_position -= (cell_height) * 0.75  # Blank row
     notes = [po_order.po_note_1, po_order.po_note_2, po_order.po_note_3]
     for note in notes:
@@ -634,18 +653,21 @@ def generate_po_pdf(request, po_order_pk):
             p.drawString(x_start, y_position, line)
             y_position -= (cell_height) * 0.75  # Consistent line break
         y_position -= (cell_height) * 0.75  # Blank row
+
     p.showPage()
     p.save()
     content_buffer.seek(0)
     content_pdf = PdfReader(content_buffer)
-    letterhead_pdf = PdfReader(open(letterhead_path, "rb"))
+
     output_pdf = PdfWriter()
     page = letterhead_pdf.pages[0]
     page.merge_page(content_pdf.pages[0])
     output_pdf.add_page(page)
+
     merged_buffer = BytesIO()
     output_pdf.write(merged_buffer)
     merged_buffer.seek(0)
+
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="PO_{po_order_pk}.pdf"'
     response.write(merged_buffer.getvalue())
@@ -813,7 +835,6 @@ def upload_costings(request):
                     'sc_paid': row['sc_paid'],
                 }
             )
-
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
@@ -822,13 +843,13 @@ def upload_letterhead(request):
     if request.method == 'POST':
         file = request.FILES['letterhead_path']
         file.name = 'letterhead.pdf'  # Set the filename
-        # Delete all existing letterheads
-        Letterhead.objects.all().delete()
         # Save the file to S3
         file_path = default_storage.save(file.name, file)
         # Create a new letterhead with the uploaded file
         letterhead = Letterhead(letterhead_path=file_path)
         letterhead.save()
+        # Delete all existing letterheads except the new one
+        Letterhead.objects.exclude(id=letterhead.id).delete()
         return JsonResponse({'message': 'File uploaded successfully'})
     else:
         return JsonResponse({'error': 'Invalid request method'})
