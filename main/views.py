@@ -2,7 +2,7 @@ import csv
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -43,6 +43,13 @@ logger = logging.getLogger(__name__)
 def drawings(request):
     return render(request, 'drawings.html')
 
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.forms.models import model_to_dict
+from django.db.models import Sum
+from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
+import json
+
 def main(request, division):
     costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list', 'category__category', 'item')
     costings = [model_to_dict(costing) for costing in costings]
@@ -62,7 +69,7 @@ def main(request, division):
     quote_allocations_sums = Quote_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
     quote_allocations_sums_dict = {item['item']: item['total_amount'] for item in quote_allocations_sums}
     for costing in costings:
-        costing['committed'] = quote_allocations_sums_dict.get(costing['costing_pk'], 0)    
+        costing['committed'] = quote_allocations_sums_dict.get(costing['costing_pk'], 0)
     items = [{'item': costing['item'], 'uncommitted': costing['uncommitted'], 'committed': costing['committed']} for costing in costings]
     committed_quotes = Quotes.objects.filter(contact_pk__division=division).all().values('quotes_pk', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk', 'contact_pk__contact_name')
     committed_quotes_list = list(committed_quotes)
@@ -70,7 +77,7 @@ def main(request, division):
         if settings.DEBUG:
             quote['pdf'] = settings.MEDIA_URL + quote['pdf']
         else:
-            quote['pdf'] = settings.MEDIA_URL + quote['pdf']   
+            quote['pdf'] = settings.MEDIA_URL + quote['pdf']
     committed_quotes_json = json.dumps(committed_quotes_list, default=str)
     quote_allocations_json = json.dumps(list(quote_allocations), default=str)
     contact_pks_in_quotes = Quotes.objects.filter(contact_pk__division=division).values_list('contact_pk', flat=True).distinct()
@@ -95,12 +102,23 @@ def main(request, division):
             'po_order_pk': order.po_order_pk,
             'po_supplier': order.po_supplier_id,
             'supplier_name': order.po_supplier.contact_name,
-            'supplier_email': order.po_supplier.contact_email,  # Add this line
+            'supplier_email': order.po_supplier.contact_email,
             'po_note_1': order.po_note_1,
             'po_note_2': order.po_note_2,
             'po_note_3': order.po_note_3,
-            'po_sent': order.po_sent  # Include the po_sent field
+            'po_sent': order.po_sent
         })
+    # Fetch invoices data
+    invoices = Invoices.objects.filter(contact_pk__division=division).select_related('contact_pk').all()
+    invoices_list = [
+        {
+            'contact_name': invoice.contact_pk.contact_name,
+            'total_cost': invoice.total_cost,
+            'supplier_invoice_number': invoice.supplier_invoice_number,
+            'pdf_url': invoice.pdf.url
+        }
+        for invoice in invoices
+    ]
     spv_data = SPVData.objects.first()  # Assuming SPVData is a singleton model
     context = {
         'division': division,
@@ -124,9 +142,11 @@ def main(request, division):
         },
         'po_globals': po_globals,
         'po_orders': po_orders_list,
-        'spv_data': spv_data,  # Add this line
+        'invoices': invoices_list,  # Add invoices data to context
+        'spv_data': spv_data,
     }
     return render(request, 'homepage.html' if division == 1 else 'build.html', context)
+
 
 def homepage_view(request):
     return main(request, 1)
@@ -853,3 +873,28 @@ def upload_letterhead(request):
         return JsonResponse({'message': 'File uploaded successfully'})
     else:
         return JsonResponse({'error': 'Invalid request method'})
+    
+@csrf_exempt
+def upload_invoice(request):
+    if request.method == 'POST':
+        supplier_id = request.POST.get('supplier')
+        invoice_number = request.POST.get('invoice_number')
+        invoice_total = request.POST.get('invoice_total')
+        pdf_file = request.FILES.get('pdf')
+        
+        try:
+            contact = Contacts.objects.get(pk=supplier_id)
+            invoice = Invoices(
+                supplier_invoice_number=invoice_number,
+                total_cost=invoice_total,
+                pdf=pdf_file,
+                contact_pk=contact
+            )
+            invoice.save()
+            return JsonResponse({'success': True})
+        except Contacts.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Supplier not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    else:
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})

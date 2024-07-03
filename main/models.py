@@ -104,6 +104,16 @@ class Quote_allocations(models.Model):
     notes = models.CharField(max_length=100, null=True)
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
+
+class Invoices(models.Model):
+    invoice_pk = models.AutoField(primary_key=True)
+    supplier_invoice_number = models.CharField(max_length=255)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    pdf = models.FileField(upload_to='invoices/')
+    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
+    def __str__(self):
+        return f"Invoices #{self.invoice_pk} - Cost: {self.total_cost}"
+
 #End Builder/Developer Model Set 1:
 
 #Builder/Developer Model Set 2:
