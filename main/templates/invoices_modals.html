@@ -1,4 +1,4 @@
-<!--Create Invoice Supplier Select Modal-->
+<!-- Create Invoice Supplier Select Modal -->
 <div class="modal fade" id="createInvoiceSelectModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content" style="border: 3px solid black;">
@@ -57,10 +57,11 @@
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Contact</th>
+                                    <th>Supplier</th>
                                     <th>Total Cost $</th>
                                     <th>Invoice #</th>
                                     <th>View PDF</th>
+                                    <th>Process</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -70,6 +71,10 @@
                                         <td>{{ invoice.total_cost }}</td>
                                         <td>{{ invoice.supplier_invoice_number }}</td>
                                         <td><a href="#" class="view-pdf" data-url="{{ invoice.pdf_url }}">View</a></td>
+                                        <td>
+                                            <a href="#" class="process-invoice" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_cost }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal">Process</a>
+                                            <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -89,4 +94,102 @@
     </div>
 </div>
 
+<!-- Select Order Type Modal -->
+<div class="modal fade" id="selectOrderTypeModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document" style="max-width: 300px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                <h5 class="modal-title">Select Invoice Type</h5>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="display: flex; align-items: center;">
+                    <strong>Supplier:&nbsp;</strong>
+                    <span id="invoiceSupplierName"></span>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center;">
+                    <strong>Invoice #:&nbsp;</strong>
+                    <span id="invoiceNumber"></span>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center;">
+                    <strong>Invoice Total ($):&nbsp;</strong>
+                    <span id="invoiceTotal"></span>
+                </div>
+                <div class="form-group">
+                    <label for="orderTypeSelect">Select option...</label>
+                    <select class="form-control" id="orderTypeSelect">
+                        <option selected>Select option...</option>
+                        <option value="allocateAgainstPO">Allocate Against PO</option>
+                        <option value="directCosts">Direct Costs</option>
+                    </select>
+                    <input type="hidden" id="selectedInvoiceId">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="col-6">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+                <div class="col-6 text-right">
+                    <button type="button" class="btn btn-primary" id="selectOrderTypeButton">Select</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Direct Cost Allocation Modal -->
+<div class="modal fade" id="directCostModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document" style="max-width: 100%; width: 100%; margin: 0; height: calc(100vh - 60px);">
+        <div class="modal-content" style="border: 3px solid black; width: 100%; height: calc(100vh - 60px);">
+            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                <h5 class="modal-title">Direct Cost Allocation</h5>
+            </div>
+            <div class="modal-body row" style="height: calc(100% - 56px);">
+                <div class="col-md-6" style="height: 100%;">
+                    <iframe id="directCostPdfViewer" style="width: 100%; height: 100%; border: 1px solid #ddd;" src=""></iframe>
+                </div>
+                <div class="col-md-6" style="height: 100%; overflow-y: auto;">
+                    <div class="form-group">
+                        <label><strong>Supplier:</strong> <span id="directCostSupplier"></span></label>
+                    </div>
+                    <div class="form-group">
+                        <label><strong>Total Cost:</strong> <span id="directCostTotal"></span></label>
+                    </div>
+                    <div class="form-group">
+                        <label><strong>Invoice #:</strong> <span id="directCostInvoiceNumber"></span></label>
+                    </div>
+                    <input type="hidden" id="hiddenInvoiceId">
+                    <h3>Line Items</h3>
+                    <table id="lineItemsTable" class="table" style="table-layout: fixed;">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="width: 17%;">Item</th>
+                                <th colspan="2" style="width: 21%;">Uncommitted</th>
+                                <th rowspan="2" style="width: 21%;">This Invoice</th>
+                                <th rowspan="2" style="width: 16%;">Total</th>
+                                <th rowspan="2" style="width: 20%;">Notes</th>
+                                <!-- <th rowspan="2" class="delete-cell-header" style="width: 5%;"></th> -->
+                            </tr>
+                            <tr>
+                                <th style="width: 10%;">Old</th>
+                                <th style="width: 15%;">New</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Rows will be added here -->
+                            <tr id="stillToAllocateRow">
+                                <td colspan="5">Still to Allocate</td>
+                                <td id="stillToAllocateValue">0.00</td>
+                                <td id="notes"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button id="addRowButton">+</button>
+                    <button id="closeBtn">Close</button>
+                    <button id="commitBtn" style="float: right; display: inline-block;">Save</button>
+                    <button id="updateBtn" style="float: right; display: none;">Update</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
