@@ -5,7 +5,7 @@ document.getElementById('claimsDropdown').addEventListener('change', function(e)
             var file = fileInput.files[0];
             if (file) {
                 var fileURL = URL.createObjectURL(file);
-                var pdfViewer = document.getElementById('pdfViewer');
+                var pdfViewer = document.getElementById('pdfViewerInvoices');
                 pdfViewer.src = fileURL;
                 $('#createInvoiceSelectModal').modal('show');
             }
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.blob())
             .then(blob => {
                 const url = URL.createObjectURL(blob);
-                const pdfViewer = document.getElementById('existingPdfViewer');
+                const pdfViewer = document.getElementById('existingInvoicesPdfViewer');
                 pdfViewer.src = url;
             })
             .catch(error => {
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Function to display the Direct Cost Allocation Modal
 function directCostAllocation(pdfFilename, invoiceId = "", supplier = "", totalCost = 0.00, allocations = [], updating = false, invoiceNumber = "") {
     // Set the PDF URL in the iframe
-    document.getElementById('directCostPdfViewer').src = pdfFilename;
+    document.getElementById('directCostInvoicesPdfViewer').src = pdfFilename;
 
     // Set the supplier, total cost, and invoice number
     document.getElementById('directCostSupplier').textContent = supplier;
@@ -142,13 +142,13 @@ function directCostAllocation(pdfFilename, invoiceId = "", supplier = "", totalC
     document.getElementById('hiddenInvoiceId').value = invoiceId;
 
     // Clear existing line items
-    var tableBody = document.getElementById('lineItemsTable').getElementsByTagName('tbody')[0];
+    var tableBody = document.getElementById('lineItemsTableInvoices').getElementsByTagName('tbody')[0];
     while (tableBody.rows.length > 1) { // Keep the 'Still to Allocate' row
         tableBody.deleteRow(0);
     }
 
     // Add event listener to the 'add row' button
-    document.getElementById('addRowButton').addEventListener('click', function() {
+    document.getElementById('addInvoicesRowButton').addEventListener('click', function() {
         addInvoiceLineItem();
         updateStillToAllocateValue();
     });
@@ -164,14 +164,14 @@ function directCostAllocation(pdfFilename, invoiceId = "", supplier = "", totalC
 
     // Set up 'close' button event listener
     document.getElementById('closeBtn').addEventListener('click', function() {
-        $('#directCostModal').modal('hide');
+        $('#directInvoicesCostModal').modal('hide');
     });
 
     // Set up 'commit' button event listener
     document.getElementById('commitBtn').addEventListener('click', function() {
         var data = gatherData();
         if (!data) return;
-        data.pdf = document.getElementById('directCostPdfViewer').src;
+        data.pdf = document.getElementById('directCostInvoicesPdfViewer').src;
         fetch('/commit_data/', {
             method: 'POST',
             headers: {
@@ -211,7 +211,7 @@ function directCostAllocation(pdfFilename, invoiceId = "", supplier = "", totalC
     });
 
     // Show the modal
-    $('#directCostModal').modal('show');
+    $('#directInvoicesCostModal').modal('show');
 }
 
 function gatherData() {
@@ -220,7 +220,7 @@ function gatherData() {
     var allocated = 0;
     var contactPk = document.getElementById('hiddenInvoiceId').value;
     var invoiceNumber = document.getElementById('directCostInvoiceNumber').textContent;
-    var tableBody = document.getElementById('lineItemsTable').tBodies[0];
+    var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
     for (var i = 0; i < tableBody.rows.length - 1; i++) {
         var cellValue = parseFloat(tableBody.rows[i].cells[4].firstChild.value.replace(/,/g, ''));
         cellValue = isNaN(cellValue) ? 0 : cellValue;
@@ -240,7 +240,7 @@ function gatherData() {
         return null;
     }
     // Populate the lineItemsTable with the current allocations
-    var allocations = Array.from(lineItemsTable.rows).slice(1, -1).map(function(row) {
+    var allocations = Array.from(lineItemsTableInvoices.rows).slice(1, -1).map(function(row) {
         var selectElement = row.cells[0].querySelector('select');
         if (selectElement) {
             var selectedOption = selectElement.options[selectedOption.selectedIndex];
@@ -358,6 +358,6 @@ function addInvoiceLineItem(item, amount, notes = '') {
             updateStillToAllocateValue();
         }
     });
-    var stillToAllocateRow = document.getElementById('stillToAllocateRow');
-    tableBody.insertBefore(newRow, stillToAllocateRow);
+    var stillToAllocateInvoicesRow = document.getElementById('stillToAllocateInvoicesRow');
+    tableBody.insertBefore(newRow, stillToAllocateInvoicesRow);
 }
