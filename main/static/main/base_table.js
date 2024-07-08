@@ -53,7 +53,7 @@ document.querySelectorAll('.save-costs').forEach(function(button) {
 });
 
 $('[data-toggle="collapse"]').on('click', function () {
-  console.log("clicked");
+  // console.log("clicked");
   $(this).toggleClass('collapsed');
 
   // Get the group number

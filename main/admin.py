@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices
+from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations
 
 class CategoriesAdmin(admin.ModelAdmin):
     list_display = ("categories_pk", "division", "category", "order_in_list")
@@ -50,7 +50,10 @@ class LetterheadAdmin(admin.ModelAdmin):
     list_display = ("letterhead_path",)
 
 class InvoicesAdmin(admin.ModelAdmin):
-    list_display = ("invoice_pk", "supplier_invoice_number", "total_cost", "pdf", "contact_pk")
+    list_display = ("invoice_pk", "invoice_status", "supplier_invoice_number", "total_net", "pdf", "contact_pk", "total_gst")
+
+class InvoiceAllocationsAdmin(admin.ModelAdmin):
+    list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes")
 
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
@@ -69,3 +72,4 @@ admin.site.register(Po_order_detail, Po_order_detailAdmin)
 admin.site.register(SPVData, SPVDataAdmin)
 admin.site.register(Letterhead, LetterheadAdmin)
 admin.site.register(Invoices, InvoicesAdmin)
+admin.site.register(Invoice_allocations, InvoiceAllocationsAdmin)

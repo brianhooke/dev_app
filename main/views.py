@@ -2,7 +2,7 @@ import csv
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -35,6 +35,8 @@ import textwrap
 from django.core import serializers
 from reportlab.lib import colors
 import requests
+from decimal import Decimal
+
 
 
 
@@ -112,8 +114,11 @@ def main(request, division):
     invoices = Invoices.objects.filter(contact_pk__division=division).select_related('contact_pk').all()
     invoices_list = [
         {
+            'invoice_pk': invoice.invoice_pk,  # Add this line
+            'invoice_status': invoice.invoice_status,
             'contact_name': invoice.contact_pk.contact_name,
-            'total_cost': invoice.total_cost,
+            'total_net': invoice.total_net,
+            'total_gst': invoice.total_gst,
             'supplier_invoice_number': invoice.supplier_invoice_number,
             'pdf_url': invoice.pdf.url
         }
@@ -880,13 +885,15 @@ def upload_invoice(request):
         supplier_id = request.POST.get('supplier')
         invoice_number = request.POST.get('invoice_number')
         invoice_total = request.POST.get('invoice_total')
+        invoice_total_gst = request.POST.get('invoice_total_gst') # Get the GST total value
         pdf_file = request.FILES.get('pdf')
-        
         try:
             contact = Contacts.objects.get(pk=supplier_id)
             invoice = Invoices(
                 supplier_invoice_number=invoice_number,
-                total_cost=invoice_total,
+                total_net=invoice_total,
+                total_gst=invoice_total_gst, # Set the GST total value
+                invoice_status=0, # Set the invoice status to 0
                 pdf=pdf_file,
                 contact_pk=contact
             )
@@ -898,3 +905,45 @@ def upload_invoice(request):
             return JsonResponse({'success': False, 'error': str(e)})
     else:
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+@csrf_exempt
+def upload_invoice_allocations(request):
+    if request.method == 'POST':
+        invoice_pk = request.POST.get('invoice_pk')
+        allocations = json.loads(request.POST.get('allocations'))
+        try:
+            invoice = Invoices.objects.get(pk=invoice_pk)
+            for allocation in allocations:
+                item_id = allocation.get('item')
+                if item_id:
+                    item = Costing.objects.get(pk=item_id)
+                    amount = Decimal(str(allocation.get('thisInvoice', 0)))  # Convert to Decimal
+                    gst_amount = Decimal(str(allocation.get('gst_amount', 0)))  # Extract and convert gst_amount to Decimal
+                    uncommitted = Decimal(str(allocation.get('uncommitted', 0)))  # Extract and convert to Decimal
+                    notes = allocation.get('notes', '')
+
+                    # Create Invoice Allocation
+                    Invoice_allocations.objects.create(
+                        invoice_pk=invoice,
+                        item=item,
+                        amount=amount,
+                        gst_amount=gst_amount,  # Add gst_amount to the allocation
+                        notes=notes
+                    )
+
+                    # Update uncommitted field in Costing model
+                    item.uncommitted = uncommitted  # Set uncommitted field to the provided value
+                    item.save()
+
+            # Set invoice status to 1 after successful upload of allocations
+            invoice.invoice_status = 1
+            invoice.save()
+            return JsonResponse({'success': True})
+        except Invoices.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Invoice not found'})
+        except Costing.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Costing item not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})

@@ -81,7 +81,6 @@ class Costing(models.Model):
     item = models.CharField(max_length=100)
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
-    # uncommitted_note = models.CharField(max_length=1000, null=True)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
     def __str__(self):
@@ -107,12 +106,24 @@ class Quote_allocations(models.Model):
 
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
+    invoice_status = models.IntegerField(default=0)  # 0 when invoice create, 1 when allocated, 2 when sent to Xero.
     supplier_invoice_number = models.CharField(max_length=255)
-    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    total_net = models.DecimalField(max_digits=10, decimal_places=2)
+    total_gst = models.DecimalField(max_digits=10, decimal_places=2)
     pdf = models.FileField(upload_to='invoices/')
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
     def __str__(self):
-        return f"Invoices #{self.invoice_pk} - Cost: {self.total_cost}"
+        return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
+    
+class Invoice_allocations(models.Model):
+    invoice_allocations_pk = models.AutoField(primary_key=True)
+    invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE)
+    item = models.ForeignKey(Costing, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.CharField(max_length=100, null=True)
+    def __str__(self):
+        return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
 
 #End Builder/Developer Model Set 1:
 

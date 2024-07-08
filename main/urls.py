@@ -38,6 +38,7 @@ urlpatterns = [
     path('upload_costings/', upload_costings, name='upload_costings'),
     path('upload_letterhead/', views.upload_letterhead, name='upload_letterhead'),
     path('upload_invoice/', views.upload_invoice, name='upload_invoice'),
+    path('upload_invoice_allocations/', views.upload_invoice_allocations, name='upload_invoice_allocations'),
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]

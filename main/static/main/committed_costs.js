@@ -50,7 +50,7 @@ $(document).ready(function() {
 committedQuotes.forEach(function(quote) {
     // Format total_cost with thousands separator
     var supplier_quote_number = quote.supplier_quote_number;
-    console.log("Supplier quote number is: "+supplier_quote_number);
+    // console.log("Supplier quote number is: "+supplier_quote_number);
     var contact_pk = quote.contact_pk;
     var totalCostFormatted = parseFloat(quote.total_cost).toLocaleString();
     var supplier = quote.contact_pk__contact_name;
