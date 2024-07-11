@@ -90,7 +90,7 @@
                                         <td style="padding: 6px;">{{ invoice.supplier_invoice_number }}</td>
                                         <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
                                         <td style="padding: 6px;">
-                                            <button onclick="postInvoice({{ invoice.invoice_pk }})">Process</button>
+                                            <a href="#" class="process-invoice-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal">Process</a>
                                             <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
                                         </td>
                                     </tr>

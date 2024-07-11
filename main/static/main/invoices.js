@@ -584,6 +584,12 @@ function gatherAllocationsDataInvoices() {
       });
 }
 
+$(document).on('click', '.process-invoice-invoices', function(e) {
+    e.preventDefault();  // Prevent the default action of the link
+    var invoicePk = $(this).data('invoice-id');  // Get the invoice_pk from the data attribute
+    postInvoice(invoicePk);  // Call the postInvoice function with the invoice_pk
+});
+
 function postInvoice(invoicePk) {
     fetch('/post_invoice/', {
         method: 'POST',
