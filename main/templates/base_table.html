@@ -192,31 +192,32 @@ document.getElementById('uploadCostingButton').addEventListener('click', functio
 });
 
 document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
-  var file = event.target.files[0];
-  if (file) {
-    var formData = new FormData();
-    formData.append('csv_file', file);
+    var file = event.target.files[0];
+    if (file) {
+        var formData = new FormData();
+        formData.append('csv_file', file);
 
-    fetch('/upload_costings/', {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken')  // Assuming you have a function to get the CSRF token
-      },
-      body: formData
-    })
-    .then(response => response.text())  // Convert the response body to text
-    .then(text => {
-      if (!response.ok) {
-        throw new Error(text);  // Throw an error with the server's message
-      }
-      alert('File uploaded successfully');
-      location.reload();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      alert('An error occurred while uploading the file. Details: ' + error.message);
-    });
-  }
+        fetch('/upload_costings/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')  // Assuming you have a function to get the CSRF token
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(text);  // Throw an error with the server's message
+                });
+            }
+            alert('File uploaded successfully');
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while uploading the file. Details: ' + error.message);
+        });
+    }
 });
 
 
