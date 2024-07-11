@@ -79,6 +79,7 @@ class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
     category = models.ForeignKey(Categories, on_delete=models.CASCADE)
     item = models.CharField(max_length=100)
+    xero_account_code = models.CharField(max_length=100)
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
@@ -108,6 +109,8 @@ class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
     invoice_status = models.IntegerField(default=0)  # 0 when invoice create, 1 when allocated, 2 when sent to Xero.
     supplier_invoice_number = models.CharField(max_length=255)
+    invoice_date = models.DateField()
+    invoice_due_date = models.DateField()
     total_net = models.DecimalField(max_digits=10, decimal_places=2)
     total_gst = models.DecimalField(max_digits=10, decimal_places=2)
     pdf = models.FileField(upload_to='invoices/')
@@ -130,6 +133,7 @@ class Invoice_allocations(models.Model):
 #Builder/Developer Model Set 2:
 class Contacts(models.Model):
     contact_pk = models.AutoField(primary_key=True)
+    xero_contact_id = models.CharField(max_length=255)
     division = models.IntegerField()
     contact_name = models.CharField(max_length=200)
     contact_email = models.EmailField(max_length=254)

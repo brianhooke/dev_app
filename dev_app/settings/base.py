@@ -36,7 +36,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'main'
+    'main',
+    'xeroapi',
 ]
 
 MIDDLEWARE = [
@@ -116,3 +117,8 @@ EMAIL_BACKEND = 'dev_app.email_backends.CustomEmailBackend'
 EMAIL_HOST = 'smtp.office365.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+
+#to be deleted pre production:
+
+XERO_CLIENT_ID='13C5F3D2D3F84B668B7A1E215E153748'
+XERO_CLIENT_SECRET='jRkopFT6kxV1_EXpVytfMCBB1XFqUuovfiZebennTVfFSMr6'

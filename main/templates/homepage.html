@@ -50,6 +50,7 @@
 {% include 'po_modals.html' %}
 {% include 'invoices_modals.html' %}
 {{ contacts|json_script:"contacts" }}
+{{ contacts_unfiltered|json_script:"contacts_unfiltered" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ costings|json_script:"costings" }}
 {{ items|json_script:"items-data" }}
@@ -57,6 +58,7 @@
 
 <script type="text/javascript">
     var contacts = JSON.parse(document.getElementById('contacts').textContent);
+    var contacts_unfiltered = JSON.parse(document.getElementById('contacts_unfiltered').textContent);
     var committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
     var costings = JSON.parse(document.getElementById('costings').textContent);
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');

@@ -34,8 +34,16 @@
                         <input type="number" step="0.01" class="form-control" id="invoiceTotalGSTInput" placeholder="Enter invoice GST">
                     </div>
                     <div class="form-group" style="width: 100%;">
-                        <label for="invoiceTotalGrossInput">Invoice Total (incl GST)</label>
-                        <p id="invoiceTotalGrossInput"></p>
+                        <label for="invoiceTotalGrossInput"><strong>Invoice Total (incl GST)</strong></label>
+                        <p id="invoiceTotalGrossInput"><strong></strong></p>
+                    </div>
+                    <div class="form-group" style="width: 100%;">
+                        <label for="invoiceDateInput">Invoice Date</label>
+                        <input type="date" class="form-control" id="invoiceDateInput" value="{{ now|date:'Y-m-d' }}">
+                    </div>
+                    <div class="form-group" style="width: 100%;">
+                        <label for="invoiceDueDateInput">Invoice Due Date</label>
+                        <input type="date" class="form-control" id="invoiceDueDateInput" value="{{ now|date:'Y-m-d' }}">
                     </div>
                 </div>
             </div>
@@ -82,7 +90,7 @@
                                         <td style="padding: 6px;">{{ invoice.supplier_invoice_number }}</td>
                                         <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
                                         <td style="padding: 6px;">
-                                            <a href="#" class="process-invoice-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal">Process</a>
+                                            <button onclick="postInvoice({{ invoice.invoice_pk }})">Process</button>
                                             <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
                                         </td>
                                     </tr>

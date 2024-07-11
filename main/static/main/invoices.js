@@ -470,6 +470,10 @@ function gatherInvoiceData() {
     var invoiceTotalGST = document.getElementById('invoiceTotalGSTInput').value; // Get the GST total value
     var fileInput = document.getElementById('newClaimPdfInputInvoices');
     var file = fileInput.files[0];
+    var invoiceDate = document.getElementById('invoiceDateInput').value;
+    var invoiceDueDate = document.getElementById('invoiceDueDateInput').value;
+    console.log("Invoice Date:", invoiceDate);
+    console.log("Invoice Due Date:", invoiceDueDate);
     console.log("Supplier:", supplierSelect.value);
     console.log("Invoice Number:", invoiceNumber);
     console.log("Invoice Total:", invoiceTotal);
@@ -479,6 +483,8 @@ function gatherInvoiceData() {
     formData.append('invoice_total', invoiceTotal);
     formData.append('invoice_total_gst', invoiceTotalGST); // Append the GST total value to formData
     formData.append('pdf', file);
+    formData.append('invoice_date', invoiceDate);
+    formData.append('invoice_due_date', invoiceDueDate);
     // var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
     // var allocations = [];
     // for (var i = 0; i < tableBody.rows.length - 1; i++) {
@@ -578,3 +584,21 @@ function gatherAllocationsDataInvoices() {
       });
 }
 
+function postInvoice(invoicePk) {
+    fetch('/post_invoice/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookieInvoices('csrftoken')
+        },
+        body: JSON.stringify({ invoice_pk: invoicePk })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Handle the response here
+        console.log(data);
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+    });
+}

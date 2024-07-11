@@ -132,3 +132,23 @@ $('[data-toggle="collapse"]').on('click', function () {
     paidCell.html(paidCell.data('original'));
   }
 });
+
+
+//XERO CODE
+// document.getElementById('getXeroToken').addEventListener('click', function() {
+//   fetch('/get_xero_token/', {
+//       method: 'GET', // or 'POST'
+//       headers: {
+//           'Content-Type': 'application/json',
+//           // 'X-CSRFToken': csrftoken  // Uncomment this line if you're using CSRF protection
+//       },
+//   })
+//   .then(response => response.json())
+//   .then(data => {
+//       alert(JSON.stringify(data));
+//   })
+//   .catch((error) => {
+//       console.error('Error:', error);
+//   });
+// });
+

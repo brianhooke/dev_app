@@ -8,13 +8,13 @@ class ProjectsAdmin(admin.ModelAdmin):
     list_display = ("projects_pk", "project")
 
 class ContactsAdmin(admin.ModelAdmin):
-    list_display = ("contact_pk", "division", "contact_name", "contact_email")
+    list_display = ("contact_pk", "xero_contact_id", "division", "contact_name", "contact_email")
 
 class QuotesAdmin(admin.ModelAdmin):
     list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf")
 
 class CostingAdmin(admin.ModelAdmin):
-    list_display = ("costing_pk", "category", "item", "contract_budget", "uncommitted", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "sc_invoiced", "sc_paid")
 
 class Quote_allocationsAdmin(admin.ModelAdmin):
     list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "notes")
@@ -50,7 +50,7 @@ class LetterheadAdmin(admin.ModelAdmin):
     list_display = ("letterhead_path",)
 
 class InvoicesAdmin(admin.ModelAdmin):
-    list_display = ("invoice_pk", "invoice_status", "supplier_invoice_number", "total_net", "pdf", "contact_pk", "total_gst")
+    list_display = ("invoice_pk", "invoice_status", "supplier_invoice_number", "invoice_due_date", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst")
 
 class InvoiceAllocationsAdmin(admin.ModelAdmin):
     list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes")

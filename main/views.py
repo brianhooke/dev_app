@@ -36,7 +36,8 @@ from django.core import serializers
 from reportlab.lib import colors
 import requests
 from decimal import Decimal
-
+from ratelimit import limits, sleep_and_retry
+from urllib.request import urlretrieve
 
 
 
@@ -51,6 +52,8 @@ from django.forms.models import model_to_dict
 from django.db.models import Sum
 from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
 import json
+from django.db.models import Q
+
 
 def main(request, division):
     costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list', 'category__category', 'item')
@@ -58,8 +61,12 @@ def main(request, division):
     for costing in costings:
         category = Categories.objects.get(pk=costing['category'])
         costing['category'] = category.category
-    contacts = Contacts.objects.filter(division=division).values()
+    # Filtered contacts
+    contacts = Contacts.objects.filter(Q(division=division) | Q(division=3)).order_by('contact_name').values()
     contacts_list = list(contacts)
+    # Unfiltered contacts
+    contacts_unfiltered = Contacts.objects.all().order_by('contact_name').values()
+    contacts_unfiltered_list = list(contacts_unfiltered)
     quote_allocations = Quote_allocations.objects.filter(item__category__division=division).select_related('item').all()
     quote_allocations = [
         {
@@ -130,7 +137,8 @@ def main(request, division):
         'costings': costings,
         'contacts_in_quotes': contacts_in_quotes_list,
         'contacts_not_in_quotes': contacts_not_in_quotes_list,
-        'contacts': contacts_list,
+        'contacts': contacts_list, #filtered contacts depending on division
+        'contacts_unfiltered': contacts_unfiltered_list,
         'items': items,
         'committed_quotes': committed_quotes_json,
         'quote_allocations': quote_allocations_json,
@@ -153,10 +161,10 @@ def main(request, division):
     return render(request, 'homepage.html' if division == 1 else 'build.html', context)
 
 
-def homepage_view(request):
+def homepage_view(request): #if Contacts.division is 1, Developer
     return main(request, 1)
 
-def build_view(request):
+def build_view(request):  #if Contacts.division is 2, Builder
     return main(request, 2)
 
 def alphanumeric_sort_key(s):
@@ -854,6 +862,7 @@ def upload_costings(request):
                 category=category,
                 item=row['item'],
                 defaults={
+                    'xero_account_code': row['xero_account_code'],
                     'contract_budget': row['contract_budget'],
                     'uncommitted': row['uncommitted'],
                     'sc_invoiced': row['sc_invoiced'],
@@ -886,6 +895,8 @@ def upload_invoice(request):
         invoice_number = request.POST.get('invoice_number')
         invoice_total = request.POST.get('invoice_total')
         invoice_total_gst = request.POST.get('invoice_total_gst') # Get the GST total value
+        invoice_date = request.POST.get('invoice_date')
+        invoice_due_date = request.POST.get('invoice_due_date')
         pdf_file = request.FILES.get('pdf')
         try:
             contact = Contacts.objects.get(pk=supplier_id)
@@ -894,6 +905,8 @@ def upload_invoice(request):
                 total_net=invoice_total,
                 total_gst=invoice_total_gst, # Set the GST total value
                 invoice_status=0, # Set the invoice status to 0
+                invoice_date=invoice_date,
+                invoice_due_date=invoice_due_date,
                 pdf=pdf_file,
                 contact_pk=contact
             )
@@ -947,3 +960,153 @@ def upload_invoice_allocations(request):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+@csrf_exempt
+def update_contacts(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        for contact in data:
+            try:
+                contact_obj = Contacts.objects.get(contact_pk=contact['contact_pk'])
+                contact_obj.division = contact['division']
+                contact_obj.contact_email = contact['contact_email']
+                contact_obj.save()
+            except Contacts.DoesNotExist:
+                return JsonResponse({'error': 'Contact with pk {} does not exist'.format(contact['contact_pk'])}, status=400)
+        return JsonResponse({'message': 'Contacts updated successfully'})
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+# Xero Integration
+def xeroapi(request):
+  template = loader.get_template('homepage.html')
+  return HttpResponse(template.render())
+# Define rate limits for Xero API calls
+@limits(calls=60, period=60)  # 60 calls per minute
+@sleep_and_retry
+def make_api_request(url, headers):
+    response = requests.get(url, headers=headers)
+    return response
+
+client_id = settings.XERO_CLIENT_ID
+client_secret = settings.XERO_CLIENT_SECRET
+
+def get_xero_token(request):
+    scopes_list = [
+        "accounting.transactions",
+        "accounting.transactions.read",
+        "accounting.reports.read",
+        "accounting.reports.tenninetynine.read",
+        "accounting.budgets.read",
+        "accounting.journals.read",
+        "accounting.settings",
+        "accounting.settings.read",
+        "accounting.contacts",
+        "accounting.contacts.read",
+        "accounting.attachments",
+        "accounting.attachments.read",
+        "files",
+        "files.read"
+    ]
+    scopes = ' '.join(scopes_list)  # Convert list to space-separated string
+    # Prepare the header
+    credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
+    headers = {
+        'Authorization': f'Basic {credentials}',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    # Prepare the body
+    data = {
+        'grant_type': 'client_credentials',
+        'scope': scopes
+    }
+    # Make the POST request
+    response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data)
+    response_data = response.json()
+    # Store the access token in a session variable
+    request.session['access_token'] = response_data['access_token']
+    # Return the response as JSON
+    return JsonResponse(response.json())
+
+@csrf_exempt
+def get_xero_contacts(request):
+    # Call get_xero_token and get the access_token
+    get_xero_token(request)
+    access_token = request.session.get('access_token')
+    
+    headers = {
+        'Authorization': 'Bearer ' + access_token,
+        'Accept': 'application/json'
+    }
+    response = requests.get('https://api.xero.com/api.xro/2.0/Contacts', headers=headers)
+    data = response.json()
+    # Extract the list of contacts
+    contacts = data['Contacts']
+    for contact in contacts:
+        xero_contact_id = contact['ContactID']
+        contact_name = contact.get('Name', 'Not Set')
+        contact_email = 'Not Set'
+        # Check if the contact already exists
+        if not Contacts.objects.filter(xero_contact_id=xero_contact_id).exists():
+            # Create and save the new contact
+            new_contact = Contacts(
+                xero_contact_id=xero_contact_id,
+                division=0,
+                contact_name=contact_name,
+                contact_email=contact_email
+            )
+            new_contact.save()
+    return JsonResponse(data)
+
+@csrf_exempt
+def post_invoice(request):
+    body = json.loads(request.body)
+    invoice_pk = body.get('invoice_pk')
+    invoice = Invoices.objects.get(pk=invoice_pk)
+    contact = Contacts.objects.get(pk=invoice.contact_pk_id)
+    invoice_allocations = Invoice_allocations.objects.filter(invoice_pk_id=invoice_pk)
+    line_items = []
+    for invoice_allocation in invoice_allocations:
+        costing = Costing.objects.get(pk=invoice_allocation.item_id)
+        line_item = {
+            "Description": invoice_allocation.notes,
+            "Quantity": 1,
+            "UnitAmount": str(invoice_allocation.amount),
+            "AccountCode": costing.xero_account_code,
+            "TaxType": "INPUT",
+            "TaxAmount": str(invoice_allocation.gst_amount),
+        }
+        line_items.append(line_item)
+    get_xero_token(request)
+    access_token = request.session.get('access_token')
+    headers = {
+        'Authorization': 'Bearer ' + access_token,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "Type": "ACCPAY",
+        "Contact": {"ContactID": contact.xero_contact_id},
+        "Date": invoice.invoice_date.isoformat(),
+        "DueDate": invoice.invoice_due_date.isoformat(),
+        "InvoiceNumber": invoice.supplier_invoice_number,
+        "Url": request.build_absolute_uri(invoice.pdf.url),  # Generate absolute URL
+        "LineItems": line_items
+    }
+    response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
+    response_data = response.json()
+    if 'Status' in response_data and response_data['Status'] == 'OK':
+        invoice_id = response_data['Invoices'][0]['InvoiceID']
+        file_url = invoice.pdf.url
+        file_name = file_url.split('/')[-1]
+        urlretrieve(file_url, file_name)
+        with open(file_name, 'rb') as f:
+            file_data = f.read()
+        headers['Content-Type'] = 'application/octet-stream'
+        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
+        if response.status_code == 200:
+            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})

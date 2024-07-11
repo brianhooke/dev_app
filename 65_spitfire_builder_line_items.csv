@@ -6,6 +6,14 @@ Site Prep and Prelims,Sediment/Silt Fencing S/I,311.51,1229.4,1229.4,0,0,0,0,0,0
 Site Prep and Prelims,Ground Prep for Access,311.52,2500,2500,0,0,0,0,0,0
 Site Prep and Prelims,Temp Electrical Connection,311.53,0.0001,0.0001,0,0,0,0,0,0
 Site Prep and Prelims,Security Fencing S/I,311.54,5260.89,5260.89,0,0,0,0,0,0
+Site Prep and Prelims,Unexpected Line Items,311.123,21000,21000,0,0,0,0,0,0
+Site Prep and Prelims,Construction Insurance,311.124,21000,21000,0,0,0,0,0,0
+Site Prep and Prelims,Temp Electrical Usage,311.126,2000,2000,0,0,0,0,0,0
+Site Prep and Prelims,Rubbish Removal,311.127,2925,2925,0,0,0,0,0,0
+Site Prep and Prelims,Builder Errors,311.128,21000,21000,0,0,0,0,0,0
+Site Prep and Prelims,PM,311.129,76050,76050,0,0,0,0,0,0
+Site Prep and Prelims,Site Manager,311.13,124666.67,124666.67,0,0,0,0,0,0
+Site Prep and Prelims,Builder's Margin,311.131,262500,262500,0,0,0,0,0,0
 Earthworks,Bulk Earthworks,311.9,40449,40449,0,0,0,0,0,0
 Earthworks,Fill Disposal,311.1,35863.55,35863.55,0,0,0,0,0,0
 Earthworks,Fill Import,311.11,0,0,0,0,0,0,0,0
@@ -111,11 +119,3 @@ Fitout,Landscaping - Turf S/I,311.67,0,0,0,0,0,0,0,0
 Fitout,Letterbox,311.68,2500,2500,0,0,0,0,0,0
 Fitout,Signage,311.69,5000,5000,0,0,0,0,0,0
 Fitout,External Painting S/I,311.7,0,0,0,0,0,0,0,0
-Fitout,Unexpected Line Items,311.123,21000,21000,0,0,0,0,0,0
-Fitout,Construction Insurance,311.124,21000,21000,0,0,0,0,0,0
-Fitout,Temp Electrical Usage,311.126,2000,2000,0,0,0,0,0,0
-Fitout,Rubbish Removal,311.127,2925,2925,0,0,0,0,0,0
-Fitout,Builder Errors,311.128,21000,21000,0,0,0,0,0,0
-Fitout,PM,311.129,76050,76050,0,0,0,0,0,0
-Fitout,Site Manager,311.13,124666.67,124666.67,0,0,0,0,0,0
-Fitout,Builder's Margin,311.131,262500,262500,0,0,0,0,0,0

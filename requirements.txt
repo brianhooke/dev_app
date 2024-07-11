@@ -23,3 +23,5 @@ pdfrw
 pyPDF2
 reportlab
 xhtml2pdf
+xeroapi
+ratelimit
