@@ -59,5 +59,7 @@ urllib3==1.26.19
 wcwidth==0.1.9
 webencodings==0.5.1
 whitenoise==6.7.0
-XeroAPI==0.0.6
+# XeroAPI==0.0.6
+xero-python
+# ==1.7.0  # or the latest version
 xhtml2pdf==0.2.16
