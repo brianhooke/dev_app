@@ -48,6 +48,7 @@ from django.db.models import Q
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set logging level to INFO
 
 def drawings(request):
     return render(request, 'drawings.html')
@@ -1056,10 +1057,6 @@ def get_xero_contacts(request):
             new_contact.save()
     return JsonResponse(data)
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 @csrf_exempt
 def post_invoice(request):
     logger.info('Starting post_invoice function')
@@ -1121,3 +1118,18 @@ def post_invoice(request):
     else:
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
+    
+level = logger.getEffectiveLevel()
+
+if level == logging.DEBUG:
+    print("Logging level is DEBUG")
+elif level == logging.INFO:
+    print("Logging level is INFO")
+elif level == logging.WARNING:
+    print("Logging level is WARNING")
+elif level == logging.ERROR:
+    print("Logging level is ERROR")
+elif level == logging.CRITICAL:
+    print("Logging level is CRITICAL")
+else:
+    print(f"Logging level is {level}")
