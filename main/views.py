@@ -1152,7 +1152,10 @@ def test_xero_invoice(request):
     }
     data = {
         "Type": "ACCPAY",
-        "Contact": {"ContactID": contact.xero_contact_id},
+        # "Contact": {"ContactID": contact.xero_contact_id},
+        "Contact": {
+            "ContactID": "54134e47-8357-448c-8e4b-7472f6beb963"
+        },
         "Date": invoice.invoice_date.isoformat(),
         "DueDate": invoice.invoice_due_date.isoformat(),
         "InvoiceNumber": invoice.supplier_invoice_number,
