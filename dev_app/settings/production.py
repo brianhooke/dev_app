@@ -3,7 +3,7 @@ from .base import *
 
 DEBUG = False
 
-# # AWS S3 Settings
+# # AWS S3 Settingss
 AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME') #Media_root is this + location in storage backends
 # AWS_STORAGE_BUCKET_NAME = 'devappbucket2' #Media_root is this + location in storage backends
 # AWS_STORAGE_BUCKET_NAME = '41accoladedevbucket' #Media_root is this + location in storage backends
