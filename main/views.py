@@ -1056,10 +1056,16 @@ def get_xero_contacts(request):
             new_contact.save()
     return JsonResponse(data)
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 @csrf_exempt
 def post_invoice(request):
+    logger.info('Starting post_invoice function')
     body = json.loads(request.body)
     invoice_pk = body.get('invoice_pk')
+    logger.info(f'Invoice PK: {invoice_pk}')
     invoice = Invoices.objects.get(pk=invoice_pk)
     contact = Contacts.objects.get(pk=invoice.contact_pk_id)
     invoice_allocations = Invoice_allocations.objects.filter(invoice_pk_id=invoice_pk)
@@ -1091,20 +1097,26 @@ def post_invoice(request):
         "Url": request.build_absolute_uri(invoice.pdf.url),  # Generate absolute URL
         "LineItems": line_items
     }
+    logger.info('Sending request to Xero API')
     response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
     response_data = response.json()
     if 'Status' in response_data and response_data['Status'] == 'OK':
         invoice_id = response_data['Invoices'][0]['InvoiceID']
+        logger.info(f'Invoice created with ID: {invoice_id}')
         file_url = invoice.pdf.url
         file_name = file_url.split('/')[-1]
         urlretrieve(file_url, file_name)
         with open(file_name, 'rb') as f:
             file_data = f.read()
         headers['Content-Type'] = 'application/octet-stream'
+        logger.info('Sending request to attach file to invoice')
         response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
         if response.status_code == 200:
+            logger.info('File attached successfully')
             return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
         else:
+            logger.error('Failed to attach file to invoice')
             return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
     else:
+        logger.error('Unexpected response from Xero API')
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
