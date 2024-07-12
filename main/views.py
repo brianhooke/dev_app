@@ -1118,5 +1118,5 @@ def post_invoice(request):
             logger.error('Failed to attach file to invoice')
             return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
     else:
-        logger.error('Unexpected response from Xero API')
+        logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
