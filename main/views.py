@@ -45,7 +45,10 @@ from django.db.models import Sum
 from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
 import json
 from django.db.models import Q
+import ssl
+import urllib.request
 
+ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set logging level to INFO
@@ -1119,6 +1122,70 @@ def post_invoice(request):
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
     
+@csrf_exempt
+def test_xero_invoice(request):
+    logger.info('Starting post_invoice function')
+    body = json.loads(request.body)
+    invoice_pk = body.get('invoice_pk')
+    logger.info(f'Invoice PK: {invoice_pk}')
+    invoice = Invoices.objects.get(pk=invoice_pk)
+    contact = Contacts.objects.get(pk=invoice.contact_pk_id)
+    invoice_allocations = Invoice_allocations.objects.filter(invoice_pk_id=invoice_pk)
+    line_items = []
+    for invoice_allocation in invoice_allocations:
+        costing = Costing.objects.get(pk=invoice_allocation.item_id)
+        line_item = {
+            "Description": invoice_allocation.notes,
+            "Quantity": 1,
+            "UnitAmount": str(invoice_allocation.amount),
+            "AccountCode": costing.xero_account_code,
+            "TaxType": "INPUT",
+            "TaxAmount": str(invoice_allocation.gst_amount),
+        }
+        line_items.append(line_item)
+    get_xero_token(request)
+    access_token = request.session.get('access_token')
+    headers = {
+        'Authorization': 'Bearer ' + access_token,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "Type": "ACCPAY",
+        "Contact": {"ContactID": contact.xero_contact_id},
+        "Date": invoice.invoice_date.isoformat(),
+        "DueDate": invoice.invoice_due_date.isoformat(),
+        "InvoiceNumber": invoice.supplier_invoice_number,
+        "Url": "https://precastappbucket.s3.amazonaws.com/drawings/P071.pdf",
+        # "Url": request.build_absolute_uri(invoice.pdf.url),  # Generate absolute URL
+        "LineItems": line_items
+    }
+    logger.info('Sending request to Xero API')
+    logger.info('Data: %s', json.dumps(data))  # Log the data
+    response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
+    response_data = response.json()
+    if 'Status' in response_data and response_data['Status'] == 'OK':
+        invoice_id = response_data['Invoices'][0]['InvoiceID']
+        logger.info(f'Invoice created with ID: {invoice_id}')
+        # file_url = invoice.pdf.url
+        file_url = 'https://precastappbucket.s3.amazonaws.com/drawings/P071.pdf'
+        file_name = file_url.split('/')[-1]
+        urlretrieve(file_url, file_name)
+        with open(file_name, 'rb') as f:
+            file_data = f.read()
+        headers['Content-Type'] = 'application/octet-stream'
+        logger.info('Sending request to attach file to invoice')
+        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
+        if response.status_code == 200:
+            logger.info('File attached successfully')
+            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
+        else:
+            logger.error('Failed to attach file to invoice')
+            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
+    else:
+        logger.error('Unexpected response from Xero API: %s', response_data)
+        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
+
 level = logger.getEffectiveLevel()
 
 if level == logging.DEBUG:

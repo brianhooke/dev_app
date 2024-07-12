@@ -12,6 +12,10 @@
 <button id="uploadLetterheadButton" class="btn btn-primary">Upload Letterhead</button>
 <input type="file" id="letterheadFileInput" accept=".pdf" style="display: none;">
 
+<!-- Add this at the top of your modal or a suitable place -->
+<button id="xeroUploadInvoiceButton" class="btn btn-primary">Upload Test Xero Invoice</button>
+<input type="file" id="xeroUploadInvoiceInput" accept=".pdf" style="display: none;">
+
 <!-- <button id="getXeroToken" class="btn btn-primary">Get Xero Token</button> -->
 
 <!-- <button id="getXeroContacts" class="btn btn-primary">Get Xero Contacts</button> -->
@@ -220,6 +224,24 @@ document.getElementById('costingCsvFileInput').addEventListener('change', functi
     }
 });
 
-
+document.getElementById('xeroUploadInvoiceButton').addEventListener('click', function() {
+  console.log("Xero upload invoice button clicked")
+  var invoice_pk = 5; // Set this to the invoice_pk you want to send
+  var data = { invoice_pk: invoice_pk };
+  fetch('/test_xero_invoice/', { // Replace this with the actual URL of the test_xero_invoice endpoint
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+          // Include CSRF token in header for Django
+          'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify(data),
+  })
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch((error) => {
+    console.error('Error:', error);
+  });
+});
 
 </script>
