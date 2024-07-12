@@ -602,6 +602,8 @@ $('#sendInvoicesToXeroButton').click(function() {
             success: function(response) {
                 // Handle the response here
                 console.log(response);
+                // Display the response data in an alert box
+                alert(JSON.stringify(response));
             },
             error: function(error) {
                 // Handle error here
