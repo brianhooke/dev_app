@@ -590,8 +590,23 @@ $('#sendInvoicesToXeroButton').click(function() {
         // Add the invoicePk to the array
         invoicePks.push(invoicePk);
     });
-    // Call the postInvoice function for each invoicePk
+    // Make the AJAX request for each invoicePk
     for (var i = 0; i < invoicePks.length; i++) {
-        postInvoice(invoicePks[i]);
+        var invoicePk = invoicePks[i];
+        $.ajax({
+            url: '/post_invoice/', 
+            type: 'POST',
+            data: JSON.stringify({invoice_pk: invoicePk}),
+            contentType: 'application/json; charset=utf-8',
+            dataType: 'json',
+            success: function(response) {
+                // Handle the response here
+                console.log(response);
+            },
+            error: function(error) {
+                // Handle error here
+                console.log(error);
+            }
+        });
     }
 });
