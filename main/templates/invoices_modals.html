@@ -256,7 +256,7 @@
                                                 {% else %}
                                                     <span style="color: green;">✔</span>
                                                 {% endif %}
-                                                <a href="#" class="process-invoice-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal"></a>
+                                                <a href="#" class="process-xero-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal"></a>
                                                 <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
                                             </td>
                                         </tr>
@@ -272,7 +272,7 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                 </div>
                 <div class="col-6 text-right">
-                    <button type="button" class="btn btn-primary">Send</button>
+                    <button type="button" class="btn btn-primary" id="sendInvoicesToXeroButton">Send</button>
                 </div>
             </div>
         </div>

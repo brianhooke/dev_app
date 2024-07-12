@@ -38,14 +38,6 @@ import requests
 from decimal import Decimal
 from ratelimit import limits, sleep_and_retry
 from urllib.request import urlretrieve
-
-
-
-logger = logging.getLogger(__name__)
-
-def drawings(request):
-    return render(request, 'drawings.html')
-
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.forms.models import model_to_dict
@@ -53,6 +45,12 @@ from django.db.models import Sum
 from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
 import json
 from django.db.models import Q
+
+
+logger = logging.getLogger(__name__)
+
+def drawings(request):
+    return render(request, 'drawings.html')
 
 
 def main(request, division):
@@ -118,7 +116,7 @@ def main(request, division):
             'po_sent': order.po_sent
         })
     # Fetch invoices data
-    invoices = Invoices.objects.filter(contact_pk__division=division).select_related('contact_pk').all()
+    invoices = Invoices.objects.filter(Q(contact_pk__division=division) | Q(contact_pk__division=3)).select_related('contact_pk').all()    
     invoices_list = [
         {
             'invoice_pk': invoice.invoice_pk,  # Add this line

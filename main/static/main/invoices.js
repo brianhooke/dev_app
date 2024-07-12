@@ -116,7 +116,6 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', function(event) {
             event.preventDefault();
             // const invoiceId = this.getAttribute('data-invoice-id');
-
             console.log(this);
             const invoiceId = this.getAttribute('data-invoice-id');
             console.log(this.getAttribute('data-invoice-id'));
@@ -526,10 +525,8 @@ function gatherAllocationsDataInvoices() {
     console.log("Gathering invoice data and allocations...");
     var invoice_pk = document.getElementById('hiddenInvoiceIdInvoices').value;
     console.log("Invoice PK:", invoice_pk);
-
     var stillToAllocateInv = parseFloat(document.getElementById('stillToAllocateInv').innerText.replace(/,/g, ''));
     var stillToAllocateGST = parseFloat(document.getElementById('stillToAllocateGST').innerText.replace(/,/g, ''));
-
     // Check if still to allocate values are zero
     if (stillToAllocateInv !== 0) {
         alert('Invoice net total does not equal allocated net amounts');
@@ -539,7 +536,6 @@ function gatherAllocationsDataInvoices() {
         alert('Invoice gst total does not equal allocated gst amounts');
         return;
     }
-
     var formData = new FormData();
     formData.append('invoice_pk', invoice_pk);
     var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
@@ -584,27 +580,18 @@ function gatherAllocationsDataInvoices() {
       });
 }
 
-$(document).on('click', '.process-invoice-invoices', function(e) {
-    e.preventDefault();  // Prevent the default action of the link
-    var invoicePk = $(this).data('invoice-id');  // Get the invoice_pk from the data attribute
-    postInvoice(invoicePk);  // Call the postInvoice function with the invoice_pk
-});
-
-function postInvoice(invoicePk) {
-    fetch('/post_invoice/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookieInvoices('csrftoken')
-        },
-        body: JSON.stringify({ invoice_pk: invoicePk })
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Handle the response here
-        console.log(data);
-    })
-    .catch((error) => {
-        console.error('Error:', error);
+$('#sendInvoicesToXeroButton').click(function() {
+    // Initialize an empty array to store the invoicePks
+    var invoicePks = [];
+    // Find all the checked checkboxes
+    $('input[type="checkbox"]:checked').each(function() {
+        // Get the invoicePk from the id of the checkbox
+        var invoicePk = $(this).attr('id').replace('sendToXero', '');
+        // Add the invoicePk to the array
+        invoicePks.push(invoicePk);
     });
-}
+    // Call the postInvoice function for each invoicePk
+    for (var i = 0; i < invoicePks.length; i++) {
+        postInvoice(invoicePks[i]);
+    }
+});
