@@ -1098,6 +1098,7 @@ def post_invoice(request):
         "LineItems": line_items
     }
     logger.info('Sending request to Xero API')
+    logger.info('Data: %s', json.dumps(data))  # Log the data
     response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
     response_data = response.json()
     if 'Status' in response_data and response_data['Status'] == 'OK':
