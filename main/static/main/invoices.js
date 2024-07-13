@@ -546,7 +546,7 @@ function gatherAllocationsDataInvoices() {
         var uncommittedInput = row.cells[2].querySelector('input');
         var thisInvoiceInput = row.cells[3].querySelector('input');
         var gstInput = row.cells[4].querySelector('input'); // Get the GST input field
-        var notesInput = row.cells[5].querySelector('input');
+        var notesInput = row.cells[6].querySelector('input');
         var allocation = {
             item: itemSelect ? itemSelect.options[itemSelect.selectedIndex].getAttribute('data-costing-id') : '',
             uncommitted: uncommittedInput ? parseFloat(uncommittedInput.value) : 0,
