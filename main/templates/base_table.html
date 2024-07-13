@@ -16,6 +16,10 @@
 <button id="xeroUploadInvoiceButton" class="btn btn-primary">Upload Test Xero Invoice</button>
 <input type="file" id="xeroUploadInvoiceInput" accept=".pdf" style="display: none;">
 
+<!-- Add this at the top of your modal or a suitable place -->
+<button id="testContactIdButton" class="btn btn-primary">Test Contact ID</button>
+<input type="file" id="testContactIdInput" accept=".pdf" style="display: none;">
+
 <!-- <button id="getXeroToken" class="btn btn-primary">Get Xero Token</button> -->
 
 <!-- <button id="getXeroContacts" class="btn btn-primary">Get Xero Contacts</button> -->
@@ -239,6 +243,29 @@ document.getElementById('xeroUploadInvoiceButton').addEventListener('click', fun
   })
   .then(response => response.json())
   .then(data => console.log(data))
+  .catch((error) => {
+    console.error('Error:', error);
+  });
+});
+
+
+document.getElementById('testContactIdButton').addEventListener('click', function() {
+  console.log("Test Contact Button clicked")
+  var invoice_pk = 5; // Set this to the invoice_pk you want to send
+  var data = { invoice_pk: invoice_pk };
+  fetch('/test_contact_id/', { // Replace this with the actual URL of the test_xero_invoice endpoint
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify(data),
+  })
+  .then(response => response.json())
+  .then(data => {
+    // Display an alert box with the contact ID
+    alert("Contact ID is " + data.contact_id);
+  })
   .catch((error) => {
     console.error('Error:', error);
   });

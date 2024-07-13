@@ -45,6 +45,7 @@ urlpatterns = [
     path('update_contacts', views.update_contacts, name='update_contacts'),
     path('post_invoice/', views.post_invoice, name='post_invoice'),
     path('test_xero_invoice/', views.test_xero_invoice, name='test_xero_invoice'),
+    path('test_contact_id/', views.test_contact_id, name='test_contact_id'),
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]

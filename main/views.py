@@ -39,7 +39,7 @@ from decimal import Decimal
 from ratelimit import limits, sleep_and_retry
 from urllib.request import urlretrieve
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.forms.models import model_to_dict
 from django.db.models import Sum
 from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
@@ -47,6 +47,7 @@ import json
 from django.db.models import Q
 import ssl
 import urllib.request
+
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -1203,3 +1204,15 @@ elif level == logging.CRITICAL:
     print("Logging level is CRITICAL")
 else:
     print(f"Logging level is {level}")
+
+@csrf_exempt
+def test_contact_id(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        invoice_pk = data.get('invoice_pk')
+        try:
+            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        except Invoices.DoesNotExist:
+            return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
+        contact = invoice.contact_pk
+        return JsonResponse({'contact_id': contact.xero_contact_id})
