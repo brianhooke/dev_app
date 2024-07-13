@@ -1105,6 +1105,10 @@ def post_invoice(request):
     if 'Status' in response_data and response_data['Status'] == 'OK':
         invoice_id = response_data['Invoices'][0]['InvoiceID']
         logger.info(f'Invoice created with ID: {invoice_id}')
+        # Update the invoice_status and invoice_xero_id fields in the Invoices model
+        invoice.invoice_status = 2
+        invoice.invoice_xero_id = invoice_id
+        invoice.save()
         file_url = invoice.pdf.url
         file_name = file_url.split('/')[-1]
         urlretrieve(file_url, file_name)

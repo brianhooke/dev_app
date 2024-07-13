@@ -50,7 +50,7 @@ class LetterheadAdmin(admin.ModelAdmin):
     list_display = ("letterhead_path",)
 
 class InvoicesAdmin(admin.ModelAdmin):
-    list_display = ("invoice_pk", "invoice_status", "supplier_invoice_number", "invoice_due_date", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst")
+    list_display = ("invoice_pk", "invoice_status", "invoice_xero_id", "supplier_invoice_number", "invoice_due_date", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst")
 
 class InvoiceAllocationsAdmin(admin.ModelAdmin):
     list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes")

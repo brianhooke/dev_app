@@ -108,6 +108,7 @@ class Quote_allocations(models.Model):
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
     invoice_status = models.IntegerField(default=0)  # 0 when invoice create, 1 when allocated, 2 when sent to Xero.
+    invoice_xero_id = models.CharField(max_length=255, null=True)
     supplier_invoice_number = models.CharField(max_length=255)
     invoice_date = models.DateField()
     invoice_due_date = models.DateField()
