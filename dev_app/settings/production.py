@@ -4,15 +4,19 @@ from .base import *
 DEBUG = False
 
 # # AWS S3 Settingss
-# AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME') #Media_root is this + location in storage backends
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME') #Media_root is this + location in storage backends
 # AWS_STORAGE_BUCKET_NAME = 'devappbucket2' #Media_root is this + location in storage backends
-AWS_STORAGE_BUCKET_NAME = '41accoladedevbucket' #Media_root is this + location in storage backends
-# AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+# AWS_STORAGE_BUCKET_NAME = '41accoladedevbucket' #Media_root is this + location in storage backends
+# AWS_STORAGE_BUCKET_NAME = 'spitfirebucket' #Media_root is this + location in storage backends
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
 # AWS_S3_CUSTOM_DOMAIN = f'devappbucket2.s3.amazonaws.com'
-AWS_S3_CUSTOM_DOMAIN = f'41accoladedevbucket.s3.amazonaws.com'
-# STATIC_URL = os.getenv('STATIC_URL')
+# AWS_S3_CUSTOM_DOMAIN = f'41accoladedevbucket.s3.amazonaws.com'
+# AWS_S3_CUSTOM_DOMAIN = f'spitfirebucket.s3.amazonaws.com'
+STATIC_URL = os.getenv('STATIC_URL')
 # STATIC_URL = f'https://devappbucket2.s3.amazonaws.com/static/'
-STATIC_URL = f'https://41accoladedevbucket.s3.amazonaws.com/static/'
+# STATIC_URL = f'https://41accoladedevbucket.s3.amazonaws.com/static/'
+# STATIC_URL = f'https://spitfirebucket.s3.amazonaws.com/static/'
+
 
 
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
