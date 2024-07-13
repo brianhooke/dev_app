@@ -134,6 +134,32 @@ def main(request, division):
         }
         for invoice in invoices
     ]
+    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0).select_related('contact_pk'))
+    invoices_unallocated_list = [
+        {
+            'invoice_pk': invoice.invoice_pk,
+            'invoice_status': invoice.invoice_status,
+            'contact_name': invoice.contact_pk.contact_name,
+            'total_net': invoice.total_net,
+            'total_gst': invoice.total_gst,
+            'supplier_invoice_number': invoice.supplier_invoice_number,
+            'pdf_url': invoice.pdf.url
+        }
+        for invoice in invoices_unallocated
+    ]    
+    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).select_related('contact_pk'))
+    invoices_allocated_list = [
+        {
+            'invoice_pk': invoice.invoice_pk,
+            'invoice_status': invoice.invoice_status,
+            'contact_name': invoice.contact_pk.contact_name,
+            'total_net': invoice.total_net,
+            'total_gst': invoice.total_gst,
+            'supplier_invoice_number': invoice.supplier_invoice_number,
+            'pdf_url': invoice.pdf.url
+        }
+        for invoice in invoices_allocated
+    ]
     spv_data = SPVData.objects.first()  # Assuming SPVData is a singleton model
     context = {
         'division': division,
@@ -159,6 +185,8 @@ def main(request, division):
         'po_globals': po_globals,
         'po_orders': po_orders_list,
         'invoices': invoices_list,  # Add invoices data to context
+        'invoices_unallocated': invoices_unallocated_list,
+        'invoices_allocated': invoices_allocated_list,
         'spv_data': spv_data,
     }
     return render(request, 'homepage.html' if division == 1 else 'build.html', context)

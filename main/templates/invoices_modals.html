@@ -64,7 +64,7 @@
     <div class="modal-dialog" role="document" style="max-width: 75%;">
         <div class="modal-content" style="border: 3px solid black;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-                <h5 class="modal-title">Existing Invoices</h5>
+                <h5 class="modal-title">Unallocated Invoices</h5>
             </div>
             <div class="modal-body row">
                 <div class="col-md-6">
@@ -83,7 +83,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for invoice in invoices %}
+                                {% for invoice in invoices_unallocated %}
                                     <tr style="line-height: 1;">
                                         <td style="padding: 6px;">{{ invoice.contact_name }}</td>
                                         <td style="padding: 6px;">{{ invoice.total_net | floatformat:2 | intcomma }}</td>
@@ -240,10 +240,11 @@
                                     <th style="width: 15%;">Invoice #</th>
                                     <th style="width: 15%;">View PDF</th>
                                     <th style="width: 15%;">Send to Xero</th>
+                                    <th style="width: 15%;">Paid</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for invoice in invoices %}
+                                {% for invoice in invoices_allocated %}
                                     {% if invoice.invoice_status != 0 %}
                                         <tr style="line-height: 1;">
                                             <td style="padding: 6px;">{{ invoice.contact_name }}</td>
@@ -258,6 +259,13 @@
                                                 {% endif %}
                                                 <a href="#" class="process-xero-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal"></a>
                                                 <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
+                                            </td>
+                                            <td style="padding: 6px;">
+                                                {% if invoice.invoice_status == 3 %}
+                                                    <span style="color: green;">✔</span>
+                                                {% else %}
+                                                    <span style="color: red;">✖</span>
+                                                {% endif %}
                                             </td>
                                         </tr>
                                     {% endif %}
