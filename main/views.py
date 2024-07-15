@@ -82,6 +82,12 @@ def main(request, division):
     quote_allocations_sums_dict = {item['item']: item['total_amount'] for item in quote_allocations_sums}
     for costing in costings:
         costing['committed'] = quote_allocations_sums_dict.get(costing['costing_pk'], 0)
+    # Fetch all Invoice_allocations and group them by item (Costing), summing the amount
+    invoice_allocations_sums = Invoice_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
+    invoice_allocations_sums_dict = {item['item']: item['total_amount'] for item in invoice_allocations_sums}
+    for costing in costings:
+        costing['sc_invoiced'] = invoice_allocations_sums_dict.get(costing['costing_pk'], 0)
+        costing['sc_paid'] = 0
     items = [{'item': costing['item'], 'uncommitted': costing['uncommitted'], 'committed': costing['committed']} for costing in costings]
     committed_quotes = Quotes.objects.filter(contact_pk__division=division).all().values('quotes_pk', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk', 'contact_pk__contact_name')
     committed_quotes_list = list(committed_quotes)
