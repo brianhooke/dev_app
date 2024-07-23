@@ -1118,7 +1118,7 @@ def post_invoice(request):
             "Tracking": [
                 {
                     "Name": "Project",
-                    "Option": {client_project},
+                    "Option": client_project,
                 }
             ]
         }
