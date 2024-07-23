@@ -6,6 +6,7 @@ import uuid
 class Projects(models.Model):
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
+    xero_project_id = models.CharField(max_length=255, null=True)
     def __str__(self):
         return self.project
     

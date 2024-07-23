@@ -2,7 +2,7 @@
 var newDiv = document.createElement("div");
 newDiv.innerHTML = `
 <div class="modal fade" id="committedQuotesModal" tabindex="-1" role="dialog" aria-labelledby="committedQuotesModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document" style="max-width: 800px;">
+  <div class="modal-dialog" role="document" style="max-width: 500px;">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="committedQuotesModalLabel">Committed Quotes</h5>
@@ -12,14 +12,14 @@ newDiv.innerHTML = `
       </div>
       <div class="modal-body">
         <table id="committedQuotesTable" class="table">
-          <thead>
-            <tr>
-              <th style="width: 200px;">Quote #</th>
-              <th style="width: 200px;">Supplier</th>
-              <th style="width: 200px;">Total Cost</th>
-              <th style="width: 100px;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
-            </tr>
-          </thead>
+        <thead>
+          <tr>
+            <th style="width: 30%;">Quote #</th>
+            <th style="width: 30%;">Supplier</th>
+            <th style="width: 30%;">Total Cost</th>
+            <th style="width: 10%;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
+          </tr>
+        </thead>
           <tbody>
             <!-- Table rows will be inserted here -->
           </tbody>
@@ -50,14 +50,13 @@ $(document).ready(function() {
 committedQuotes.forEach(function(quote) {
     // Format total_cost with thousands separator
     var supplier_quote_number = quote.supplier_quote_number;
-    // console.log("Supplier quote number is: "+supplier_quote_number);
     var contact_pk = quote.contact_pk;
     var totalCostFormatted = parseFloat(quote.total_cost).toLocaleString();
     var supplier = quote.contact_pk__contact_name;
     // Create a new table row for each quote
     var newRow = document.createElement("tr");
-    newRow.innerHTML = `<td style="width: 200px;"><a href="#" class="quote-link">${supplier_quote_number}</a></td><td style="width: 200px;">${supplier}</td><td style="width: 200px;">${totalCostFormatted}</td><td class="delete-column"><button class="btn delete-btn" style="width: 34px; height: 34px; border-radius: 0; background-color: white; color: black; border: 3px solid transparent; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; border-image-slice: 1;">X</button></td>`;
-    // Append the table row to the table body
+    newRow.innerHTML = `<td style="width: 200px;"><a href="#" class="quote-link">${supplier_quote_number}</a></td><td style="width: 200px;">${supplier}</td><td style="width: 200px;">${totalCostFormatted}</td><td class="delete-column" style="text-align: center;"><button class="btn delete-btn" style="width: 12px; height: 12px; padding: 0; font-size: 10px; line-height: 12px; text-align: center; border-radius: 0; background-color: white; color: black; border: 3px solid transparent; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; border-image-slice: 1; display: flex; justify-content: center; align-items: center;">X</button></td>`;    
+    newRow.style.lineHeight = "0.1"; // Make the row height smaller
     tableBody.appendChild(newRow);
     // Add event listener to the delete button
     newRow.children[3].children[0].addEventListener('click', function(event) {

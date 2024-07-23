@@ -1027,6 +1027,7 @@ def make_api_request(url, headers):
 
 client_id = settings.XERO_CLIENT_ID
 client_secret = settings.XERO_CLIENT_SECRET
+client_project = settings.XERO_PROJECT_ID
 
 def get_xero_token(request):
     scopes_list = [
@@ -1114,6 +1115,12 @@ def post_invoice(request):
             "AccountCode": costing.xero_account_code,
             "TaxType": "INPUT",
             "TaxAmount": str(invoice_allocation.gst_amount),
+            "Tracking": [
+                {
+                    "Name": "Project",
+                    "Option": {client_project},
+                }
+            ]
         }
         line_items.append(line_item)
     get_xero_token(request)
@@ -1160,6 +1167,7 @@ def post_invoice(request):
     else:
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
+
     
 @csrf_exempt
 def test_xero_invoice(request):
