@@ -39,3 +39,8 @@ LOGGING = {
 EMAIL_HOST_USER = 'invoices@mason.build'
 # EMAIL_HOST_PASSWORD = 'password'
 DEFAULT_FROM_EMAIL = 'invoices@mason.build'
+
+# fake xero settings
+XERO_CLIENT_ID=1
+XERO_CLIENT_SECRET=2
+XERO_PROJECT_ID=3

@@ -2,7 +2,7 @@
 var newDiv = document.createElement("div");
 newDiv.innerHTML = `
 <div class="modal fade" id="committedQuotesModal" tabindex="-1" role="dialog" aria-labelledby="committedQuotesModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document" style="max-width: 500px;">
+  <div class="modal-dialog" role="document" style="max-width: 750px;"> <!-- Double the modal width -->
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="committedQuotesModalLabel">Committed Quotes</h5>
@@ -14,10 +14,10 @@ newDiv.innerHTML = `
         <table id="committedQuotesTable" class="table">
         <thead>
           <tr>
-            <th style="width: 30%;">Quote #</th>
-            <th style="width: 30%;">Supplier</th>
-            <th style="width: 30%;">Total Cost</th>
-            <th style="width: 10%;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
+            <th style="width: 25%;">Quote #</th> <!-- Add 25% of the new width -->
+            <th style="width: 50%;">Supplier</th> <!-- Add 75% of the new width -->
+            <th style="width: 20%;">Total Cost</th>
+            <th style="width: 5%;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
           </tr>
         </thead>
           <tbody>
@@ -55,7 +55,7 @@ committedQuotes.forEach(function(quote) {
     var supplier = quote.contact_pk__contact_name;
     // Create a new table row for each quote
     var newRow = document.createElement("tr");
-    newRow.innerHTML = `<td style="width: 200px;"><a href="#" class="quote-link">${supplier_quote_number}</a></td><td style="width: 200px;">${supplier}</td><td style="width: 200px;">${totalCostFormatted}</td><td class="delete-column" style="text-align: center;"><button class="btn delete-btn" style="width: 12px; height: 12px; padding: 0; font-size: 10px; line-height: 12px; text-align: center; border-radius: 0; background-color: white; color: black; border: 3px solid transparent; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; border-image-slice: 1; display: flex; justify-content: center; align-items: center;">X</button></td>`;    
+    newRow.innerHTML = `<td style="width: 200px; font-size: 12px; word-wrap: break-word;"><a href="#" class="quote-link">${supplier_quote_number}</a></td><td style="width: 200px; font-size: 12px; word-wrap: break-word;">${supplier}</td><td style="width: 200px; font-size: 12px;">${totalCostFormatted}</td><td class="delete-column" style="text-align: center;"><button class="btn delete-btn" style="width: 12px; height: 12px; padding: 0; font-size: 12px; line-height: 12px; text-align: center; border-radius: 0; background-color: white; color: black; border: 3px solid transparent; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; border-image-slice: 1; display: flex; justify-content: center; align-items: center;">X</button></td>`;    
     newRow.style.lineHeight = "0.1"; // Make the row height smaller
     tableBody.appendChild(newRow);
     // Add event listener to the delete button
