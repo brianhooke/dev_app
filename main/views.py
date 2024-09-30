@@ -1239,4 +1239,40 @@ def test_xero_invoice(request):
             file_data = f.read()
         headers['Content-Type'] = 'application/octet-stream'
         logger.info('Sending request to attach file to invoice')
-        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data
+        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
+        if response.status_code == 200:
+            logger.info('File attached successfully')
+            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
+        else:
+            logger.error('Failed to attach file to invoice')
+            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
+    else:
+        logger.error('Unexpected response from Xero API: %s', response_data)
+        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
+
+level = logger.getEffectiveLevel()
+
+if level == logging.DEBUG:
+    print("Logging level is DEBUG")
+elif level == logging.INFO:
+    print("Logging level is INFO")
+elif level == logging.WARNING:
+    print("Logging level is WARNING")
+elif level == logging.ERROR:
+    print("Logging level is ERROR")
+elif level == logging.CRITICAL:
+    print("Logging level is CRITICAL")
+else:
+    print(f"Logging level is {level}")
+
+@csrf_exempt
+def test_contact_id(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        invoice_pk = data.get('invoice_pk')
+        try:
+            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        except Invoices.DoesNotExist:
+            return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
+        contact = invoice.contact_pk
+        return JsonResponse({'contact_id': contact.xero_contact_id})
