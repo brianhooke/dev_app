@@ -14,10 +14,10 @@ newDiv.innerHTML = `
         <table id="committedQuotesTable" class="table">
         <thead>
           <tr>
-            <th style="width: 25%;">Quote #</th> <!-- Add 25% of the new width -->
+            <th style="width: 28.5%;">Quote #</th> <!-- Add 25% of the new width -->
             <th style="width: 50%;">Supplier</th> <!-- Add 75% of the new width -->
-            <th style="width: 20%;">Total Cost</th>
-            <th style="width: 5%;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
+            <th style="width: 17.5%;">Total Cost</th>
+            <th style="width: 4%;" rowspan="2" class="delete-cell-header delete-column">Delete</th>
           </tr>
         </thead>
           <tbody>

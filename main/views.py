@@ -65,10 +65,11 @@ def main(request, division):
         category = Categories.objects.get(pk=costing['category'])
         costing['category'] = category.category
     # Filtered contacts
-    contacts = Contacts.objects.filter(Q(division=division) | Q(division=3)).order_by('contact_name').values()
+    contacts = Contacts.objects.filter(division=division, checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
     # Unfiltered contacts
-    contacts_unfiltered = Contacts.objects.all().order_by('contact_name').values()
+    # contacts_unfiltered = Contacts.objects.all().order_by('contact_name').values()
+    contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
     contacts_unfiltered_list = list(contacts_unfiltered)
     quote_allocations = Quote_allocations.objects.filter(item__category__division=division).select_related('item').all()
     quote_allocations = [
@@ -99,8 +100,14 @@ def main(request, division):
     committed_quotes_json = json.dumps(committed_quotes_list, default=str)
     quote_allocations_json = json.dumps(list(quote_allocations), default=str)
     contact_pks_in_quotes = Quotes.objects.filter(contact_pk__division=division).values_list('contact_pk', flat=True).distinct()
-    contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes, division=division).values()
-    contacts_in_quotes_list = list(contacts_in_quotes)
+    # contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes, division=division).values()
+    # contacts_in_quotes_list = list(contacts_in_quotes)
+    contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes, division=division)
+    contacts_in_quotes_list = []
+    for contact in contacts_in_quotes:
+        contact_dict = contact.__dict__
+        contact_dict['quotes'] = list(contact.quotes_set.values('quotes_pk', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk'))
+        contacts_in_quotes_list.append(contact_dict)
     contacts_not_in_quotes = Contacts.objects.exclude(pk__in=contact_pks_in_quotes, division=division).values()
     contacts_not_in_quotes_list = list(contacts_not_in_quotes)
     # totals for homepage bottom table row
@@ -127,7 +134,9 @@ def main(request, division):
             'po_sent': order.po_sent
         })
     # Fetch invoices data
-    invoices = Invoices.objects.filter(Q(contact_pk__division=division) | Q(contact_pk__division=3)).select_related('contact_pk').all()    
+    # invoices = Invoices.objects.filter(Q(contact_pk__division=division) | Q(contact_pk__division=3)).select_related('contact_pk').all()    
+    # invoices = Invoices.objects.filter(Q(invoice_division=division) | Q(invoice_division=3)).select_related('contact_pk').all()
+    invoices = Invoices.objects.filter((Q(contact_pk__division=division) | Q(contact_pk__division=3)) & (Q(invoice_division=division) | Q(invoice_division=3))).select_related('contact_pk').all()
     invoices_list = [
         {
             'invoice_pk': invoice.invoice_pk,  # Add this line
@@ -138,9 +147,10 @@ def main(request, division):
             'supplier_invoice_number': invoice.supplier_invoice_number,
             'pdf_url': invoice.pdf.url
         }
-        for invoice in invoices
+        for invoice in invoices #unsure if this list is used.
     ]
-    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0).select_related('contact_pk'))
+    # invoices_unallocated = list(Invoices.objects.filter(invoice_status=0).select_related('contact_pk'))
+    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0, invoice_division=division).select_related('contact_pk'))
     invoices_unallocated_list = [
         {
             'invoice_pk': invoice.invoice_pk,
@@ -153,7 +163,8 @@ def main(request, division):
         }
         for invoice in invoices_unallocated
     ]    
-    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).select_related('contact_pk'))
+    # invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).select_related('contact_pk'))
+    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk'))
     invoices_allocated_list = [
         {
             'invoice_pk': invoice.invoice_pk,
@@ -585,7 +596,6 @@ def generate_po_pdf(request, po_order_pk):
     po_order = Po_orders.objects.get(pk=po_order_pk)
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk).select_related('costing', 'quote')
     company_details = Po_globals.objects.first()
-    
     letterhead = Letterhead.objects.first()
     if letterhead is not None:
         letterhead_path = letterhead.letterhead_path.name  # Get the file name or path as a string
@@ -602,7 +612,6 @@ def generate_po_pdf(request, po_order_pk):
         raise Exception("No Letterhead instance found.")
     content_buffer = BytesIO()
     p = canvas.Canvas(content_buffer, pagesize=A4)
-
     if company_details:
         details = [
             ("PO Reference: ", company_details.reference),
@@ -631,7 +640,6 @@ def generate_po_pdf(request, po_order_pk):
         p.setFont("Helvetica", 12)
         p.drawString(inch/2, y_position, today)
         y_position -= 12  # Move to the next line
-
     p.setFont("Helvetica-Bold", 15)
     supplier_name = po_order.po_supplier.contact_name  # Get the supplier's name
     project_address = po_globals.project_address  # Get the job address
@@ -644,11 +652,9 @@ def generate_po_pdf(request, po_order_pk):
     for line in wrapped_po_text:
         p.drawString(x_position, y_position, line)
         y_position -= 22  # Adjust for line height
-
     p.setLineWidth(1)
     p.line(x_position, y_position - 2, x_position + max_text_width, y_position - 2)
     y_position -= 36
-
     p.setFont("Helvetica-Bold", 12)
     table_headers = ["Claim Category", "Quote # or Variation", "Amount ($)*"]
     col_widths = [2.5 * inch, 3.5 * inch, 1 * inch]  # Adjusted column widths
@@ -660,7 +666,6 @@ def generate_po_pdf(request, po_order_pk):
             header_x_position = x_start + sum(col_widths[:i]) + col_widths[i] / 2 - p.stringWidth(header, "Helvetica-Bold", 12) / 2
         p.drawString(header_x_position, y_position + 2, header)  # Adjust for padding
         p.line(header_x_position, y_position, header_x_position + p.stringWidth(header, "Helvetica-Bold", 12), y_position)  # Draw underline
-
     y_position -= cell_height
     total_amount = 0  # Initialize total amount
     p.setFont("Helvetica", 10)  # Smaller font size for table contents
@@ -692,9 +697,7 @@ def generate_po_pdf(request, po_order_pk):
                     p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding and right alignment
                 else:
                     p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding
-
         y_position -= max_row_height
-
     p.setFont("Helvetica-Bold", 12)
     total_row_data = [
         "Total",
@@ -708,14 +711,12 @@ def generate_po_pdf(request, po_order_pk):
             p.line(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position, x_start + sum(col_widths[:i+1]) - line_width - 2 + p.stringWidth(cell, "Helvetica-Bold", 12), y_position)  # Draw underline
         else:
             p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2, cell)  # Adjust for padding
-
     y_position -= (cell_height * 2.5)
     p.setFont("Helvetica", 10)
     fixed_text = "* All amounts are net of GST. Supplier to add GST if applicable."
     for line in wrap_text(fixed_text, 110):
         p.drawString(x_start, y_position, line)
         y_position -= (cell_height) * 0.75  # Consistent line break
-
     y_position -= (cell_height) * 0.75  # Blank row
     notes = [po_order.po_note_1, po_order.po_note_2, po_order.po_note_3]
     for note in notes:
@@ -723,21 +724,17 @@ def generate_po_pdf(request, po_order_pk):
             p.drawString(x_start, y_position, line)
             y_position -= (cell_height) * 0.75  # Consistent line break
         y_position -= (cell_height) * 0.75  # Blank row
-
     p.showPage()
     p.save()
     content_buffer.seek(0)
     content_pdf = PdfReader(content_buffer)
-
     output_pdf = PdfWriter()
     page = letterhead_pdf.pages[0]
     page.merge_page(content_pdf.pages[0])
     output_pdf.add_page(page)
-
     merged_buffer = BytesIO()
     output_pdf.write(merged_buffer)
     merged_buffer.seek(0)
-
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="PO_{po_order_pk}.pdf"'
     response.write(merged_buffer.getvalue())
@@ -934,6 +931,7 @@ def upload_invoice(request):
         invoice_total_gst = request.POST.get('invoice_total_gst') # Get the GST total value
         invoice_date = request.POST.get('invoice_date')
         invoice_due_date = request.POST.get('invoice_due_date')
+        invoice_division = request.POST.get('invoiceDivision') # Get the invoice division
         pdf_file = request.FILES.get('pdf')
         try:
             contact = Contacts.objects.get(pk=supplier_id)
@@ -944,6 +942,7 @@ def upload_invoice(request):
                 invoice_status=0, # Set the invoice status to 0
                 invoice_date=invoice_date,
                 invoice_due_date=invoice_due_date,
+                invoice_division=invoice_division, # Set the invoice division
                 pdf=pdf_file,
                 contact_pk=contact
             )
@@ -1005,7 +1004,7 @@ def update_contacts(request):
         for contact in data:
             try:
                 contact_obj = Contacts.objects.get(contact_pk=contact['contact_pk'])
-                contact_obj.division = contact['division']
+                contact_obj.checked = contact['checked']
                 contact_obj.contact_email = contact['contact_email']
                 contact_obj.save()
             except Contacts.DoesNotExist:
@@ -1021,6 +1020,7 @@ def xeroapi(request):
 # Define rate limits for Xero API calls
 @limits(calls=60, period=60)  # 60 calls per minute
 @sleep_and_retry
+
 def make_api_request(url, headers):
     response = requests.get(url, headers=headers)
     return response
@@ -1029,7 +1029,13 @@ client_id = settings.XERO_CLIENT_ID
 client_secret = settings.XERO_CLIENT_SECRET
 client_project = settings.XERO_PROJECT_ID
 
-def get_xero_token(request):
+mb_client_id = settings.MB_XERO_CLIENT_ID
+mb_client_secret = settings.MB_XERO_CLIENT_SECRET
+
+mdg_client_id = settings.MDG_XERO_CLIENT_ID
+mdg_client_secret = settings.MDG_XERO_CLIENT_SECRET
+
+def get_xero_token(request, division):
     scopes_list = [
         "accounting.transactions",
         "accounting.transactions.read",
@@ -1047,6 +1053,13 @@ def get_xero_token(request):
         "files.read"
     ]
     scopes = ' '.join(scopes_list)  # Convert list to space-separated string
+        # Set the client_id and client_secret based on the division
+    if division == 1:
+        client_id = mdg_client_id
+        client_secret = mdg_client_secret
+    elif division == 2:
+        client_id = mb_client_id
+        client_secret = mb_client_secret
     # Prepare the header
     credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
     headers = {
@@ -1069,9 +1082,10 @@ def get_xero_token(request):
 @csrf_exempt
 def get_xero_contacts(request):
     # Call get_xero_token and get the access_token
-    get_xero_token(request)
+    division = int(request.GET.get('division', 0))  # Default to 0 if division is not provided
+    # Call get_xero_token and get the access_token
+    get_xero_token(request, division)
     access_token = request.session.get('access_token')
-    
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Accept': 'application/json'
@@ -1089,7 +1103,7 @@ def get_xero_contacts(request):
             # Create and save the new contact
             new_contact = Contacts(
                 xero_contact_id=xero_contact_id,
-                division=0,
+                division=division,
                 contact_name=contact_name,
                 contact_email=contact_email
             )
@@ -1225,40 +1239,4 @@ def test_xero_invoice(request):
             file_data = f.read()
         headers['Content-Type'] = 'application/octet-stream'
         logger.info('Sending request to attach file to invoice')
-        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
-        if response.status_code == 200:
-            logger.info('File attached successfully')
-            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
-        else:
-            logger.error('Failed to attach file to invoice')
-            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
-    else:
-        logger.error('Unexpected response from Xero API: %s', response_data)
-        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
-
-level = logger.getEffectiveLevel()
-
-if level == logging.DEBUG:
-    print("Logging level is DEBUG")
-elif level == logging.INFO:
-    print("Logging level is INFO")
-elif level == logging.WARNING:
-    print("Logging level is WARNING")
-elif level == logging.ERROR:
-    print("Logging level is ERROR")
-elif level == logging.CRITICAL:
-    print("Logging level is CRITICAL")
-else:
-    print(f"Logging level is {level}")
-
-@csrf_exempt
-def test_contact_id(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        invoice_pk = data.get('invoice_pk')
-        try:
-            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
-        contact = invoice.contact_pk
-        return JsonResponse({'contact_id': contact.xero_contact_id})
+        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data

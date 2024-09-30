@@ -16,8 +16,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('saveInvoiceButton').addEventListener('click', gatherInvoiceData);
-    
-    
 
     // Handle "Existing Invoices" dropdown selection
     document.getElementById('claimsDropdownInvoices').addEventListener('change', function(e) {
@@ -110,7 +108,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     invoiceTotalGSTInput.addEventListener('input', updateInvoiceTotalGross);
 
-
     // Handle "Process Invoice" link click in the existing invoices modal
     document.querySelectorAll('.process-invoice-invoices').forEach(link => {
         link.addEventListener('click', function(event) {
@@ -125,13 +122,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const totalCost = this.getAttribute('data-total');
             const totalGst = this.getAttribute('data-gst');
             console.log("Invoice GST is", totalGst);
-
             document.getElementById('invoiceSupplierName').textContent = supplierName;
             document.getElementById('invoiceNumber').textContent = invoiceNumber;
             document.getElementById('invoiceTotal').textContent = parseFloat(totalCost).toLocaleString();
             document.getElementById('invoiceGSTTotal').textContent = parseFloat(totalGst).toLocaleString();
             document.getElementById('selectedInvoiceId').value = invoiceId;
-
             $('#existingInvoicesModal').modal('hide').on('hidden.bs.modal', function () {
                 $('#selectOrderTypeModal').modal('show');
             });
@@ -191,7 +186,6 @@ function directCostAllocationInvoices(pdfFilename, invoiceId = "", supplier = ""
     // const commitButton = document.getElementById('commitBtnInvoices');
     const saveButton = document.getElementById('saveInvoicesButton');
     const tableBody = document.getElementById('lineItemsTableInvoices').getElementsByTagName('tbody')[0];
-
     // Log each element to see which one is null
     if (!pdfViewer) {
         console.error('pdfViewer not found');
@@ -226,7 +220,6 @@ function directCostAllocationInvoices(pdfFilename, invoiceId = "", supplier = ""
     if (!tableBody) {
         console.error('tableBody not found');
     }
-
     // Return if any element is missing
     // if (!pdfViewer || !supplierElement || !totalElement || !invoiceNumberElement || !hiddenInvoiceIdElement || !addRowButton || !closeButton || !commitButton || !updateButton || !tableBody) {
     //     console.error('One or more required elements not found');
@@ -464,6 +457,7 @@ function gatherInvoiceData() {
         alert('Please select a supplier.');
         return;
     }
+    var invoiceDivision = division;
     var invoiceNumber = document.getElementById('invoiceNumberInput').value;
     var invoiceTotal = document.getElementById('invoiceTotalInput').value;
     var invoiceTotalGST = document.getElementById('invoiceTotalGSTInput').value; // Get the GST total value
@@ -478,6 +472,8 @@ function gatherInvoiceData() {
     console.log("Invoice Total:", invoiceTotal);
     console.log("Invoice Total GST:", invoiceTotalGST); // Log the GST total value
     console.log("File:", file);
+    console.log("Invoice Division for the invoice upload is:" + invoiceDivision);
+    formData.append('invoiceDivision', invoiceDivision); // Change 'division' to 'invoiceDivision'
     formData.append('invoice_number', invoiceNumber);
     formData.append('invoice_total', invoiceTotal);
     formData.append('invoice_total_gst', invoiceTotalGST); // Append the GST total value to formData
@@ -519,7 +515,7 @@ function gatherInvoiceData() {
               console.error('Error uploading invoice:', data.error);
           }
       });
-}    
+} 
 
 function gatherAllocationsDataInvoices() {
     console.log("Gathering invoice data and allocations...");
@@ -581,6 +577,8 @@ function gatherAllocationsDataInvoices() {
 }
 
 $('#sendInvoicesToXeroButton').click(function() {
+    var division = $(this).data('division'); // Get the division from the data attribute. 1 is Developer, 2 is Builder
+
     // Initialize an empty array to store the invoicePks
     var invoicePks = [];
     // Find all the checked checkboxes
@@ -596,7 +594,7 @@ $('#sendInvoicesToXeroButton').click(function() {
         $.ajax({
             url: '/post_invoice/', 
             type: 'POST',
-            data: JSON.stringify({invoice_pk: invoicePk}),
+            data: JSON.stringify({invoice_pk: invoicePk, division: division}), // Add the division to the data sent in the AJAX request
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
             success: function(response) {

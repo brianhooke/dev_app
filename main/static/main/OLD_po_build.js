@@ -17,16 +17,13 @@ $(document).ready(function() {
             type: 'GET',
             success: function(response) {
                 console.log('GET request response:', response); // Log the entire response
-                
                 var tableBody = $('#createPoModalBuild .table tbody');
                 var tableHead = $('#createPoModalBuild .table thead');
                 var costings = response.costings;
                 console.log('Costings:', costings); // Log the costings part of the response
-                
                 delete response.costings; // Remove costings from the response object
                 var data = response; // Now data only contains the item data
                 console.log('Data (without costings):', data); // Log the data part of the response
-                
                 tableBody.empty();
                 tableHead.empty();
                 var quoteNumbers = [];
@@ -46,7 +43,6 @@ $(document).ready(function() {
                 }
                 headerRow += '<th>Variations</th><th>Total</th></tr>'; // Add Variation and Total column headers
                 tableHead.append(headerRow);
-    
                 var columnTotals = new Array(quoteNumbers.length).fill(0); // Initialize column totals
     
                 for (var item in data) {
@@ -82,13 +78,10 @@ $(document).ready(function() {
                 var overallTotal = columnTotals.reduce((acc, val) => acc + val, 0);
                 var formattedOverallTotal = overallTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 footerRow += '<td></td><td class="overall-total">' + formattedOverallTotal + '</td></tr>'; // Overall total and empty cell for Add Variation
-    
                 $('#createPoModalBuild .table').append('<tfoot>' + footerRow + '</tfoot>');
-    
                 // Add "Add new Item" button after the table with the same styling
                 var addItemButton = '<div style="display: flex; justify-content: center; width: 25%; padding: 2px;"><div style="width: 90%;"><button type="button" class="btn btn-primary addItemButton" style="background-color: white; color: black; border: 3px solid; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; width: 100%; white-space: nowrap; font-size: 1em;"><strong>Add new Item</strong></button></div></div>';
                 $('#createPoModalBuild .modal-body').append(addItemButton);
-    
                 // Add Note rows after the "Add new Item" button
                 var notesRows = `
                 <div class="form-group" style="display: flex; align-items: center;"><label for="note1" style="flex: 1;">Note 1:</label><input type="text" id="note1" class="form-control" style="flex: 4;"></div>

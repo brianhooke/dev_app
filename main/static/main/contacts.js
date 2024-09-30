@@ -5,21 +5,19 @@ document.addEventListener('DOMContentLoaded', function() {
             <tr>
                 <td>${contact.contact_name}</td>
                 <td><a href="#" class="email-field" data-index="${index}">${contact.contact_email}</a></td>
-                <td><input type="checkbox" ${contact.division == 1 || contact.division == 3 ? 'checked' : ''}></td>
-                <td><input type="checkbox" ${contact.division == 2 || contact.division == 3 ? 'checked' : ''}></td>
+                <td><input type="checkbox" ${contact.checked == 1 ? 'checked' : ''}></td>
                 <input type="hidden" value="${contact.contact_pk}" class="contact-pk">
             </tr>
             `;
         }).join('');
-    
+
         var tableHTML = `
         <table id="contactsTable">
             <thead>
                 <tr>
                     <th>Contact</th>
                     <th>Email Address</th>
-                    <th>Developer</th>
-                    <th>Builder</th>
+                    <th>Selectable</th>
                 </tr>
             </thead>
             <tbody>
@@ -28,12 +26,21 @@ document.addEventListener('DOMContentLoaded', function() {
         </table>
         `;
     
+        var modalTitle;
+        if (division == 1) {
+            modalTitle = "Mason Development Group Suppliers";
+        } else if (division == 2) {
+            modalTitle = "Mason Build Suppliers";
+        } else {
+            modalTitle = "Contacts";
+        }
+        
         var modalHtml = `
         <div class="modal fade" id="contactsModal" tabindex="-1" role="dialog" aria-hidden="true">
             <div class="modal-dialog modal-lg" role="document" style="max-width: 800px;">
                 <div class="modal-content" style="border: 3px solid black;">
                     <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-                        <h5 class="modal-title">Contacts</h5>
+                        <h5 class="modal-title">${modalTitle}</h5>
                     </div>
                     <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto;">
                         <div class="table-responsive">
@@ -64,8 +71,35 @@ document.addEventListener('DOMContentLoaded', function() {
             $(this).remove();
         });
     
+        // document.getElementById('addContactButton').addEventListener('click', function() {
+        //     fetch('/get_xero_contacts/', {
+        //         method: 'GET', // or 'POST'
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //             // 'X-CSRFToken': csrftoken  // Uncomment this line if you're using CSRF protection
+        //         },
+        //     })
+        //     .then(response => {
+        //         if (!response.ok) {
+        //             throw new Error('Network response was not ok');
+        //         }
+        //         return response.json();
+        //     })
+        //     .then(data => {
+        //         console.log(data);
+        //         alert('Xero Contacts Successfully Updated.');
+        //         location.reload();
+        //     })
+        //     .catch((error) => {
+        //         console.error('Error:', error);
+        //         alert('Operation failed. Please try again.');
+        //     });
+        // });
+
         document.getElementById('addContactButton').addEventListener('click', function() {
-            fetch('/get_xero_contacts/', {
+            // var division = division; // Assuming invoiceDivision is globally available
+            console.log("Division for contact is:", division);
+            fetch('/get_xero_contacts/?division=' + division, {
                 method: 'GET', // or 'POST'
                 headers: {
                     'Content-Type': 'application/json',
@@ -108,17 +142,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 var contact_pk = row.querySelector('.contact-pk') ? row.querySelector('.contact-pk').value : null;
                 var emailField = row.querySelector('.email-field');
                 var contact_email = emailField.querySelector('input') ? emailField.querySelector('input').value : emailField.textContent;
-                var checkboxes = Array.from(row.querySelectorAll('input[type="checkbox"]'));
-                var division = checkboxes.reduce(function(acc, checkbox, index) {
-                    return acc + (checkbox.checked ? Math.pow(2, index) : 0);
-                }, 0);
+                var checkbox = row.querySelector('input[type="checkbox"]');
+                var checked = checkbox ? checkbox.checked : false;
                 return {
                     contact_pk: contact_pk,
                     contact_email: contact_email,
-                    division: division
+                    checked: checked
                 };
             });
-        
+
             $.ajax({
                 url: '/update_contacts', // replace with your server endpoint
                 type: 'POST',

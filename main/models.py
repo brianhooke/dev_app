@@ -102,12 +102,13 @@ class Quote_allocations(models.Model):
     quotes_pk = models.ForeignKey(Quotes, on_delete=models.CASCADE)
     item = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    notes = models.CharField(max_length=100, null=True)
+    notes = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
 
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
+    invoice_division = models.IntegerField()  # Add this line
     invoice_status = models.IntegerField(default=0)  # 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
     invoice_xero_id = models.CharField(max_length=255, null=True)
     supplier_invoice_number = models.CharField(max_length=255)
@@ -126,17 +127,17 @@ class Invoice_allocations(models.Model):
     item = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    notes = models.CharField(max_length=100, null=True)
+    notes = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
-
 #End Builder/Developer Model Set 1:
 
 #Builder/Developer Model Set 2:
 class Contacts(models.Model):
     contact_pk = models.AutoField(primary_key=True)
     xero_contact_id = models.CharField(max_length=255)
-    division = models.IntegerField()
+    division = models.IntegerField() #can delete this after "checked" is integrated
+    checked = models.BooleanField(default=False) #0 for no, 1 for yes
     contact_name = models.CharField(max_length=200)
     contact_email = models.EmailField(max_length=254)
     def __str__(self):

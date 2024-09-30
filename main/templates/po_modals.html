@@ -1,83 +1,87 @@
-
 <!--Create Purchase Order Supplier Select Modal-->
 <div class="modal fade" id="createPoSelectModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document" style="max-width: 300px;">
-        <div class="modal-content" style="border: 3px solid black;">
-            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-                <h5 class="modal-title">Create Purchase Order</h5>
-            </div>
-            <div class="modal-body">
-              <select class="form-control" id="poSupplierSelect">
-                  <option selected>Select Supplier...</option>
-                  {% for contact in contacts_in_quotes %}
-                      <option value="{{ contact.contact_pk }}">{{ contact.contact_name }}</option>
-                  {% endfor %}
-                  {% for contact in contacts_not_in_quotes %}
-                      <option value="{{ contact.contact_pk }}" disabled style="color: grey;">{{ contact.contact_name }}</option>
-                  {% endfor %}
-              </select>
-            </div>
-            <div class="modal-footer">
-                <div class="col-6">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                </div>
-                <div class="col-6 text-right">
-                    <button type="button" class="btn btn-primary" id="saveCategoryButton">Select</button>
-                </div>
-            </div>
+  <div class="modal-dialog modal-lg" role="document" style="max-width: 1000px;">
+    <div class="modal-content" style="border: 3px solid black;">
+      <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+        <h5 class="modal-title">Create Purchase Order</h5>
+      </div>
+      <div class="modal-body" style="display: flex; justify-content: space-between;">
+        <select class="form-control" id="poSupplierSelect" style="width: 20%;">
+          <option selected>Select Supplier...</option>
+          {% for contact in contacts_in_quotes %}
+            <option value="{{ contact.contact_pk }}" data-quotes="{{ contact.quotes|escapejs }}">{{ contact.contact_name }}</option>
+          {% endfor %}
+          {% for contact in contacts_not_in_quotes %}
+            <option value="{{ contact.contact_pk }}" disabled style="color: grey;">{{ contact.contact_name }}</option>
+          {% endfor %}
+        </select>
+        <select class="form-control" id="poQuoteSelect" style="width: 20%;">
+          <option selected>Select Quote...</option>
+        </select>
+        <iframe id="pdfViewer" style="width: 55%; height: 500px;"></iframe>
+      </div>
+      <div class="modal-footer">
+        <div class="col-6">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
         </div>
+        <div class="col-6 text-right">
+          <button type="button" class="btn btn-primary" id="saveCategoryButton">Select</button>
+        </div>
+      </div>
     </div>
   </div>
+</div>
+
   
-  <!-- Create Purchase Order Modal -->
-  <div class="modal fade" id="createPoModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document" style="max-width: 750px; max-height: calc(100vh - 60px); overflow-y: auto;">
-        <div class="modal-content" style="border: 3px solid black;">
-            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-                <h5 class="modal-title">Create Purchase Order</h5>
-            </div>
-            <div class="modal-body">
-              <p>Supplier: XXX</p>
-              <table class="table">
-                  <thead>
-                      <tr style="padding: 0; margin: 0;">
-                          <th>Item</th>
-                          <th>Variation</th>
-                          <th>quote 1 $</th>
-                          <th>quote 2 $</th>
-                          <th>quote 3 (& so on) $</th>
-                          <th>total</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      <tr style="line-height: 10px;">
-                        <td><button type="button" class="btn btn-small">+</button></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
+<!-- Create Purchase Order Modal -->
+<div class="modal fade" id="createPoModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document" style="max-width: 750px; max-height: calc(100vh - 60px); overflow-y: auto;">
+      <div class="modal-content" style="border: 3px solid black;">
+          <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+              <h5 class="modal-title">Create Purchase Order</h5>
+          </div>
+          <div class="modal-body">
+            <p>Supplier: XXX</p>
+            <table class="table">
+                <thead>
+                    <tr style="padding: 0; margin: 0;">
+                        <th>Item</th>
+                        <th>Variation</th>
+                        <th>quote 1 $</th>
+                        <th>quote 2 $</th>
+                        <th>quote 3 (& so on) $</th>
+                        <th>total</th>
                     </tr>
+                </thead>
+                <tbody>
                     <tr style="line-height: 10px;">
-                        <td><strong>Total</strong></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                  </tbody>
-              </table>
-            </div>
-            <div class="modal-footer">
-                <div class="col-6">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                </div>
-                <div class="col-6 text-right">
-                    <button type="button" class="btn btn-primary" id="createPoButton">Create</button>
-                </div>
-            </div>
-        </div>
-    </div>
+                      <td><button type="button" class="btn btn-small">+</button></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                  </tr>
+                  <tr style="line-height: 10px;">
+                      <td><strong>Total</strong></td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                  </tr>
+                </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+              <div class="col-6">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+              </div>
+              <div class="col-6 text-right">
+                  <button type="button" class="btn btn-primary" id="createPoButton">Create</button>
+              </div>
+          </div>
+      </div>
   </div>
+</div>
   
   <!--Create Purchase Order View and Email Modal-->
   <div class="modal fade" id="createPoViewSendModal" tabindex="-1" role="dialog" aria-hidden="true">

@@ -5,6 +5,18 @@ $(document).ready(function() {
         }
     });
 
+    $('#poSupplierSelect').change(function() {
+      var selectedContact = $(this).find('option:selected');
+      var quotes = JSON.parse(selectedContact.attr('data-quotes'));
+      var poQuoteSelect = $('#poQuoteSelect');
+      poQuoteSelect.empty();
+      poQuoteSelect.append('<option selected>Select Quote...</option>');
+      $.each(quotes, function(index, quote) {
+        poQuoteSelect.append('<option value="' + quote.quotes_pk + '">' + quote.supplier_quote_number + '</option>');
+      });
+    });
+
+
     $('#saveCategoryButton').click(function() {
         var selectedSupplierPk = $('#poSupplierSelect option:selected').val();
         var selectedSupplierName = $('#poSupplierSelect option:selected').text();
@@ -61,7 +73,6 @@ $(document).ready(function() {
                     row += '<td class="total-column">' + formattedRowTotal + '</td></tr>'; // Add row total cell last
                     tableBody.append(row);
                 }
-
                 var footerRow = '<tr><td><strong>Total</strong></td>';
                 columnTotals.forEach(function(total) {
                     var formattedTotal = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -70,7 +81,6 @@ $(document).ready(function() {
                 var overallTotal = columnTotals.reduce((acc, val) => acc + val, 0);
                 var formattedOverallTotal = overallTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 footerRow += '<td></td><td class="overall-total">' + formattedOverallTotal + '</td></tr>'; // Overall total and empty cell for Add Variation
-
                 $('#createPoModal .table').append('<tfoot>' + footerRow + '</tfoot>');
 
                 // Add "Add new Item" button after the table with the same styling
@@ -84,7 +94,6 @@ $(document).ready(function() {
                 <div class="form-group" style="display: flex; align-items: center;"><label for="note3" style="flex: 1;">Note 3:</label><input type="text" id="note3" class="form-control" style="flex: 4;"></div>
             `;            
                 $('#createPoModal .modal-body').append(notesRows); 
-
                 // Add event listener to the "Add new Item" button
                 $('.addItemButton').click(function() {
                     var newRow = '<tr><td><select class="item-select"><option value="" disabled selected>Select Item...</option>';
@@ -104,7 +113,6 @@ $(document).ready(function() {
                     // Re-bind events to the new row
                     bindEventsToRow();
                 });
-
                 function bindSelectEvent() {
                     $('.item-select').off('change').on('change', function() {
                         var selectedOption = $(this).find('option:selected');
@@ -122,10 +130,8 @@ $(document).ready(function() {
                         console.log('Selected Item PK:', selectedItemPk);
                     });
                 }
-
                 // Call bindEventsToRow after initial table generation
                 bindEventsToRow();
-
                 function bindSelectEvent() {
                     $('.item-select').off('change').on('change', function() {
                         var selectedOption = $(this).find('option:selected');

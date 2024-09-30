@@ -109,7 +109,6 @@
     </div>
 </div>
 
-
 <!-- Select Order Type Modal -->
 <div class="modal fade" id="selectOrderTypeModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document" style="max-width: 300px;">
@@ -239,7 +238,14 @@
                                     <th style="width: 15%;">Net Total $</th>
                                     <th style="width: 15%;">Invoice #</th>
                                     <th style="width: 15%;">View PDF</th>
-                                    <th style="width: 15%;">Send to Xero</th>
+                                    <!-- <th style="width: 15%;">Send to Xero</th> -->
+                                    <th style="width: 15%;">
+                                        {% if division == 1 %}
+                                            Send to MDG Xero
+                                        {% elif division == 2 %}
+                                            Send to MB Xero
+                                        {% endif %}
+                                    </th>
                                     <th style="width: 15%;">Paid</th>
                                 </tr>
                             </thead>
@@ -275,14 +281,4 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <div class="col-6 text-left">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                </div>
-                <div class="col-6 text-right">
-                    <button type="button" class="btn btn-primary" id="sendInvoicesToXeroButton">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+            <div class="modal-

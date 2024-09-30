@@ -74,7 +74,9 @@
     var costings = JSON.parse(document.getElementById('costings').textContent);
     var division = "{{ division }}";
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
-  </script>
+    var division = "{{ division }}";
+    console.log("division is:" + division);
+</script>
 
 <script src="{% static 'main/base_table.js' %}"></script>
 <script src="{% static 'main/commit_costs.js' %}"></script>
