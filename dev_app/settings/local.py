@@ -43,7 +43,8 @@ DEFAULT_FROM_EMAIL = 'invoices@mason.build'
 # fake xero settings
 XERO_CLIENT_ID=1
 XERO_CLIENT_SECRET=2
-XERO_PROJECT_ID=3
+XERO_PROJECT_ID='3_Decora' #for Mason Build tracking category
+# XERO_MDG_ACCOUNT_ID=4 #for MDG account to put invoices in, eg Loan-Taree
 
 MB_XERO_CLIENT_ID= ''
 MB_XERO_CLIENT_SECRET= ''

@@ -578,7 +578,7 @@ function gatherAllocationsDataInvoices() {
 
 $('#sendInvoicesToXeroButton').click(function() {
     var division = $(this).data('division'); // Get the division from the data attribute. 1 is Developer, 2 is Builder
-
+    console.log("Global division for invoices is:", division);
     // Initialize an empty array to store the invoicePks
     var invoicePks = [];
     // Find all the checked checkboxes
@@ -591,8 +591,9 @@ $('#sendInvoicesToXeroButton').click(function() {
     // Make the AJAX request for each invoicePk
     for (var i = 0; i < invoicePks.length; i++) {
         var invoicePk = invoicePks[i];
+        // console.log("Division for invoice is:", division);
         $.ajax({
-            url: '/post_invoice/', 
+            url: '/post_invoice/?division=' + division, 
             type: 'POST',
             data: JSON.stringify({invoice_pk: invoicePk, division: division}), // Add the division to the data sent in the AJAX request
             contentType: 'application/json; charset=utf-8',

@@ -80,7 +80,7 @@ class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
     category = models.ForeignKey(Categories, on_delete=models.CASCADE)
     item = models.CharField(max_length=100)
-    xero_account_code = models.CharField(max_length=100)
+    xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)

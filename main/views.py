@@ -1115,6 +1115,9 @@ def post_invoice(request):
     logger.info('Starting post_invoice function')
     body = json.loads(request.body)
     invoice_pk = body.get('invoice_pk')
+    # division = int(request.GET.get('division', 0))  # Default to 0 if division is not provided
+    division = int(body.get('division', 0))  # Default to 0 if division is not provided
+    logger.info(f'Division: {division}')
     logger.info(f'Invoice PK: {invoice_pk}')
     invoice = Invoices.objects.get(pk=invoice_pk)
     contact = Contacts.objects.get(pk=invoice.contact_pk_id)
@@ -1129,16 +1132,18 @@ def post_invoice(request):
             "AccountCode": costing.xero_account_code,
             "TaxType": "INPUT",
             "TaxAmount": str(invoice_allocation.gst_amount),
-            "Tracking": [
+        }
+        if division == 2:
+            line_item["Tracking"] = [
                 {
                     "Name": "Project",
                     "Option": client_project,
                 }
             ]
-        }
         line_items.append(line_item)
-    get_xero_token(request)
+    get_xero_token(request, division)
     access_token = request.session.get('access_token')
+    logger.info(f'Access Token: {access_token}')
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Accept': 'application/json',
@@ -1153,10 +1158,15 @@ def post_invoice(request):
         "Url": request.build_absolute_uri(invoice.pdf.url),  # Generate absolute URL
         "LineItems": line_items
     }
+    # Rest of the function remains the same...
     logger.info('Sending request to Xero API')
     logger.info('Data: %s', json.dumps(data))  # Log the data
     response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
-    response_data = response.json()
+    try:
+        response_data = response.json()
+    except json.JSONDecodeError:
+        logger.error('Empty response from Xero API')
+        return JsonResponse({'status': 'error', 'message': 'Empty response from Xero API'})
     if 'Status' in response_data and response_data['Status'] == 'OK':
         invoice_id = response_data['Invoices'][0]['InvoiceID']
         logger.info(f'Invoice created with ID: {invoice_id}')
