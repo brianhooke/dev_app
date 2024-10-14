@@ -67,6 +67,9 @@ def main(request, division):
     # Filtered contacts
     contacts = Contacts.objects.filter(division=division, checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
+    # Log the contacts_list
+    logger = logging.getLogger('django.server')
+    logger.info('contacts_list: %s', contacts_list)
     # Unfiltered contacts
     # contacts_unfiltered = Contacts.objects.all().order_by('contact_name').values()
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
@@ -1101,6 +1104,7 @@ def upload_invoice_allocations(request):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
+# add checkbox to contacts
 @csrf_exempt
 def update_contacts(request):
     if request.method == 'POST':
@@ -1203,7 +1207,13 @@ def get_xero_contacts(request):
         contact_name = contact.get('Name', 'Not Set')
         contact_email = 'Not Set'
         # Check if the contact already exists
-        if not Contacts.objects.filter(xero_contact_id=xero_contact_id).exists():
+        existing_contact = Contacts.objects.filter(xero_contact_id=xero_contact_id).first()
+        if existing_contact:
+            # If the division does not match, update it
+            if existing_contact.division != division:
+                existing_contact.division = division
+                existing_contact.save()
+        else:
             # Create and save the new contact
             new_contact = Contacts(
                 xero_contact_id=xero_contact_id,
