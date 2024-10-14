@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice
+from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -15,6 +15,7 @@ urlpatterns = [
     # path('update_build_quote/', update_build_quote, name='update_build_quote'),
     # path('create_build_po_order/', views.create_build_po_order, name='create_build_po_order'),
     path('update_uncommitted/', update_uncommitted, name='update_uncommitted'),
+    path('update_fixedonsite/', views.update_fixedonsite, name='update_fixedonsite'),
     # path('update_complete_on_site/', update_complete_on_site, name='update_complete_on_site'),
     path('model_viewer/', views.model_viewer_view, name='model_viewer'),
     # path('update_costing/', update_costing, name='update_costing'),
@@ -38,6 +39,7 @@ urlpatterns = [
     path('upload_costings/', upload_costings, name='upload_costings'),
     path('upload_letterhead/', views.upload_letterhead, name='upload_letterhead'),
     path('upload_invoice/', views.upload_invoice, name='upload_invoice'),
+    path('mark_sent_to_boutique/', views.mark_sent_to_boutique, name='mark_sent_to_boutique'),
     path('upload_invoice_allocations/', views.upload_invoice_allocations, name='upload_invoice_allocations'),
     path('xeroapi/', views.xeroapi, name='xeroapi'),
     path('get_xero_token/', views.get_xero_token, name='get_xero_token'),
@@ -46,6 +48,8 @@ urlpatterns = [
     path('post_invoice/', views.post_invoice, name='post_invoice'),
     path('test_xero_invoice/', views.test_xero_invoice, name='test_xero_invoice'),
     path('test_contact_id/', views.test_contact_id, name='test_contact_id'),
+    path('associate_sc_claims_with_hc_claim/', views.associate_sc_claims_with_hc_claim, name='associate_sc_claims_with_hc_claim'),
+    path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data')
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]

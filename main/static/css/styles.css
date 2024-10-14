@@ -13,6 +13,12 @@ table {
     padding: 2.5px; /* Reduce padding to decrease space */
   }
   
+  .myTable th {
+    background-image: none;
+    background-color: white;
+    color: black;
+  }
+
   tr:nth-child(even) {
     background-color: #f2f2f2;
   }
@@ -157,6 +163,24 @@ table {
     text-align: center;  /* Center the content of the cells */
   }
   
+  .btn-custom {
+    display: block;
+    width: 100px; /* Adjust as needed */
+    margin-right: auto;
+    background-color: #6c757d; /* Bootstrap's secondary color */
+    color: white;
+    text-align: center;
+    padding: 10px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  
+  .btn-custom:hover {
+    background-color: #5a6268; /* Darken color on hover */
+  }
+  
   #quoteModal {
     z-index: 1050000;  /* Increase as needed to bring the modal to the front */
   }
@@ -194,4 +218,14 @@ table {
     margin: 4px 2px;
     cursor: pointer;
     border-radius: 12px;
+  }
+
+  .flash-update {
+    background-color: #6cef6c5d;  /* Green color */
+    transition: background-color 5s ease-out;  /* Fade out over 3 seconds */
+  }
+
+  .flash-original {
+    background-color: initial;  /* Original color */
+    transition: background-color 5s ease-out;  /* Fade out over 3 seconds */
   }

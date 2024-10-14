@@ -2,11 +2,11 @@ import csv
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
-from django.db.models import Sum
+from django.db.models import Sum, Case, When, IntegerField
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -116,6 +116,7 @@ def main(request, division):
     total_committed = sum(costing['committed'] for costing in costings)
     total_forecast_budget = total_committed + total_uncommitted
     total_sc_invoiced = sum(costing['sc_invoiced'] for costing in costings)
+    total_fixed_on_site = sum(costing['fixed_on_site'] for costing in costings)
     total_sc_paid = sum(costing['sc_paid'] for costing in costings)
     # Fetch Po_globals data
     po_globals = Po_globals.objects.first()
@@ -136,21 +137,24 @@ def main(request, division):
     # Fetch invoices data
     # invoices = Invoices.objects.filter(Q(contact_pk__division=division) | Q(contact_pk__division=3)).select_related('contact_pk').all()    
     # invoices = Invoices.objects.filter(Q(invoice_division=division) | Q(invoice_division=3)).select_related('contact_pk').all()
-    invoices = Invoices.objects.filter((Q(contact_pk__division=division) | Q(contact_pk__division=3)) & (Q(invoice_division=division) | Q(invoice_division=3))).select_related('contact_pk').all()
+    # invoices = Invoices.objects.filter(Q(invoice_division=division)).select_related('contact_pk').all()
+    invoices = Invoices.objects.filter(Q(invoice_division=division)).select_related('contact_pk', 'associated_hc_claim').order_by(F('associated_hc_claim__pk').desc(nulls_first=True)).all()
     invoices_list = [
         {
-            'invoice_pk': invoice.invoice_pk,  # Add this line
+            'invoice_pk': invoice.invoice_pk,
             'invoice_status': invoice.invoice_status,
             'contact_name': invoice.contact_pk.contact_name,
             'total_net': invoice.total_net,
             'total_gst': invoice.total_gst,
             'supplier_invoice_number': invoice.supplier_invoice_number,
-            'pdf_url': invoice.pdf.url
+            'pdf_url': invoice.pdf.url,
+            'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,
+            'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None,        
         }
-        for invoice in invoices #unsure if this list is used.
+        for invoice in invoices
     ]
     # invoices_unallocated = list(Invoices.objects.filter(invoice_status=0).select_related('contact_pk'))
-    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0, invoice_division=division).select_related('contact_pk'))
+    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0, invoice_division=division).select_related('contact_pk', 'associated_hc_claim'))
     invoices_unallocated_list = [
         {
             'invoice_pk': invoice.invoice_pk,
@@ -159,12 +163,14 @@ def main(request, division):
             'total_net': invoice.total_net,
             'total_gst': invoice.total_gst,
             'supplier_invoice_number': invoice.supplier_invoice_number,
-            'pdf_url': invoice.pdf.url
+            'pdf_url': invoice.pdf.url,
+            'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,
+            'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None
+
         }
         for invoice in invoices_unallocated
     ]    
-    # invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).select_related('contact_pk'))
-    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk'))
+    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk', 'associated_hc_claim'))
     invoices_allocated_list = [
         {
             'invoice_pk': invoice.invoice_pk,
@@ -173,10 +179,74 @@ def main(request, division):
             'total_net': invoice.total_net,
             'total_gst': invoice.total_gst,
             'supplier_invoice_number': invoice.supplier_invoice_number,
-            'pdf_url': invoice.pdf.url
+            'pdf_url': invoice.pdf.url,
+            'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,
+            'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None
         }
         for invoice in invoices_allocated
     ]
+    hc_claims = list(HC_claims.objects.filter(status=0).order_by('display_id').annotate(
+        sc_invoiced_total=Sum(
+            Case(
+                When(hc_claim_allocations__isnull=True, then=0),
+                default='hc_claim_allocations__sc_invoiced',
+                output_field=IntegerField(),
+            )
+        ),
+        hc_claimed_total=Sum(
+            Case(
+                When(hc_claim_allocations__isnull=True, then=0),
+                default='hc_claim_allocations__hc_claimed',
+                output_field=IntegerField(),
+            )
+        ),
+        qs_claimed_total=Sum(
+            Case(
+                When(hc_claim_allocations__isnull=True, then=0),
+                default='hc_claim_allocations__qs_claimed',
+                output_field=IntegerField(),
+            )
+        ),
+    ).values())
+    current_hc_claim = HC_claims.objects.filter(status=0).first()
+    if current_hc_claim is not None:
+        current_hc_claim_display_id = current_hc_claim.display_id
+    else:
+        current_hc_claim_display_id = None
+    #add invoices for this claim and previous claims to costing dictionary
+    for costing in costings:
+        costing['hc_prev_invoiced'] = 0
+        costing['hc_this_claim_invoices'] = 0
+        invoice_allocations = Invoice_allocations.objects.filter(item=costing['costing_pk'])
+        for allocation in invoice_allocations:
+            invoice = Invoices.objects.get(invoice_pk=allocation.invoice_pk.pk)
+            if invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk == current_hc_claim.pk:
+                costing['hc_this_claim_invoices'] += allocation.amount
+            elif invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk < current_hc_claim.pk:                
+                costing['hc_prev_invoiced'] += allocation.amount
+    for costing in costings:
+        costing['hc_prev_fixedonsite'] = 0
+        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
+        for allocation in hc_claim_allocations:
+            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
+            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+                costing['hc_prev_fixedonsite'] += allocation.fixed_on_site
+    for costing in costings:
+        costing['hc_prev_claimed'] = 0
+        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
+        for allocation in hc_claim_allocations:
+            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
+            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+                costing['hc_prev_claimed'] += allocation.hc_claimed
+    for costing in costings:
+        costing['qs_claimed'] = 0
+        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
+        for allocation in hc_claim_allocations:
+            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
+            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+                costing['qs_claimed'] += allocation.qs_claimed
+    for costing in costings:
+        costing['qs_this_claim'] = max(0,min(costing['fixed_on_site'], costing['contract_budget'] - (costing['committed'] + costing['uncommitted'] - (costing['hc_prev_invoiced'] + costing['hc_this_claim_invoices'])) - costing['qs_claimed']))
     spv_data = SPVData.objects.first()  # Assuming SPVData is a singleton model
     context = {
         'division': division,
@@ -197,6 +267,7 @@ def main(request, division):
             'total_uncommitted': total_uncommitted,
             'total_committed': total_committed,
             'total_sc_invoiced': total_sc_invoiced,
+            'total_fixed_on_site': total_fixed_on_site,
             'total_sc_paid': total_sc_paid,
         },
         'po_globals': po_globals,
@@ -204,6 +275,8 @@ def main(request, division):
         'invoices': invoices_list,  # Add invoices data to context
         'invoices_unallocated': invoices_unallocated_list,
         'invoices_allocated': invoices_allocated_list,
+        'hc_claims': hc_claims,
+        'current_hc_claim_display_id': current_hc_claim_display_id,
         'spv_data': spv_data,
     }
     return render(request, 'homepage.html' if division == 1 else 'build.html', context)
@@ -829,6 +902,37 @@ def update_uncommitted(request):
         # Return a JSON response
         return JsonResponse({'status': 'success'})
 
+@csrf_exempt
+def associate_sc_claims_with_hc_claim(request):
+    if request.method == 'POST':
+        # Check if there are any HC_claims entries
+        if HC_claims.objects.exists():
+            # Check if the latest HC_claims entry has a status of 0
+            latest_hc_claim = HC_claims.objects.latest('hc_claim_pk')
+            if latest_hc_claim.status == 0:
+                return JsonResponse({'error': 'There is a HC claim in progress. Complete this claim before starting another.'}, status=400)
+        selected_invoices = request.POST.getlist('selectedInvoices[]')
+        # Create a new HC_claims entry
+        new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
+        # Update the associated_hc_claim for each selected invoice
+        Invoices.objects.filter(invoice_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
+        return JsonResponse({'latest_hc_claim_pk': new_hc_claim.hc_claim_pk})
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+@csrf_exempt
+def update_fixedonsite(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        costing_pk = data.get('costing_pk')
+        fixed_on_site = data.get('fixed_on_site')
+        # Get the Costing object and update it
+        costing = Costing.objects.get(pk=costing_pk)
+        costing.fixed_on_site = fixed_on_site
+        costing.save()
+        # Return a JSON response
+        return JsonResponse({'status': 'success'})
+
 
 @csrf_exempt
 def generate_po_pdf_bytes(request, po_order_pk):
@@ -1192,6 +1296,20 @@ def post_invoice(request):
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
 
+@csrf_exempt
+def mark_sent_to_boutique(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        invoice_pk = data.get('invoice_pk')
+        try:
+            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+            invoice.invoice_status = 4
+            invoice.save()
+            return JsonResponse({"status": "success", "message": f"Invoice {invoice_pk} marked as sent to boutique."}, status=200)
+        except Invoices.DoesNotExist:
+            return JsonResponse({"status": "error", "message": "Invoice does not exist."}, status=400)
+    else:
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
     
 @csrf_exempt
 def test_xero_invoice(request):
@@ -1286,3 +1404,64 @@ def test_contact_id(request):
             return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
         contact = invoice.contact_pk
         return JsonResponse({'contact_id': contact.xero_contact_id})
+
+@csrf_exempt
+def update_hc_claim_data(request):
+    if request.method == 'POST':
+        try:
+            # Parse the JSON body
+            data = json.loads(request.body)
+            
+            # Get the HC_claim with status=0 (unapproved)
+            try:
+                hc_claim = HC_claims.objects.get(status=0)  # There will only be one entry with status=0
+            except HC_claims.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': "No HC Claim with status 0 found."}, status=400)
+
+            # Iterate through each entry and process
+            for entry in data.get('hc_claim_data', []):
+                # Look up related ForeignKey objects
+                try:
+                    # Now using the `category` field to fetch the category by name
+                    category = Categories.objects.get(category=entry['category'])
+                except Categories.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': f"Category '{entry['category']}' not found."}, status=400)
+
+                try:
+                    item = Costing.objects.get(costing_pk=entry['item_id'])
+                except Costing.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': f"Item with ID '{entry['item_id']}' not found."}, status=400)
+
+                # Update or create the HC_claim_allocations entry
+                obj, created = HC_claim_allocations.objects.update_or_create(
+                    hc_claim_pk=hc_claim,  # Now using the hc_claim from status=0
+                    category=category,
+                    item=item,
+                    defaults={
+                        'contract_budget': entry['contract_budget'],
+                        'working_budget': entry['working_budget'],
+                        'uncommitted': entry['uncommitted'],
+                        'committed': entry['committed'],
+                        'fixed_on_site': entry['fixed_on_site_current'],
+                        'fixed_on_site_previous': entry['fixed_on_site_previous'],
+                        'fixed_on_site_this': entry['fixed_on_site_this'],
+                        'sc_invoiced': entry['sc_invoiced'],
+                        'sc_invoiced_previous': entry['sc_invoiced_previous'],
+                        'adjustment': entry['adjustment'],
+                        'hc_claimed': entry['hc_claimed'],
+                        'hc_claimed_previous': entry['hc_claimed_previous'],
+                        'qs_claimed': entry['qs_claimed'],
+                        'qs_claimed_previous': entry['qs_claimed_previous'],
+                    }
+                )
+
+            # Return a success response
+            return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
+
+        except json.JSONDecodeError:
+            return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': f"Unexpected error: {str(e)}"}, status=400)
+
+    # If not a POST request, return an error
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)

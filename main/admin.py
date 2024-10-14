@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations
+from .models import Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations
 
 class CategoriesAdmin(admin.ModelAdmin):
     list_display = ("categories_pk", "division", "category", "order_in_list")
@@ -14,7 +14,7 @@ class QuotesAdmin(admin.ModelAdmin):
     list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf")
 
 class CostingAdmin(admin.ModelAdmin):
-    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "fixed_on_site", "sc_invoiced", "sc_paid")
 
 class Quote_allocationsAdmin(admin.ModelAdmin):
     list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "notes")
@@ -50,10 +50,16 @@ class LetterheadAdmin(admin.ModelAdmin):
     list_display = ("letterhead_path",)
 
 class InvoicesAdmin(admin.ModelAdmin):
-    list_display = ("invoice_pk", "invoice_division", "invoice_status", "invoice_xero_id", "supplier_invoice_number", "invoice_due_date", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst")
+    list_display = ("invoice_pk", "invoice_division", "invoice_status", "invoice_xero_id", "supplier_invoice_number", "invoice_due_date", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst", "associated_hc_claim")
 
 class InvoiceAllocationsAdmin(admin.ModelAdmin):
     list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes")
+
+class HC_claimsAdmin(admin.ModelAdmin):
+    list_display = ("hc_claim_pk", "date", "status", "display_id")
+
+class HC_claim_allocationsAdmin(admin.ModelAdmin):
+    list_display = ('hc_claim_pk', 'item', 'committed', 'uncommitted', 'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this', 'sc_invoiced', 'sc_invoiced_previous', 'adjustment', 'hc_claimed', 'hc_claimed_previous', 'qs_claimed', 'qs_claimed_previous')
 
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
@@ -73,3 +79,5 @@ admin.site.register(SPVData, SPVDataAdmin)
 admin.site.register(Letterhead, LetterheadAdmin)
 admin.site.register(Invoices, InvoicesAdmin)
 admin.site.register(Invoice_allocations, InvoiceAllocationsAdmin)
+admin.site.register(HC_claims, HC_claimsAdmin)
+admin.site.register(HC_claim_allocations, HC_claim_allocationsAdmin)

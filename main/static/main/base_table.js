@@ -64,32 +64,33 @@ $('[data-toggle="collapse"]').on('click', function () {
   var sumWorkingBudget = 0;
   var sumUncommitted = 0;
   var sumCommitted = 0;
+  var sumFixedOnSite = 0;
   var sumInvoiced = 0;
-  var sumPaid = 0;
 
   // Calculate the sums
   $('.group' + groupNumber).each(function () {
-    var contractBudget = $(this).find('td').eq(2).text().replace(',', '').trim();
-    var workingBudget = $(this).find('td').eq(3).text().replace(',', '').trim();
-    var uncommitted = $(this).find('td').eq(4).text().replace(',', '').trim();
-    var committed = $(this).find('td').eq(5).text().replace(',', '').trim();
-    var invoiced = $(this).find('td').eq(6).text().replace(',', '').trim();
-    var paid = $(this).find('td').eq(7).text().replace(',', '').trim();
+    var contractBudget = $(this).find('td').eq(2).text().replace(/,/g, '').trim();
+    var workingBudget = $(this).find('td').eq(3).text().replace(/,/g, '').trim();
+    var uncommitted = $(this).find('td').eq(4).text().replace(/,/g, '').trim();
+    var committed = $(this).find('td').eq(5).text().replace(/,/g, '').trim();
+    var fixedOnSite = $(this).find('td').eq(7).text().replace(/,/g, '').trim();
+    var invoiced = $(this).find('td').eq(6).text().replace(/,/g, '').trim();
 
     // Check if the text is '-' and, if so, treat it as 0
-    contractBudget = contractBudget === '-' ? 0 : contractBudget;
-    workingBudget = workingBudget === '-' ? 0 : workingBudget;
-    uncommitted = uncommitted === '-' ? 0 : uncommitted;
-    committed = committed === '-' ? 0 : committed;
-    invoiced = invoiced === '-' ? 0 : invoiced;
-    paid = paid === '-' ? 0 : paid;
+    contractBudget = contractBudget === '-' || contractBudget === '' ? 0 : parseFloat(contractBudget);
+    workingBudget = workingBudget === '-' || workingBudget === '' ? 0 : parseFloat(workingBudget);
+    uncommitted = uncommitted === '-' || uncommitted === '' ? 0 : parseFloat(uncommitted);
+    committed = committed === '-' || committed === '' ? 0 : parseFloat(committed);
+    fixedOnSite = fixedOnSite === '-' || fixedOnSite === '' ? 0 : parseFloat(fixedOnSite);
+    invoiced = invoiced === '-' || invoiced === '' ? 0 : parseFloat(invoiced);
+
 
     sumContractBudget += parseFloat(contractBudget);
     sumWorkingBudget += parseFloat(workingBudget);
     sumUncommitted += parseFloat(uncommitted);
     sumCommitted += parseFloat(committed);
+    sumFixedOnSite += parseFloat(fixedOnSite);
     sumInvoiced += parseFloat(invoiced);
-    sumPaid += parseFloat(paid);
   });
 
   // Helper function to format numbers with thousand comma separator
@@ -104,7 +105,7 @@ $('[data-toggle="collapse"]').on('click', function () {
   var uncommittedCell = row.find('td').eq(4);
   var committedCell = row.find('td').eq(5);
   var invoicedCell = row.find('td').eq(6);
-  var paidCell = row.find('td').eq(7);
+  var fixedOnSiteCell = row.find('td').eq(7);
 
   if ($(this).hasClass('collapsed')) {
     // Store the original values
@@ -112,43 +113,23 @@ $('[data-toggle="collapse"]').on('click', function () {
     workingBudgetCell.data('original', workingBudgetCell.html());
     uncommittedCell.data('original', uncommittedCell.html());
     committedCell.data('original', committedCell.html());
+    fixedOnSiteCell.data('original', fixedOnSiteCell.html());
     invoicedCell.data('original', invoicedCell.html());
-    paidCell.data('original', paidCell.html());
 
     // Display the sums
     contractBudgetCell.html((sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>'));
     workingBudgetCell.html((sumWorkingBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumWorkingBudget.toFixed(2)) + '</strong>'));
     uncommittedCell.html((sumUncommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumUncommitted.toFixed(2)) + '</strong>'));
     committedCell.html((sumCommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumCommitted.toFixed(2)) + '</strong>'));
+    fixedOnSiteCell.html((sumFixedOnSite.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumFixedOnSite.toFixed(2)) + '</strong>'));
     invoicedCell.html((sumInvoiced.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumInvoiced.toFixed(2)) + '</strong>'));
-    paidCell.html((sumPaid.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumPaid.toFixed(2)) + '</strong>'));
   } else {
     // Restore the original values
     contractBudgetCell.html(contractBudgetCell.data('original'));
     workingBudgetCell.html(workingBudgetCell.data('original'));
     uncommittedCell.html(uncommittedCell.data('original'));
     committedCell.html(committedCell.data('original'));
+    fixedOnSiteCell.html(fixedOnSiteCell.data('original'));
     invoicedCell.html(invoicedCell.data('original'));
-    paidCell.html(paidCell.data('original'));
   }
 });
-
-
-//XERO CODE
-// document.getElementById('getXeroToken').addEventListener('click', function() {
-//   fetch('/get_xero_token/', {
-//       method: 'GET', // or 'POST'
-//       headers: {
-//           'Content-Type': 'application/json',
-//           // 'X-CSRFToken': csrftoken  // Uncomment this line if you're using CSRF protection
-//       },
-//   })
-//   .then(response => response.json())
-//   .then(data => {
-//       alert(JSON.stringify(data));
-//   })
-//   .catch((error) => {
-//       console.error('Error:', error);
-//   });
-// });
-

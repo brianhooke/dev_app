@@ -39,9 +39,9 @@
           <th style="position: sticky; top: 20px;"><strong>Uncommitted</strong></th>
           <th style="position: sticky; top: 20px;"><strong>Committed</strong></th>
           <th style="position: sticky; top: 20px;"><strong>Invoiced</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Paid</strong></th>
+          <!-- <th style="position: sticky; top: 20px;"><strong>Paid</strong></th> -->
           {% if division == 2 %}
-            <th style="position: sticky; top: 20px;">Complete On Site</th>
+            <th style="position: sticky; top: 20px;">Fixed On Site</th>
             <th style="position: sticky; top: 20px;">HC Claimed</th>
             <th style="position: sticky; top: 20px;">HC Received</th>
           {% endif %}
@@ -50,12 +50,11 @@
       <tbody>
         {% regroup costings by category as costings_by_category %}
         {% for category in costings_by_category %}
-          <tr data-toggle="collapse" data-target=".group{{ forloop.counter }}" style="cursor: pointer;">
+        <tr data-toggle="collapse" data-target=".group{{ forloop.counter }}" style="cursor: pointer;">
             <td>
               <strong>{{ category.grouper }}</strong>
               <span class="dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">&#9660;</span>
             </td>
-            <td></td>
             <td></td>
             <td></td>
             <td></td>
@@ -79,9 +78,9 @@
               <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
               <td>{{ costing.committed|floatformat:2|intcomma }}</td>
               <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-              <td>{% if costing.sc_paid|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_paid|floatformat:2|intcomma }}{% endif %}</td>
+              <!-- <td>{% if costing.sc_paid|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_paid|floatformat:2|intcomma }}{% endif %}</td> -->
               {% if division == 2 %}
-                <td>{% if costing.complete_on_site|floatformat:2 == "0.00" %}-{% else %}{{ costing.complete_on_site|floatformat:2|intcomma }}{% endif %}</td>
+                <td><a href="#" data-toggle="modal" data-target="#fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.fixed_on_site|floatformat:2|intcomma }}</a></td>
                 <td>{% if costing.hc_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
                 <td>{% if costing.hc_received|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_received|floatformat:2|intcomma }}{% endif %}</td>
               {% endif %}
@@ -96,9 +95,9 @@
           <td>{% if totals.total_uncommitted == 0 %}-{% else %}{{ totals.total_uncommitted|floatformat:2|intcomma }}{% endif %}</td>
           <td>{% if totals.total_committed == 0 %}-{% else %}{{ totals.total_committed|floatformat:2|intcomma }}{% endif %}</td>
           <td>{% if totals.total_sc_invoiced == 0 %}-{% else %}{{ totals.total_sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-          <td>{% if totals.total_sc_paid == 0 %}-{% else %}{{ totals.total_sc_paid|floatformat:2|intcomma }}{% endif %}</td>
+          <!-- <td>{% if totals.total_sc_paid == 0 %}-{% else %}{{ totals.total_sc_paid|floatformat:2|intcomma }}{% endif %}</td> -->
           {% if division == 2 %}
-            <td>{% if totals.total_complete_on_site == 0 %}-{% else %}{{ totals.total_complete_on_site|floatformat:2|intcomma }}{% endif %}</td>
+            <td>{% if totals.total_fixed_on_site == 0 %}-{% else %}{{ totals.total_fixed_on_site|floatformat:2|intcomma }}{% endif %}</td>
             <td>{% if totals.total_hc_claimed == 0 %}-{% else %}{{ totals.total_hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
             <td>{% if totals.total_hc_received == 0 %}-{% else %}{{ totals.total_hc_received|floatformat:2|intcomma }}{% endif %}</td>
           {% endif %}
@@ -153,6 +152,45 @@
   </div>
   {% endfor %}
 </div>
+
+<!--Fixed on Site Modal-->
+{% for costing in costings %}
+<div class="modal fade" id="fixedOnSiteModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="fixedOnSiteModalLabel{{ costing.costing_pk }}" aria-hidden="true">
+  <div class="modal-dialog" role="document" style="max-width: 600px;">
+    <div class="modal-content" style="border: 3px solid black;">
+      <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+        <h5 class="modal-title" id="fixedOnSiteModalLabel{{ costing.costing_pk }}">Fixed On Site</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table>
+          <tr>
+            <th>Working Budget</th>
+            <th>Invoiced</th>
+            <th>Existing Fixed on Site</th>
+            <th id="newFixedOnSiteHeader{{ costing.costing_pk }}">New Fixed on Site ($)</th>
+          </tr>
+          <tr>
+            <td id="contractBudget{{ costing.costing_pk }}">{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
+            <td>{{ costing.sc_invoiced|floatformat:2|intcomma }}</td>
+            <td>{{ costing.fixed_on_site|floatformat:2|intcomma }}</td>
+            <td>
+              <input type="number" class="form-control" id="newFixedOnSite{{ costing.costing_pk }}" value="{{ costing.fixed_on_site|floatformat:2 }}">
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="fosPctFixedBtn{{ costing.costing_pk }}">Toggle $/%</button>
+        <button type="button" class="btn btn-primary save-fixed-costs" data-id="{{ costing.costing_pk }}">Save</button>      
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
 
 <style>
     .dropdown-arrow {

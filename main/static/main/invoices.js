@@ -603,6 +603,7 @@ $('#sendInvoicesToXeroButton').click(function() {
                 console.log(response);
                 // Display the response data in an alert box
                 alert(JSON.stringify(response));
+                location.reload();
             },
             error: function(error) {
                 // Handle error here
@@ -612,4 +613,36 @@ $('#sendInvoicesToXeroButton').click(function() {
     }
 });
 
-
+$('#markAsSentToBoutiqueButton').click(function() {
+    // Initialize an empty array to store the invoicePks
+    var invoicePks = [];
+    // Find all the checked checkboxes
+    $('input[type="checkbox"]:checked').each(function() {
+        // Get the invoicePk from the id of the checkbox
+        var invoicePk = $(this).attr('id').replace('sentToBoutique', '');
+        // Add the invoicePk to the array
+        invoicePks.push(invoicePk);
+    });
+    // Make the AJAX request for each invoicePk
+    for (var i = 0; i < invoicePks.length; i++) {
+        var invoicePk = invoicePks[i];
+        $.ajax({
+            url: '/mark_sent_to_boutique/', 
+            type: 'POST',
+            data: JSON.stringify({invoice_pk: invoicePk}), 
+            contentType: 'application/json; charset=utf-8',
+            dataType: 'json',
+            success: function(response) {
+                // Handle the response here
+                console.log(response);
+                // Display the response data in an alert box
+                alert(JSON.stringify(response));
+                location.reload();
+            },
+            error: function(error) {
+                // Handle error here
+                console.log(error);
+            }
+        });
+    }
+});

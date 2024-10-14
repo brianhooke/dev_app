@@ -83,6 +83,7 @@ class Costing(models.Model):
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
     def __str__(self):
@@ -118,6 +119,7 @@ class Invoices(models.Model):
     total_gst = models.DecimalField(max_digits=10, decimal_places=2)
     pdf = models.FileField(upload_to='invoices/')
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
+    associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True)
     def __str__(self):
         return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
     
@@ -130,6 +132,45 @@ class Invoice_allocations(models.Model):
     notes = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
+
+class HC_claims(models.Model):
+    hc_claim_pk = models.AutoField(primary_key=True)
+    date = models.DateField()
+    status = models.IntegerField(default=0) #0 for unapproved, 1 for approved, 2 for sent to Xero, 3 for payment received
+    display_id = models.IntegerField(blank=True, null=True)
+    def save(self, *args, **kwargs):
+        if not self.display_id:
+            # Get the highest display_id in the table
+            highest_display_id = HC_claims.objects.order_by('-display_id').values('display_id').first()
+            if highest_display_id:
+                self.display_id = highest_display_id['display_id'] + 1
+            else:
+                self.display_id = 1
+        super().save(*args, **kwargs)
+    def __str__(self):
+        return f"HC Claim - PK: {self.hc_claim_pk}, Date: {self.date}, Status: {self.status}, Display ID: {self.display_id}"
+
+class HC_claim_allocations(models.Model):
+    hc_claim_allocations_pk = models.AutoField(primary_key=True)
+    hc_claim_pk = models.ForeignKey(HC_claims, on_delete=models.CASCADE)
+    category = models.ForeignKey(Categories, on_delete=models.CASCADE)
+    item = models.ForeignKey(Costing, on_delete=models.CASCADE)
+    contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
+    working_budget = models.DecimalField(max_digits=10, decimal_places=2)
+    committed = models.DecimalField(max_digits=10, decimal_places=2)
+    uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
+    fixed_on_site_previous = models.DecimalField(max_digits=10, decimal_places=2)
+    fixed_on_site_this = models.DecimalField(max_digits=10, decimal_places=2)
+    sc_invoiced_previous = models.DecimalField(max_digits=10, decimal_places=2)
+    sc_invoiced = models.DecimalField(max_digits=10, decimal_places=2)
+    adjustment = models.DecimalField(max_digits=10, decimal_places=2)
+    hc_claimed_previous = models.DecimalField(max_digits=10, decimal_places=2)
+    hc_claimed = models.DecimalField(max_digits=10, decimal_places=2)
+    qs_claimed_previous = models.DecimalField(max_digits=10, decimal_places=2)
+    qs_claimed = models.DecimalField(max_digits=10, decimal_places=2)
+    def __str__(self):
+        return f"HC Claim Allocation - PK: {self.hc_claim_allocations_pk}, HC Claim PK: {self.hc_claim_pk.pk}, Item: {self.item}, Committed: {self.committed}, Uncommitted: {self.uncommitted}, Fixed on Site: {self.fixed_on_site}, Fixed on Site Previous: {self.fixed_on_site_previous}, Fixed on Site This: {self.fixed_on_site_this}, SC Invoiced: {self.sc_invoiced}, SC Invoiced Previous: {self.sc_invoiced_previous}, Adjustment: {self.adjustment}, HC Claimed: {self.hc_claimed}, HC Claimed Previous: {self.hc_claimed_previous}, QS Claimed: {self.qs_claimed}, QS Claimed Previous: {self.qs_claimed_previous}"
 #End Builder/Developer Model Set 1:
 
 #Builder/Developer Model Set 2:

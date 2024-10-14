@@ -44,8 +44,9 @@
   <div style="width: 125px; padding: 10px; text-align: center; border-radius: 10px; margin-right: 10px;">
       <select id="hcDropdown" style="width: 100%; background-color: white; color: black; border: 3px solid transparent; border-radius: 10px; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1;">
           <option selected disabled>HC Claims</option>
-          <option id="hcMakeClaim" value="makeClaim">Create HC Claim</option>
-          <option id="hcClaims" value="hcClaims">Existing HC Claims</option>
+          <option id="hcMakeClaim" value="makeClaim">New Claim</option>
+          <option id="hcExistingClaims" value="existingClaims">Existing Claims</option>
+          <option id="hcPrepSheet" value="prepSheet">Claim Prep Sheet</option>
       </select>
   </div>
 </div>
@@ -57,10 +58,12 @@
 {% include 'base_table.html' %}
 {% include 'po_modals.html' %}
 {% include 'invoices_modals.html' %}
+{% include 'hc_claim_modals.html' %}
 {{ items|json_script:"items-data" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
 {{ costings|json_script:"costings" }}
+{{ hc_claims|json_script:"hc_claims" }}
 {{ contacts|json_script:"contacts" }}
 {{ contacts_unfiltered|json_script:"contacts_unfiltered" }}
 {{ hc_claim_lines_sums|json_script:"hc_claim_lines_sums" }}
@@ -72,19 +75,24 @@
     var contacts_unfiltered = JSON.parse(document.getElementById('contacts_unfiltered').textContent);
     var committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
     var costings = JSON.parse(document.getElementById('costings').textContent);
-    var division = "{{ division }}";
+    var hc_claims = JSON.parse(document.getElementById('hc_claims').textContent);
+    console.log("hc_claims is:" + hc_claims);
+    var current_hc_claim_display_id = "{{current_hc_claim_display_id}}";
+    var hc_prev_fixedonsite = "{{hc_prev_fixedonsite}}";
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
     var division = "{{ division }}";
     console.log("division is:" + division);
 </script>
 
 <script src="{% static 'main/base_table.js' %}"></script>
+<script src="{% static 'main/fixed_on_site.js' %}"></script>
 <script src="{% static 'main/commit_costs.js' %}"></script>
 <script src="{% static 'main/committed_costs.js' %}"></script>
 <script src="{% static 'main/contacts.js' %}"></script>
 <script src="{% static 'main/po.js' %}"></script>
 <script src="{% static 'main/view_send_po.js' %}"></script>
 <script src="{% static 'main/invoices.js' %}"></script>
+<script src="{% static 'main/hc_claims.js' %}"></script>
 
 
 {% endblock %}

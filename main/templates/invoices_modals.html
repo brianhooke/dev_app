@@ -238,7 +238,6 @@
                                     <th style="width: 15%;">Net Total $</th>
                                     <th style="width: 15%;">Invoice #</th>
                                     <th style="width: 15%;">View PDF</th>
-                                    <!-- <th style="width: 15%;">Send to Xero</th> -->
                                     <th style="width: 15%;">
                                         {% if division == 1 %}
                                             Send to MDG Xero
@@ -246,6 +245,9 @@
                                             Send to MB Xero
                                         {% endif %}
                                     </th>
+                                    {% if division == 1 %}
+                                        <th style="width: 15%;">Send to Boutique</th>
+                                    {% endif %}
                                     <th style="width: 15%;">Paid</th>
                                 </tr>
                             </thead>
@@ -258,14 +260,25 @@
                                             <td style="padding: 6px;">{{ invoice.supplier_invoice_number }}</td>
                                             <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
                                             <td style="padding: 6px;">
-                                                {% if invoice.invoice_status == 1 %}
+                                                {% if invoice.invoice_status == 1 %} <!-- 1 is allocated but not sent, 2 is sent to Xero, 3 is paid, 4 is sent to Boutique-->
                                                     <input type="checkbox" id="sendToXero{{ invoice.invoice_pk }}">
+                                                {% elif invoice.invoice_status == 4 %}
+                                                    <input type="checkbox" id="sendToXero{{ invoice.invoice_pk }}" disabled style="opacity: 0.5;">
                                                 {% else %}
                                                     <span style="color: green;">✔</span>
                                                 {% endif %}
                                                 <a href="#" class="process-xero-invoices" data-invoice-id="{{ invoice.invoice_pk }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total="{{ invoice.total_net }}" data-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-toggle="modal" data-target="#selectOrderTypeModal"></a>
                                                 <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
                                             </td>
+                                            {% if division == 1 %}
+                                                <td style="padding: 6px;">
+                                                    {% if invoice.invoice_status == 4 %}
+                                                        <span style="color: green;">✔</span>
+                                                    {% else %}
+                                                        <input type="checkbox" id="sentToBoutique{{ invoice.invoice_pk }}">
+                                                    {% endif %}
+                                                </td>
+                                            {% endif %}
                                             <td style="padding: 6px;">
                                                 {% if invoice.invoice_status == 3 %}
                                                     <span style="color: green;">✔</span>
@@ -287,6 +300,9 @@
                 </div>
                 <div class="col-6 text-right">
                     <button type="button" class="btn btn-primary" id="sendInvoicesToXeroButton"  data-division="{{division}}">Send</button>
+                    {% if division == 1 %}
+                        <button type="button" class="btn btn-primary" id="markAsSentToBoutiqueButton">Mark as Sent to Boutique</button>
+                    {% endif %}
                 </div>
             </div>
         </div>
