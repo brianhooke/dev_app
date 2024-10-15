@@ -394,16 +394,14 @@ function addInvoiceLineItem(item, amount, notes = '') {
 function updateStillToAllocateValueInvoices() {
     var totalCost = parseFloat(document.getElementById('directCostTotalInvoices').innerText.replace(/,/g, '')); 
     var totalGst = parseFloat(document.getElementById('gstTotalInvoices').innerText.replace(/,/g, '')); 
-    console.log("Total cost for updateAllocate is", totalCost);
-    console.log("Total GST for updateAllocate is", totalGst);
     totalCost = isNaN(totalCost) ? 0 : totalCost;
     totalGst = isNaN(totalGst) ? 0 : totalGst;
     var allocated = 0;
     var GstAllocated = 0;
     var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
     for (var i = 0; i < tableBody.rows.length - 1; i++) {
-        var cell = tableBody.rows[i].cells[3]; // Set of cells of 'allocated' amount to be counted up towards 'still to allocate total'
-        var GstCell = tableBody.rows[i].cells[4]; // Set of GST cells of 'allocated' amount to be counted up towards 'still to allocate total'
+        var cell = tableBody.rows[i].cells[3]; // Allocated amount
+        var GstCell = tableBody.rows[i].cells[4]; // GST allocated amount
         var cellValue = 0;
         var GstCellValue = 0;
         if (cell && cell.firstChild) {
@@ -414,8 +412,9 @@ function updateStillToAllocateValueInvoices() {
         }
         cellValue = isNaN(cellValue) ? 0 : cellValue;
         GstCellValue = isNaN(GstCellValue) ? 0 : GstCellValue;
-        allocated += cellValue;
-        GstAllocated += GstCellValue;
+        // Round to two decimal places for both allocated and GstAllocated
+        allocated += parseFloat(cellValue.toFixed(2));
+        GstAllocated += parseFloat(GstCellValue.toFixed(2));
         // Updating the total if uncommitted, net $, or GST changes
         ['input', 'change'].forEach(function(evt) {
             tableBody.rows[i].cells[2].firstChild.addEventListener(evt, updateRowTotalInvoices);
@@ -423,13 +422,14 @@ function updateStillToAllocateValueInvoices() {
             tableBody.rows[i].cells[4].firstChild.addEventListener(evt, updateRowTotalInvoices);
         });
     }
-    console.log("Allocated is", allocated);
-    console.log("GST Allocated is", GstAllocated);
-    var stillToAllocateInv = totalCost - allocated;
-    var stillToAllocateGST = totalGst - GstAllocated;
+    // Round the result of the subtraction to prevent floating-point errors
+    var stillToAllocateInv = parseFloat((totalCost - allocated).toFixed(2));
+    var stillToAllocateGST = parseFloat((totalGst - GstAllocated).toFixed(2));
+    // Display the values, properly formatted with commas for thousands separators
     document.getElementById('stillToAllocateInv').innerHTML = stillToAllocateInv.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     document.getElementById('stillToAllocateGST').innerHTML = stillToAllocateGST.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
+
 
 
 function updateRowTotalInvoices() {
@@ -480,25 +480,6 @@ function gatherInvoiceData() {
     formData.append('pdf', file);
     formData.append('invoice_date', invoiceDate);
     formData.append('invoice_due_date', invoiceDueDate);
-    // var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
-    // var allocations = [];
-    // for (var i = 0; i < tableBody.rows.length - 1; i++) {
-    //     var row = tableBody.rows[i];
-    //     var itemSelect = row.cells[0].querySelector('select');
-    //     var uncommittedInput = row.cells[2].querySelector('input');
-    //     var thisInvoiceInput = row.cells[3].querySelector('input');
-    //     var notesInput = row.cells[5].querySelector('input');
-    //     var allocation = {
-    //         item: itemSelect ? itemSelect.value : '',
-    //         uncommitted: uncommittedInput ? parseFloat(uncommittedInput.value) : 0,
-    //         thisInvoice: thisInvoiceInput ? parseFloat(thisInvoiceInput.value) : 0,
-    //         notes: notesInput ? notesInput.value : ''
-    //     };
-    //     allocations.push(allocation);
-    //     console.log("Allocation for row", i, ":", allocation);
-    // }
-    // formData.append('allocations', JSON.stringify(allocations));
-    // console.log("Allocations JSON:", JSON.stringify(allocations));
     fetch('/upload_invoice/', {
         method: 'POST',
         body: formData,
@@ -521,15 +502,18 @@ function gatherAllocationsDataInvoices() {
     console.log("Gathering invoice data and allocations...");
     var invoice_pk = document.getElementById('hiddenInvoiceIdInvoices').value;
     console.log("Invoice PK:", invoice_pk);
+    // Get and round the still to allocate values to two decimal places
     var stillToAllocateInv = parseFloat(document.getElementById('stillToAllocateInv').innerText.replace(/,/g, ''));
     var stillToAllocateGST = parseFloat(document.getElementById('stillToAllocateGST').innerText.replace(/,/g, ''));
+    stillToAllocateInv = parseFloat(stillToAllocateInv.toFixed(2));
+    stillToAllocateGST = parseFloat(stillToAllocateGST.toFixed(2));
     // Check if still to allocate values are zero
     if (stillToAllocateInv !== 0) {
         alert('Invoice net total does not equal allocated net amounts');
         return;
     }
     if (stillToAllocateGST !== 0) {
-        alert('Invoice gst total does not equal allocated gst amounts');
+        alert('Invoice GST total does not equal allocated GST amounts');
         return;
     }
     var formData = new FormData();
@@ -543,11 +527,12 @@ function gatherAllocationsDataInvoices() {
         var thisInvoiceInput = row.cells[3].querySelector('input');
         var gstInput = row.cells[4].querySelector('input'); // Get the GST input field
         var notesInput = row.cells[6].querySelector('input');
+        // Extract values and round to two decimal places
         var allocation = {
             item: itemSelect ? itemSelect.options[itemSelect.selectedIndex].getAttribute('data-costing-id') : '',
-            uncommitted: uncommittedInput ? parseFloat(uncommittedInput.value) : 0,
-            thisInvoice: thisInvoiceInput ? parseFloat(thisInvoiceInput.value) : 0,
-            gst_amount: gstInput ? parseFloat(gstInput.value) : 0, // Include gst_amount in the allocation
+            uncommitted: uncommittedInput ? parseFloat(parseFloat(uncommittedInput.value).toFixed(2)) : 0,
+            thisInvoice: thisInvoiceInput ? parseFloat(parseFloat(thisInvoiceInput.value).toFixed(2)) : 0,
+            gst_amount: gstInput ? parseFloat(parseFloat(gstInput.value).toFixed(2)) : 0, // Include gst_amount in the allocation
             notes: notesInput ? notesInput.value : ''
         };
         allocations.push(allocation);
@@ -575,6 +560,7 @@ function gatherAllocationsDataInvoices() {
           console.error('Error:', error);
       });
 }
+
 
 $('#sendInvoicesToXeroButton').click(function() {
     var division = $(this).data('division'); // Get the division from the data attribute. 1 is Developer, 2 is Builder

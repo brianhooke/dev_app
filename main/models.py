@@ -83,6 +83,7 @@ class Costing(models.Model):
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    uncommitted_notes = models.CharField(max_length=1000, null=True)
     fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)

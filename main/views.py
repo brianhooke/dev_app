@@ -892,18 +892,31 @@ Brian Hooke.
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+
 @csrf_exempt
 def update_uncommitted(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         costing_pk = data.get('costing_pk')
         uncommitted = data.get('uncommitted')
+        notes = data.get('notes')  # Get the notes data from the request
         # Get the Costing object and update it
-        costing = Costing.objects.get(costing_pk=costing_pk)
-        costing.uncommitted = uncommitted
-        costing.save()
-        # Return a JSON response
-        return JsonResponse({'status': 'success'})
+        try:
+            costing = Costing.objects.get(costing_pk=costing_pk)
+            costing.uncommitted = uncommitted
+            costing.uncommitted_notes = notes  # Update the notes field
+            costing.save()
+            # Return a JSON response indicating success
+            return JsonResponse({'status': 'success'})
+        except Costing.DoesNotExist:
+            # If the Costing object is not found, return an error response
+            return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
+    # If not a POST request, return a method not allowed response
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
 
 @csrf_exempt
 def associate_sc_claims_with_hc_claim(request):

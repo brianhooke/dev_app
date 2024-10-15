@@ -22,35 +22,47 @@ document.getElementById('letterheadFileInput').addEventListener('change', functi
 });
 
 document.querySelectorAll('.save-costs').forEach(function(button) {
-    button.addEventListener('click', function() {
+  button.addEventListener('click', function() {
       var costing_pk = this.getAttribute('data-id');
-      console.log("costing ID is: "+costing_pk);
+      console.log("Costing ID is: " + costing_pk);
+      // Get the uncommitted value
       var uncommitted = document.getElementById('uncommittedInput' + costing_pk).value;
+      // Get the notes value (including line breaks)
+      var notes = document.getElementById('notesInput' + costing_pk).value;
       if (!costing_pk || !uncommitted) {
           alert('Costing ID or uncommitted value is missing');
           return;
       }
-      // var uncommitted_notes = document.getElementById('uncommittedNotes' + costing_pk).value;
-      var data = { 'costing_pk': costing_pk, 'uncommitted': uncommitted };
-        console.log(data);
-        if (!data) return;
-        fetch('/update_uncommitted/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(data)
-        }).then(function(response) {
-            if (response.ok) {
-                alert('Costs updated successfully');
-                location.reload();
-            } else {
-                alert('An error occurred.');
-            }
-        });
-    });
+      // Prepare data object, now including 'notes'
+      var data = { 
+          'costing_pk': costing_pk, 
+          'uncommitted': uncommitted,
+          'notes': notes // Add notes to the data
+      };
+      console.log(data);
+      if (!data) return;
+      // Fetch API to send the data to the server
+      fetch('/update_uncommitted/', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+          },
+          body: JSON.stringify(data)
+      }).then(function(response) {
+          if (response.ok) {
+              alert('Costs updated successfully');
+              location.reload();
+          } else {
+              alert('An error occurred.');
+          }
+      }).catch(function(error) {
+          console.error('Error:', error);
+          alert('An error occurred while updating the costs.');
+      });
+  });
 });
+
 
 $('[data-toggle="collapse"]').on('click', function () {
   // console.log("clicked");

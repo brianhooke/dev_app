@@ -14,7 +14,7 @@ class QuotesAdmin(admin.ModelAdmin):
     list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf")
 
 class CostingAdmin(admin.ModelAdmin):
-    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "fixed_on_site", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
 
 class Quote_allocationsAdmin(admin.ModelAdmin):
     list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "notes")
