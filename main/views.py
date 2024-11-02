@@ -68,8 +68,8 @@ def main(request, division):
     contacts = Contacts.objects.filter(division=division, checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
     # Log the contacts_list
-    logger = logging.getLogger('django.server')
-    logger.info('contacts_list: %s', contacts_list)
+    # logger = logging.getLogger('django.server')
+    # logger.info('contacts_list: %s', contacts_list)
     # Unfiltered contacts
     # contacts_unfiltered = Contacts.objects.all().order_by('contact_name').values()
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()

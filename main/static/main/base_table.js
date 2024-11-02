@@ -4,22 +4,7 @@ window.onload = function() {
   });
 };
 
-//upload letterhead button js
-document.getElementById('uploadLetterheadButton').addEventListener('click', function() {
-  document.getElementById('letterheadFileInput').click();
-});
-document.getElementById('letterheadFileInput').addEventListener('change', function() {
-  var file = this.files[0];
-  var formData = new FormData();
-  formData.append('letterhead_path', file);
 
-  fetch('/upload_letterhead/', {
-      method: 'POST',
-      body: formData
-  }).then(response => response.json())
-    .then(data => console.log(data))
-    .catch(error => console.error(error));
-});
 
 document.querySelectorAll('.save-costs').forEach(function(button) {
   button.addEventListener('click', function() {
@@ -145,3 +130,6 @@ $('[data-toggle="collapse"]').on('click', function () {
     invoicedCell.html(invoicedCell.data('original'));
   }
 });
+
+
+  

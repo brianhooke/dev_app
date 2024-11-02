@@ -1,24 +1,13 @@
 {% load humanize %}
 
-<!-- Add this at the top of your modal -->
-<button id="uploadButton" class="btn btn-primary">Upload Categories</button>
+<!-- <button id="uploadButton" class="btn btn-primary">Upload Categories</button>
 <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
 
-<!-- Add this at the top of your modal or a suitable place -->
 <button id="uploadCostingButton" class="btn btn-primary">Upload Costings</button>
 <input type="file" id="costingCsvFileInput" accept=".csv" style="display: none;">
 
-<!-- Add this at the top of your modal or a suitable place -->
 <button id="uploadLetterheadButton" class="btn btn-primary">Upload Letterhead</button>
-<input type="file" id="letterheadFileInput" accept=".pdf" style="display: none;">
-
-<!-- Add this at the top of your modal or a suitable place -->
-<button id="xeroUploadInvoiceButton" class="btn btn-primary">Upload Test Xero Invoice</button>
-<input type="file" id="xeroUploadInvoiceInput" accept=".pdf" style="display: none;">
-
-<!-- Add this at the top of your modal or a suitable place -->
-<button id="testContactIdButton" class="btn btn-primary">Test Contact ID</button>
-<input type="file" id="testContactIdInput" accept=".pdf" style="display: none;">
+<input type="file" id="letterheadFileInput" accept=".pdf" style="display: none;"> -->
 
 <!-- <button id="getXeroToken" class="btn btn-primary">Get Xero Token</button> -->
 
@@ -210,109 +199,86 @@
   </style>
 
 <script>
-  document.getElementById('uploadButton').addEventListener('click', function() {
-    document.getElementById('csvFileInput').click();
-});
 
-document.getElementById('csvFileInput').addEventListener('change', function(event) {
-    var file = event.target.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('csv_file', file);
+//   document.getElementById('uploadButton').addEventListener('click', function() {
+//     document.getElementById('csvFileInput').click();
+// });
 
-        fetch('/upload_categories/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')  // Assuming you have a function to get the CSRF token
-            },
-            body: formData
-        }).then(response => {
-            if (response.ok) {
-                alert('File uploaded successfully');
-                location.reload();
-            } else {
-                alert('An error occurred while uploading the file.');
-            }
-        }).catch(error => {
-            console.error('Error:', error);
-        });
-    }
-});
+// document.getElementById('csvFileInput').addEventListener('change', function(event) {
+//     var file = event.target.files[0];
+//     if (file) {
+//         var formData = new FormData();
+//         formData.append('csv_file', file);
 
-document.getElementById('uploadCostingButton').addEventListener('click', function() {
-    document.getElementById('costingCsvFileInput').click();
-});
+//         fetch('/upload_categories/', {
+//             method: 'POST',
+//             headers: {
+//                 'X-CSRFToken': getCookie('csrftoken')
+//             },
+//             body: formData
+//         }).then(response => {
+//             if (response.ok) {
+//                 alert('File uploaded successfully');
+//                 location.reload();
+//             } else {
+//                 alert('An error occurred while uploading the file.');
+//             }
+//         }).catch(error => {
+//             console.error('Error:', error);
+//         });
+//     }
+// });
 
-document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
-    var file = event.target.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('csv_file', file);
+// document.getElementById('uploadCostingButton').addEventListener('click', function() {
+//     document.getElementById('costingCsvFileInput').click();
+// });
 
-        fetch('/upload_costings/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')  // Assuming you have a function to get the CSRF token
-            },
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(text);  // Throw an error with the server's message
-                });
-            }
-            alert('File uploaded successfully');
-            location.reload();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while uploading the file. Details: ' + error.message);
-        });
-    }
-});
+// document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
+//     var file = event.target.files[0];
+//     if (file) {
+//         var formData = new FormData();
+//         formData.append('csv_file', file);
 
-document.getElementById('xeroUploadInvoiceButton').addEventListener('click', function() {
-  console.log("Xero upload invoice button clicked")
-  var invoice_pk = 5; // Set this to the invoice_pk you want to send
-  var data = { invoice_pk: invoice_pk };
-  fetch('/test_xero_invoice/', { // Replace this with the actual URL of the test_xero_invoice endpoint
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          // Include CSRF token in header for Django
-          'X-CSRFToken': getCookie('csrftoken')
-      },
-      body: JSON.stringify(data),
-  })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch((error) => {
-    console.error('Error:', error);
-  });
-});
+//         fetch('/upload_costings/', {
+//             method: 'POST',
+//             headers: {
+//                 'X-CSRFToken': getCookie('csrftoken')
+//             },
+//             body: formData
+//         })
+//         .then(response => {
+//             if (!response.ok) {
+//                 return response.text().then(text => {
+//                     throw new Error(text);
+//                 });
+//             }
+//             alert('File uploaded successfully');
+//             location.reload();
+//         })
+//         .catch(error => {
+//             console.error('Error:', error);
+//             alert('An error occurred while uploading the file. Details: ' + error.message);
+//         });
+//     }
+// });
 
 
-document.getElementById('testContactIdButton').addEventListener('click', function() {
-  console.log("Test Contact Button clicked")
-  var invoice_pk = 5; // Set this to the invoice_pk you want to send
-  var data = { invoice_pk: invoice_pk };
-  fetch('/test_contact_id/', { // Replace this with the actual URL of the test_xero_invoice endpoint
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken')
-      },
-      body: JSON.stringify(data),
-  })
-  .then(response => response.json())
-  .then(data => {
-    // Display an alert box with the contact ID
-    alert("Contact ID is " + data.contact_id);
-  })
-  .catch((error) => {
-    console.error('Error:', error);
-  });
-});
+// document.getElementById('uploadLetterheadButton').addEventListener('click', function() {
+//   document.getElementById('letterheadFileInput').click();
+// });
+
+// document.getElementById('letterheadFileInput').addEventListener('change', function() {
+//   var file = this.files[0];
+//   var formData = new FormData();
+//   formData.append('letterhead_path', file);
+
+//   fetch('/upload_letterhead/', {
+//       method: 'POST',
+//       body: formData
+//   }).then(response => response.json())
+//     .then(data => console.log(data))
+//     .catch(error => console.error(error));
+// });
+
 
 </script>
