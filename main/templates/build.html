@@ -67,6 +67,7 @@
 {{ contacts|json_script:"contacts" }}
 {{ contacts_unfiltered|json_script:"contacts_unfiltered" }}
 {{ hc_claim_lines_sums|json_script:"hc_claim_lines_sums" }}
+{{ hc_claim_wip_adjustments|json_script:"hc_claim_wip_adjustments"}}
 <!-- {{ totals|json_script:"totals-data" }}
 {{ hc_claimed|json_script:"hc_claimed" }} -->
 
@@ -78,9 +79,11 @@
     var hc_claims = JSON.parse(document.getElementById('hc_claims').textContent);
     console.log("hc_claims is:" + hc_claims);
     var current_hc_claim_display_id = "{{current_hc_claim_display_id}}";
+    console.log("current_hc_claim_display_id is:" + current_hc_claim_display_id);
     var hc_prev_fixedonsite = "{{hc_prev_fixedonsite}}";
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
     var division = "{{ division }}";
+    var hc_claim_wip_adjustments = JSON.parse(document.getElementById('hc_claim_wip_adjustments').textContent);
     console.log("division is:" + division);
 </script>
 

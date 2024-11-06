@@ -157,7 +157,6 @@ $('.save-hc-costs').click(function(event) {
                 flashCell('#hc-claim-total-' + costingId);
                 flashCell('#hc-this-claim-' + costingId);
                 flashCell('#qs-this-claim-' + costingId);
-                
                 // Recalculate totals for the group
                 var parentRow = $('#hc-claim-uncommitted-' + costingId).closest('tr').prevAll('tr[data-toggle="unique-collapse"]').first();
                 if (parentRow.length > 0) {
@@ -319,48 +318,35 @@ function calculateTotals(groupNumber) {
     var totalThisQSClaims = 0;
     var totalAdjustment = 0;
 
-    // Loop through all rows in the table, regardless of group
+    // Loop through all rows in the table to accumulate totals
     $('tbody tr.collapse').each(function () {
         var cells = $(this).find('td');
-        // Ensure there are enough cells in the row to avoid undefined errors
+
+        // Ensure there are enough cells in the row to avoid errors
         if (cells.length >= 16) {
-            var contractBudget = cells.eq(2).text() ? cells.eq(2).text().replace(',', '').trim() : '0';
-            var workingBudget = cells.eq(3).text() ? cells.eq(3).text().replace(',', '').trim() : '0';
-            var uncommitted = cells.eq(4).text() ? cells.eq(4).text().replace(',', '').trim() : '0';
-            var committed = cells.eq(5).text() ? cells.eq(5).text().replace(',', '').trim() : '0';
-            var FixedOnSiteCurrent = cells.eq(6).text() ? cells.eq(6).text().replace(',', '').trim() : '0';
-            var FixedOnSitePrevious = cells.eq(7).text() ? cells.eq(7).text().replace(',', '').trim() : '0';
-            var FixedOnSiteThis = cells.eq(8).text() ? cells.eq(8).text().replace(',', '').trim() : '0';
-            var prevSCInvoices = cells.eq(9).text() ? cells.eq(9).text().replace(',', '').trim() : '0';
-            var thisSCInvoices = cells.eq(10).text() ? cells.eq(10).text().replace(',', '').trim() : '0';
-            var prevHCClaims = cells.eq(12).text() ? cells.eq(12).text().replace(',', '').trim() : '0';
-            var thisHCClaims = cells.eq(13).text() ? cells.eq(13).text().replace(',', '').trim() : '0';
-            var prevQSClaims = cells.eq(14).text() ? cells.eq(14).text().replace(',', '').trim() : '0';
-            var thisQSClaims = cells.eq(15).text() ? cells.eq(15).text().replace(',', '').trim() : '0';
-            var adjustment = cells.eq(11).find('input').val() ? cells.eq(11).find('input').val().replace(',', '').trim() : '0';
-            // Treat '-' as 0 for calculations
-            contractBudget = contractBudget === '-' ? 0 : parseFloat(contractBudget) || 0;
-            workingBudget = workingBudget === '-' ? 0 : parseFloat(workingBudget) || 0;
-            uncommitted = uncommitted === '-' ? 0 : parseFloat(uncommitted) || 0;
-            committed = committed === '-' ? 0 : parseFloat(committed) || 0;
-            FixedOnSiteCurrent = FixedOnSiteCurrent === '-' ? 0 : parseFloat(FixedOnSiteCurrent) || 0;
-            FixedOnSitePrevious = FixedOnSitePrevious === '-' ? 0 : parseFloat(FixedOnSitePrevious) || 0;
-            FixedOnSiteThis = FixedOnSiteThis === '-' ? 0 : parseFloat(FixedOnSiteThis) || 0;
-            prevSCInvoices = prevSCInvoices === '-' ? 0 : parseFloat(prevSCInvoices) || 0;
-            thisSCInvoices = thisSCInvoices === '-' ? 0 : parseFloat(thisSCInvoices) || 0;
-            prevHCClaims = prevHCClaims === '-' ? 0 : parseFloat(prevHCClaims) || 0;
-            thisHCClaims = thisHCClaims === '-' ? 0 : parseFloat(thisHCClaims) || 0;
-            prevQSClaims = prevQSClaims === '-' ? 0 : parseFloat(prevQSClaims) || 0;
-            thisQSClaims = thisQSClaims === '-' ? 0 : parseFloat(thisQSClaims) || 0;
-            adjustment = adjustment === '' || adjustment === '-' ? 0 : parseFloat(adjustment) || 0;
+            var contractBudget = parseFloat(cells.eq(2).text().replace(/,/g, '').trim()) || 0;
+            var workingBudget = parseFloat(cells.eq(3).text().replace(/,/g, '').trim()) || 0;
+            var uncommitted = parseFloat(cells.eq(4).text().replace(/,/g, '').trim()) || 0;
+            var committed = parseFloat(cells.eq(5).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSiteCurrent = parseFloat(cells.eq(6).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSitePrevious = parseFloat(cells.eq(7).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSiteThis = parseFloat(cells.eq(8).text().replace(/,/g, '').trim()) || 0;
+            var prevSCInvoices = parseFloat(cells.eq(9).text().replace(/,/g, '').trim()) || 0;
+            var thisSCInvoices = parseFloat(cells.eq(10).text().replace(/,/g, '').trim()) || 0;
+            var prevHCClaims = parseFloat(cells.eq(12).text().replace(/,/g, '').trim()) || 0;
+            var thisHCClaims = parseFloat(cells.eq(13).text().replace(/,/g, '').trim()) || 0;
+            var prevQSClaims = parseFloat(cells.eq(14).text().replace(/,/g, '').trim()) || 0;
+            var thisQSClaims = parseFloat(cells.eq(15).text().replace(/,/g, '').trim()) || 0;
+            var adjustment = parseFloat(cells.eq(11).find('input').val().replace(/,/g, '').trim()) || 0;
+
             // Accumulate totals
             totalContractBudget += contractBudget;
             totalWorkingBudget += workingBudget;
             totalUncommitted += uncommitted;
             totalCommitted += committed;
-            totalFixedOnSiteCurrent += FixedOnSiteCurrent;
-            totalFixedOnSitePrevious += FixedOnSitePrevious;
-            totalFixedOnSiteThis += FixedOnSiteThis;
+            totalFixedOnSiteCurrent += fixedOnSiteCurrent;
+            totalFixedOnSitePrevious += fixedOnSitePrevious;
+            totalFixedOnSiteThis += fixedOnSiteThis;
             totalPrevSCInvoices += prevSCInvoices;
             totalThisSCInvoices += thisSCInvoices;
             totalPrevHCClaims += prevHCClaims;
@@ -368,30 +354,14 @@ function calculateTotals(groupNumber) {
             totalPrevQSClaims += prevQSClaims;
             totalThisQSClaims += thisQSClaims;
             totalAdjustment += adjustment;
-        } else {
-            // Log skipped rows for debugging
-            console.warn('Skipped row, not enough columns:', cells.length, $(this).html());
         }
     });
+
     // Function to format numbers with commas
     function formatNumber(num) {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
-    // Output global totals to console for debugging
-    console.log('Total Contract Budget:', totalContractBudget);
-    console.log('Total Working Budget:', totalWorkingBudget);
-    console.log('Total Uncommitted:', totalUncommitted);
-    console.log('Total Committed:', totalCommitted);
-    console.log('Total Fixed On Site Current:', totalFixedOnSiteCurrent);
-    console.log('Total Fixed On Site Previous:', totalFixedOnSitePrevious);
-    console.log('Total Fixed On Site This:', totalFixedOnSiteThis);
-    console.log('Total Prev SC Invoices:', totalPrevSCInvoices);
-    console.log('Total This SC Invoices:', totalThisSCInvoices);
-    console.log('Total Prev HC Claims:', totalPrevHCClaims);
-    console.log('Total This HC Claims:', totalThisHCClaims);
-    console.log('Total Prev QS Claims:', totalPrevQSClaims);
-    console.log('Total This QS Claims:', totalThisQSClaims);
-    console.log('Total Adjustment:', totalAdjustment);
+
     // Update the total row at the bottom of the table
     var hcPrepSheetTotalRow = $('#hcPrepSheetTotalRow');
     hcPrepSheetTotalRow.find('td').eq(2).html(totalContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(totalContractBudget.toFixed(2)) + '</strong>');
@@ -407,7 +377,9 @@ function calculateTotals(groupNumber) {
     hcPrepSheetTotalRow.find('td').eq(13).html(totalThisHCClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(totalThisHCClaims.toFixed(2)) + '</strong>');
     hcPrepSheetTotalRow.find('td').eq(14).html(totalPrevQSClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(totalPrevQSClaims.toFixed(2)) + '</strong>');
     hcPrepSheetTotalRow.find('td').eq(15).html(totalThisQSClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(totalThisQSClaims.toFixed(2)) + '</strong>');
-    hcPrepSheetTotalRow.find('td').eq(11).find('input').val(totalAdjustment.toFixed(2) == 0.00 ? '-' : formatNumber(totalAdjustment.toFixed(2)));
+    hcPrepSheetTotalRow.find('td').eq(11).html(totalAdjustment.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(totalAdjustment.toFixed(2)) + '</strong>');
+
+    // Summarize totals for each group
     var sumContractBudget = 0;
     var sumWorkingBudget = 0;
     var sumUncommitted = 0;
@@ -422,57 +394,44 @@ function calculateTotals(groupNumber) {
     var sumPrevQSClaims = 0;
     var sumThisQSClaims = 0;
     var sumAdjustment = 0;
-        // Loop through all rows in the group and calculate sums
-        $('.unique-group' + groupNumber).each(function () {
-            var cells = $(this).find('td');
-            // Ensure there are enough cells in the row to avoid undefined errors
-            if (cells.length >= 16) { // Check for the required number of cells
-                var contractBudget = cells.eq(2).text() ? cells.eq(2).text().replace(',', '').trim() : '0';
-                var workingBudget = cells.eq(3).text() ? cells.eq(3).text().replace(',', '').trim() : '0';
-                var uncommitted = cells.eq(4).text() ? cells.eq(4).text().replace(',', '').trim() : '0';
-                var committed = cells.eq(5).text() ? cells.eq(5).text().replace(',', '').trim() : '0';
-                var FixedOnSiteCurrent = cells.eq(6).text() ? cells.eq(6).text().replace(',', '').trim() : '0';
-                var FixedOnSitePrevious = cells.eq(7).text() ? cells.eq(7).text().replace(',', '').trim() : '0';
-                var FixedOnSiteThis = cells.eq(8).text() ? cells.eq(8).text().replace(',', '').trim() : '0';
-                var prevSCInvoices = cells.eq(9).text() ? cells.eq(9).text().replace(',', '').trim() : '0';
-                var thisSCInvoices = cells.eq(10).text() ? cells.eq(10).text().replace(',', '').trim() : '0';
-                var prevHCClaims = cells.eq(12).text() ? cells.eq(12).text().replace(',', '').trim() : '0';
-                var thisHCClaims = cells.eq(13).text() ? cells.eq(13).text().replace(',', '').trim() : '0';
-                var prevQSClaims = cells.eq(14).text() ? cells.eq(14).text().replace(',', '').trim() : '0';
-                var thisQSClaims = cells.eq(15).text() ? cells.eq(15).text().replace(',', '').trim() : '0';
-                var adjustment = cells.eq(11).find('input').val() ? cells.eq(11).find('input').val().replace(',', '').trim() : '0'; // Adjustment is an input field
-                // Treat '-' as 0 for calculations
-                contractBudget = contractBudget === '-' ? 0 : parseFloat(contractBudget) || 0;
-                workingBudget = workingBudget === '-' ? 0 : parseFloat(workingBudget) || 0;
-                uncommitted = uncommitted === '-' ? 0 : parseFloat(uncommitted) || 0;
-                committed = committed === '-' ? 0 : parseFloat(committed) || 0;
-                FixedOnSiteCurrent = FixedOnSiteCurrent === '-' ? 0 : parseFloat(FixedOnSiteCurrent) || 0;
-                FixedOnSitePrevious = FixedOnSitePrevious === '-' ? 0 : parseFloat(FixedOnSitePrevious) || 0;
-                FixedOnSiteThis = FixedOnSiteThis === '-' ? 0 : parseFloat(FixedOnSiteThis) || 0;
-                prevSCInvoices = prevSCInvoices === '-' ? 0 : parseFloat(prevSCInvoices) || 0;
-                thisSCInvoices = thisSCInvoices === '-' ? 0 : parseFloat(thisSCInvoices) || 0;
-                prevHCClaims = prevHCClaims === '-' ? 0 : parseFloat(prevHCClaims) || 0;
-                thisHCClaims = thisHCClaims === '-' ? 0 : parseFloat(thisHCClaims) || 0;
-                prevQSClaims = prevQSClaims === '-' ? 0 : parseFloat(prevQSClaims) || 0;
-                thisQSClaims = thisQSClaims === '-' ? 0 : parseFloat(thisQSClaims) || 0;
-                adjustment = adjustment === '' || adjustment === '-' ? 0 : parseFloat(adjustment) || 0;
-                // Accumulate the group sums
-                sumContractBudget += contractBudget;
-                sumWorkingBudget += workingBudget;
-                sumUncommitted += uncommitted;
-                sumCommitted += committed;
-                sumFixedOnSiteCurrent += FixedOnSiteCurrent;
-                sumFixedOnSitePrevious += FixedOnSitePrevious;
-                sumFixedOnSiteThis += FixedOnSiteThis;
-                sumPrevSCInvoices += prevSCInvoices;
-                sumThisSCInvoices += thisSCInvoices;
-                sumPrevHCClaims += prevHCClaims;
-                sumThisHCClaims += thisHCClaims;
-                sumPrevQSClaims += prevQSClaims;
-                sumThisQSClaims += thisQSClaims;
-                sumAdjustment += adjustment;
+
+    // Loop through all rows in the group and calculate sums
+    $('.unique-group' + groupNumber).each(function () {
+        var cells = $(this).find('td');
+        if (cells.length >= 16) {
+            var contractBudget = parseFloat(cells.eq(2).text().replace(/,/g, '').trim()) || 0;
+            var workingBudget = parseFloat(cells.eq(3).text().replace(/,/g, '').trim()) || 0;
+            var uncommitted = parseFloat(cells.eq(4).text().replace(/,/g, '').trim()) || 0;
+            var committed = parseFloat(cells.eq(5).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSiteCurrent = parseFloat(cells.eq(6).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSitePrevious = parseFloat(cells.eq(7).text().replace(/,/g, '').trim()) || 0;
+            var fixedOnSiteThis = parseFloat(cells.eq(8).text().replace(/,/g, '').trim()) || 0;
+            var prevSCInvoices = parseFloat(cells.eq(9).text().replace(/,/g, '').trim()) || 0;
+            var thisSCInvoices = parseFloat(cells.eq(10).text().replace(/,/g, '').trim()) || 0;
+            var prevHCClaims = parseFloat(cells.eq(12).text().replace(/,/g, '').trim()) || 0;
+            var thisHCClaims = parseFloat(cells.eq(13).text().replace(/,/g, '').trim()) || 0;
+            var prevQSClaims = parseFloat(cells.eq(14).text().replace(/,/g, '').trim()) || 0;
+            var thisQSClaims = parseFloat(cells.eq(15).text().replace(/,/g, '').trim()) || 0;
+            var adjustment = parseFloat(cells.eq(11).find('input').val().replace(/,/g, '').trim()) || 0;
+
+            // Accumulate group sums
+            sumContractBudget += contractBudget;
+            sumWorkingBudget += workingBudget;
+            sumUncommitted += uncommitted;
+            sumCommitted += committed;
+            sumFixedOnSiteCurrent += fixedOnSiteCurrent;
+            sumFixedOnSitePrevious += fixedOnSitePrevious;
+            sumFixedOnSiteThis += fixedOnSiteThis;
+            sumPrevSCInvoices += prevSCInvoices;
+            sumThisSCInvoices += thisSCInvoices;
+            sumPrevHCClaims += prevHCClaims;
+            sumThisHCClaims += thisHCClaims;
+            sumPrevQSClaims += prevQSClaims;
+            sumThisQSClaims += thisQSClaims;
+            sumAdjustment += adjustment;
         }
     });
+
     // Update the header row with the calculated sums for the group
     var row = $('[data-target=".unique-group' + groupNumber + '"]').closest('tr');
     row.find('td').eq(2).html(sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>');
@@ -488,7 +447,7 @@ function calculateTotals(groupNumber) {
     row.find('td').eq(13).html(sumThisHCClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumThisHCClaims.toFixed(2)) + '</strong>');
     row.find('td').eq(14).html(sumPrevQSClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumPrevQSClaims.toFixed(2)) + '</strong>');
     row.find('td').eq(15).html(sumThisQSClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumThisQSClaims.toFixed(2)) + '</strong>');
-    row.find('td').eq(11).find('input').val(sumAdjustment.toFixed(2) == 0.00 ? '-' : formatNumber(sumAdjustment.toFixed(2)));
+    row.find('td').eq(11).html(sumAdjustment.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumAdjustment.toFixed(2)) + '</strong>');
 }
     
         // Event handler for the collapse/expand functionality
@@ -521,22 +480,18 @@ function calculateTotals(groupNumber) {
         }); 
 
         
-        function gatherAndPostHCClaimData() {
+        function gatherAndPostHCClaimData(currentHcClaimId) {
             let data = [];
-        
             // Loop through each row in the table body (except the total row)
             $('table.myTable tbody tr:not(#hcPrepSheetTotalRow)').each(function () {
                 let row = $(this);
-                
                 // Retrieve the category name (grouper) and item primary keys from data attributes
                 let category = row.find('td').eq(0).data('category');  // Use category.grouper now
                 let itemId = row.find('td').eq(1).data('item-id');
-        
                 // Skip rows where category or item_id is undefined (these are the summary rows)
                 if (category === undefined || itemId === undefined) {
                     return;  // Skip to the next row
                 }
-        
                 // Continue collecting other values
                 let contractBudget = parseFloat(row.find('td').eq(2).text().replace(/,/g, '')) || 0;
                 let workingBudget = parseFloat(row.find('td').eq(3).text().replace(/,/g, '')) || 0;
@@ -573,37 +528,65 @@ function calculateTotals(groupNumber) {
                     'qs_claimed': qsThisClaim,
                 });
             });
-        
             // Console log the entire data object before sending it
             console.log("Final data gathered: ", data);
-        
             $.ajax({
                 type: "POST",
                 url: "/update_hc_claim_data/",
                 data: JSON.stringify({ // Convert the data to JSON
                     'csrfmiddlewaretoken': $('input[name="csrfmiddlewaretoken"]').val(),
-                    'hc_claim_data': data
+                    'hc_claim_data': data,
+                    'current_hc_claim_display_id': currentHcClaimId
                 }),
                 contentType: "application/json", // Ensure it's sent as JSON
                 success: function(response) {
                     alert('Data saved successfully!');
+                    location.reload();
                 },
                 error: function(xhr, status, error) {
                     alert('An error occurred while saving data.');
                     console.log(xhr.responseText);
                 }
             });
-            
-            
         }
         
         $(document).ready(function() {
             $('#saveAdjustmentsButton').on('click', function(event) {
                 event.preventDefault();  // Prevent form submission/page reload
-                gatherAndPostHCClaimData();
+                gatherAndPostHCClaimData(0);  // Pass 0 for save adjustments
+            });
+        
+            $('#finalise_hc_claim_btn').on('click', function(event) {
+                event.preventDefault();  // Prevent form submission/page reload
+                let claimId = $(this).data('claim-id');  // Get the claim ID from the data attribute
+                gatherAndPostHCClaimData(claimId);  // Pass the actual claim ID for finalisation
             });
         });
         
+    // Make sure this script runs after the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Select all elements with the class or attribute that corresponds to the 'View' link
+        var links = document.querySelectorAll('.view-pdf-link'); // Replace with the appropriate class/attribute
+
+        // Add an event listener to each link
+        links.forEach(function(link) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                var claimId = this.getAttribute('data-claim-id');
+
+                if (claimId) {
+                    // Set the iframe source to point to the correct endpoint with claimId as part of the URL
+                    document.getElementById('existingClaimsPdfViewer').src = '/get_claim_table/' + claimId + '/';
+
+                    // Show the modal
+                    $('#existingClaimsModal').modal('show');
+                } else {
+                    alert('Invalid claim ID.');
+                }
+            });
+        });
+    });
+
         
 
 });

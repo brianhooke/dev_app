@@ -6,7 +6,7 @@ from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, De
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
-from django.db.models import Sum, Case, When, IntegerField
+from django.db.models import Sum, Case, When, IntegerField, F
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -21,7 +21,6 @@ from django.core.files.storage import default_storage
 from datetime import datetime, date
 import re
 from django.core.mail import send_mail
-from django.db.models import F
 from django.db import connection
 from collections import defaultdict
 from reportlab.lib.pagesizes import A4
@@ -188,7 +187,7 @@ def main(request, division):
         }
         for invoice in invoices_allocated
     ]
-    hc_claims = list(HC_claims.objects.filter(status=0).order_by('display_id').annotate(
+    hc_claims = list(HC_claims.objects.order_by('display_id').annotate(
         sc_invoiced_total=Sum(
             Case(
                 When(hc_claim_allocations__isnull=True, then=0),
@@ -217,36 +216,53 @@ def main(request, division):
     else:
         current_hc_claim_display_id = None
     #add invoices for this claim and previous claims to costing dictionary
-    for costing in costings:
-        costing['hc_prev_invoiced'] = 0
-        costing['hc_this_claim_invoices'] = 0
-        invoice_allocations = Invoice_allocations.objects.filter(item=costing['costing_pk'])
-        for allocation in invoice_allocations:
-            invoice = Invoices.objects.get(invoice_pk=allocation.invoice_pk.pk)
-            if invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk == current_hc_claim.pk:
-                costing['hc_this_claim_invoices'] += allocation.amount
-            elif invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk < current_hc_claim.pk:                
-                costing['hc_prev_invoiced'] += allocation.amount
+    current_hc_claim = HC_claims.objects.filter(status=0).first()
+    hc_claim_wip_adjustments = {}
+    if current_hc_claim:
+        # Get the HC_claim_allocations related to the current HC_claim
+        hc_claim_allocations = HC_claim_allocations.objects.filter(hc_claim_pk=current_hc_claim.hc_claim_pk)
+        # Create a dictionary with item as the key and adjustment as the value
+        hc_claim_wip_adjustments = {
+            allocation.item.costing_pk: allocation.adjustment
+            for allocation in hc_claim_allocations
+        }
+
+    if current_hc_claim is not None:
+        for costing in costings:
+            costing['hc_prev_invoiced'] = 0
+            costing['hc_this_claim_invoices'] = 0
+            invoice_allocations = Invoice_allocations.objects.filter(item=costing['costing_pk'])
+            for allocation in invoice_allocations:
+                invoice = Invoices.objects.get(invoice_pk=allocation.invoice_pk.pk)
+                if invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk == current_hc_claim.pk:
+                    costing['hc_this_claim_invoices'] += allocation.amount
+                elif invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk < current_hc_claim.pk:
+                    costing['hc_prev_invoiced'] += allocation.amount
+    else:
+        # Handle case where current_hc_claim is None
+        for costing in costings:
+            costing['hc_prev_invoiced'] = 0
+            costing['hc_this_claim_invoices'] = 0
     for costing in costings:
         costing['hc_prev_fixedonsite'] = 0
         hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
         for allocation in hc_claim_allocations:
             hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
                 costing['hc_prev_fixedonsite'] += allocation.fixed_on_site
     for costing in costings:
         costing['hc_prev_claimed'] = 0
         hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
         for allocation in hc_claim_allocations:
             hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
                 costing['hc_prev_claimed'] += allocation.hc_claimed
     for costing in costings:
         costing['qs_claimed'] = 0
         hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
         for allocation in hc_claim_allocations:
             hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if hc_claim.hc_claim_pk < current_hc_claim.pk:
+            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
                 costing['qs_claimed'] += allocation.qs_claimed
     for costing in costings:
         costing['qs_this_claim'] = max(0,min(costing['fixed_on_site'], costing['contract_budget'] - (costing['committed'] + costing['uncommitted'] - (costing['hc_prev_invoiced'] + costing['hc_this_claim_invoices'])) - costing['qs_claimed']))
@@ -259,6 +275,7 @@ def main(request, division):
         'contacts': contacts_list, #filtered contacts depending on division
         'contacts_unfiltered': contacts_unfiltered_list,
         'items': items,
+        'hc_claim_wip_adjustments': hc_claim_wip_adjustments,
         'committed_quotes': committed_quotes_json,
         'quote_allocations': quote_allocations_json,
         'current_page': 'build' if division == 2 else 'quotes',
@@ -1434,13 +1451,12 @@ def update_hc_claim_data(request):
         try:
             # Parse the JSON body
             data = json.loads(request.body)
-            
+            current_hc_claim_display_id = data.get('current_hc_claim_display_id', '0')
             # Get the HC_claim with status=0 (unapproved)
             try:
                 hc_claim = HC_claims.objects.get(status=0)  # There will only be one entry with status=0
             except HC_claims.DoesNotExist:
                 return JsonResponse({'status': 'error', 'message': "No HC Claim with status 0 found."}, status=400)
-
             # Iterate through each entry and process
             for entry in data.get('hc_claim_data', []):
                 # Look up related ForeignKey objects
@@ -1449,12 +1465,10 @@ def update_hc_claim_data(request):
                     category = Categories.objects.get(category=entry['category'])
                 except Categories.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': f"Category '{entry['category']}' not found."}, status=400)
-
                 try:
                     item = Costing.objects.get(costing_pk=entry['item_id'])
                 except Costing.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': f"Item with ID '{entry['item_id']}' not found."}, status=400)
-
                 # Update or create the HC_claim_allocations entry
                 obj, created = HC_claim_allocations.objects.update_or_create(
                     hc_claim_pk=hc_claim,  # Now using the hc_claim from status=0
@@ -1477,14 +1491,24 @@ def update_hc_claim_data(request):
                         'qs_claimed_previous': entry['qs_claimed_previous'],
                     }
                 )
-
+            # If current_hc_claim_display_id is not '0', update the status of the matching HC_claim
+            if current_hc_claim_display_id != '0':
+                try:
+                    hc_claim_to_update = HC_claims.objects.get(display_id=current_hc_claim_display_id)
+                    hc_claim_to_update.status = 1  # Set status to 1 for approved
+                    hc_claim_to_update.save()
+                except HC_claims.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': f"No HC Claim found with display_id '{current_hc_claim_display_id}'."}, status=400)
             # Return a success response
             return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
-
         except json.JSONDecodeError:
             return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': f"Unexpected error: {str(e)}"}, status=400)
-
     # If not a POST request, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+def get_claim_table(request, claim_id):
+    claim_id = request.GET.get('claim_id')  # Retrieve claim_id from query parameters
+    if not claim_id:
+        return HttpResponseBadRequest("Missing claim_id")

@@ -61,9 +61,13 @@
         <div class="modal-content" style="border: 3px solid black;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
                 <h5 class="modal-title">Existing Claims</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
             <div class="modal-body row">
                 <div class="col-md-6">
+                    <!-- The iframe for displaying table data dynamically -->
                     <iframe id="existingClaimsPdfViewer" style="width: 100%; height: 600px; border: 1px solid #ddd;" src=""></iframe>
                 </div>
                 <div class="col-md-6">
@@ -89,15 +93,23 @@
                                         <td style="padding: 6px;">{{ hc_claim.sc_invoiced_total | floatformat:2 | intcomma }}</td>
                                         <td style="padding: 6px;">{{ hc_claim.hc_claimed_total | floatformat:2 | intcomma }}</td>
                                         <td style="padding: 6px;">{{ hc_claim.qs_claimed_total | floatformat:2 | intcomma }}</td>
-                                        <td></td>
-                                        <td class="{}">
+                                        <td>
+                                            <a href="#" class="view-table-link" data-claim-id="{{ hc_claim.display_id }}">View</a>
+                                        </td>
+                                        <td>
                                             {% if hc_claim.status == 0 %}
                                                 <a href="#" data-toggle="modal" data-target="#hcPrepSheetModal" onclick="$('#existingClaimsModal').modal('hide')">Edit</a>
-                                            {% else %}
-                                                View
                                             {% endif %}
                                         </td>
-                                        <td></td>
+                                        <td>
+                                            {% if hc_claim.status == 0 %}
+                                                <!-- Remain blank -->
+                                            {% elif hc_claim.status == 1 %}
+                                                <input type="checkbox">
+                                            {% elif hc_claim.status == 2 or hc_claim.status == 3 %}
+                                                <span style="color: green;">&#10004;</span>
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -113,6 +125,8 @@
         </div>
     </div>
 </div>
+
+
 
 <!-- HC Claim Prep Sheet -->
 <div class="modal fade" id="hcPrepSheetModal" tabindex="-1" role="dialog" aria-labelledby="hcPrepSheetModalLabel" aria-hidden="true">
@@ -216,7 +230,13 @@
                                 <td id="difference-{{ costing.costing_pk }}"></td>
                                 <td id="hc-prev-invoiced-{{costing.costing_pk}}">{% if costing.hc_prev_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_invoiced|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="hc-this-claim-invoices-{{costing.costing_pk}}">{% if costing.hc_this_claim_invoices|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_this_claim_invoices|floatformat:2|intcomma }}{% endif %}</td>
-                                <td><input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{costing.costing_pk}}" /></td>
+                                <td>
+                                    {% with hc_claim_wip_adjustments|get_dict_value:costing.costing_pk as adjustment_value %}
+                                        <input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{ costing.costing_pk }}"
+                                               value="{% if adjustment_value and adjustment_value != 0 %}{{ adjustment_value }}{% else %}{% endif %}">
+                                    {% endwith %}
+                                </td>                                                               
+                                <!-- <td><input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{costing.costing_pk}}" /></td> -->
                                 <td id="hc-prev-claimed-{{costing.costing_pk}}">{% if costing.hc_prev_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_claimed|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="hc-this-claim-{{ costing.costing_pk }}">
                                     {% with result=costing.contract_budget|subtract:costing.committed|subtract:costing.uncommitted|add:costing.hc_prev_invoiced|add:costing.hc_this_claim_invoices|subtract:costing.hc_prev_claimed %}
@@ -272,10 +292,10 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                 </div>
                 <div class="text-center">
-                    <button type="button" class="btn" data-dismiss="modal" style="background-color: #cce5ff; border: 1px solid #66b2ff; color: #004085;" id="saveAdjustmentsButton">Save Adjustments, Continue Later</button>
+                    <button type="button" class="btn" data-dismiss="modal" style="background-color: #cce5ff; border: 1px solid #66b2ff; color: #004085;" id="saveAdjustmentsButton">Save Values, Continue Later</button>
                 </div>
                 <div class="text-right">
-                    <button type="button" class="btn btn-primary" data-dismiss="modal">Finalise Claim</button>
+                    <button type="button" class="btn btn-primary" data-dismiss="modal" id="finalise_hc_claim_btn" data-claim-id="{{ current_hc_claim_display_id }}">Finalise Claim</button>
                 </div>
             </div> 
         </div>

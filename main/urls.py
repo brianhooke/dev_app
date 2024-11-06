@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data
+from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -49,7 +49,8 @@ urlpatterns = [
     path('test_xero_invoice/', views.test_xero_invoice, name='test_xero_invoice'),
     path('test_contact_id/', views.test_contact_id, name='test_contact_id'),
     path('associate_sc_claims_with_hc_claim/', views.associate_sc_claims_with_hc_claim, name='associate_sc_claims_with_hc_claim'),
-    path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data')
+    path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data'),
+    path('get_claim_table/<int:claim_id>/', get_claim_table, name='get_claim_table'),
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]
