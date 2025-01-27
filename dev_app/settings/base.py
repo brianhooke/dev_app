@@ -78,8 +78,6 @@ WSGI_APPLICATION = 'dev_app.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default'='postgresql://dev_app_user:dev_app_password@localhost/dev_app_db'
-
     'default': dj_database_url.config(default='postgresql://dev_app_user:dev_app_password@localhost/dev_app_db', conn_max_age=600)
 }
 
