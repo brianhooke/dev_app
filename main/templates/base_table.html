@@ -1,4 +1,6 @@
 {% load humanize %}
+{% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
+
 
 <!-- <button id="uploadButton" class="btn btn-primary">Upload Categories</button>
 <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
@@ -57,17 +59,16 @@
             {% endif %}
           </tr>
           {% for costing in category.list %}
-            <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;">
-              <td>{{ costing.category }}</td>
-              <td>{{ costing.item }}</td>
-              <td>{% if costing.contract_budget|floatformat:2 == "0.00" %}-{% else %}{{ costing.contract_budget|floatformat:2|intcomma }}{% endif %}</td>
-              <td>{% with total=costing.committed|add:costing.uncommitted %}
-                {% if total|floatformat:2 == "0.00" %}-{% else %}{{ total|floatformat:2|intcomma }}{% endif %}
-              {% endwith %}</td>
-              <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
-              <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-              <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-              <!-- <td>{% if costing.sc_paid|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_paid|floatformat:2|intcomma }}{% endif %}</td> -->
+          <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;">
+            <td>{{ costing.category }}</td>
+            <td>{{ costing.item }}</td>
+            <td>{% if costing.contract_budget|floatformat:2 == "0.00" %}-{% else %}{{ costing.contract_budget|floatformat:2|intcomma }}{% endif %}</td>
+            <td>{% with total=costing.committed|add:costing.uncommitted %}
+              {% if total|floatformat:2 == "0.00" %}-{% else %}{{ total|floatformat:2|intcomma }}{% endif %}
+            {% endwith %}</td>
+            <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
+            <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td>
+            <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
               {% if division == 2 %}
                 <td><a href="#" data-toggle="modal" data-target="#fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.fixed_on_site|floatformat:2|intcomma }}</a></td>
                 <td>{% if costing.hc_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
@@ -98,49 +99,57 @@
 
   {% for costing in costings %}
   <div class="modal fade" id="editModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="editModalLabel{{ costing.costing_pk }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content" style="border: 3px solid black;">
-        <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-          <h5 class="modal-title" id="editModalLabel{{ costing.costing_pk }}">{{costing.item}}</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body" style="padding-bottom: 0;"> <!-- Remove bottom padding to reduce extra space -->
-          <table class="table table-bordered" style="margin-bottom: 0;"> <!-- Ensure no margin under the table -->
-            <tr style="line-height: 1;"> <!-- Adjusted line-height to make rows shorter -->
-              <th style="width: 10%;"></th>
-              <th style="width: 20%;">Uncommitted</th>
-              <th style="width: 20%;">Committed</th>
-              <th style="width: 20%;">Total</th>
-              <th style="width: 30%;">Notes</th>
-            </tr>
-            <tr style="line-height: 1;">
-              <td>Original</td>
-              <td>{{ costing.uncommitted|floatformat:2|intcomma }}</td>
-              <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-              <td>{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
-              <!-- The Notes text area spans both rows -->
-              <td rowspan="2">
-                <textarea id="notesInput{{ costing.costing_pk }}" class="form-control" rows="4" maxlength="1000" style="font-size: 12px;" placeholder="Enter notes here (max 1000 characters)...">{{ costing.uncommitted_notes }}</textarea>
-              </td>
-            </tr>
-            <tr style="line-height: 1;">
-              <td>Edited</td>
-              <td>
-                <input type="number" class="form-control committed-input" id="uncommittedInput{{ costing.costing_pk }}" value="{{ costing.uncommitted }}">
-              </td>
-              <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-              <td id="total{{ costing.costing_pk }}">{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
-            </tr>
-          </table>
-        </div>
-        <div class="modal-footer" style="justify-content: space-between; padding-top: 0;"> <!-- Adjust button positions and remove padding -->
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button> <!-- Moved to the left -->
-          <button type="button" class="btn btn-primary save-costs" data-id="{{ costing.costing_pk }}">Save</button>
-        </div>
+      <div class="modal-dialog modal-lg" role="document">
+          <div class="modal-content" style="border: 3px solid black;">
+              <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                  <h5 class="modal-title" id="editModalLabel{{ costing.costing_pk }}">{{costing.item}}</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                      <span aria-hidden="true">×</span>
+                  </button>
+              </div>
+              <div class="modal-body" style="padding-bottom: 0;">
+                  <table class="table table-bordered" style="margin-bottom: 0;">
+                      <tr style="line-height: 1;">
+                          <th style="width: 10%;"></th>
+                          <th style="width: 20%;">Uncommitted</th>
+                          <th style="width: 20%;">Committed</th>
+                          <th style="width: 20%;">Total</th>
+                          <th style="width: 30%;">Notes</th>
+                      </tr>
+                      <tr style="line-height: 1;">
+                          <td>Original</td>
+                          <td>{{ costing.uncommitted|floatformat:2|intcomma }}</td>
+                          <td id="committedValue{{ costing.costing_pk }}">{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td>
+                          <td>{{ committed_values|get_item:costing.costing_pk|add:costing.uncommitted|floatformat:2|intcomma }}</td>
+                          <td rowspan="2">
+                              <textarea id="notesInput{{ costing.costing_pk }}" class="form-control" rows="4" maxlength="1000" style="font-size: 12px;" placeholder="Enter notes here (max 1000 characters)...">{{ costing.uncommitted_notes }}</textarea>
+                          </td>
+                      </tr>
+                      <tr style="line-height: 1;">
+                          <td>Edited</td>
+                          <td>
+                              <input type="number" class="form-control committed-input" id="uncommittedInput{{ costing.costing_pk }}" value="{{ costing.uncommitted }}">
+                          </td>
+                          <td>
+                            {% with committed_value=committed_values|get_item:costing.costing_pk %}
+                                {% if committed_value|floatformat:2 == "0.00" or committed_value == "" %}
+                                    -
+                                {% else %}
+                                    {{ committed_value|floatformat:2|intcomma }}
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                          <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td>
+                          <td id="total{{ costing.costing_pk }}">{{ committed_values|get_item:costing.costing_pk|add:costing.uncommitted|floatformat:2|intcomma }}</td>
+                      </tr>
+                  </table>
+              </div>
+              <div class="modal-footer" style="justify-content: space-between; padding-top: 0;">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                  <button type="button" class="btn btn-primary save-costs" data-id="{{ costing.costing_pk }}">Save</button>
+              </div>
+          </div>
       </div>
-    </div>
   </div>
   {% endfor %}
   

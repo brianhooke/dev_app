@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table
+from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -51,6 +51,10 @@ urlpatterns = [
     path('associate_sc_claims_with_hc_claim/', views.associate_sc_claims_with_hc_claim, name='associate_sc_claims_with_hc_claim'),
     path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data'),
     path('get_claim_table/<int:claim_id>/', get_claim_table, name='get_claim_table'),
+    path('get_invoices_by_supplier/', get_invoices_by_supplier, name='get_invoices_by_supplier'),
+    path('get_quotes_by_supplier/', views.get_quotes_by_supplier, name='get_quotes_by_supplier'),
+    path('post_progress_claim_data/', views.post_progress_claim_data, name='post_progress_claim_data'),
+    path('post_direct_cost_data/', views.post_direct_cost_data, name='post_direct_cost_data'),
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]

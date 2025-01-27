@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle "Existing Invoices" dropdown selection
     document.getElementById('claimsDropdownInvoices').addEventListener('change', function(e) {
         if (e.target.value === 'existingClaims') {
-            $('#existingInvoicesModal').modal('show');
+            $('#unallocatedInvoicesModal').modal('show');
         }
     });
 
@@ -300,7 +300,7 @@ $('.save-hc-costs').click(function(event) {
                 element.find('.unique-dropdown-arrow').html('&#9660;'); // Down arrow (expanded)
             }
         }
-    
+
 // Function to calculate totals for all rows in the table (ignores groupNumber)
 function calculateTotals(groupNumber) {
     var totalContractBudget = 0;
@@ -321,7 +321,6 @@ function calculateTotals(groupNumber) {
     // Loop through all rows in the table to accumulate totals
     $('tbody tr.collapse').each(function () {
         var cells = $(this).find('td');
-
         // Ensure there are enough cells in the row to avoid errors
         if (cells.length >= 16) {
             var contractBudget = parseFloat(cells.eq(2).text().replace(/,/g, '').trim()) || 0;
@@ -449,7 +448,7 @@ function calculateTotals(groupNumber) {
     row.find('td').eq(15).html(sumThisQSClaims.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumThisQSClaims.toFixed(2)) + '</strong>');
     row.find('td').eq(11).html(sumAdjustment.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumAdjustment.toFixed(2)) + '</strong>');
 }
-    
+
         // Event handler for the collapse/expand functionality
         $('[data-toggle="unique-collapse"]').on('click', function() {
             // Toggle the collapsed state
@@ -555,7 +554,6 @@ function calculateTotals(groupNumber) {
                 event.preventDefault();  // Prevent form submission/page reload
                 gatherAndPostHCClaimData(0);  // Pass 0 for save adjustments
             });
-        
             $('#finalise_hc_claim_btn').on('click', function(event) {
                 event.preventDefault();  // Prevent form submission/page reload
                 let claimId = $(this).data('claim-id');  // Get the claim ID from the data attribute
@@ -567,13 +565,11 @@ function calculateTotals(groupNumber) {
     document.addEventListener('DOMContentLoaded', function() {
         // Select all elements with the class or attribute that corresponds to the 'View' link
         var links = document.querySelectorAll('.view-pdf-link'); // Replace with the appropriate class/attribute
-
         // Add an event listener to each link
         links.forEach(function(link) {
             link.addEventListener('click', function(event) {
                 event.preventDefault();
                 var claimId = this.getAttribute('data-claim-id');
-
                 if (claimId) {
                     // Set the iframe source to point to the correct endpoint with claimId as part of the URL
                     document.getElementById('existingClaimsPdfViewer').src = '/get_claim_table/' + claimId + '/';
@@ -587,6 +583,21 @@ function calculateTotals(groupNumber) {
         });
     });
 
-        
+    document.querySelectorAll('.preview-table-link').forEach(function(element) {
+        console.log('Adding event listener to:', element);
+        element.addEventListener('click', function(event) {
+            event.preventDefault();
+            console.log('Preview link clicked');
+            var claimId = this.getAttribute('data-preview-claim-id');
+            console.log('Claim ID:', claimId);
+            var iframe = document.getElementById('existingClaimsPdfViewer');
+            if (iframe) {
+                console.log('Iframe found');
+                iframe.contentDocument.body.innerHTML = '<div style="font-size: medium; text-align: center;">You have clicked HC claim # ' + claimId + '</div>';
+            } else {
+                console.log('Iframe not found');
+            }
+        });
+    });     
 
 });

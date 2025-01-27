@@ -125,11 +125,12 @@ class LetterheadAdmin(admin.ModelAdmin):
 
 class InvoicesAdmin(admin.ModelAdmin):
     form = InvoicesForm
-    list_display = ("invoice_pk", "invoice_division", "invoice_status", "invoice_xero_id", "supplier_invoice_number", "invoice_due_date", "total_net", "pdf", "contact_pk", "total_gst", "associated_hc_claim")
-
+    list_display = (
+        "invoice_pk", "contact_pk", "invoice_division", "invoice_status", "invoice_xero_id", "supplier_invoice_number", "invoice_date", "invoice_due_date", "total_net", "total_gst", "pdf", "associated_hc_claim", "invoice_type"
+    )
 class InvoiceAllocationsAdmin(admin.ModelAdmin):
     form = InvoiceAllocationsForm
-    list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes")
+    list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes", "allocation_type")
 
 class HC_claimsAdmin(admin.ModelAdmin):
     list_display = ("hc_claim_pk", "date", "status", "display_id")

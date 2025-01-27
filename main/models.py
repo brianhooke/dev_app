@@ -101,7 +101,7 @@ class Quotes(models.Model):
 
 class Quote_allocations(models.Model):
     quote_allocations_pk = models.AutoField(primary_key=True)
-    quotes_pk = models.ForeignKey(Quotes, on_delete=models.CASCADE)
+    quotes_pk = models.ForeignKey(Quotes, on_delete=models.CASCADE, related_name='quote_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.CharField(max_length=1000, null=True)
@@ -110,7 +110,7 @@ class Quote_allocations(models.Model):
 
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
-    invoice_division = models.IntegerField()  # Add this line
+    invoice_division = models.IntegerField()
     invoice_status = models.IntegerField(default=0)  # 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
     invoice_xero_id = models.CharField(max_length=255, null=True)
     supplier_invoice_number = models.CharField(max_length=255)
@@ -121,18 +121,23 @@ class Invoices(models.Model):
     pdf = models.FileField(upload_to='invoices/')
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
     associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True)
+    invoice_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
     def __str__(self):
         return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
     
 class Invoice_allocations(models.Model):
     invoice_allocations_pk = models.AutoField(primary_key=True)
-    invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE)
+    invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE, related_name='invoice_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.CharField(max_length=1000, null=True)
+    allocation_type = models.IntegerField(default=0, choices=[
+        (0, "as per invoice_type"),
+        (1, "direct cost in progress claim")
+    ])
     def __str__(self):
-        return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
+        return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
 
 class HC_claims(models.Model):
     hc_claim_pk = models.AutoField(primary_key=True)

@@ -57,7 +57,7 @@
 
 <!-- Existing Claims Modal -->
 <div class="modal fade" id="existingClaimsModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document" style="max-width: 75%;">
+    <div class="modal-dialog" role="document" style="max-width: 80%;">
         <div class="modal-content" style="border: 3px solid black;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
                 <h5 class="modal-title">Existing Claims</h5>
@@ -80,7 +80,7 @@
                                     <th style="width: 12%;">SC Total $</th>
                                     <th style="width: 12%;">HC Total #</th>
                                     <th style="width: 12%;">QS Total #</th>
-                                    <th style="width: 12%;">View PDF</th>
+                                    <th style="width: 12%;">View</th>
                                     <th style="width: 12%;">Edit</th>
                                     <th style="width: 8%;">Send to Xero</th>
                                 </tr>
@@ -88,20 +88,26 @@
                             <tbody>
                                 {% for hc_claim in hc_claims %}
                                     <tr style="line-height: 1;">
-                                        <td style="padding: 6px;">{{ hc_claim.display_id }}</td>
-                                        <td style="padding: 6px;">{{ hc_claim.date }}</td>
-                                        <td style="padding: 6px;">{{ hc_claim.sc_invoiced_total | floatformat:2 | intcomma }}</td>
-                                        <td style="padding: 6px;">{{ hc_claim.hc_claimed_total | floatformat:2 | intcomma }}</td>
-                                        <td style="padding: 6px;">{{ hc_claim.qs_claimed_total | floatformat:2 | intcomma }}</td>
-                                        <td>
-                                            <a href="#" class="view-table-link" data-claim-id="{{ hc_claim.display_id }}">View</a>
+                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.display_id }}</td>
+                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.date|date:"d-M-y" }}</td>
+                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.sc_invoiced_total | floatformat:2 | intcomma }}</td>
+                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.hc_claimed_total | floatformat:2 | intcomma }}</td>
+                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.qs_claimed_total | floatformat:2 | intcomma }}</td>
+                                        <td style="vertical-align: middle;">
+                                            {% if hc_claim.status == 0 %}
+                                                <!-- Remain blank -->
+                                            {% elif hc_claim.status == 1 %}
+                                                <a href="#" class="preview-table-link" data-preview-claim-id="{{ hc_claim.display_id }}">Preview</a>
+                                            {% elif hc_claim.status == 2 %}
+                                                <a href="#" class="view-table-link" data-view-claim-id="{{ hc_claim.display_id }}">View</a>
+                                            {% endif %}
                                         </td>
-                                        <td>
+                                        <td style="vertical-align: middle;">
                                             {% if hc_claim.status == 0 %}
                                                 <a href="#" data-toggle="modal" data-target="#hcPrepSheetModal" onclick="$('#existingClaimsModal').modal('hide')">Edit</a>
                                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td style="vertical-align: middle;">
                                             {% if hc_claim.status == 0 %}
                                                 <!-- Remain blank -->
                                             {% elif hc_claim.status == 1 %}
@@ -386,37 +392,3 @@
     </div>
 </div>
 {% endfor %}
-
-<!-- <style>
-    .unique-dropdown-arrow {
-    transform: rotate(0);
-    transition: transform 0s ease;
-  }
-  
-  .collapsed .unique-dropdown-arrow {
-    transform: rotate(-90deg);
-  }
-  </style> -->
-
-<!-- <script>
-$(document).ready(function() {
-    // Calculate the "QS This Claim" value... need to do in .js as Django can't support 'max' function
-    var contractBudgetElement = document.getElementById('hc-contract-budget-{{costing.costing_pk}}');
-    if (contractBudgetElement) {
-        var contract_budget = parseFloat(contractBudgetElement.dataset.value);
-    } else {
-        console.error('Element with ID hc-contract-budget-{{costing.costing_pk}} not found.');
-    }
-    var contract_budget = parseFloat(document.getElementById('hc-contract-budget-{{costing.costing_pk}}').dataset.value);
-    var committed = parseFloat(document.getElementById('hc-claim-committed-{{ costing.costing_pk }}').dataset.value);
-    var uncommitted = parseFloat(document.getElementById('hc-claim-uncommitted-{{ costing.costing_pk }}').dataset.value);
-    var hc_prev_invoiced = parseFloat(document.getElementById('hc-prev-invoiced-{{costing.costing_pk}}').dataset.value);
-    var hc_this_claim_invoices = parseFloat(document.getElementById('hc-this-claim-invoices-{{costing.costing_pk}}').dataset.value);
-    var qs_claimed = parseFloat(document.getElementById('qs-claimed-{{costing.costing_pk}}').dataset.value);
-    var fixed_on_site = parseFloat(document.getElementById('fixed-on-site-display-{{ costing.costing_pk }}').dataset.value);
-    // Calculate the result
-    var result = Math.max(fixed_on_site, contract_budget - (committed + uncommitted - (hc_prev_invoiced + hc_this_claim_invoices)) - qs_claimed);
-    // Update the td
-    document.getElementById('qs-this-claim-{{ costing.costing_pk }}').innerText = result.toFixed(2);
-});
-</script> -->
