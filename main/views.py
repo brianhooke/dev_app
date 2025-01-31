@@ -1019,7 +1019,7 @@ def upload_costings(request):
                 logger.debug(f"Updated or created Costing for item: {row['item']}")
             return JsonResponse({'status': 'success'})
         except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
             return JsonResponse({'status': 'error', 'message': f'An error occurred: {str(e)}'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 

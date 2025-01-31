@@ -64,6 +64,9 @@
     var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
     var division = "{{ division }}";
     console.log("division is:" + division);
+    var progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
+    var progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
+
 </script>
 
 <script src="{% static 'main/base_table.js' %}"></script>
