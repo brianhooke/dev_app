@@ -1,20 +1,6 @@
 {% load humanize %}
 {% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
 
-
-<!-- <button id="uploadButton" class="btn btn-primary">Upload Categories</button>
-<input type="file" id="csvFileInput" accept=".csv" style="display: none;">
-
-<button id="uploadCostingButton" class="btn btn-primary">Upload Costings</button>
-<input type="file" id="costingCsvFileInput" accept=".csv" style="display: none;">
-
-<button id="uploadLetterheadButton" class="btn btn-primary">Upload Letterhead</button>
-<input type="file" id="letterheadFileInput" accept=".pdf" style="display: none;"> -->
-
-<!-- <button id="getXeroToken" class="btn btn-primary">Get Xero Token</button> -->
-
-<!-- <button id="getXeroContacts" class="btn btn-primary">Get Xero Contacts</button> -->
-
 <!-- base_table.html -->
 <div style="overflow-x: visible;">
     <table style="width:100%; border-collapse: collapse;">
@@ -67,7 +53,8 @@
               {% if total|floatformat:2 == "0.00" %}-{% else %}{{ total|floatformat:2|intcomma }}{% endif %}
             {% endwith %}</td>
             <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
-            <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td>
+            <!-- <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td> -->
+            <td> {{ costing.committed|floatformat:2|intcomma}} </td>
             <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
               {% if division == 2 %}
                 <td><a href="#" data-toggle="modal" data-target="#fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.fixed_on_site|floatformat:2|intcomma }}</a></td>
@@ -209,67 +196,67 @@
 
 <script>
 
-//   document.getElementById('uploadButton').addEventListener('click', function() {
-//     document.getElementById('csvFileInput').click();
-// });
+  document.getElementById('uploadButton').addEventListener('click', function() {
+    document.getElementById('csvFileInput').click();
+});
 
-// document.getElementById('csvFileInput').addEventListener('change', function(event) {
-//     var file = event.target.files[0];
-//     if (file) {
-//         var formData = new FormData();
-//         formData.append('csv_file', file);
+document.getElementById('csvFileInput').addEventListener('change', function(event) {
+    var file = event.target.files[0];
+    if (file) {
+        var formData = new FormData();
+        formData.append('csv_file', file);
 
-//         fetch('/upload_categories/', {
-//             method: 'POST',
-//             headers: {
-//                 'X-CSRFToken': getCookie('csrftoken')
-//             },
-//             body: formData
-//         }).then(response => {
-//             if (response.ok) {
-//                 alert('File uploaded successfully');
-//                 location.reload();
-//             } else {
-//                 alert('An error occurred while uploading the file.');
-//             }
-//         }).catch(error => {
-//             console.error('Error:', error);
-//         });
-//     }
-// });
+        fetch('/upload_categories/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                alert('File uploaded successfully');
+                location.reload();
+            } else {
+                alert('An error occurred while uploading the file.');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+        });
+    }
+});
 
-// document.getElementById('uploadCostingButton').addEventListener('click', function() {
-//     document.getElementById('costingCsvFileInput').click();
-// });
+document.getElementById('uploadCostingButton').addEventListener('click', function() {
+    document.getElementById('costingCsvFileInput').click();
+});
 
-// document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
-//     var file = event.target.files[0];
-//     if (file) {
-//         var formData = new FormData();
-//         formData.append('csv_file', file);
+document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
+    var file = event.target.files[0];
+    if (file) {
+        var formData = new FormData();
+        formData.append('csv_file', file);
 
-//         fetch('/upload_costings/', {
-//             method: 'POST',
-//             headers: {
-//                 'X-CSRFToken': getCookie('csrftoken')
-//             },
-//             body: formData
-//         })
-//         .then(response => {
-//             if (!response.ok) {
-//                 return response.text().then(text => {
-//                     throw new Error(text);
-//                 });
-//             }
-//             alert('File uploaded successfully');
-//             location.reload();
-//         })
-//         .catch(error => {
-//             console.error('Error:', error);
-//             alert('An error occurred while uploading the file. Details: ' + error.message);
-//         });
-//     }
-// });
+        fetch('/upload_costings/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+            alert('File uploaded successfully');
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while uploading the file. Details: ' + error.message);
+        });
+    }
+});
 
 
 // document.getElementById('uploadLetterheadButton').addEventListener('click', function() {

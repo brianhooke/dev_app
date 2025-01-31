@@ -1,7 +1,7 @@
 {% load humanize %}
 {% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
 
-<!-- HC Claim - SC Invoice Selection -->
+<!-- 1: SC Invoice Selection -->
 <div class="modal fade" id="hcSelectInvoicesModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 90%;">
         <div class="modal-content" style="border: 3px solid black;">
@@ -35,7 +35,7 @@
                                             <td style="padding: 6px;">{{ invoice.contact_name }}</td>
                                             <td style="padding: 6px;">{{ invoice.total_net | floatformat:2 | intcomma }}</td>
                                             <td style="padding: 6px;">{{ invoice.supplier_invoice_number }}</td>
-                                            <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
+                                            <td style="padding: 6px;"><a href="#" class="view-pdf-hcClaim" data-url="{{ invoice.pdf_url }}">View</a></td>
                                         </tr>
                                 {% endfor %}
                             </tbody>
@@ -45,7 +45,7 @@
             </div>
             <div class="modal-footer">
                 <div class="col-6 text-left">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="location.reload();">Close</button>
                 </div>
                 <div class="col-6 text-right">
                     <button type="button" class="btn btn-primary" id="hcSendInvoicesToXeroButton"  data-division="{{division}}">Save and Start Claim</button>
@@ -55,15 +55,12 @@
     </div>
 </div>
 
-<!-- Existing Claims Modal -->
+<!-- 2: Existing Claims Modal -->
 <div class="modal fade" id="existingClaimsModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 80%;">
         <div class="modal-content" style="border: 3px solid black;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
                 <h5 class="modal-title">Existing Claims</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
             </div>
             <div class="modal-body row">
                 <div class="col-md-6">
@@ -125,7 +122,7 @@
             </div>
             <div class="modal-footer">
                 <div class="col-6">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="location.reload();">Close</button>
                 </div>
             </div>
         </div>
@@ -134,15 +131,15 @@
 
 
 
-<!-- HC Claim Prep Sheet -->
+<!-- 3a: HC Claim Prep Sheet -->
 <div class="modal fade" id="hcPrepSheetModal" tabindex="-1" role="dialog" aria-labelledby="hcPrepSheetModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document" style="max-width: 90%;">
         <div class="modal-content" style="font-size: 0.8em;">
             <div class="modal-header">
                 <h5 class="modal-title" id="hcPrepSheetModalLabel">HC Claim Prep Sheet - HC Claim #{{current_hc_claim_display_id}}</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <!-- <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="location.reload();">
                     <span aria-hidden="true">&times;</span>
-                </button>
+                </button> -->
             </div>
             <div class="modal-body">
                 <div style="overflow-x: visible;">
@@ -295,7 +292,7 @@
             </div>
             <div class="modal-footer d-flex justify-content-between">
                 <div class="text-left">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="location.reload();">Close</button>
                 </div>
                 <div class="text-center">
                     <button type="button" class="btn" data-dismiss="modal" style="background-color: #cce5ff; border: 1px solid #66b2ff; color: #004085;" id="saveAdjustmentsButton">Save Values, Continue Later</button>
@@ -308,7 +305,7 @@
     </div>
 </div>
 
-<!-- Uncommitted Modal -->
+<!-- 3b: Uncommitted Modal -->
 {% for costing in costings %}
 <div class="modal fade" id="hc-claim-editModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="hc-claim-editModalLabel{{ costing.costing_pk }}" aria-hidden="true">
         <div class="modal-dialog" role="document">
@@ -355,7 +352,7 @@
 {% endfor %}
 
 
-<!--Fixed on Site Modal-->
+<!-- 3c: Fixed on Site Modal-->
 {% for costing in costings %}
 <div class="modal fade" id="hc-claim-fixedOnSiteModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="hc-claim-fixedOnSiteModalLabel{{ costing.costing_pk }}" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 600px;">
