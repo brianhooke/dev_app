@@ -202,12 +202,11 @@
   </style>
 
 <script>
-
-  document.getElementById('uploadButton').addEventListener('click', function() {
+  document.getElementById('uploadCategoriesButton').addEventListener('click', function() {
     document.getElementById('csvFileInput').click();
-});
+  });
 
-document.getElementById('csvFileInput').addEventListener('change', function(event) {
+  document.getElementById('csvFileInput').addEventListener('change', function(event) {
     var file = event.target.files[0];
     if (file) {
         var formData = new FormData();
@@ -230,13 +229,13 @@ document.getElementById('csvFileInput').addEventListener('change', function(even
             console.error('Error:', error);
         });
     }
-});
+  });
 
-document.getElementById('uploadCostingButton').addEventListener('click', function() {
+  document.getElementById('uploadCostingsButton').addEventListener('click', function() {
     document.getElementById('costingCsvFileInput').click();
-});
+  });
 
-document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
+  document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
     var file = event.target.files[0];
     if (file) {
         var formData = new FormData();
@@ -263,25 +262,21 @@ document.getElementById('costingCsvFileInput').addEventListener('change', functi
             alert('An error occurred while uploading the file. Details: ' + error.message);
         });
     }
-});
+  });
 
-
-// document.getElementById('uploadLetterheadButton').addEventListener('click', function() {
-//   document.getElementById('letterheadFileInput').click();
-// });
-
-// document.getElementById('letterheadFileInput').addEventListener('change', function() {
-//   var file = this.files[0];
-//   var formData = new FormData();
-//   formData.append('letterhead_path', file);
-
-//   fetch('/upload_letterhead/', {
-//       method: 'POST',
-//       body: formData
-//   }).then(response => response.json())
-//     .then(data => console.log(data))
-//     .catch(error => console.error(error));
-// });
-
-
+  // Ensure the getCookie function is defined if not already present
+  function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
+  }
 </script>
