@@ -236,27 +236,27 @@
         var formData = new FormData();
         formData.append('csv_file', file);
 
+
         fetch('/upload_costings/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(text);
-                });
-            }
-            alert('File uploaded successfully');
-            location.reload();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while uploading the file. Details: ' + error.message);
-        });
-    }
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    }).then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Server error:', response.status, response.statusText, text);
+                throw new Error(`Server responded with ${response.status}: ${text}`);
+            });
+        }
+        alert('File uploaded successfully');
+        location.reload();
+    }).catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while uploading the file. Details: ' + error.message);
+    });
+        }
   });
 
   // Helper function for fetching CSRF token
