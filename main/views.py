@@ -997,22 +997,30 @@ def upload_costings(request):
         csv_file = request.FILES['csv_file']
         csv_reader = csv.DictReader(csv_file.read().decode('utf-8').splitlines())
 
-        for row in csv_reader:
-            category_name = row['category']
-            category, created = Categories.objects.get_or_create(category=category_name)
-            
-            Costing.objects.update_or_create(
-                category=category,
-                item=row['item'],
-                defaults={
-                    'xero_account_code': row['xero_account_code'],
-                    'contract_budget': row['contract_budget'],
-                    'uncommitted': row['uncommitted'],
-                    'sc_invoiced': row['sc_invoiced'],
-                    'sc_paid': row['sc_paid'],
-                }
-            )
-        return JsonResponse({'status': 'success'})
+        try:
+            for row in csv_reader:
+                logger.debug(f"Processing row: {row}")
+                category_name = row['category']
+                category, created = Categories.objects.get_or_create(category=category_name)
+                
+                logger.debug(f"Category: {category}, Created: {created}")
+                
+                Costing.objects.update_or_create(
+                    category=category,
+                    item=row['item'],
+                    defaults={
+                        'xero_account_code': row['xero_account_code'],
+                        'contract_budget': Decimal(row['contract_budget']),
+                        'uncommitted': Decimal(row['uncommitted']),
+                        'sc_invoiced': Decimal(row['sc_invoiced']),
+                        'sc_paid': Decimal(row['sc_paid']),
+                    }
+                )
+                logger.debug(f"Updated or created Costing for item: {row['item']}")
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            logger.error(f"Error processing CSV: {str(e)}")
+            return JsonResponse({'status': 'error', 'message': f'An error occurred: {str(e)}'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
 @csrf_exempt
