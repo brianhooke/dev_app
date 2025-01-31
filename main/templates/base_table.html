@@ -3,10 +3,11 @@
 
 <!-- base_table.html -->
 <div style="overflow-x: visible;">
-    <!-- Upload Buttons -->
+    <!-- New buttons for file uploads -->
     <button id="uploadCategoriesButton">Upload Categories</button>
     <button id="uploadCostingsButton">Upload Costings</button>
 
+    <!-- Hidden file inputs -->
     <input type="file" id="csvFileInput" style="display:none;">
     <input type="file" id="costingCsvFileInput" style="display:none;">
 
@@ -23,7 +24,6 @@
           <th style="position: sticky; top: 20px;"><strong>Uncommitted</strong></th>
           <th style="position: sticky; top: 20px;"><strong>Committed</strong></th>
           <th style="position: sticky; top: 20px;"><strong>Invoiced</strong></th>
-          <!-- <th style="position: sticky; top: 20px;"><strong>Paid</strong></th> -->
           {% if division == 2 %}
             <th style="position: sticky; top: 20px;">Fixed On Site</th>
             <th style="position: sticky; top: 20px;">HC Claimed</th>
@@ -37,7 +37,7 @@
         <tr data-toggle="collapse" data-target=".group{{ forloop.counter }}" style="cursor: pointer;">
             <td>
               <strong>{{ category.grouper }}</strong>
-              <span class="dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">&#9660;</span>
+              <span class="dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">▼</span>
             </td>
             <td></td>
             <td></td>
@@ -60,8 +60,7 @@
               {% if total|floatformat:2 == "0.00" %}-{% else %}{{ total|floatformat:2|intcomma }}{% endif %}
             {% endwith %}</td>
             <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
-            <!-- <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td> -->
-            <td> {{ costing.committed|floatformat:2|intcomma}} </td>
+            <td>{{ costing.committed|floatformat:2|intcomma }}</td>
             <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
               {% if division == 2 %}
                 <td><a href="#" data-toggle="modal" data-target="#fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.fixed_on_site|floatformat:2|intcomma }}</a></td>
@@ -79,7 +78,6 @@
           <td>{% if totals.total_uncommitted == 0 %}-{% else %}{{ totals.total_uncommitted|floatformat:2|intcomma }}{% endif %}</td>
           <td>{% if totals.total_committed == 0 %}-{% else %}{{ totals.total_committed|floatformat:2|intcomma }}{% endif %}</td>
           <td>{% if totals.total_sc_invoiced == 0 %}-{% else %}{{ totals.total_sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-          <!-- <td>{% if totals.total_sc_paid == 0 %}-{% else %}{{ totals.total_sc_paid|floatformat:2|intcomma }}{% endif %}</td> -->
           {% if division == 2 %}
             <td>{% if totals.total_fixed_on_site == 0 %}-{% else %}{{ totals.total_fixed_on_site|floatformat:2|intcomma }}{% endif %}</td>
             <td>{% if totals.total_hc_claimed == 0 %}-{% else %}{{ totals.total_hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
@@ -133,7 +131,6 @@
                                 {% endif %}
                             {% endwith %}
                         </td>
-                          <td>{{ committed_values|get_item:costing.costing_pk|floatformat:2|intcomma }}</td>
                           <td id="total{{ costing.costing_pk }}">{{ committed_values|get_item:costing.costing_pk|add:costing.uncommitted|floatformat:2|intcomma }}</td>
                       </tr>
                   </table>
@@ -146,10 +143,6 @@
       </div>
   </div>
   {% endfor %}
-  
-  
-  
-  
 
 <!--Fixed on Site Modal-->
 {% for costing in costings %}
@@ -159,7 +152,7 @@
       <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
         <h5 class="modal-title" id="fixedOnSiteModalLabel{{ costing.costing_pk }}">Fixed On Site</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
+          <span aria-hidden="true">×</span>
         </button>
       </div>
       <div class="modal-body">
@@ -199,9 +192,11 @@
   .collapsed .dropdown-arrow {
     transform: rotate(-90deg);
   }
-  </style>
+</style>
 
 <script>
+
+  // Event listeners for upload buttons
   document.getElementById('uploadCategoriesButton').addEventListener('click', function() {
     document.getElementById('csvFileInput').click();
   });
@@ -264,7 +259,7 @@
     }
   });
 
-  // Ensure the getCookie function is defined if not already present
+  // Helper function for fetching CSRF token
   function getCookie(name) {
       let cookieValue = null;
       if (document.cookie && document.cookie !== '') {
