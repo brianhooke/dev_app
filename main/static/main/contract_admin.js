@@ -63,31 +63,31 @@ function getCookie(name) {
 //     });
 // });
 
-$(document).ready(function() {
-    $('#uploadCostingsButton').on('click', function() {
-        $('#id_csv_file').click();
-    });
+// $(document).ready(function() {
+//     $('#uploadCostingsButton').on('click', function() {
+//         $('#id_csv_file').click();
+//     });
 
-    $('#id_csv_file').on('change', function() {
-        var formData = new FormData();
-        formData.append('csv_file', this.files[0]);
-        $.ajax({
-            url: '/upload_csv/',  // replace with your actual endpoint
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                alert('CSV file uploaded successfully');
-                location.reload();
-            },
-            error: function(jqXHR, textStatus, errorThrown) {
-                alert(jqXHR.responseJSON.message);
-                location.reload();
-            }
-        });
-    });
-});
+//     $('#id_csv_file').on('change', function() {
+//         var formData = new FormData();
+//         formData.append('csv_file', this.files[0]);
+//         $.ajax({
+//             url: '/upload_costings/',  // replace with your actual endpoint
+//             type: 'POST',
+//             data: formData,
+//             processData: false,
+//             contentType: false,
+//             success: function(response) {
+//                 alert('CSV file uploaded successfully');
+//                 location.reload();
+//             },
+//             error: function(jqXHR, textStatus, errorThrown) {
+//                 alert(jqXHR.responseJSON.message);
+//                 location.reload();
+//             }
+//         });
+//     });
+// });
 
 $(document).ready(function() {
   $('#uploadButton').on('click', function() {

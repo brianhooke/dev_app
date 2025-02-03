@@ -959,24 +959,22 @@ def upload_costings(request):
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
         csv_reader = csv.DictReader(csv_file.read().decode('utf-8').splitlines())
-
         try:
             for row in csv_reader:
                 logger.debug(f"Processing row: {row}")
                 category_name = row['category']
                 category, created = Categories.objects.get_or_create(category=category_name)
-                
                 logger.debug(f"Category: {category}, Created: {created}")
-                
                 Costing.objects.update_or_create(
                     category=category,
                     item=row['item'],
                     defaults={
-                        'xero_account_code': row['xero_account_code'],
-                        'contract_budget': Decimal(row['contract_budget']),
-                        'uncommitted': Decimal(row['uncommitted']),
-                        'sc_invoiced': Decimal(row['sc_invoiced']),
-                        'sc_paid': Decimal(row['sc_paid']),
+                        'xero_account_code': row.get('xero_account_code', ''),  # Set default to empty string
+                        'contract_budget': Decimal(row.get('contract_budget', '0.00')),  # Set default to 0.00
+                        'uncommitted': Decimal(row.get('uncommitted', '0.00')),  # Set default to 0.00
+                        'sc_invoiced': Decimal(row.get('sc_invoiced', '0.00')),  # Set default to 0.00
+                        'sc_paid': Decimal(row.get('sc_paid', '0.00')),  # Set default to 0.00
+                        'fixed_on_site': Decimal(row.get('fixed_on_site', '0.00')),  # Set default to 0.00
                     }
                 )
                 logger.debug(f"Updated or created Costing for item: {row['item']}")
