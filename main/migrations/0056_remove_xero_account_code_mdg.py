@@ -11,7 +11,31 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            sql='ALTER TABLE main_costing DROP COLUMN xero_account_code_mdg;',
-            reverse_sql='ALTER TABLE main_costing ADD COLUMN xero_account_code_mdg character varying(100) NOT NULL DEFAULT \'\';'
+            sql='''
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'main_costing' 
+                    AND column_name = 'xero_account_code_mdg'
+                ) THEN
+                    ALTER TABLE main_costing DROP COLUMN xero_account_code_mdg;
+                END IF;
+            END $$;
+            ''',
+            reverse_sql='''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'main_costing' 
+                    AND column_name = 'xero_account_code_mdg'
+                ) THEN
+                    ALTER TABLE main_costing ADD COLUMN xero_account_code_mdg character varying(100) NOT NULL DEFAULT '';
+                END IF;
+            END $$;
+            '''
         ),
     ]
