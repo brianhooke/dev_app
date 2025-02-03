@@ -75,7 +75,7 @@ class CategoriesAdmin(admin.ModelAdmin):
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
-    list_display = ("projects_pk", "project")
+    list_display = ("projects_pk", "project", "xero_project_id", "xero_sales_account")
 
 class ContactsAdmin(admin.ModelAdmin):
     list_display = ("contact_pk", "xero_contact_id", "division", "checked", "contact_name", "contact_email")

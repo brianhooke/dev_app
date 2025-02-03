@@ -7,6 +7,7 @@ class Projects(models.Model):
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
     xero_project_id = models.CharField(max_length=255, null=True)
+    xero_sales_account = models.CharField(max_length=255, null=True)
     def __str__(self):
         return self.project
     
@@ -144,6 +145,7 @@ class HC_claims(models.Model):
     date = models.DateField()
     status = models.IntegerField(default=0) #0 for unapproved, 1 for approved, 2 for sent to Xero, 3 for payment received
     display_id = models.IntegerField(blank=True, null=True)
+    invoicee = models.CharField(blank = True, null = True, max_length=255)
     def save(self, *args, **kwargs):
         if not self.display_id:
             # Get the highest display_id in the table
@@ -184,7 +186,7 @@ class Contacts(models.Model):
     contact_pk = models.AutoField(primary_key=True)
     xero_contact_id = models.CharField(max_length=255)
     division = models.IntegerField() #can delete this after "checked" is integrated
-    checked = models.BooleanField(default=False) #0 for no, 1 for yes
+    checked = models.IntegerField(default=0)  # 0 for none, 1 for supplier, 2 for client
     contact_name = models.CharField(max_length=200)
     contact_email = models.EmailField(max_length=254)
     def __str__(self):

@@ -15,14 +15,11 @@ def build_data_structures():
     """
     Builds two lists based on your specification.
     """
-
     # 1) progress_claim_quote_allocations
     #    For each unique contact_pk in Quotes, collect all quote allocations.
     progress_claim_quote_allocations = []
-    
     # Distinct contact_pks from the Quotes table
     distinct_contacts_quotes = Quotes.objects.values_list("contact_pk", flat=True).distinct()
-    
     for contact_id in distinct_contacts_quotes:
         # Gather all quotes for this contact
         quotes_for_contact = Quotes.objects.filter(contact_pk=contact_id)

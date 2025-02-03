@@ -3,39 +3,47 @@
 
 <!-- 1: SC Invoice Selection -->
 <div class="modal fade" id="hcSelectInvoicesModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document" style="max-width: 90%;">
-        <div class="modal-content" style="border: 3px solid black;">
+    <div class="modal-dialog" role="document" style="max-width: 90%; height: 90vh;">
+        <div class="modal-content" style="border: 3px solid black; height: 100%;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
                 <h5 class="modal-title">Create HC Claim - Select associated Invoices</h5>
             </div>
             <div class="modal-body row">
-                <div class="col-md-6">
-                    <iframe id="hcInvoicesPdfViewer" style="width: 100%; height: 550px; border: 1px solid #ddd;" src=""></iframe>
+                <div class="col-md-5" style="height: 100%;">
+                    <iframe id="hcInvoicesPdfViewer" style="width: 100%; height: 100%; border: 1px solid #ddd;" src=""></iframe>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-7" style="height: 100%;">
                     <div style="overflow-x: auto; white-space: nowrap;">
                         <table class="table" style="font-size: 10px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 20%;">Include</th>
-                                    <th style="width: 20%;">Supplier</th>
-                                    <th style="width: 15%;">Net Total $</th>
-                                    <th style="width: 15%;">Invoice #</th>
-                                    <th style="width: 15%;">View PDF</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Include</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Supplier</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice #</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Net Total $</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">GST Total $</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Gross Total $</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice Date</th>
+                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
+                                    <th style="width: 8%; padding: 4px; line-height: 1.2;">View PDF</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for invoice in invoices_allocated %}
                                         <tr style="line-height: 1;">
                                             {% if invoice.associated_hc_claim == 0 or invoice.associated_hc_claim == None %}
-                                                <td style="padding: 6px;"><input type="checkbox" id="hcIncludeInClaim{{ invoice.invoice_pk }}"></td>
+                                                <td style="padding: 4px;"><input type="checkbox" id="hcIncludeInClaim{{ invoice.invoice_pk }}"></td>
                                             {% else %}
-                                                <td style="padding: 6px;">HC {{ invoice.display_id }}</td> 
+                                                <td style="padding: 4px;">HC {{ invoice.display_id }}</td> 
                                             {% endif %}
-                                            <td style="padding: 6px;">{{ invoice.contact_name }}</td>
-                                            <td style="padding: 6px;">{{ invoice.total_net | floatformat:2 | intcomma }}</td>
-                                            <td style="padding: 6px;">{{ invoice.supplier_invoice_number }}</td>
-                                            <td style="padding: 6px;"><a href="#" class="view-pdf-hcClaim" data-url="{{ invoice.pdf_url }}">View</a></td>
+                                            <td style="padding: 4px;">{{ invoice.contact_name }}</td>
+                                            <td style="padding: 4px;">{{ invoice.supplier_invoice_number }}</td>
+                                            <td style="padding: 4px;">{{ invoice.total_net | floatformat:2 | intcomma }}</td>
+                                            <td style="padding: 4px;">{{ invoice.total_gst | floatformat:2 | intcomma }}</td>
+                                            <td style="padding: 4px;">{{ invoice.total_net|add:invoice.total_gst|floatformat:2|intcomma }}</td>
+                                            <td style="padding: 4px;">{{ invoice.invoice_date|date:"d-M-y" }}</td>
+                                            <td style="padding: 4px;">{{ invoice.invoice_due_date|date:"d-M-y" }}</td>
+                                            <td style="padding: 4px;"><a href="#" class="view-pdf-hcClaim" data-url="{{ invoice.pdf_url }}">View</a></td>
                                         </tr>
                                 {% endfor %}
                             </tbody>
@@ -57,72 +65,44 @@
 
 <!-- 2: Existing Claims Modal -->
 <div class="modal fade" id="existingClaimsModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document" style="max-width: 80%;">
-        <div class="modal-content" style="border: 3px solid black;">
+    <div class="modal-dialog" role="document" style="max-width: 90%; height: 90vh;">
+        <div class="modal-content" style="border: 3px solid black; height: 100%;">
             <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
                 <h5 class="modal-title">Existing Claims</h5>
             </div>
             <div class="modal-body row">
-                <div class="col-md-6">
+                <div class="col-md-5" style="height: 100%;">
                     <!-- The iframe for displaying table data dynamically -->
-                    <iframe id="existingClaimsPdfViewer" style="width: 100%; height: 600px; border: 1px solid #ddd;" src=""></iframe>
+                    <iframe id="existingClaimsPdfViewer" style="width: 100%; height: 100%; border: 1px solid #ddd;" src=""></iframe>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-7" style="height: 100%;">
                     <div style="overflow-x: auto; white-space: nowrap;">
-                        <table class="table" style="font-size: 10px;">
+                        <table id="existingClaimsTable" class="table" style="font-size: 10px;">
                             <thead>
-                                <tr style="height: 30px;">
-                                    <th style="width: 8%;">Claim #</th>
-                                    <th style="width: 8%;">Date</th>
-                                    <th style="width: 12%;">SC Total $</th>
-                                    <th style="width: 12%;">HC Total #</th>
-                                    <th style="width: 12%;">QS Total #</th>
-                                    <th style="width: 12%;">View</th>
-                                    <th style="width: 12%;">Edit</th>
-                                    <th style="width: 8%;">Send to Xero</th>
+                                <tr>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Claim #</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Client</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Date</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">SC Total $</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">HC Total #</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">HC Claim Sheet</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">QS Total #</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">QS Claim Sheet</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Process</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Send to Xero</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for hc_claim in hc_claims %}
-                                    <tr style="line-height: 1;">
-                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.display_id }}</td>
-                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.date|date:"d-M-y" }}</td>
-                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.sc_invoiced_total | floatformat:2 | intcomma }}</td>
-                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.hc_claimed_total | floatformat:2 | intcomma }}</td>
-                                        <td style="padding: 6px; vertical-align: middle;">{{ hc_claim.qs_claimed_total | floatformat:2 | intcomma }}</td>
-                                        <td style="vertical-align: middle;">
-                                            {% if hc_claim.status == 0 %}
-                                                <!-- Remain blank -->
-                                            {% elif hc_claim.status == 1 %}
-                                                <a href="#" class="preview-table-link" data-preview-claim-id="{{ hc_claim.display_id }}">Preview</a>
-                                            {% elif hc_claim.status == 2 %}
-                                                <a href="#" class="view-table-link" data-view-claim-id="{{ hc_claim.display_id }}">View</a>
-                                            {% endif %}
-                                        </td>
-                                        <td style="vertical-align: middle;">
-                                            {% if hc_claim.status == 0 %}
-                                                <a href="#" data-toggle="modal" data-target="#hcPrepSheetModal" onclick="$('#existingClaimsModal').modal('hide')">Edit</a>
-                                            {% endif %}
-                                        </td>
-                                        <td style="vertical-align: middle;">
-                                            {% if hc_claim.status == 0 %}
-                                                <!-- Remain blank -->
-                                            {% elif hc_claim.status == 1 %}
-                                                <input type="checkbox">
-                                            {% elif hc_claim.status == 2 or hc_claim.status == 3 %}
-                                                <span style="color: green;">&#10004;</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
+                                <!-- Rows will be added dynamically by JavaScript -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <div class="col-6">
+                <div class="d-flex justify-content-between w-100">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="location.reload();">Close</button>
+                    <button type="button" class="btn btn-primary" id="sendToXeroButton" disabled>Send to Xero</button>
                 </div>
             </div>
         </div>
@@ -169,17 +149,17 @@
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Category</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Item</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Contract</strong></th>
-                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;" title="Working Budget = Uncommitted + Committed."><strong>Working</strong></th>
+                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Working</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Uncommitted</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Committed</strong></th>
-                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Current </strong></th>
+                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"" title="Fixed on Site as $ amount of Working Budget, eg Contract Budget = $200 and Working Budget = $500, if 50% complete enter $250"><strong>Current </strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Prev Claims</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>This Claim</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Prev Claims</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>This Claim</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;" title="Manual Adjustment to both This HC Claim and This QS Claim."><strong>Adjustment</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Prev Claims</strong></th>
-                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;" title="HC Claim Logic.&#13;This HC Claim = Max of [0, [Contract budget - C2C - sum of Previous HC Claims].&#13;C2C = Working Budget - Invoiced.&#13;Working Budget = Uncommitted + Committed."><strong>This Claim</strong></th>
+                                <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;" title="HC Claim Logic.&#13;This HC Claim = Max of [0, [Contract budget - C2C - sum of Previous HC Claims].&#13;C2C = Working Budget - Paid Invoices.&#13;Working Budget = Uncommitted + Committed."><strong>This Claim</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;"><strong>Prev Claims</strong></th>
                                 <th style="position: sticky; top: 40px; background-image: linear-gradient(45deg, #A090D0, #B3E1DD); color: white;" title="QS Claim Logic.&#13;This QS Claim = Max of [0, Minimum of [(Contract budget less C2C), Fixed on Site] less sum of Previous QS Claims].&#13;C2C = Working Budget less Invoiced.&#13;Working Budget = Uncommitted + Committed."><strong>This Claim</strong></th>
                             </tr>
@@ -224,11 +204,16 @@
                                     </a>
                                 </td>
                                 <td id="hc-claim-committed-{{ costing.costing_pk }}">{% if costing.committed|floatformat:2 == "0.00" %}-{% else %}{{ costing.committed|floatformat:2|intcomma }}{% endif %}</td>
-                                <td id="fixed-on-site-display-{{ costing.costing_pk }}">
+                                <!-- <td id="fixed-on-site-display-{{ costing.costing_pk }}">
                                     <a href="#" data-toggle="modal" data-target="#hc-claim-fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
                                         {% if costing.fixed_on_site|floatformat:2 == "0.00" %}-{% else %}{{ costing.fixed_on_site|floatformat:2|intcomma }}{% endif %}
                                     </a>
-                                </td>                                
+                                </td>   -->
+                                <td id="fixed-on-site-display-{{ costing.costing_pk }}"style="background: linear-gradient(to right, #4CAF50 {{ percentage }}%, transparent {{ percentage }}%);">
+                                        <a href="#" data-toggle="modal" data-target="#hc-claim-fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
+                                            {% if costing.fixed_on_site|floatformat:2 == "0.00" %}-{% else %}{{ costing.fixed_on_site|floatformat:2|intcomma }}{% endif %}
+                                        </a>
+                                    </td>                              
                                 <td id="prev-fixed-on-site-display-{{ costing.costing_pk }}">{% if costing.hc_prev_fixedonsite|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_fixedonsite|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="difference-{{ costing.costing_pk }}"></td>
                                 <td id="hc-prev-invoiced-{{costing.costing_pk}}">{% if costing.hc_prev_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_invoiced|floatformat:2|intcomma }}{% endif %}</td>
@@ -308,13 +293,10 @@
 <!-- 3b: Uncommitted Modal -->
 {% for costing in costings %}
 <div class="modal fade" id="hc-claim-editModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="hc-claim-editModalLabel{{ costing.costing_pk }}" aria-hidden="true">
-        <div class="modal-dialog" role="document">
+        <div class="modal-dialog" role="document" style="max-width: 600px;">
             <div class="modal-content" style="border: 3px solid black;">
                 <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
-                    <h5 class="modal-title" id="hc-claim-editModalLabel{{ costing.costing_pk }}">{{costing.item}}</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <h5 class="modal-title" id="hc-claim-editModalLabel{{ costing.costing_pk }}">Edit Uncommitted</h5>
                 </div>
                 <div class="modal-body">
                     <table>
@@ -350,7 +332,6 @@
         </div>
     </div>
 {% endfor %}
-
 
 <!-- 3c: Fixed on Site Modal-->
 {% for costing in costings %}

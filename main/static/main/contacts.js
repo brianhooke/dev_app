@@ -1,11 +1,15 @@
 document.addEventListener('DOMContentLoaded', function() {
-    function showContactsModal(contacts_unfiltered) {
-        var tableRows = contacts_unfiltered.map(function(contact, index) {
+    function showContactsModal(contacts) {
+        // Ensure contacts is an array
+        const contactsArray = Array.isArray(contacts) ? contacts : [];
+        
+        var tableRows = contactsArray.map(function(contact, index) {
             return `
             <tr>
                 <td>${contact.contact_name}</td>
                 <td><a href="#" class="email-field" data-index="${index}">${contact.contact_email}</a></td>
-                <td><input type="checkbox" ${contact.checked == 1 ? 'checked' : ''}></td>
+                <td><input type="checkbox" class="supplier-checkbox" ${contact.checked == 1 || contact.checked == 3 ? 'checked' : ''}></td>
+                <td><input type="checkbox" class="client-checkbox" ${contact.checked == 2 || contact.checked == 3 ? 'checked' : ''}></td>
                 <input type="hidden" value="${contact.contact_pk}" class="contact-pk">
             </tr>
             `;
@@ -17,7 +21,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <th>Contact</th>
                     <th>Email Address</th>
-                    <th>Selectable</th>
+                    <th>Selectable Supplier</th>
+                    <th>Selectable Client</th>
+
                 </tr>
             </thead>
             <tbody>
@@ -142,8 +148,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 var contact_pk = row.querySelector('.contact-pk') ? row.querySelector('.contact-pk').value : null;
                 var emailField = row.querySelector('.email-field');
                 var contact_email = emailField.querySelector('input') ? emailField.querySelector('input').value : emailField.textContent;
-                var checkbox = row.querySelector('input[type="checkbox"]');
-                var checked = checkbox ? checkbox.checked : false;
+                var supplierCheckbox = row.querySelector('.supplier-checkbox');
+                var clientCheckbox = row.querySelector('.client-checkbox');
+                var checked = 0;
+                if (supplierCheckbox.checked) {
+                    checked += 1;
+                }
+                if (clientCheckbox.checked) {
+                    checked += 2;
+                }
                 return {
                     contact_pk: contact_pk,
                     contact_email: contact_email,

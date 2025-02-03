@@ -41,6 +41,7 @@ urlpatterns = [
     path('upload_invoice/', views.upload_invoice, name='upload_invoice'),
     path('mark_sent_to_boutique/', views.mark_sent_to_boutique, name='mark_sent_to_boutique'),
     path('upload_invoice_allocations/', views.upload_invoice_allocations, name='upload_invoice_allocations'),
+    path('send_hc_claim_to_xero/', views.send_hc_claim_to_xero, name='send_hc_claim_to_xero'),
     path('xeroapi/', views.xeroapi, name='xeroapi'),
     path('get_xero_token/', views.get_xero_token, name='get_xero_token'),
     path('get_xero_contacts/', views.get_xero_contacts, name='get_xero_contacts'),

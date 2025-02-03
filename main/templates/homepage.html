@@ -55,6 +55,7 @@
 {{ costings|json_script:"costings" }}
 {{ items|json_script:"items-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
+{{ claim_category_totals|json_script:"claim-category-totals" }}
 
 <script type="text/javascript">
     var contacts = JSON.parse(document.getElementById('contacts').textContent);
@@ -66,6 +67,8 @@
     console.log("division is:" + division);
     var progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
     var progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
+    var claim_category_totals = JSON.parse('{{ claim_category_totals|escapejs }}');
+    console.log("Loaded claim_category_totals:", claim_category_totals);
 
 </script>
 

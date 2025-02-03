@@ -8,6 +8,14 @@
 {% block content %}
 <head>
     <link rel="icon" href="{% static 'favicon.ico' %}">
+    <style>
+        .client-dropdown option {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px; /* Adjust this value as needed */
+        }
+    </style>
 </head>
 
 <h3 style="text-align: center;">{{ project_name }} Project <img src="{% static 'logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Build Contract</h3>
@@ -68,25 +76,34 @@
 {{ contacts_unfiltered|json_script:"contacts_unfiltered" }}
 {{ hc_claim_lines_sums|json_script:"hc_claim_lines_sums" }}
 {{ hc_claim_wip_adjustments|json_script:"hc_claim_wip_adjustments"}}
-<!-- {{ totals|json_script:"totals-data" }}
-{{ hc_claimed|json_script:"hc_claimed" }} -->
+{{ claim_category_totals|json_script:"claim-category-totals" }}
+{{ category_summary|json_script:"category_summary" }}
 
 <script type="text/javascript">
-  var contacts = JSON.parse(document.getElementById('contacts').textContent);
-  var contacts_unfiltered = JSON.parse(document.getElementById('contacts_unfiltered').textContent);
-  var committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
-  var costings = JSON.parse(document.getElementById('costings').textContent);
-  var hc_claims = JSON.parse(document.getElementById('hc_claims').textContent);
-  console.log("hc_claims is:" + hc_claims);
-  var current_hc_claim_display_id = "{{ current_hc_claim_display_id }}";
-  console.log("current_hc_claim_display_id is:" + current_hc_claim_display_id);
-  var hc_prev_fixedonsite = "{{ hc_prev_fixedonsite }}";
-  var quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
-  var division = "{{ division }}";
-  var hc_claim_wip_adjustments = JSON.parse(document.getElementById('hc_claim_wip_adjustments').textContent);
+  const contacts = JSON.parse(document.getElementById('contacts').textContent);
+  const contacts_unfiltered = JSON.parse(document.getElementById('contacts_unfiltered').textContent);
+  const committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
+  const costings = JSON.parse(document.getElementById('costings').textContent);
+  const hc_claims = JSON.parse('{{ hc_claims|escapejs|safe }}');
+  const category_summary = JSON.parse(document.getElementById('category_summary').textContent);
+  const current_hc_claim_display_id = "{{ current_hc_claim_display_id }}";
+  const hc_prev_fixedonsite = "{{ hc_prev_fixedonsite }}";
+  const quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
+  const division = "{{ division }}";
   console.log("division is:" + division);
-  var progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
-  var progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
+  const progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
+  const progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
+  const claim_category_totals = JSON.parse('{{ claim_category_totals|escapejs }}');
+  console.log("Loaded claim_category_totals:", claim_category_totals);
+  const hc_claim_wip_adjustments = JSON.parse(document.getElementById('hc_claim_wip_adjustments').textContent);
+
+  // Format date function for display
+  function formatDate(dateString) {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${day}-${months[parseInt(month, 10) - 1]}-${year.slice(2)}`;
+  }
 </script>
 
 <script src="{% static 'main/base_table.js' %}"></script>
@@ -106,7 +123,5 @@
 <script src="{% static 'main/hc_claims_1.js' %}"></script>
 <script src="{% static 'main/hc_claims_2.js' %}"></script>
 <script src="{% static 'main/hc_claims_3.js' %}"></script>
-
-
 
 {% endblock %}

@@ -2,6 +2,22 @@
 
 document.addEventListener('DOMContentLoaded', function() {
 
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        // Does this cookie string begin with the name we want?
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
   // 1) If user chooses "makeClaim" in #hcDropdown => show #hcSelectInvoicesModal
   const hcDropdown = document.getElementById('hcDropdown');
   if (hcDropdown) {
@@ -48,21 +64,27 @@ document.addEventListener('DOMContentLoaded', function() {
       // AJAX call to associate SC invoices with new HC claim
       fetch('/associate_sc_claims_with_hc_claim/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ 'selectedInvoices': selectedInvoices })
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: new URLSearchParams({ 'selectedInvoices[]': selectedInvoices })
       })
       .then(res => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        return res.text();
-      })
-      .then(() => {
+        if (!res.ok) {
+            return res.json().then(json => { throw new Error(json.error || 'Unknown error'); });
+        }
+        return res.json();
+    })
+    .then(data => {
         alert('New HC Claim started. The selected invoices have been associated.');
         location.reload();
-      })
-      .catch(err => {
-        console.error(err);
-        alert('Error associating invoices with HC Claim.');
-      });
+    })
+    .catch(err => {
+        console.error(err.message);
+        alert(err.message);
+    });
+      
     });
   }
 

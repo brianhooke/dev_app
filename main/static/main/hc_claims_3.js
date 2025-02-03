@@ -21,6 +21,27 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       return null;
     }
+
+    function colorCurrentCells() {
+      $('tr.collapse').each(function() {
+          var currentCell = $(this).find('td:nth-child(7)'); // 7th child for 'Current' column
+          var fixedOnSite = parseFloat(currentCell.text().replace(/,/g, '').replace('-', '0')) || 0;
+          var workingBudget = parseFloat($(this).find('td:nth-child(4)').text().replace(/,/g, '').replace('-', '0')) || 0; // 4th child for 'Working' column
+    
+          if (workingBudget > 0) {
+              var percentage = Math.min((fixedOnSite / workingBudget) * 100, 100);
+              if (percentage < 100) {
+                  // Use blue from the gradient for less than 100%
+                  currentCell.attr('style', 'background: linear-gradient(to right, #bcdcf5 ' + percentage + '%, transparent ' + percentage + '%);');
+              } else {
+                  // Use green for 100%
+                  currentCell.attr('style', 'background: linear-gradient(to right, #BCF5C0 100%, transparent 100%);');
+              }
+          } else {
+              currentCell.attr('style', '');
+          }
+      });
+    }
   
     function formatNumber(num) {
       // 2 decimal places + thousand separators
@@ -49,6 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateTotals(groupNumber);
         updateArrowDirection($(this));
       });
+          // New: Recalculate for each row with an adjustment input on modal open
+      $('input[id^="hc-adjustment-"]').each(function() {
+        var costingId = this.id.split('-')[2];
+        recalcRow(costingId);
+    });
     });
   
     // Toggle the arrow direction on expand/collapse
@@ -72,12 +98,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2) Updating "Uncommitted" in sub-modal => /update_uncommitted/
     //////////////////////////////////////////////////////
   
-    $('.save-hc-costs').click(function(event) {
+    $('.save-hc-costs').on('click', function(event) {
       event.preventDefault();
       var costingId = $(this).data('id');
       var newUncommittedValue = $('#hc-claim-uncommittedInput' + costingId).val();
       newUncommittedValue = parseFloat(newUncommittedValue) || 0;
-  
+    
       $.ajax({
         url: '/update_uncommitted/',
         type: 'POST',
@@ -92,20 +118,23 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#hc-claim-editModal' + costingId).modal('hide');
             $('#hcPrepSheetModal').modal('show');
             $('body').addClass('modal-open');
-  
+    
             // Update main table cell
             $('#hc-claim-uncommitted-' + costingId + ' a').text(formatNumber(newUncommittedValue));
-  
+    
             // Recalc total for that row: uncommitted + committed
             var committedVal = parseFloat($('#hc-claim-committed-' + costingId).text().replace(/,/g, '')) || 0;
             var total = (newUncommittedValue + committedVal).toFixed(2);
             $('#hc-claim-total-' + costingId).text(formatNumber(total));
-  
+    
             // Possibly recalc "hc-this-claim" and "qs-this-claim"
             recalcRow(costingId);
-  
+    
             flashCell('#hc-claim-uncommitted-' + costingId);
             flashCell('#hc-claim-total-' + costingId);
+    
+            // Use setTimeout to delay the call until the DOM update is visible
+            setTimeout(colorCurrentCells, 100); // Adjust delay if necessary
           }
         },
         error: function(err) {
@@ -113,17 +142,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     });
-  
-    //////////////////////////////////////////////////////
-    // 3) Updating "Fixed on Site" => /update_fixedonsite/
-    //////////////////////////////////////////////////////
-  
-    $('.save-hc-fixed-costs').click(function(event) {
+    
+    $('.save-hc-fixed-costs').on('click', function(event) {
       event.preventDefault();
       var costingId = $(this).data('id');
+      var workingBudget = parseFloat($('#hc-claim-contractBudget' + costingId).text().replace(/,/g, '')) || 0;
       var rawVal = $('#hc-claim-newFixedOnSite' + costingId).val();
       var newValue = parseFloat(rawVal.replace(/,/g, '')) || 0;
-  
+    
+      if (newValue > workingBudget) {
+        alert('Cannot enter Fixed on Site values > Working Budget');
+        // Optionally, focus back on the input for immediate correction
+        $('#hc-claim-newFixedOnSite' + costingId).focus();
+        return; // Prevent AJAX call
+      }
+    
       $.ajax({
         url: '/update_fixedonsite/',
         type: 'POST',
@@ -137,18 +170,39 @@ document.addEventListener('DOMContentLoaded', function() {
             // Close sub-modal, re-show main
             $('#hc-claim-fixedOnSiteModal' + costingId).modal('hide');
             $('#hcPrepSheetModal').modal('show');
-  
+    
             // Update main table cell
             $('#fixed-on-site-display-' + costingId + ' a').text(formatNumber(newValue));
-  
+    
             // Possibly recalc difference, "qs-this-claim," etc.
             recalcRow(costingId);
-  
+    
             flashCell('#fixed-on-site-display-' + costingId);
+    
+            // Use setTimeout to delay the call until the DOM update is visible
+            setTimeout(colorCurrentCells, 100); // Adjust delay if necessary
           }
         },
         error: function(err) {
           console.error('Error saving fixed on site:', err);
+        }
+      });
+    });
+    
+    // Add event listener for real-time validation
+    $('#hcPrepSheetModal').on('shown.bs.modal', function() {
+      $('input[id^="hc-claim-newFixedOnSite"]').on('input', function() {
+        var costingId = this.id.replace('hc-claim-newFixedOnSite', '');
+        var workingBudget = parseFloat($('#hc-claim-contractBudget' + costingId).text().replace(/,/g, '')) || 0;
+        var inputValue = parseFloat($(this).val().replace(/,/g, '')) || 0;
+    
+        if (inputValue > workingBudget) {
+          $(this).val(workingBudget);
+          // Show a temporary message in the modal
+          $('#hc-claim-fixedOnSiteModal' + costingId + ' .modal-body').append('<div id="temp-alert" class="alert alert-warning" role="alert">Cannot enter Fixed on Site value > Working Budget</div>');
+          setTimeout(function() {
+            $('#temp-alert').remove();
+          }, 3000); // Remove alert after 3 seconds
         }
       });
     });
@@ -167,7 +221,9 @@ document.addEventListener('DOMContentLoaded', function() {
       let contractBudget = parseFloat($('#hc-contract-budget-' + costingId).text().replace(/,/g, '')) || 0;
       let committed = parseFloat($('#hc-claim-committed-' + costingId).text().replace(/,/g, '')) || 0;
       let uncommitted = parseFloat($('#hc-claim-uncommitted-' + costingId + ' a').text().replace(/,/g, '')) || 0;
+      let workingBudget = committed + uncommitted;
       let hcPrevInvoiced = parseFloat($('#hc-prev-invoiced-' + costingId).text().replace(/,/g, '')) || 0;
+      let c2c = workingBudget - hcPrevInvoiced;
       let hcThisClaimInvoices = parseFloat($('#hc-this-claim-invoices-' + costingId).text().replace(/,/g, '')) || 0;
       let hcPrevClaimed = parseFloat($('#hc-prev-claimed-' + costingId).text().replace(/,/g, '')) || 0;
       let fixedOnSite = parseFloat($('#fixed-on-site-display-' + costingId + ' a').text().replace(/,/g, '')) || 0;
@@ -179,19 +235,16 @@ document.addEventListener('DOMContentLoaded', function() {
         contractBudget - hcPrevClaimed,
         Math.max(
           0,
-          contractBudget - committed - uncommitted - hcPrevInvoiced + hcThisClaimInvoices - hcPrevClaimed + adjustment
+          contractBudget - c2c + hcThisClaimInvoices - hcPrevClaimed + adjustment
         )
       );
       // Calculate "qs-this-claim"
       let qsThisClaim = Math.min(
-        contractBudget - qsClaimed,
-        Math.max(
-          0,
-          Math.min(
-            contractBudget - (committed + uncommitted - (hcPrevInvoiced + hcThisClaimInvoices)),
-            fixedOnSite
-          ) - qsClaimed + adjustment
-        )
+          fixedOnSite*(contractBudget/workingBudget), //Note, fixedOnSite is in terms of WorkingBudget
+          Math.max(
+              0,
+              contractBudget - c2c + hcThisClaimInvoices  - qsClaimed + adjustment
+          )
       );
   
       $('#hc-this-claim-' + costingId).text(hcThisClaim > 0 ? formatNumber(hcThisClaim) : '-');
@@ -215,7 +268,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function calculateTotals(groupNumber) {
       // Summation across the entire table
       let totalRow = $('#hcPrepSheetTotalRow');
-  
       let totalContractBudget = 0,
           totalWorkingBudget = 0,
           totalUncommitted = 0,
@@ -230,63 +282,37 @@ document.addEventListener('DOMContentLoaded', function() {
           totalThisHCClaims = 0,
           totalPrevQSClaims = 0,
           totalThisQSClaims = 0;
-  
-      // sum all 'collapse' rows in <tbody>
+    
+      // Sum all 'collapse' rows in <tbody>
       $('tbody tr.collapse').each(function() {
         let cells = $(this).find('td');
         if (cells.length >= 16) {
-          let cb = parseFloat(cells.eq(2).text().replace(/,/g, '')) || 0;  // contract
-          let wb = parseFloat(cells.eq(3).text().replace(/,/g, '')) || 0;  // working
-          let uncom = parseFloat(cells.eq(4).text().replace(/,/g, '')) || 0;
-          let com = parseFloat(cells.eq(5).text().replace(/,/g, '')) || 0;
-          let fosCur = parseFloat(cells.eq(6).text().replace(/,/g, '')) || 0;
-          let fosPrev = parseFloat(cells.eq(7).text().replace(/,/g, '')) || 0;
-          let fosThis = parseFloat(cells.eq(8).text().replace(/,/g, '')) || 0;
-          let scPrev = parseFloat(cells.eq(9).text().replace(/,/g, '')) || 0;
-          let scThis = parseFloat(cells.eq(10).text().replace(/,/g, '')) || 0;
-          let adj = parseFloat(cells.eq(11).find('input').val()) || 0;
-          let hcPrev = parseFloat(cells.eq(12).text().replace(/,/g, '')) || 0;
-          let hcThis = parseFloat(cells.eq(13).text().replace(/,/g, '')) || 0;
-          let qsPrev = parseFloat(cells.eq(14).text().replace(/,/g, '')) || 0;
-          let qsThis = parseFloat(cells.eq(15).text().replace(/,/g, '')) || 0;
-  
-          totalContractBudget += cb;
-          totalWorkingBudget += wb;
-          totalUncommitted += uncom;
-          totalCommitted += com;
-          totalFOSCurrent += fosCur;
-          totalFOSPrevious += fosPrev;
-          totalFOSThis += fosThis;
-          totalPrevSCInvoices += scPrev;
-          totalThisSCInvoices += scThis;
-          totalAdjustment += adj;
-          totalPrevHCClaims += hcPrev;
-          totalThisHCClaims += hcThis;
-          totalPrevQSClaims += qsPrev;
-          totalThisQSClaims += qsThis;
+          totalContractBudget += parseFloat(cells.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalWorkingBudget += parseFloat(cells.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalUncommitted += parseFloat(cells.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalCommitted += parseFloat(cells.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalFOSCurrent += parseFloat(cells.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalFOSPrevious += parseFloat(cells.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalFOSThis += parseFloat(cells.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalPrevSCInvoices += parseFloat(cells.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalThisSCInvoices += parseFloat(cells.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalAdjustment += parseFloat(cells.eq(11).find('input').val()) || 0;
+          totalPrevHCClaims += parseFloat(cells.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalThisHCClaims += parseFloat(cells.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalPrevQSClaims += parseFloat(cells.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalThisQSClaims += parseFloat(cells.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
         }
       });
-  
-      // populate the bottom row (#hcPrepSheetTotalRow)
+    
+      // Populate the bottom row (#hcPrepSheetTotalRow)
       function maybeDash(val) {
         return val === 0 ? '-' : formatNumber(val);
       }
-  
-      totalRow.find('td').eq(2).html(maybeDash(totalContractBudget));
-      totalRow.find('td').eq(3).html(maybeDash(totalWorkingBudget));
-      totalRow.find('td').eq(4).html(maybeDash(totalUncommitted));
-      totalRow.find('td').eq(5).html(maybeDash(totalCommitted));
-      totalRow.find('td').eq(6).html(maybeDash(totalFOSCurrent));
-      totalRow.find('td').eq(7).html(maybeDash(totalFOSPrevious));
-      totalRow.find('td').eq(8).html(maybeDash(totalFOSThis));
-      totalRow.find('td').eq(9).html(maybeDash(totalPrevSCInvoices));
-      totalRow.find('td').eq(10).html(maybeDash(totalThisSCInvoices));
-      totalRow.find('td').eq(11).html(maybeDash(totalAdjustment));
-      totalRow.find('td').eq(12).html(maybeDash(totalPrevHCClaims));
-      totalRow.find('td').eq(13).html(maybeDash(totalThisHCClaims));
-      totalRow.find('td').eq(14).html(maybeDash(totalPrevQSClaims));
-      totalRow.find('td').eq(15).html(maybeDash(totalThisQSClaims));
-  
+    
+      for (let i = 2; i <= 15; i++) {
+        totalRow.find('td').eq(i).html(maybeDash(eval('total' + ['ContractBudget', 'WorkingBudget', 'Uncommitted', 'Committed', 'FOSCurrent', 'FOSPrevious', 'FOSThis', 'PrevSCInvoices', 'ThisSCInvoices', 'Adjustment', 'PrevHCClaims', 'ThisHCClaims', 'PrevQSClaims', 'ThisQSClaims'][i - 2]))).css('font-weight', 'bold');
+      }
+    
       // Now also do the sums for the specific group heading row
       let groupRow = $('[data-target=".unique-group' + groupNumber + '"]').closest('tr');
       let gSumContract = 0,
@@ -303,56 +329,43 @@ document.addEventListener('DOMContentLoaded', function() {
           gHCThis = 0,
           gQSPrev = 0,
           gQSThis = 0;
-  
+    
       $('.unique-group' + groupNumber).each(function() {
         let cc = $(this).find('td');
         if (cc.length >= 16) {
-          let cb = parseFloat(cc.eq(2).text().replace(/,/g, '')) || 0;
-          let wb = parseFloat(cc.eq(3).text().replace(/,/g, '')) || 0;
-          let u = parseFloat(cc.eq(4).text().replace(/,/g, '')) || 0;
-          let c = parseFloat(cc.eq(5).text().replace(/,/g, '')) || 0;
-          let fosC = parseFloat(cc.eq(6).text().replace(/,/g, '')) || 0;
-          let fosP = parseFloat(cc.eq(7).text().replace(/,/g, '')) || 0;
-          let fosT = parseFloat(cc.eq(8).text().replace(/,/g, '')) || 0;
-          let scP = parseFloat(cc.eq(9).text().replace(/,/g, '')) || 0;
-          let scT = parseFloat(cc.eq(10).text().replace(/,/g, '')) || 0;
-          let adj = parseFloat(cc.eq(11).find('input').val()) || 0;
-          let hcP = parseFloat(cc.eq(12).text().replace(/,/g, '')) || 0;
-          let hcT = parseFloat(cc.eq(13).text().replace(/,/g, '')) || 0;
-          let qsP = parseFloat(cc.eq(14).text().replace(/,/g, '')) || 0;
-          let qsT = parseFloat(cc.eq(15).text().replace(/,/g, '')) || 0;
-  
-          gSumContract += cb;
-          gSumWorking += wb;
-          gSumUncom += u;
-          gSumCom += c;
-          gFOSCur += fosC;
-          gFOSPrev += fosP;
-          gFOSThis += fosT;
-          gSCPrev += scP;
-          gSCThis += scT;
-          gAdj += adj;
-          gHCPrev += hcP;
-          gHCThis += hcT;
-          gQSPrev += qsP;
-          gQSThis += qsT;
+          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gAdj += parseFloat(cc.eq(11).find('input').val()) || 0;
+          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
         }
       });
-  
-      groupRow.find('td').eq(2).html(maybeDash(gSumContract));
-      groupRow.find('td').eq(3).html(maybeDash(gSumWorking));
-      groupRow.find('td').eq(4).html(maybeDash(gSumUncom));
-      groupRow.find('td').eq(5).html(maybeDash(gSumCom));
-      groupRow.find('td').eq(6).html(maybeDash(gFOSCur));
-      groupRow.find('td').eq(7).html(maybeDash(gFOSPrev));
-      groupRow.find('td').eq(8).html(maybeDash(gFOSThis));
-      groupRow.find('td').eq(9).html(maybeDash(gSCPrev));
-      groupRow.find('td').eq(10).html(maybeDash(gSCThis));
-      groupRow.find('td').eq(11).html(maybeDash(gAdj));
-      groupRow.find('td').eq(12).html(maybeDash(gHCPrev));
-      groupRow.find('td').eq(13).html(maybeDash(gHCThis));
-      groupRow.find('td').eq(14).html(maybeDash(gQSPrev));
-      groupRow.find('td').eq(15).html(maybeDash(gQSThis));
+    
+      // Populate the group heading row
+      for (let i = 2; i <= 15; i++) {
+        groupRow.find('td').eq(i).html(maybeDash(eval('g' + ['SumContract', 'SumWorking', 'SumUncom', 'SumCom', 'FOSCur', 'FOSPrev', 'FOSThis', 'SCPrev', 'SCThis', 'Adj', 'HCPrev', 'HCThis', 'QSPrev', 'QSThis'][i - 2]))).css('font-weight', 'bold');
+      }
+    
+      // Apply color sliders to category total rows
+      if (gSumWorking > 0) {
+        let percentage = Math.min((gFOSCur / gSumWorking) * 100, 100);
+        if (percentage < 100) {
+          groupRow.find('td').eq(6).attr('style', 'background: linear-gradient(to right, #bcdcf5 ' + percentage + '%, transparent ' + percentage + '%); font-weight: bold;');
+        } else {
+          groupRow.find('td').eq(6).attr('style', 'background: linear-gradient(to right, #BCF5C0 100%, transparent 100%); font-weight: bold;');
+        }
+      } else {
+        groupRow.find('td').eq(6).attr('style', 'font-weight: bold;');
+      }
     }
   
     //////////////////////////////////////////////////////
@@ -416,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
           current_hc_claim_display_id: currentHcClaimId
         }),
         success: function(response) {
-          alert('Data saved successfully!');
+          alert('Head Contract Claim Finalised. Data saved successfully.');
           location.reload();
         },
         error: function(xhr, status, error) {
@@ -436,6 +449,10 @@ document.addEventListener('DOMContentLoaded', function() {
       event.preventDefault();
       let claimId = $(this).data('claim-id');
       gatherAndPostHCClaimData(claimId);  // pass real ID => finalise
+    });
+
+    $('#hcPrepSheetModal').on('shown.bs.modal', function() {
+      colorCurrentCells();
     });
   
   });

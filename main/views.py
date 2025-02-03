@@ -2,7 +2,7 @@ import csv
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -18,7 +18,7 @@ import os
 import logging
 from io import BytesIO
 from django.core.files.storage import default_storage
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import re
 from django.core.mail import send_mail
 from django.db import connection
@@ -47,7 +47,8 @@ from django.db.models import Q
 import ssl
 import urllib.request
 from django.core.exceptions import ValidationError
-from .formulas import Committed 
+from .formulas import Committed
+from django.core.serializers.json import DjangoJSONEncoder
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -60,9 +61,9 @@ def drawings(request):
 def main(request, division):
     costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list','category__category','item')
     costings = [model_to_dict(costing) for costing in costings]
-    for costing in costings:
-        category = Categories.objects.get(pk=costing['category'])
-        costing['category'] = category.category
+    for c in costings:
+        cat_obj = Categories.objects.get(pk=c['category'])
+        c['category'] = cat_obj.category
     contacts = Contacts.objects.filter(division=division,checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
@@ -70,173 +71,140 @@ def main(request, division):
     quote_allocations = Quote_allocations.objects.filter(item__category__division=division).select_related('item').all()
     quote_allocations = [{**model_to_dict(ca),'item_name': ca.item.item}for ca in quote_allocations]
     quote_allocations_sums = Quote_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
-    quote_allocations_sums_dict = {item['item']: item['total_amount'] for item in quote_allocations_sums}
+    quote_allocations_sums_dict = {i['item']: i['total_amount'] for i in quote_allocations_sums}
     committed_values = {pk: amount for pk, amount in Committed()}
-    for costing in costings:
-        costing['committed'] = committed_values.get(costing['costing_pk'],0)
+    for c in costings:
+        c['committed'] = committed_values.get(c['costing_pk'],0)
     invoice_allocations_sums = Invoice_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
-    invoice_allocations_sums_dict = {item['item']: item['total_amount'] for item in invoice_allocations_sums}
-    for costing in costings:
-        costing['sc_invoiced'] = invoice_allocations_sums_dict.get(costing['costing_pk'],0)
-        costing['sc_paid'] = 0
-    items = [{'item': costing['item'],'uncommitted': costing['uncommitted'],'committed': costing['committed']} for costing in costings]
-    committed_quotes = Quotes.objects.filter(contact_pk__division=division).all().values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk','contact_pk__contact_name')
+    invoice_allocations_sums_dict = {i['item']: i['total_amount'] for i in invoice_allocations_sums}
+    for c in costings:
+        c['sc_invoiced'] = invoice_allocations_sums_dict.get(c['costing_pk'],0)
+        c['sc_paid'] = 0
+    items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed']} for c in costings]
+    committed_quotes = Quotes.objects.filter(contact_pk__division=division).values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk','contact_pk__contact_name')
     committed_quotes_list = list(committed_quotes)
-    for quote in committed_quotes_list:
-        if settings.DEBUG:
-            quote['pdf'] = settings.MEDIA_URL + quote['pdf']
-        else:
-            quote['pdf'] = settings.MEDIA_URL + quote['pdf']
+    for q in committed_quotes_list:
+        if settings.DEBUG: q['pdf'] = settings.MEDIA_URL + q['pdf']
+        else: q['pdf'] = settings.MEDIA_URL + q['pdf']
     committed_quotes_json = json.dumps(committed_quotes_list,default=str)
     quote_allocations_json = json.dumps(list(quote_allocations),default=str)
     contact_pks_in_quotes = Quotes.objects.filter(contact_pk__division=division).values_list('contact_pk',flat=True).distinct()
     contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes,division=division)
     contacts_in_quotes_list = []
     for contact in contacts_in_quotes:
-        contact_dict = contact.__dict__
-        contact_dict['quotes'] = list(contact.quotes_set.values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk'))
-        contacts_in_quotes_list.append(contact_dict)
+        d = contact.__dict__
+        d['quotes'] = list(contact.quotes_set.values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk'))
+        contacts_in_quotes_list.append(d)
     contacts_not_in_quotes = Contacts.objects.exclude(pk__in=contact_pks_in_quotes,division=division).values()
     contacts_not_in_quotes_list = list(contacts_not_in_quotes)
-    total_contract_budget = sum(costing['contract_budget'] for costing in costings)
-    total_uncommitted = sum(costing['uncommitted'] for costing in costings)
-    total_committed = sum(costing['committed'] for costing in costings)
+    total_contract_budget = sum(c['contract_budget'] for c in costings)
+    total_uncommitted = sum(c['uncommitted'] for c in costings)
+    total_committed = sum(c['committed'] for c in costings)
     total_forecast_budget = total_committed + total_uncommitted
-    total_sc_invoiced = sum(costing['sc_invoiced'] for costing in costings)
-    total_fixed_on_site = sum(costing['fixed_on_site'] for costing in costings)
-    total_sc_paid = sum(costing['sc_paid'] for costing in costings)
+    total_sc_invoiced = sum(c['sc_invoiced'] for c in costings)
+    total_fixed_on_site = sum(c['fixed_on_site'] for c in costings)
+    total_sc_paid = sum(c['sc_paid'] for c in costings)
     po_globals = Po_globals.objects.first()
     po_orders = Po_orders.objects.filter(po_supplier__division=division).select_related('po_supplier').all()
     po_orders_list = []
     for order in po_orders:
         po_orders_list.append({'po_order_pk': order.po_order_pk,'po_supplier': order.po_supplier_id,'supplier_name': order.po_supplier.contact_name,'supplier_email': order.po_supplier.contact_email,'po_note_1': order.po_note_1,'po_note_2': order.po_note_2,'po_note_3': order.po_note_3,'po_sent': order.po_sent})
-    invoices = Invoices.objects.filter(Q(invoice_division=division)).select_related('contact_pk','associated_hc_claim').order_by(F('associated_hc_claim__pk').desc(nulls_first=True)).all()
-    invoices_list = [{'invoice_pk': invoice.invoice_pk,'invoice_status': invoice.invoice_status,'contact_name': invoice.contact_pk.contact_name,'total_net': invoice.total_net,'total_gst': invoice.total_gst,'supplier_invoice_number': invoice.supplier_invoice_number,'pdf_url': invoice.pdf.url,'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None,'invoice_date': invoice.invoice_date,'invoice_due_date': invoice.invoice_due_date}for invoice in invoices]
-    invoices_unallocated = list(Invoices.objects.filter(invoice_status=0,invoice_division=division).select_related('contact_pk','associated_hc_claim'))
+    invoices = Invoices.objects.filter(invoice_division=division).select_related('contact_pk','associated_hc_claim').order_by(F('associated_hc_claim__pk').desc(nulls_first=True)).all()
+    invoices_list = [{'invoice_pk': i.invoice_pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date}for i in invoices]
+    invoices_unallocated = Invoices.objects.filter(invoice_status=0,invoice_division=division).select_related('contact_pk','associated_hc_claim')
+    invoices_unallocated_list = []
     quotes_contact_pks = set(Quotes.objects.values_list('contact_pk',flat=True))
-    invoices_unallocated_list = [
-        {
-            'invoice_pk': invoice.invoice_pk,
-            'contact_pk': invoice.contact_pk.pk,
-            'invoice_status': invoice.invoice_status,
-            'contact_name': invoice.contact_pk.contact_name,
-            'total_net': invoice.total_net,
-            'total_gst': invoice.total_gst,
-            'supplier_invoice_number': invoice.supplier_invoice_number,
-            'pdf_url': invoice.pdf.url,
-            'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,
-            'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None,
-            'invoice_date': invoice.invoice_date,
-            'invoice_due_date': invoice.invoice_due_date,
-            'possible_progress_claim': 1 if invoice.contact_pk.pk in quotes_contact_pks else 0
-        }
-        for invoice in invoices_unallocated
-    ]
-    invoices_allocated = list(Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk','associated_hc_claim'))
-    invoices_allocated_list = [{'invoice_pk': invoice.invoice_pk,'invoice_status': invoice.invoice_status,'contact_name': invoice.contact_pk.contact_name,'total_net': invoice.total_net,'total_gst': invoice.total_gst,'supplier_invoice_number': invoice.supplier_invoice_number,'pdf_url': invoice.pdf.url,'associated_hc_claim': invoice.associated_hc_claim.hc_claim_pk if invoice.associated_hc_claim else None,'display_id': invoice.associated_hc_claim.display_id if invoice.associated_hc_claim else None,'invoice_date': invoice.invoice_date,'invoice_due_date': invoice.invoice_due_date}for invoice in invoices_allocated]
-    hc_claims = list(HC_claims.objects.order_by('display_id').annotate(sc_invoiced_total=Sum(Case(When(hc_claim_allocations__isnull=True,then=0),default='hc_claim_allocations__sc_invoiced',output_field=IntegerField())),hc_claimed_total=Sum(Case(When(hc_claim_allocations__isnull=True,then=0),default='hc_claim_allocations__hc_claimed',output_field=IntegerField())),qs_claimed_total=Sum(Case(When(hc_claim_allocations__isnull=True,then=0),default='hc_claim_allocations__qs_claimed',output_field=IntegerField()))).values())
+    for i in invoices_unallocated:
+        invoices_unallocated_list.append({'invoice_pk': i.invoice_pk,'contact_pk': i.contact_pk.pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date,'possible_progress_claim': 1 if i.contact_pk.pk in quotes_contact_pks else 0})
+    invoices_allocated = Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk','associated_hc_claim')
+    invoices_allocated_list = [{'invoice_pk': i.invoice_pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date}for i in invoices_allocated]
+    hc_claims_list = []
+    hc_claims_qs = HC_claims.objects.all().order_by('-display_id')
+    for claim in hc_claims_qs:
+        d = {'hc_claim_pk': claim.hc_claim_pk,'date': claim.date.strftime('%Y-%m-%d') if claim.date else None,'status': claim.status,'display_id': claim.display_id,'invoicee': claim.invoicee if claim.invoicee else None}
+        hc_claims_list.append(d)
+    hc_claims_json = json.dumps(hc_claims_list)
     current_hc_claim = HC_claims.objects.filter(status=0).first()
-    if current_hc_claim is not None:
-        current_hc_claim_display_id = current_hc_claim.display_id
-    else:
-        current_hc_claim_display_id = None
-    current_hc_claim = HC_claims.objects.filter(status=0).first()
+    current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     hc_claim_wip_adjustments = {}
     if current_hc_claim:
-        hc_claim_allocations = HC_claim_allocations.objects.filter(hc_claim_pk=current_hc_claim.hc_claim_pk)
-        hc_claim_wip_adjustments = {allocation.item.costing_pk: allocation.adjustment for allocation in hc_claim_allocations}
-    if current_hc_claim is not None:
-        for costing in costings:
-            costing['hc_prev_invoiced'] = 0
-            costing['hc_this_claim_invoices'] = 0
-            invoice_allocations = Invoice_allocations.objects.filter(item=costing['costing_pk'])
-            for allocation in invoice_allocations:
-                invoice = Invoices.objects.get(invoice_pk=allocation.invoice_pk.pk)
-                if invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk == current_hc_claim.pk:
-                    costing['hc_this_claim_invoices'] += allocation.amount
-                elif invoice.associated_hc_claim is not None and invoice.associated_hc_claim.pk < current_hc_claim.pk:
-                    costing['hc_prev_invoiced'] += allocation.amount
+        hc_claim_allocs = HC_claim_allocations.objects.filter(hc_claim_pk=current_hc_claim.hc_claim_pk)
+        hc_claim_wip_adjustments = {a.item.costing_pk: a.adjustment for a in hc_claim_allocs}
+    if current_hc_claim:
+        for c in costings:
+            c['hc_prev_invoiced'] = 0
+            c['hc_this_claim_invoices'] = 0
+            allocs = Invoice_allocations.objects.filter(item=c['costing_pk'])
+            for al in allocs:
+                inv = Invoices.objects.get(invoice_pk=al.invoice_pk.pk)
+                if inv.associated_hc_claim and inv.associated_hc_claim.pk == current_hc_claim.pk:
+                    c['hc_this_claim_invoices'] += al.amount
+                elif inv.associated_hc_claim and inv.associated_hc_claim.pk < current_hc_claim.pk:
+                    c['hc_prev_invoiced'] += al.amount
     else:
-        for costing in costings:
-            costing['hc_prev_invoiced'] = 0
-            costing['hc_this_claim_invoices'] = 0
-    for costing in costings:
-        costing['hc_prev_fixedonsite'] = 0
-        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
-        for allocation in hc_claim_allocations:
-            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
-                costing['hc_prev_fixedonsite'] += allocation.fixed_on_site
-    for costing in costings:
-        costing['hc_prev_claimed'] = 0
-        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
-        for allocation in hc_claim_allocations:
-            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
-                costing['hc_prev_claimed'] += allocation.hc_claimed
-    for costing in costings:
-        costing['qs_claimed'] = 0
-        hc_claim_allocations = HC_claim_allocations.objects.filter(item=costing['costing_pk'])
-        for allocation in hc_claim_allocations:
-            hc_claim = HC_claims.objects.get(hc_claim_pk=allocation.hc_claim_pk.pk)
-            if current_hc_claim is not None and hc_claim.hc_claim_pk < current_hc_claim.pk:
-                costing['qs_claimed'] += allocation.qs_claimed
-    for costing in costings:
-        costing['qs_this_claim'] = max(0,min(costing['fixed_on_site'],costing['contract_budget']-(costing['committed']+costing['uncommitted']-(costing['hc_prev_invoiced']+costing['hc_this_claim_invoices']))-costing['qs_claimed']))
+        for c in costings:
+            c['hc_prev_invoiced'] = 0
+            c['hc_this_claim_invoices'] = 0
+    for c in costings:
+        c['hc_prev_fixedonsite'] = 0
+        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
+        for al in allocs:
+            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
+            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
+                c['hc_prev_fixedonsite'] += al.fixed_on_site
+    for c in costings:
+        c['hc_prev_claimed'] = 0
+        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
+        for al in allocs:
+            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
+            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
+                c['hc_prev_claimed'] += al.hc_claimed
+    for c in costings:
+        c['qs_claimed'] = 0
+        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
+        for al in allocs:
+            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
+            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
+                c['qs_claimed'] += al.qs_claimed
+    for c in costings:
+        c['qs_this_claim'] = max(0,min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed']))
     spv_data = SPVData.objects.first()
     distinct_contacts_quotes = Quotes.objects.values_list("contact_pk", flat=True).distinct()
     progress_claim_quote_allocations = []
-    for contact_id in distinct_contacts_quotes:
-        quotes_for_contact = Quotes.objects.filter(contact_pk=contact_id)
-        contact_entry = {
-            "contact_pk": contact_id,
-            "quotes": []
-        }
-        for q in quotes_for_contact:
+    for cid in distinct_contacts_quotes:
+        qs_for_c = Quotes.objects.filter(contact_pk=cid)
+        c_entry = {"contact_pk": cid,"quotes": []}
+        for q in qs_for_c:
             q_allocs = Quote_allocations.objects.filter(quotes_pk=q)
-            allocations_list = []
+            alloc_list = []
             for qa in q_allocs:
-                allocations_list.append({
-                    "item_pk": qa.item.pk,             # primary key from the Costing (or whichever model)
-                    "item_name": qa.item.item,         # display name from .item (assuming your model field is named 'item')
-                    "amount": str(qa.amount)
-                })
-            quote_dict = {
-                "quote_number": q.quotes_pk,
-                "allocations": allocations_list
-            }
-            contact_entry["quotes"].append(quote_dict)
-        progress_claim_quote_allocations.append(contact_entry)
+                alloc_list.append({"item_pk": qa.item.pk,"item_name": qa.item.item,"amount": str(qa.amount)})
+            c_entry["quotes"].append({"quote_number": q.quotes_pk,"allocations": alloc_list})
+        progress_claim_quote_allocations.append(c_entry)
     distinct_contacts_invoices = Invoices.objects.exclude(invoice_status=0).values_list("contact_pk",flat=True).distinct()
     progress_claim_invoice_allocations = []
-    for contact_id in distinct_contacts_invoices:
-        invoices_for_contact = (
-            Invoices.objects
-            .filter(contact_pk=contact_id)
-            .exclude(invoice_status=0)
-            .order_by("invoice_date")
-        )
-        contact_entry = {"contact_pk": contact_id, "invoices": []}
-        for inv in invoices_for_contact:
+    for cid in distinct_contacts_invoices:
+        invs_for_c = Invoices.objects.filter(contact_pk=cid).exclude(invoice_status=0).order_by("invoice_date")
+        c_entry = {"contact_pk": cid,"invoices": []}
+        for inv in invs_for_c:
             i_allocs = Invoice_allocations.objects.filter(invoice_pk=inv)
             alloc_list = []
             for ia in i_allocs:
-                if inv.invoice_type == 2 and ia.allocation_type == 0:
-                    allocation_type_str = "progress_claim"
-                else:
-                    allocation_type_str = "direct_cost"
-                alloc_list.append({
-                    "item_pk": ia.item.pk,               # the Costing.pk
-                    "item_name": ia.item.item,           # the Costing.item field
-                    "amount": str(ia.amount),
-                    "invoice_allocation_type": allocation_type_str
-                })
-            invoice_dict = {
-                "invoice_number": inv.invoice_pk,
-                "allocations": alloc_list
-            }
-            contact_entry["invoices"].append(invoice_dict)
-        progress_claim_invoice_allocations.append(contact_entry)
+                allocation_type_str = "progress_claim" if inv.invoice_type == 2 and ia.allocation_type == 0 else "direct_cost"
+                alloc_list.append({"item_pk": ia.item.pk,"item_name": ia.item.item,"amount": str(ia.amount),"invoice_allocation_type": allocation_type_str})
+            c_entry["invoices"].append({"invoice_number": inv.invoice_pk,"allocations": alloc_list})
+        progress_claim_invoice_allocations.append(c_entry)
+    claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division).values('hc_claim_pk','hc_claim_pk__display_id','category__categories_pk','category__category').annotate(total_hc_claimed=Sum('hc_claimed')).order_by('hc_claim_pk','category__order_in_list'))
+    contract_budget_totals = (Costing.objects.filter(category__division=division).values('category__categories_pk','category__category').annotate(total_contract_budget=Sum('contract_budget')).order_by('category__order_in_list'))
+    claim_category_totals_dict = {}
+    claim_category_totals_dict[0] = {"display_id": "Contract Budget","categories": [{"categories_pk": i['category__categories_pk'],"category": i['category__category'],"total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0} for i in contract_budget_totals]}
+    for i in claim_category_totals:
+        pk = i['hc_claim_pk']
+        if pk not in claim_category_totals_dict:
+            claim_category_totals_dict[pk] = {"display_id": i['hc_claim_pk__display_id'],"categories": []}
+        claim_category_totals_dict[pk]["categories"].append({"categories_pk": i['category__categories_pk'],"category": i['category__category'],"total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0})
+    claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
+    claim_category_totals_json = json.dumps(claim_category_totals_list)
     context = {
         "division": division,
         "costings": costings,
@@ -266,13 +234,15 @@ def main(request, division):
         "invoices": invoices_list,
         "invoices_unallocated": invoices_unallocated_list,
         "invoices_allocated": invoices_allocated_list,
-        "hc_claims": hc_claims,
+        "hc_claims": hc_claims_json,
         "current_hc_claim_display_id": current_hc_claim_display_id,
         "spv_data": spv_data,
         "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
         "progress_claim_invoice_allocations_json": json.dumps(progress_claim_invoice_allocations),
+        "claim_category_totals": claim_category_totals_json
     }
     return render(request,"homepage.html" if division == 1 else "build.html",context)
+
 
 def homepage_view(request): #if Contacts.division is 1, Developer
     return main(request, 1)
@@ -389,9 +359,7 @@ def update_quote(request):
         return JsonResponse({'status': 'success'})
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
-  
-    
-    
+
 @csrf_exempt
 def create_contacts(request):
     if request.method == 'POST':
@@ -426,7 +394,7 @@ def delete_quote(request):
 
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
-    
+
 #function to accept supplier (contact_pk) & retun list of existing quoted line items for Purchase Order creation
 def get_quote_allocations(request, supplier_id):
     quote_allocations = Quote_allocations.objects.filter(
@@ -601,7 +569,7 @@ def get_report_pdf_url(request, report_category, report_reference=None):
             return JsonResponse({'data': response_data})
     except ReportPdfs.DoesNotExist:
         return JsonResponse({'error': 'ReportPdfs not found'}, status=404)
-    
+
 @csrf_exempt
 def create_po_order(request):
     if request.method == 'POST':
@@ -806,7 +774,6 @@ def generate_po_pdf(request, po_order_pk):
     merged_buffer.close()
     return response
 
-
 @csrf_exempt
 def view_po_pdf(request, po_order_pk):
     return render(request, 'view_po_pdf.html', {'po_order_pk': po_order_pk})
@@ -906,7 +873,6 @@ def update_uncommitted(request):
     # If not a POST request, return a method not allowed response
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
-
 @csrf_exempt
 def associate_sc_claims_with_hc_claim(request):
     if request.method == 'POST':
@@ -938,7 +904,6 @@ def update_fixedonsite(request):
         # Return a JSON response
         return JsonResponse({'status': 'success'})
 
-
 @csrf_exempt
 def generate_po_pdf_bytes(request, po_order_pk):
     response = generate_po_pdf(request, po_order_pk)
@@ -959,8 +924,6 @@ def send_po_email_view(request):
             logger.error(f'Error in send_po_email_view: {e}')
             return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'Error', 'message': 'Invalid request method.'}, status=400)
-
-
 
 @csrf_exempt
 def upload_categories(request):
@@ -1038,7 +1001,7 @@ def upload_letterhead(request):
         return JsonResponse({'message': 'File uploaded successfully'})
     else:
         return JsonResponse({'error': 'Invalid request method'})
-    
+
 @csrf_exempt
 def upload_invoice(request):
     if request.method == 'POST':
@@ -1071,7 +1034,6 @@ def upload_invoice(request):
             return JsonResponse({'success': False, 'error': str(e)})
     else:
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
 
 @csrf_exempt
 def upload_invoice_allocations(request):
@@ -1144,16 +1106,14 @@ def make_api_request(url, headers):
     return response
 
 client_id = settings.XERO_CLIENT_ID
+client_id = settings.XERO_CLIENT_ID
 client_secret = settings.XERO_CLIENT_SECRET
 client_project = settings.XERO_PROJECT_ID
 
-mb_client_id = settings.MB_XERO_CLIENT_ID
-mb_client_secret = settings.MB_XERO_CLIENT_SECRET
-
-mdg_client_id = settings.MDG_XERO_CLIENT_ID
-mdg_client_secret = settings.MDG_XERO_CLIENT_SECRET
-
 def get_xero_token(request, division):
+    # Convert division to int if it's a string
+    division = int(division) if isinstance(division, str) else division
+    
     scopes_list = [
         "accounting.transactions",
         "accounting.transactions.read",
@@ -1171,13 +1131,16 @@ def get_xero_token(request, division):
         "files.read"
     ]
     scopes = ' '.join(scopes_list)  # Convert list to space-separated string
-        # Set the client_id and client_secret based on the division
+    # Set the client_id and client_secret based on the division
     if division == 1:
-        client_id = mdg_client_id
-        client_secret = mdg_client_secret
+        client_id = settings.MDG_XERO_CLIENT_ID
+        client_secret = settings.MDG_XERO_CLIENT_SECRET
     elif division == 2:
-        client_id = mb_client_id
-        client_secret = mb_client_secret
+        client_id = settings.MB_XERO_CLIENT_ID
+        client_secret = settings.MB_XERO_CLIENT_SECRET
+    else:
+        raise ValueError(f"Invalid division: {division}")
+
     # Prepare the header
     credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
     headers = {
@@ -1192,16 +1155,24 @@ def get_xero_token(request, division):
     # Make the POST request
     response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data)
     response_data = response.json()
+    
+    # Log the response for debugging
+    logger.info(f"Xero token response: {response.status_code}")
+    logger.info(f"Xero token response data: {response_data}")
+    
+    if response.status_code != 200:
+        raise ValueError(f"Failed to get Xero token: {response_data}")
+    
+    if 'access_token' not in response_data:
+        raise ValueError(f"No access token in response: {response_data}")
+    
     # Store the access token in a session variable
     request.session['access_token'] = response_data['access_token']
-    # Return the response as JSON
-    return JsonResponse(response.json())
+    return JsonResponse(response_data)
 
 @csrf_exempt
 def get_xero_contacts(request):
-    # Call get_xero_token and get the access_token
     division = int(request.GET.get('division', 0))  # Default to 0 if division is not provided
-    # Call get_xero_token and get the access_token
     get_xero_token(request, division)
     access_token = request.session.get('access_token')
     headers = {
@@ -1210,21 +1181,17 @@ def get_xero_contacts(request):
     }
     response = requests.get('https://api.xero.com/api.xro/2.0/Contacts', headers=headers)
     data = response.json()
-    # Extract the list of contacts
     contacts = data['Contacts']
     for contact in contacts:
         xero_contact_id = contact['ContactID']
         contact_name = contact.get('Name', 'Not Set')
         contact_email = 'Not Set'
-        # Check if the contact already exists
         existing_contact = Contacts.objects.filter(xero_contact_id=xero_contact_id).first()
         if existing_contact:
-            # If the division does not match, update it
             if existing_contact.division != division:
                 existing_contact.division = division
                 existing_contact.save()
         else:
-            # Create and save the new contact
             new_contact = Contacts(
                 xero_contact_id=xero_contact_id,
                 division=division,
@@ -1239,7 +1206,6 @@ def post_invoice(request):
     logger.info('Starting post_invoice function')
     body = json.loads(request.body)
     invoice_pk = body.get('invoice_pk')
-    # division = int(request.GET.get('division', 0))  # Default to 0 if division is not provided
     division = int(body.get('division', 0))  # Default to 0 if division is not provided
     logger.info(f'Division: {division}')
     logger.info(f'Invoice PK: {invoice_pk}')
@@ -1257,13 +1223,6 @@ def post_invoice(request):
             "TaxType": "INPUT",
             "TaxAmount": str(invoice_allocation.gst_amount),
         }
-        if division == 2:
-            line_item["Tracking"] = [
-                {
-                    "Name": "Project",
-                    "Option": client_project,
-                }
-            ]
         line_items.append(line_item)
     get_xero_token(request, division)
     access_token = request.session.get('access_token')
@@ -1275,14 +1234,13 @@ def post_invoice(request):
     }
     data = {
         "Type": "ACCPAY",
-        "Contact": {"ContactID": contact.xero_contact_id},
+        "Contact": {"ContactID": Contacts.objects.first().xero_contact_id},
         "Date": invoice.invoice_date.isoformat(),
         "DueDate": invoice.invoice_due_date.isoformat(),
         "InvoiceNumber": invoice.supplier_invoice_number,
         "Url": request.build_absolute_uri(invoice.pdf.url),  # Generate absolute URL
         "LineItems": line_items
     }
-    # Rest of the function remains the same...
     logger.info('Sending request to Xero API')
     logger.info('Data: %s', json.dumps(data))  # Log the data
     response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
@@ -1294,7 +1252,6 @@ def post_invoice(request):
     if 'Status' in response_data and response_data['Status'] == 'OK':
         invoice_id = response_data['Invoices'][0]['InvoiceID']
         logger.info(f'Invoice created with ID: {invoice_id}')
-        # Update the invoice_status and invoice_xero_id fields in the Invoices model
         invoice.invoice_status = 2
         invoice.invoice_xero_id = invoice_id
         invoice.save()
@@ -1316,21 +1273,6 @@ def post_invoice(request):
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
 
-@csrf_exempt
-def mark_sent_to_boutique(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        invoice_pk = data.get('invoice_pk')
-        try:
-            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
-            invoice.invoice_status = 4
-            invoice.save()
-            return JsonResponse({"status": "success", "message": f"Invoice {invoice_pk} marked as sent to boutique."}, status=200)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"status": "error", "message": "Invoice does not exist."}, status=400)
-    else:
-        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
-    
 @csrf_exempt
 def test_xero_invoice(request):
     logger.info('Starting post_invoice function')
@@ -1361,7 +1303,7 @@ def test_xero_invoice(request):
     }
     data = {
         "Type": "ACCPAY",
-        "Contact": {"ContactID": contact.xero_contact_id},
+        "Contact": {"ContactID": Contacts.objects.first().xero_contact_id},
         # "Contact": {
         #     "ContactID": "54134e47-8357-448c-8e4b-7472f6beb963"
         # },
@@ -1398,20 +1340,20 @@ def test_xero_invoice(request):
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
 
-level = logger.getEffectiveLevel()
-
-if level == logging.DEBUG:
-    print("Logging level is DEBUG")
-elif level == logging.INFO:
-    print("Logging level is INFO")
-elif level == logging.WARNING:
-    print("Logging level is WARNING")
-elif level == logging.ERROR:
-    print("Logging level is ERROR")
-elif level == logging.CRITICAL:
-    print("Logging level is CRITICAL")
-else:
-    print(f"Logging level is {level}")
+@csrf_exempt
+def mark_sent_to_boutique(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        invoice_pk = data.get('invoice_pk')
+        try:
+            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+            invoice.invoice_status = 4
+            invoice.save()
+            return JsonResponse({"status": "success", "message": f"Invoice {invoice_pk} marked as sent to boutique."}, status=200)
+        except Invoices.DoesNotExist:
+            return JsonResponse({"status": "error", "message": "Invoice does not exist."}, status=400)
+    else:
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
 
 @csrf_exempt
 def test_contact_id(request):
@@ -1429,29 +1371,14 @@ def test_contact_id(request):
 def update_hc_claim_data(request):
     if request.method == 'POST':
         try:
-            # Parse the JSON body
             data = json.loads(request.body)
             current_hc_claim_display_id = data.get('current_hc_claim_display_id', '0')
-            # Get the HC_claim with status=0 (unapproved)
-            try:
-                hc_claim = HC_claims.objects.get(status=0)  # There will only be one entry with status=0
-            except HC_claims.DoesNotExist:
-                return JsonResponse({'status': 'error', 'message': "No HC Claim with status 0 found."}, status=400)
-            # Iterate through each entry and process
+            hc_claim = HC_claims.objects.get(status=0)  # There will only be one entry with status=0
             for entry in data.get('hc_claim_data', []):
-                # Look up related ForeignKey objects
-                try:
-                    # Now using the `category` field to fetch the category by name
-                    category = Categories.objects.get(category=entry['category'])
-                except Categories.DoesNotExist:
-                    return JsonResponse({'status': 'error', 'message': f"Category '{entry['category']}' not found."}, status=400)
-                try:
-                    item = Costing.objects.get(costing_pk=entry['item_id'])
-                except Costing.DoesNotExist:
-                    return JsonResponse({'status': 'error', 'message': f"Item with ID '{entry['item_id']}' not found."}, status=400)
-                # Update or create the HC_claim_allocations entry
+                category = Categories.objects.get(category=entry['category'])
+                item = Costing.objects.get(costing_pk=entry['item_id'])
                 obj, created = HC_claim_allocations.objects.update_or_create(
-                    hc_claim_pk=hc_claim,  # Now using the hc_claim from status=0
+                    hc_claim_pk=hc_claim,
                     category=category,
                     item=item,
                     defaults={
@@ -1471,21 +1398,15 @@ def update_hc_claim_data(request):
                         'qs_claimed_previous': entry['qs_claimed_previous'],
                     }
                 )
-            # If current_hc_claim_display_id is not '0', update the status of the matching HC_claim
             if current_hc_claim_display_id != '0':
-                try:
-                    hc_claim_to_update = HC_claims.objects.get(display_id=current_hc_claim_display_id)
-                    hc_claim_to_update.status = 1  # Set status to 1 for approved
-                    hc_claim_to_update.save()
-                except HC_claims.DoesNotExist:
-                    return JsonResponse({'status': 'error', 'message': f"No HC Claim found with display_id '{current_hc_claim_display_id}'."}, status=400)
-            # Return a success response
+                hc_claim_to_update = HC_claims.objects.get(display_id=current_hc_claim_display_id)
+                hc_claim_to_update.status = 1  # Set status to 1 for approved
+                hc_claim_to_update.save()
             return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
         except json.JSONDecodeError:
             return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': f"Unexpected error: {str(e)}"}, status=400)
-    # If not a POST request, return an error
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
 def get_claim_table(request, claim_id):
@@ -1495,18 +1416,14 @@ def get_claim_table(request, claim_id):
 
 def get_quotes_by_supplier(request):
     supplier_name = request.GET.get('supplier', '')
-    # Fetch contacts by name
     contact = Contacts.objects.filter(contact_name=supplier_name).first()
-    
     if not contact:
         return JsonResponse({"error": "Supplier not found"}, status=404)
 
-    # Fetch Quotes with their allocations, filtered by contact
     quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
         Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  # Changed to_attr to 'fetched_allocations'
     )
 
-    # Serialize the data in the required format
     quotes_data = []
     for quote in quotes:
         quote_info = {
@@ -1528,13 +1445,11 @@ def get_quotes_by_supplier(request):
 def get_invoices_by_supplier(request):
     supplier_name = request.GET.get('supplier', '')
 
-    # Fetch the supplier's contact
     contact = Contacts.objects.filter(contact_name=supplier_name).first()
 
     if not contact:
         return JsonResponse({"error": "Supplier not found"}, status=404)
 
-    # Fetch invoices with their allocations, filtered by the contact and invoice_status
     invoices = Invoices.objects.filter(contact_pk=contact, invoice_status=2).prefetch_related(
         Prefetch('invoice_allocations_set', queryset=Invoice_allocations.objects.all(), to_attr='fetched_allocations')
     )
@@ -1542,7 +1457,6 @@ def get_invoices_by_supplier(request):
     if not invoices.exists():  # Handle no invoices
         return JsonResponse({"message": "No invoices found for this supplier with status=2"}, safe=False)
 
-    # Serialize the data in the required format
     invoices_data = []
     for invoice in invoices:
         invoice_info = {
@@ -1576,16 +1490,10 @@ def post_progress_claim_data(request):
         allocations = data.get("allocations", [])
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
-        # 1) Fetch and update the Invoice
-        try:
-            invoice = Invoices.objects.get(pk=invoice_id)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"error": f"Invoice with pk={invoice_id} not found"}, status=404)
+        invoice = Invoices.objects.get(pk=invoice_id)
         invoice.invoice_status = 1  # allocated
         invoice.invoice_type = 2    # progress claim
         invoice.save()
-        # 2) For each allocation, create new Invoice_allocations record
-        new_allocations = []
         for alloc in allocations:
             item_pk = alloc.get("item_pk")
             net = alloc.get("net", 0)
@@ -1593,10 +1501,7 @@ def post_progress_claim_data(request):
             allocation_type = alloc.get("allocation_type", 0)
             if not item_pk:
                 continue  # skip or raise error if item_pk missing
-            try:
-                costing_obj = Costing.objects.get(pk=item_pk)
-            except Costing.DoesNotExist:
-                return JsonResponse({"error": f"Costing with pk={item_pk} not found"}, status=404)
+            costing_obj = Costing.objects.get(pk=item_pk)
             new_alloc = Invoice_allocations.objects.create(
                 invoice_pk=invoice,
                 item=costing_obj,
@@ -1628,12 +1533,8 @@ def post_direct_cost_data(request):
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
 
-        try:
-            invoice = Invoices.objects.get(pk=invoice_id)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"error": f"Invoice with pk={invoice_id} not found"}, status=404)
+        invoice = Invoices.objects.get(pk=invoice_id)
 
-        # Mark invoice as allocated + direct cost
         invoice.invoice_status = 1
         invoice.invoice_type = 1  # Direct Cost
         invoice.save()
@@ -1649,17 +1550,10 @@ def post_direct_cost_data(request):
             if not item_pk:
                 continue
 
-            try:
-                costing_obj = Costing.objects.get(pk=item_pk)
-            except Costing.DoesNotExist:
-                return JsonResponse({"error": f"Costing with pk={item_pk} not found"}, status=404)
+            costing_obj = Costing.objects.get(pk=item_pk)
 
-            # Optionally update the Costing.uncommitted or .uncommitted_notes if desired:
             if uncommitted_new is not None:
-                # e.g. store new uncommitted value if posted
                 costing_obj.uncommitted = uncommitted_new
-                # if you want to store notes there as well
-                # costing_obj.uncommitted_notes = notes
                 costing_obj.save()
 
             new_alloc = Invoice_allocations.objects.create(
@@ -1681,3 +1575,84 @@ def post_direct_cost_data(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
+def send_hc_claim_to_xero(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    try:
+        data = json.loads(request.body)
+        hc_claim_pk = data.get('hc_claim_pk')
+        xero_contact_id = data.get('xero_contact_id')
+        contact_name = data.get('contact_name')
+        categories = data.get('categories', [])
+        if not all([hc_claim_pk, xero_contact_id, contact_name]):
+            return JsonResponse({'success': False, 'error': 'Missing required data'})
+        hc_claim = HC_claims.objects.get(pk=hc_claim_pk)
+        get_xero_token(request, 2)  # Ignoring the returned JsonResponse
+        access_token = request.session.get('access_token')
+        if not access_token:
+            return JsonResponse({'success': False, 'error': 'No access token found in session'})
+        url = 'https://api.xero.com/api.xro/2.0/Invoices'
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        project_id = settings.XERO_PROJECT_ID
+        logger.info(f"Retrieving project with XERO_PROJECT_ID: {project_id}")
+        try:
+            project = Projects.objects.get(xero_project_id=project_id)
+            logger.info(f"Retrieved project: {project.__dict__}")
+        except Projects.DoesNotExist:
+            logger.error(f"No project found with xero_project_id: {project_id}")
+            return JsonResponse({"error": "Project not found"}, status=404)
+        except Exception as e:
+            logger.error(f"Error retrieving project: {str(e)}")
+            return JsonResponse({"error": f"Error retrieving project: {str(e)}"}, status=500)
+        sales_account = project.xero_sales_account
+        if not sales_account:
+            return JsonResponse({'success': False, 'error': 'Sales account not configured'})
+        line_items = []
+        for cat_data in categories:
+            cat_obj = Categories.objects.get(categories_pk=cat_data['categories_pk'])
+            amount = Decimal(str(cat_data['amount']))
+            line_items.append({
+                "Description": cat_obj.category,
+                "Quantity": "1.0",
+                "UnitAmount": str(amount),
+                "AccountCode": sales_account,
+                "TaxType": "OUTPUT",
+                "TaxAmount": str(amount * Decimal('0.1')),
+                "Tracking": [
+                    {
+                        "Name": "Project",
+                        "Option": project.project
+                    }
+                ]
+            })
+        invoice_data = {
+            "Type": "ACCREC",
+            "Contact": {"ContactID": xero_contact_id},
+            "LineItems": line_items,
+            "Date": hc_claim.date.strftime("%Y-%m-%d"),
+            "DueDate": (hc_claim.date + timedelta(days=30)).strftime("%Y-%m-%d"),
+            "Status": "DRAFT"
+        }
+        response = requests.post(url, headers=headers, json=invoice_data)
+        response_data = response.json()
+        logger.info(f"Xero response code: {response.status_code}")
+        logger.info(f"Xero response JSON: {response_data}")
+        if response.status_code == 200 and response_data.get('Status') == 'OK':
+            invoice_id = response_data['Invoices'][0]['InvoiceID']
+            hc_claim.status = 2
+            hc_claim.invoicee = contact_name
+            hc_claim.save()
+            return JsonResponse({'success': True, 'invoice_id': invoice_id})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f"Xero API error: {response_data.get('ErrorNumber', 'Unknown error')} - {response_data}"
+            })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
