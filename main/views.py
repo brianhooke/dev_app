@@ -49,6 +49,8 @@ import urllib.request
 from django.core.exceptions import ValidationError
 from .formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
+
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -1503,6 +1505,7 @@ def get_invoices_by_supplier(request):
 
     return JsonResponse(invoices_data, safe=False)
 
+
 @csrf_exempt
 def post_progress_claim_data(request):
     if request.method != 'POST':
@@ -1513,36 +1516,49 @@ def post_progress_claim_data(request):
         allocations = data.get("allocations", [])
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
-        invoice = Invoices.objects.get(pk=invoice_id)
-        invoice.invoice_status = 1  # allocated
-        invoice.invoice_type = 2    # progress claim
-        invoice.save()
-        for alloc in allocations:
-            item_pk = alloc.get("item_pk")
-            net = alloc.get("net", 0)
-            gst = alloc.get("gst", 0)
-            allocation_type = alloc.get("allocation_type", 0)
-            if not item_pk:
-                continue  # skip or raise error if item_pk missing
-            costing_obj = Costing.objects.get(pk=item_pk)
-            new_alloc = Invoice_allocations.objects.create(
-                invoice_pk=invoice,
-                item=costing_obj,
-                amount=net,
-                gst_amount=gst,
-                notes="",
-                allocation_type=allocation_type
-            )
-            new_allocations.append(new_alloc.invoice_allocations_pk)
+        if not allocations:
+            return JsonResponse({"error": "No allocations provided"}, status=400)
+        new_allocations = []  # Initialize the list
+        # Wrap all database operations in a transaction
+        with transaction.atomic():
+            invoice = Invoices.objects.get(pk=invoice_id)
+            invoice.invoice_status = 1  # allocated
+            invoice.invoice_type = 2    # progress claim
+            invoice.save()
+            for alloc in allocations:
+                item_pk = alloc.get("item_pk")
+                net = alloc.get("net", 0)
+                gst = alloc.get("gst", 0)
+                allocation_type = alloc.get("allocation_type", 0)
+                if not item_pk:
+                    raise ValueError("Missing item_pk in allocation")
+                try:
+                    costing_obj = Costing.objects.get(pk=item_pk)
+                except Costing.DoesNotExist:
+                    raise ValueError(f"Costing object not found for pk: {item_pk}")
+                new_alloc = Invoice_allocations.objects.create(
+                    invoice_pk=invoice,
+                    item=costing_obj,
+                    amount=net,
+                    gst_amount=gst,
+                    notes="",
+                    allocation_type=allocation_type
+                )
+                new_allocations.append(new_alloc.invoice_allocations_pk)
         return JsonResponse({
+            "success": True,
             "message": "Progress claim data posted successfully",
             "updated_invoice": invoice.invoice_pk,
             "created_allocations": new_allocations
         }, status=200)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Invoices.DoesNotExist:
+        return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
 
 @csrf_exempt
 def post_direct_cost_data(request):

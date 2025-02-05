@@ -532,68 +532,127 @@ function addProgressClaimLine() {
   
 /* Updated saveProgressClaimInvoices: now uses row.getAttribute("data-variation-row") */
 async function saveProgressClaimInvoices() {
+    console.log('Starting saveProgressClaimInvoices...');
+    
     const invoiceId = document.getElementById("hiddenInvoiceIdInvoices").value;
+    console.log('Invoice ID:', invoiceId);
+    
     const table = document.getElementById("progressClaimLineItemsTableInvoices");
-    if (!table) return;
+    if (!table) {
+        console.error('Table not found!');
+        return;
+    }
+    console.log('Found table:', table.id);
   
-    const stillToAllocateNet = parseFloat(document.getElementById("progressClaimStillToAllocateInv")?.textContent.replace(/,/g, "") || 0);
-    const stillToAllocateGst = parseFloat(document.getElementById("progressClaimStillToAllocateGST")?.textContent.replace(/,/g, "") || 0);
+    const netElement = document.getElementById("progressClaimStillToAllocateInv");
+    const gstElement = document.getElementById("progressClaimStillToAllocateGST");
+    
+    console.log('Raw text content - Net:', netElement?.textContent, 'GST:', gstElement?.textContent);
+    
+    // Remove currency symbol, commas and convert to number
+    const stillToAllocateNet = parseFloat(netElement?.textContent.replace(/[^-0-9.]/g, "")) || 0;
+    const stillToAllocateGst = parseFloat(gstElement?.textContent.replace(/[^-0-9.]/g, "")) || 0;
+    
+    console.log('Converted numbers - Net:', stillToAllocateNet, 'GST:', stillToAllocateGst);
+    console.log('Is negative check - Net:', stillToAllocateNet < 0, 'GST:', stillToAllocateGst < 0);
+    
+    if (stillToAllocateNet < 0 || stillToAllocateGst < 0) {
+      console.warn('Validation failed: Line item overclaimed');
+      alert("Line item has been overclaimed vs what was quoted. Use the variations section if required.");
+      return;
+    }
+    
     if (stillToAllocateNet !== 0 || stillToAllocateGst !== 0) {
+      console.warn('Validation failed: Still to allocate amounts must be 0');
       alert("Still to Allocate Net Amount & GST must both be 0.00");
       return;
     }
   
     const tableBody = table.tBodies[0];
     const rows = tableBody.querySelectorAll("tr");
+    console.log('Number of rows found:', rows.length);
+    
     const numQuotes = parseInt(table.getAttribute("data-num-quotes")) || 0;
     const numInvoices = parseInt(table.getAttribute("data-num-invoices")) || 0;
+    console.log('Quotes:', numQuotes, 'Invoices:', numInvoices);
+    
     const allocations = [];
   
-    rows.forEach((row) => {
-      if (row.id === "variationsHeadingRow" || row.id === "progressClaimstillToAllocateInvoicesRow") return;
+    rows.forEach((row, index) => {
+      console.log(`\nProcessing row ${index + 1}:`, row.id);
+      if (row.id === "variationsHeadingRow" || row.id === "progressClaimstillToAllocateInvoicesRow") {
+        console.log('Skipping special row:', row.id);
+        return;
+      }
   
       const cells = row.cells;
-      if (!cells?.length) return;
+      if (!cells?.length) {
+        console.log('No cells found in row');
+        return;
+      }
+      console.log('Number of cells:', cells.length);
+      
       const netIndex = numQuotes + numInvoices + 3;
       const gstIndex = numQuotes + numInvoices + 4;
+      console.log('Indexes - Net:', netIndex, 'GST:', gstIndex);
+      
       const netInput = cells[netIndex]?.querySelector("input");
       const gstInput = cells[gstIndex]?.querySelector("input");
-      if (!netInput || !gstInput) return;
+      if (!netInput || !gstInput) {
+        console.log('Missing net or GST input fields');
+        return;
+      }
   
       const netVal = parseFloat(netInput.value || "0") || 0;
       const gstVal = parseFloat(gstInput.value || "0") || 0;
-      if (netVal === 0 && gstVal === 0) return;
+      console.log('Values - Net:', netVal, 'GST:', gstVal);
+      
+      if (netVal === 0 && gstVal === 0) {
+        console.log('Skipping row with zero values');
+        return;
+      }
   
-      // Use data-variation-row attribute
       let allocation_type = 0;
       if (row.getAttribute("data-variation-row") === "1") {
         allocation_type = 1;
+        console.log('Row is a variation row');
       }
   
       let itemPk = cells[0]?.getAttribute("data-costing-id") || null;
+      console.log('Initial itemPk:', itemPk);
   
-      // If there's a <select>, we still want to check an item is selected
       const select = cells[0]?.querySelector("select");
       if (select) {
+        console.log('Found select element');
         const selectedVal = select.value?.trim();
+        console.log('Selected value:', selectedVal);
+        
         if ((netVal !== 0 || gstVal !== 0) && !selectedVal) {
+          console.error('Validation error: No line item selected for non-zero amounts');
           alert("Amounts allocated to a Variation but no Line Item selected from Dropdown box.");
           throw new Error("Validation halted saveProgressClaimInvoices");
         }
+        
         const selectedOption = select.querySelector(`option[value="${selectedVal}"]`);
         if (selectedOption) {
           itemPk = selectedOption.getAttribute("data-costing-id") || null;
+          console.log('Updated itemPk from select:', itemPk);
         }
       }
   
-      if (!itemPk) return;
+      if (!itemPk) {
+        console.log('Skipping row with no itemPk');
+        return;
+      }
   
-      allocations.push({
+      const allocation = {
         item_pk: itemPk,
         net: netVal,
         gst: gstVal,
         allocation_type: allocation_type,
-      });
+      };
+      console.log('Adding allocation:', allocation);
+      allocations.push(allocation);
     });
   
     const payload = {
@@ -601,7 +660,7 @@ async function saveProgressClaimInvoices() {
       allocations: allocations,
     };
   
-    console.log("Sending payload:", payload);
+    console.log('Final payload:', JSON.stringify(payload, null, 2));
   
 try {
     const response = await fetch("/post_progress_claim_data/", {
