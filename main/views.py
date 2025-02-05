@@ -194,16 +194,41 @@ def main(request, division):
                 alloc_list.append({"item_pk": ia.item.pk,"item_name": ia.item.item,"amount": str(ia.amount),"invoice_allocation_type": allocation_type_str})
             c_entry["invoices"].append({"invoice_number": inv.invoice_pk,"allocations": alloc_list})
         progress_claim_invoice_allocations.append(c_entry)
-    claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division).values('hc_claim_pk','hc_claim_pk__display_id','category__categories_pk','category__category').annotate(total_hc_claimed=Sum('hc_claimed')).order_by('hc_claim_pk','category__order_in_list'))
-    contract_budget_totals = (Costing.objects.filter(category__division=division).values('category__categories_pk','category__category').annotate(total_contract_budget=Sum('contract_budget')).order_by('category__order_in_list'))
+    claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division)
+        .values('hc_claim_pk', 'hc_claim_pk__display_id', 'category__categories_pk', 'category__category')
+        .annotate(
+            total_hc_claimed=Sum('hc_claimed'),
+            total_qs_claimed=Sum('qs_claimed')
+        ).order_by('hc_claim_pk', 'category__order_in_list'))
+    contract_budget_totals = (Costing.objects.filter(category__division=division)
+        .values('category__categories_pk', 'category__category')
+        .annotate(total_contract_budget=Sum('contract_budget'))
+        .order_by('category__order_in_list'))
     claim_category_totals_dict = {}
-    claim_category_totals_dict[0] = {"display_id": "Contract Budget","categories": [{"categories_pk": i['category__categories_pk'],"category": i['category__category'],"total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0} for i in contract_budget_totals]}
+    claim_category_totals_dict[0] = {
+        "display_id": "Contract Budget",
+        "categories": [{
+            "categories_pk": i['category__categories_pk'],
+            "category": i['category__category'],
+            "total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0,
+            "total_qs_claimed": 0.0
+        } for i in contract_budget_totals]
+    }
     for i in claim_category_totals:
         pk = i['hc_claim_pk']
         if pk not in claim_category_totals_dict:
-            claim_category_totals_dict[pk] = {"display_id": i['hc_claim_pk__display_id'],"categories": []}
-        claim_category_totals_dict[pk]["categories"].append({"categories_pk": i['category__categories_pk'],"category": i['category__category'],"total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0})
+            claim_category_totals_dict[pk] = {
+                "display_id": i['hc_claim_pk__display_id'],
+                "categories": []
+            }
+        claim_category_totals_dict[pk]["categories"].append({
+            "categories_pk": i['category__categories_pk'],
+            "category": i['category__category'],
+            "total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0,
+            "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0
+        })
     claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
+    print("\nClaim Category Totals List:", claim_category_totals_list, "\n")
     claim_category_totals_json = json.dumps(claim_category_totals_list)
     context = {
         "division": division,
