@@ -70,20 +70,25 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         body: new URLSearchParams({ 'selectedInvoices[]': selectedInvoices })
       })
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to associate invoices');
+      .then(async response => {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Server returned an error');
+          }
+          return data;
+        } else {
+          throw new Error('Server returned an invalid response. Please try again or contact support.');
         }
-        return data;
       })
       .then(data => {
-        alert(data.message || 'New HC Claim started. The selected invoices have been associated.');
+        alert('New HC Claim started. The selected invoices have been associated.');
         location.reload();
       })
       .catch(err => {
         console.error('Error:', err);
-        alert(err.message);
+        alert('Error: ' + err.message);
       });
       
     });

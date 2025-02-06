@@ -900,37 +900,52 @@ def update_uncommitted(request):
     # If not a POST request, return a method not allowed response
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
+logger = logging.getLogger(__name__)
+
 @csrf_exempt
 def associate_sc_claims_with_hc_claim(request):
-    if request.method == 'POST':
-        try:
-            # Check if there are any HC_claims entries
-            if HC_claims.objects.exists():
-                # Check if the latest HC_claims entry has a status of 0
-                latest_hc_claim = HC_claims.objects.latest('hc_claim_pk')
-                if latest_hc_claim.status == 0:
-                    return JsonResponse({'error': 'There is a HC claim in progress. Complete this claim before starting another.'}, status=400)
+    try:
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+        logger.info('Processing associate_sc_claims_with_hc_claim request')
+        
+        # Log request data for debugging
+        logger.info(f'Request POST data: {request.POST}')
+        selected_invoices = request.POST.getlist('selectedInvoices[]')
+        logger.info(f'Selected invoices: {selected_invoices}')
+
+        if not selected_invoices:
+            logger.warning('No invoices selected')
+            return JsonResponse({'error': 'No invoices selected'}, status=400)
+
+        # Check if there are any HC_claims entries
+        if HC_claims.objects.exists():
+            latest_hc_claim = HC_claims.objects.latest('hc_claim_pk')
+            logger.info(f'Latest HC claim status: {latest_hc_claim.status}')
             
-            selected_invoices = request.POST.getlist('selectedInvoices[]')
-            if not selected_invoices:
-                return JsonResponse({'error': 'No invoices selected'}, status=400)
-                
-            # Create a new HC_claims entry
-            new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
-            
-            # Update the associated_hc_claim for each selected invoice
-            Invoices.objects.filter(invoice_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
-            
-            return JsonResponse({
-                'message': 'Successfully created new HC claim and associated invoices',
-                'hc_claim_pk': new_hc_claim.hc_claim_pk
-            })
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-            
-    return JsonResponse({'error': 'Invalid request method'}, status=405)_hc_claim_pk': new_hc_claim.hc_claim_pk})
-    else:
-        return JsonResponse({'error': 'Invalid request method'}, status=400)
+            if latest_hc_claim.status == 0:
+                logger.warning('Found existing HC claim in progress')
+                return JsonResponse({
+                    'error': 'There is a HC claim in progress. Complete this claim before starting another.'
+                }, status=400)
+
+        # Create a new HC_claims entry
+        new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
+        logger.info(f'Created new HC claim with pk: {new_hc_claim.hc_claim_pk}')
+
+        # Update the associated_hc_claim for each selected invoice
+        update_result = Invoices.objects.filter(invoice_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
+        logger.info(f'Updated {update_result} invoices with new HC claim')
+
+        return JsonResponse({
+            'latest_hc_claim_pk': new_hc_claim.hc_claim_pk,
+            'invoices_updated': update_result
+        })
+
+    except Exception as e:
+        logger.error(f'Error in associate_sc_claims_with_hc_claim: {str(e)}', exc_info=True)
+        return JsonResponse({'error': 'Internal server error occurred'}, status=500)
 
 @csrf_exempt
 def update_fixedonsite(request):
