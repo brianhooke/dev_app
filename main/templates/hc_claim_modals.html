@@ -17,20 +17,152 @@
                         <table class="table" style="font-size: 10px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Include</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Supplier</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice #</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Net Total $</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">GST Total $</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Gross Total $</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice Date</th>
-                                    <th style="width: 11.5%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
-                                    <th style="width: 8%; padding: 4px; line-height: 1.2;">View PDF</th>
+                                    <th style="width: 8%; padding: 4px; line-height: 1.2;">Include</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Supplier</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Invoice #</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Net Total $</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">GST Total $</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Gross Total $</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Invoice Date</th>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
+                                    <th style="width: 8%; padding: 4px; line-height: 1.2;">Age</th>
+                                    <th style="width: 8%; padding: 4px; line-height: 1.2;">Date of Birth</th>
+                                    <th style="width: 6%; padding: 4px; line-height: 1.2;">View PDF</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                <!-- Sample data rows with Age and Date of Birth -->
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim1" class="form-check-input"></td>
+                                    <td>John Smith</td>
+                                    <td>INV-001</td>
+                                    <td>$1,500.00</td>
+                                    <td>$150.00</td>
+                                    <td>$1,650.00</td>
+                                    <td>2025-01-15</td>
+                                    <td>2025-02-15</td>
+                                    <td>35</td>
+                                    <td>1990-03-12</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim2" class="form-check-input"></td>
+                                    <td>Sarah Johnson</td>
+                                    <td>INV-002</td>
+                                    <td>$2,300.00</td>
+                                    <td>$230.00</td>
+                                    <td>$2,530.00</td>
+                                    <td>2025-01-18</td>
+                                    <td>2025-02-18</td>
+                                    <td>42</td>
+                                    <td>1983-07-25</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim3" class="form-check-input"></td>
+                                    <td>Michael Brown</td>
+                                    <td>INV-003</td>
+                                    <td>$1,800.00</td>
+                                    <td>$180.00</td>
+                                    <td>$1,980.00</td>
+                                    <td>2025-01-20</td>
+                                    <td>2025-02-20</td>
+                                    <td>28</td>
+                                    <td>1997-11-03</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim4" class="form-check-input"></td>
+                                    <td>Emily Davis</td>
+                                    <td>INV-004</td>
+                                    <td>$3,200.00</td>
+                                    <td>$320.00</td>
+                                    <td>$3,520.00</td>
+                                    <td>2025-01-22</td>
+                                    <td>2025-02-22</td>
+                                    <td>31</td>
+                                    <td>1994-05-17</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim5" class="form-check-input"></td>
+                                    <td>David Wilson</td>
+                                    <td>INV-005</td>
+                                    <td>$2,700.00</td>
+                                    <td>$270.00</td>
+                                    <td>$2,970.00</td>
+                                    <td>2025-01-25</td>
+                                    <td>2025-02-25</td>
+                                    <td>45</td>
+                                    <td>1980-09-30</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim6" class="form-check-input"></td>
+                                    <td>Lisa Anderson</td>
+                                    <td>INV-006</td>
+                                    <td>$1,900.00</td>
+                                    <td>$190.00</td>
+                                    <td>$2,090.00</td>
+                                    <td>2025-01-27</td>
+                                    <td>2025-02-27</td>
+                                    <td>39</td>
+                                    <td>1986-12-15</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim7" class="form-check-input"></td>
+                                    <td>James Taylor</td>
+                                    <td>INV-007</td>
+                                    <td>$2,100.00</td>
+                                    <td>$210.00</td>
+                                    <td>$2,310.00</td>
+                                    <td>2025-01-29</td>
+                                    <td>2025-02-28</td>
+                                    <td>33</td>
+                                    <td>1992-02-08</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim8" class="form-check-input"></td>
+                                    <td>Rachel Martinez</td>
+                                    <td>INV-008</td>
+                                    <td>$2,900.00</td>
+                                    <td>$290.00</td>
+                                    <td>$3,190.00</td>
+                                    <td>2025-02-01</td>
+                                    <td>2025-03-01</td>
+                                    <td>37</td>
+                                    <td>1988-04-22</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim9" class="form-check-input"></td>
+                                    <td>Kevin Thompson</td>
+                                    <td>INV-009</td>
+                                    <td>$1,600.00</td>
+                                    <td>$160.00</td>
+                                    <td>$1,760.00</td>
+                                    <td>2025-02-03</td>
+                                    <td>2025-03-03</td>
+                                    <td>41</td>
+                                    <td>1984-08-11</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
+                                <tr style="line-height: 1;">
+                                    <td><input type="checkbox" id="hcIncludeInClaim10" class="form-check-input"></td>
+                                    <td>Amanda White</td>
+                                    <td>INV-010</td>
+                                    <td>$2,400.00</td>
+                                    <td>$240.00</td>
+                                    <td>$2,640.00</td>
+                                    <td>2025-02-05</td>
+                                    <td>2025-03-05</td>
+                                    <td>29</td>
+                                    <td>1996-06-19</td>
+                                    <td><button class="btn btn-sm btn-primary">View</button></td>
+                                </tr>
                                 {% for invoice in invoices_allocated %}
-                                        <tr style="line-height: 1;">
                                             {% if invoice.associated_hc_claim == 0 or invoice.associated_hc_claim == None %}
                                                 <td style="padding: 4px;"><input type="checkbox" id="hcIncludeInClaim{{ invoice.invoice_pk }}"></td>
                                             {% else %}
