@@ -70,20 +70,21 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         body: new URLSearchParams({ 'selectedInvoices[]': selectedInvoices })
       })
-      .then(res => {
+      .then(async res => {
+        const data = await res.json();
         if (!res.ok) {
-            return res.json().then(json => { throw new Error(json.error || 'Unknown error'); });
+          throw new Error(data.error || 'Failed to associate invoices');
         }
-        return res.json();
-    })
-    .then(data => {
-        alert('New HC Claim started. The selected invoices have been associated.');
+        return data;
+      })
+      .then(data => {
+        alert(data.message || 'New HC Claim started. The selected invoices have been associated.');
         location.reload();
-    })
-    .catch(err => {
-        console.error(err.message);
+      })
+      .catch(err => {
+        console.error('Error:', err);
         alert(err.message);
-    });
+      });
       
     });
   }
