@@ -910,9 +910,10 @@ def associate_sc_claims_with_hc_claim(request):
 
         logger.info('Processing associate_sc_claims_with_hc_claim request')
         
-        # Log request data for debugging
-        logger.info(f'Request POST data: {request.POST}')
-        selected_invoices = request.POST.getlist('selectedInvoices[]')
+        # Parse JSON data
+        data = json.loads(request.body)
+        logger.info(f'Request data: {data}')
+        selected_invoices = data.get('selectedInvoices', [])
         logger.info(f'Selected invoices: {selected_invoices}')
 
         if not selected_invoices:

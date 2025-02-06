@@ -62,18 +62,13 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       // AJAX call to associate SC invoices with new HC claim
-      // Convert array to multiple URLSearchParams entries
-      const formData = new FormData();
-      selectedInvoices.forEach(id => {
-        formData.append('selectedInvoices[]', id);
-      });
-
       fetch('/associate_sc_claims_with_hc_claim/', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-CSRFToken': getCookie('csrftoken')
         },
-        body: formData
+        body: JSON.stringify({ selectedInvoices: selectedInvoices })
       })
       .then(async response => {
         const contentType = response.headers.get('content-type');
