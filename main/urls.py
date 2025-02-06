@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data
+from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -37,6 +37,7 @@ urlpatterns = [
     path('send_po_emails/', send_po_email_view, name='send_po_emails'),
     path('upload_categories/', views.upload_categories, name='upload_categories'),
     path('upload_costings/', upload_costings, name='upload_costings'),
+    path('update_contract_budget_amounts/', views.update_contract_budget_amounts, name='update_contract_budget_amounts'),
     path('upload_letterhead/', views.upload_letterhead, name='upload_letterhead'),
     path('upload_invoice/', views.upload_invoice, name='upload_invoice'),
     path('mark_sent_to_boutique/', views.mark_sent_to_boutique, name='mark_sent_to_boutique'),

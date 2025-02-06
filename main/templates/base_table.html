@@ -6,10 +6,12 @@
     <!-- New buttons for file uploads -->
     <button id="uploadCategoriesButton">Upload Categories</button>
     <button id="uploadCostingsButton">Upload Costings</button>
+    <button id="updateContractBudgetButton">Update Contract Budget</button>
 
     <!-- Hidden file inputs -->
     <input type="file" id="csvFileInput" style="display:none;">
     <input type="file" id="costingCsvFileInput" style="display:none;">
+    <input type="file" id="updateContractBudgetCsvFileInput" style="display:none;">
 
     <table style="width:100%; border-collapse: collapse;">
       <thead>
@@ -255,8 +257,37 @@
     }).catch(error => {
         console.error('Error:', error);
         alert('An error occurred while uploading the file. Details: ' + error.message);
-    });
-        }
+      });
+    }
+  });
+
+  document.getElementById('updateContractBudgetButton').addEventListener('click', function() {
+    document.getElementById('updateContractBudgetCsvFileInput').click();
+  });
+
+  document.getElementById('updateContractBudgetCsvFileInput').addEventListener('change', function(event) {
+    var file = event.target.files[0];
+    if (file) {
+        var formData = new FormData();
+        formData.append('csv_file', file);
+
+        fetch('/update_contract_budget_amounts/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                alert('File uploaded successfully');
+                location.reload();
+            } else {
+                alert('An error occurred while uploading the file.');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+        });
+      }
   });
 
   // Helper function for fetching CSRF token

@@ -1038,8 +1038,98 @@ def upload_costings(request):
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-            return JsonResponse({'status': 'error', 'message': f'An error occurred: {str(e)}'})
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+
+@csrf_exempt
+def update_contract_budget_amounts(request):
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        csv_file = request.FILES['csv_file']
+        skipped_rows = []
+        updated_rows = []
+        try:
+            # Read the CSV file
+            csv_reader = csv.DictReader(csv_file.read().decode('utf-8').splitlines())
+            logger.debug("Starting to process CSV file for contract budget updates")
+
+            # Process each row in the CSV
+            for row in csv_reader:
+                try:
+                    # First find the category by its name
+                    logger.debug(f"Looking for category: {row['category']}")
+                    category = Categories.objects.get(category=row['category'])
+                    
+                    # Then find the costing entry that matches both category and item
+                    try:
+                        logger.debug(f"Looking for costing with category: {category} and item: {row['item']}")
+                        costing = Costing.objects.get(
+                            category=category,
+                            item=row['item']
+                        )
+                        
+                        # Update the contract_budget
+                        old_budget = costing.contract_budget
+                        costing.contract_budget = Decimal(row['contract_budget'])
+                        costing.save()
+                        
+                        logger.info(f"Updated contract_budget for {row['category']} - {row['item']} from {old_budget} to {costing.contract_budget}")
+                        
+                        updated_rows.append({
+                            'category': row['category'],
+                            'item': row['item'],
+                            'old_budget': str(old_budget),
+                            'new_budget': str(costing.contract_budget)
+                        })
+                        
+                    except Costing.DoesNotExist:
+                        logger.warning(f"No costing found for category: {row['category']}, item: {row['item']}")
+                        skipped_rows.append({
+                            'category': row['category'],
+                            'item': row['item'],
+                            'reason': 'No matching costing entry found'
+                        })
+                        continue
+                        
+                except Categories.DoesNotExist:
+                    logger.warning(f"Category not found: {row['category']}")
+                    skipped_rows.append({
+                        'category': row['category'],
+                        'item': row['item'],
+                        'reason': f'Category not found: {row["category"]}'
+                    })
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing row: {row}. Error: {str(e)}")
+                    skipped_rows.append({
+                        'category': row['category'],
+                        'item': row['item'],
+                        'reason': f'Error: {str(e)}'
+                    })
+                    continue
+
+            response_data = {
+                'message': 'File processed successfully',
+                'updated': len(updated_rows),
+                'skipped': len(skipped_rows),
+                'updated_rows': updated_rows,
+                'skipped_rows': skipped_rows
+            }
+            
+            logger.info(f"Completed processing CSV file. Updated: {len(updated_rows)}, Skipped: {len(skipped_rows)}")
+            
+            # If we skipped any rows, return a 206 Partial Content status
+            status_code = 206 if skipped_rows else 200
+            return JsonResponse(response_data, status=status_code)
+            
+        except Exception as e:
+            logger.error(f"Error processing file: {str(e)}")
+            return JsonResponse({
+                'error': f'Error processing file: {str(e)}',
+                'updated_rows': updated_rows,
+                'skipped_rows': skipped_rows
+            }, status=400)
+            
+    return JsonResponse({'error': 'No file uploaded'}, status=400)
 
 @csrf_exempt
 def upload_letterhead(request):
