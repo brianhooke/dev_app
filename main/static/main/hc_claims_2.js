@@ -41,7 +41,6 @@ function updateExistingClaimsTable() {
 }
 
 function generateExitingClaimsModalData(claim) {
-    console.log(claim)
     const row = $('<tr>').css('line-height', '1');
     row.append($('<td>').text(claim.display_id).css('padding', '4px'));
     const clientCell = $('<td>').css('padding', '4px').css('width', '10%');
@@ -235,7 +234,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
                     .find(ct => ct.display_id === c.display_id)
                     ?.categories
                     ?.find(cat => cat.category === categoryName)
-                    ?.total_hc_claimed || 0;
+                    ?.[claimType === 'qs' ? 'total_qs_claimed' : 'total_hc_claimed'] || 0;
                 if (!columnTotals.previousClaims[c.display_id]) {
                     columnTotals.previousClaims[c.display_id] = 0;
                 }
@@ -258,7 +257,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
     // Generate previous claims table
     const previousClaimsHtml = `
         <div style="margin-top: 2rem;"></div>
-        <div style="text-align: center; margin: 0 0 1rem 0; color: #2c3e50; font-size: 1rem; font-weight: bold;">Previous Claims</div>
+        <div style="text-align: center; margin: 0 0 1rem 0; color: #2c3e50; font-size: 1rem; font-weight: bold;">Prior Claims</div>
         <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.7rem;">
             <thead>
                 <tr style="background-color: #f8f9fa;">
@@ -282,7 +281,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
                                     .find(ct => ct.display_id === c.display_id)
                                     ?.categories
                                     ?.find(cat => cat.category === categoryName)
-                                    ?.total_hc_claimed || 0;
+                                    ?.[claimType === 'qs' ? 'total_qs_claimed' : 'total_hc_claimed'] || 0;
                                 return `<td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(prevClaimTotal)}</td>`;
                             })
                             .join('')}

@@ -93,7 +93,6 @@
   const progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
   const progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
   const claim_category_totals = JSON.parse('{{ claim_category_totals|escapejs }}');
-  console.log("Loaded claim_category_totals:", claim_category_totals);
   const hc_claim_wip_adjustments = JSON.parse(document.getElementById('hc_claim_wip_adjustments').textContent);
 
   // Format date function for display
