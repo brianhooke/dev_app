@@ -175,7 +175,9 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
 
         let totValue = 0;
         claim_category_totals
-            .filter(ct => ct.display_id !== 'Contract Budget')
+            .filter(ct => ct.display_id !== 'Contract Budget' && 
+                   (ct.display_id === claim.display_id || 
+                    (parseInt(ct.display_id) < parseInt(claim.display_id))))
             .forEach(record => {
                 if (record.categories) {
                     const entry = record.categories.find(cat => cat.category === categoryName);
