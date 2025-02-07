@@ -66,6 +66,7 @@
 {% include 'po_modals.html' %}
 {% include 'invoices_modals.html' %}
 {% include 'hc_claim_modals.html' %}
+{% include 'quotes_modals.html' %}
 {{ items|json_script:"items-data" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
@@ -104,10 +105,11 @@
   }
 </script>
 
+<script src="{% static 'main/secret_buttons.js' %}"></script>
 <script src="{% static 'main/base_table.js' %}"></script>
 <script src="{% static 'main/fixed_on_site.js' %}"></script>
-<script src="{% static 'main/commit_costs.js' %}"></script>
-<script src="{% static 'main/committed_costs.js' %}"></script>
+<script src="{% static 'main/quotes_1.js' %}"></script>
+<script src="{% static 'main/quotes_2.js' %}"></script>
 <script src="{% static 'main/contacts.js' %}"></script>
 <script src="{% static 'main/po.js' %}"></script>
 <script src="{% static 'main/view_send_po.js' %}"></script>

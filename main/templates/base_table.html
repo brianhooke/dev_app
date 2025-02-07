@@ -1,12 +1,15 @@
+{% load static %}
 {% load humanize %}
 {% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
 
 <!-- base_table.html -->
 <div style="overflow-x: visible;">
     <!-- New buttons for file uploads -->
-    <button id="uploadCategoriesButton">Upload Categories</button>
-    <button id="uploadCostingsButton">Upload Costings</button>
-    <button id="updateContractBudgetButton">Update Contract Budget</button>
+    <div id="adminButtons" style="display: none; margin: 10px 0;">
+        <button id="uploadCategoriesButton">Upload Categories</button>
+        <button id="uploadCostingsButton">Upload Costings</button>
+        <button id="updateContractBudgetButton">Update Contract Budget</button>
+    </div>
 
     <!-- Hidden file inputs -->
     <input type="file" id="csvFileInput" style="display:none;">
@@ -195,128 +198,3 @@
     transform: rotate(-90deg);
   }
 </style>
-
-<script>
-
-  // Event listeners for upload buttons
-  document.getElementById('uploadCategoriesButton').addEventListener('click', function() {
-    document.getElementById('csvFileInput').click();
-  });
-
-  document.getElementById('csvFileInput').addEventListener('change', function(event) {
-    var file = event.target.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('csv_file', file);
-
-        fetch('/upload_categories/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        }).then(response => {
-            if (response.ok) {
-                alert('File uploaded successfully');
-                location.reload();
-            } else {
-                alert('An error occurred while uploading the file.');
-            }
-        }).catch(error => {
-            console.error('Error:', error);
-        });
-    }
-  });
-
-  document.getElementById('uploadCostingsButton').addEventListener('click', function() {
-    document.getElementById('costingCsvFileInput').click();
-  });
-
-  document.getElementById('costingCsvFileInput').addEventListener('change', function(event) {
-    var file = event.target.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('csv_file', file);
-
-
-        fetch('/upload_costings/', {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: formData
-    }).then(response => {
-        if (!response.ok) {
-            return response.text().then(text => {
-                console.error('Server error:', response.status, response.statusText, text);
-                throw new Error(`Server responded with ${response.status}: ${text}`);
-            });
-        }
-        alert('File uploaded successfully');
-        location.reload();
-    }).catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while uploading the file. Details: ' + error.message);
-      });
-    }
-  });
-
-  document.getElementById('updateContractBudgetButton').addEventListener('click', function() {
-    document.getElementById('updateContractBudgetCsvFileInput').click();
-  });
-
-  document.getElementById('updateContractBudgetCsvFileInput').addEventListener('change', function(event) {
-    var file = event.target.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('csv_file', file);
-
-        fetch('/update_contract_budget_amounts/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(response => response.json().then(data => ({ status: response.status, body: data })))
-        .then(({ status, body }) => {
-            if (body.error) {
-                alert('Error: ' + body.error);
-                return;
-            }
-            
-            let message = `File processed successfully.\n\nUpdated: ${body.updated} rows\nSkipped: ${body.skipped} rows`;
-            
-            if (body.skipped_rows && body.skipped_rows.length > 0) {
-                message += '\n\nSkipped rows:';
-                body.skipped_rows.forEach(row => {
-                    message += `\n${row.category} - ${row.item}: ${row.reason}`;
-                });
-            }
-            
-            alert(message);
-            location.reload();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error processing file: ' + error.message);
-        });
-    }
-  });
-
-  // Helper function for fetching CSRF token
-  function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-          const cookies = document.cookie.split(';');
-          for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                  break;
-              }
-          }
-      }
-      return cookieValue;
-  }
-</script>
