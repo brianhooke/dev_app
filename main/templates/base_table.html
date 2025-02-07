@@ -277,17 +277,31 @@
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: formData
-        }).then(response => {
-            if (response.ok) {
-                alert('File uploaded successfully');
-                location.reload();
-            } else {
-                alert('An error occurred while uploading the file.');
+        })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            if (body.error) {
+                alert('Error: ' + body.error);
+                return;
             }
-        }).catch(error => {
+            
+            let message = `File processed successfully.\n\nUpdated: ${body.updated} rows\nSkipped: ${body.skipped} rows`;
+            
+            if (body.skipped_rows && body.skipped_rows.length > 0) {
+                message += '\n\nSkipped rows:';
+                body.skipped_rows.forEach(row => {
+                    message += `\n${row.category} - ${row.item}: ${row.reason}`;
+                });
+            }
+            
+            alert(message);
+            location.reload();
+        })
+        .catch(error => {
             console.error('Error:', error);
+            alert('Error processing file: ' + error.message);
         });
-      }
+    }
   });
 
   // Helper function for fetching CSRF token

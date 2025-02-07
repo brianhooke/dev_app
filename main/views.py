@@ -1049,38 +1049,64 @@ def update_contract_budget_amounts(request):
         updated_rows = []
         try:
             # Read the CSV file
-            csv_reader = csv.DictReader(csv_file.read().decode('utf-8').splitlines())
-            logger.debug("Starting to process CSV file for contract budget updates")
+            decoded_file = csv_file.read().decode('utf-8-sig').splitlines()  # utf-8-sig to handle BOM
+            csv_reader = csv.DictReader(decoded_file)
+            logger.info("Starting to process CSV file for contract budget updates")
+            logger.info(f"CSV Headers: {csv_reader.fieldnames}")
 
             # Process each row in the CSV
+            row_count = 0
             for row in csv_reader:
+                row_count += 1
                 try:
+                    # Only strip whitespace from contract_budget, preserve spaces in category and item
+                    if row.get('contract_budget'):
+                        row['contract_budget'] = row['contract_budget'].strip()
+                    logger.info(f"Processing row {row_count}: {row}")
+
                     # First find the category by its name
-                    logger.debug(f"Looking for category: {row['category']}")
                     category = Categories.objects.get(category=row['category'])
+                    logger.info(f"Found category: {category.category} (pk={category.categories_pk})")
                     
                     # Then find the costing entry that matches both category and item
                     try:
-                        logger.debug(f"Looking for costing with category: {category} and item: {row['item']}")
                         costing = Costing.objects.get(
                             category=category,
                             item=row['item']
                         )
+                        logger.info(f"Found costing: {costing.item} (pk={costing.costing_pk})")
                         
                         # Update the contract_budget
                         old_budget = costing.contract_budget
-                        costing.contract_budget = Decimal(row['contract_budget'])
-                        costing.save()
-                        
-                        logger.info(f"Updated contract_budget for {row['category']} - {row['item']} from {old_budget} to {costing.contract_budget}")
-                        
-                        updated_rows.append({
-                            'category': row['category'],
-                            'item': row['item'],
-                            'old_budget': str(old_budget),
-                            'new_budget': str(costing.contract_budget)
-                        })
-                        
+                        try:
+                            # Remove any currency symbols and commas
+                            budget_str = row['contract_budget'].replace('$', '').replace(',', '')
+                            new_budget = Decimal(budget_str)
+                            
+                            # Only update if the value has changed
+                            if new_budget != old_budget:
+                                costing.contract_budget = new_budget
+                                costing.save()
+                                logger.info(f"Updated contract_budget for {row['category']} - {row['item']} from {old_budget} to {new_budget}")
+                                
+                                updated_rows.append({
+                                    'category': row['category'],
+                                    'item': row['item'],
+                                    'old_budget': str(old_budget),
+                                    'new_budget': str(new_budget)
+                                })
+                            else:
+                                logger.info(f"Skipping update for {row['category']} - {row['item']} as budget hasn't changed ({old_budget})")
+                                
+                        except (ValueError, decimal.InvalidOperation) as e:
+                            logger.error(f"Invalid budget value '{row['contract_budget']}' for {row['category']} - {row['item']}: {str(e)}")
+                            skipped_rows.append({
+                                'category': row['category'],
+                                'item': row['item'],
+                                'reason': f'Invalid budget value: {row["contract_budget"]}'
+                            })
+                            continue
+                            
                     except Costing.DoesNotExist:
                         logger.warning(f"No costing found for category: {row['category']}, item: {row['item']}")
                         skipped_rows.append({
@@ -1116,6 +1142,14 @@ def update_contract_budget_amounts(request):
             }
             
             logger.info(f"Completed processing CSV file. Updated: {len(updated_rows)}, Skipped: {len(skipped_rows)}")
+            if updated_rows:
+                logger.info("Updated rows:")
+                for row in updated_rows:
+                    logger.info(f"  {row['category']} - {row['item']}: {row['old_budget']} -> {row['new_budget']}")
+            if skipped_rows:
+                logger.info("Skipped rows:")
+                for row in skipped_rows:
+                    logger.info(f"  {row['category']} - {row['item']}: {row['reason']}")
             
             # If we skipped any rows, return a 206 Partial Content status
             status_code = 206 if skipped_rows else 200
