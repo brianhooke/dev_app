@@ -41,6 +41,7 @@ function updateExistingClaimsTable() {
 }
 
 function generateExitingClaimsModalData(claim) {
+    console.log(claim)
     const row = $('<tr>').css('line-height', '1');
     row.append($('<td>').text(claim.display_id).css('padding', '4px'));
     const clientCell = $('<td>').css('padding', '4px').css('width', '10%');
@@ -67,8 +68,9 @@ function generateExitingClaimsModalData(claim) {
     }
     row.append(clientCell);
     row.append($('<td>').text(formatDate(claim.date)).css('padding', '4px'));
-    row.append($('<td>').text(formatNumber(claim.sc_invoiced_total || 0)).css('padding', '4px'));
-    row.append($('<td>').text(formatNumber(claim.hc_claimed_total || 0)).css('padding', '4px'));
+    row.append($('<td>').text(formatNumber(claim.sc_total || 0)).css('padding', '4px'));
+    row.append($('<td>').text(formatNumber(claim.hc_total || 0)).css('padding', '4px'));
+    row.append($('<td>').text(formatNumber(claim.qs_total || 0)).css('padding', '4px'));
     const hcClaimCell = $('<td>').css('padding', '4px');
     if (claim.status > 0) {
         const viewLink = $('<a>')
@@ -83,7 +85,6 @@ function generateExitingClaimsModalData(claim) {
         hcClaimCell.append(viewLink);
     }
     row.append(hcClaimCell);
-    row.append($('<td>').text(formatNumber(claim.qs_claimed_total || 0)).css('padding', '4px'));
     const qsClaimCell = $('<td>').css('padding', '4px');
     if (claim.status > 0) {
         const viewLink = $('<a>')
@@ -191,7 +192,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
         <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.7rem;">
             <thead>
                 <tr style="background-color: #f8f9fa;">
-                    <th style="padding: 0.15rem 0.3rem; text-align: left; border-bottom: 1px solid #dee2e6;">Category List</th>
+                    <th style="padding: 0.15rem 0.3rem; text-align: left; border-bottom: 1px solid #dee2e6;">Claim Category</th>
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Contract Budget</th>
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">This Claim</th>
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Total Claimed</th>

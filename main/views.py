@@ -89,8 +89,8 @@ def main(request, division):
     for q in committed_quotes_list:
         if settings.DEBUG: q['pdf'] = settings.MEDIA_URL + q['pdf']
         else: q['pdf'] = settings.MEDIA_URL + q['pdf']
-    committed_quotes_json = json.dumps(committed_quotes_list,default=str)
-    quote_allocations_json = json.dumps(list(quote_allocations),default=str)
+    committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)
+    quote_allocations_json = json.dumps(list(quote_allocations), cls=DjangoJSONEncoder)
     contact_pks_in_quotes = Quotes.objects.filter(contact_pk__division=division).values_list('contact_pk',flat=True).distinct()
     contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes,division=division)
     contacts_in_quotes_list = []
@@ -121,12 +121,38 @@ def main(request, division):
         invoices_unallocated_list.append({'invoice_pk': i.invoice_pk,'contact_pk': i.contact_pk.pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date,'possible_progress_claim': 1 if i.contact_pk.pk in quotes_contact_pks else 0})
     invoices_allocated = Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk','associated_hc_claim')
     invoices_allocated_list = [{'invoice_pk': i.invoice_pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date}for i in invoices_allocated]
+    # Get HC and QS claim totals from HC_claim_allocations
+    hc_qs_totals = HC_claim_allocations.objects.values('hc_claim_pk').annotate(
+        hc_total=Sum('hc_claimed'),
+        qs_total=Sum('qs_claimed')
+    )
+    hc_qs_totals_dict = {item['hc_claim_pk']: {
+        'hc_total': float(item['hc_total'] or 0), 
+        'qs_total': float(item['qs_total'] or 0)
+    } for item in hc_qs_totals}
+    
+    # Get invoice totals for each HC claim
+    sc_totals = Invoices.objects.filter(associated_hc_claim__isnull=False).values('associated_hc_claim').annotate(
+        sc_total=Sum('total_net')
+    )
+    sc_totals_dict = {item['associated_hc_claim']: float(item['sc_total'] or 0) for item in sc_totals}
+    
     hc_claims_list = []
     hc_claims_qs = HC_claims.objects.all().order_by('-display_id')
     for claim in hc_claims_qs:
-        d = {'hc_claim_pk': claim.hc_claim_pk,'date': claim.date.strftime('%Y-%m-%d') if claim.date else None,'status': claim.status,'display_id': claim.display_id,'invoicee': claim.invoicee if claim.invoicee else None}
+        claim_totals = hc_qs_totals_dict.get(claim.hc_claim_pk, {'hc_total': 0.0, 'qs_total': 0.0})
+        d = {
+            'hc_claim_pk': claim.hc_claim_pk,
+            'date': claim.date.strftime('%Y-%m-%d') if claim.date else None,
+            'status': claim.status,
+            'display_id': claim.display_id,
+            'invoicee': claim.invoicee if claim.invoicee else None,
+            'hc_total': claim_totals['hc_total'],
+            'qs_total': claim_totals['qs_total'],
+            'sc_total': sc_totals_dict.get(claim.hc_claim_pk, 0.0)
+        }
         hc_claims_list.append(d)
-    hc_claims_json = json.dumps(hc_claims_list)
+    hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
     current_hc_claim = HC_claims.objects.filter(status=0).first()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     hc_claim_wip_adjustments = {}
