@@ -1,5 +1,5 @@
 import csv
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
@@ -1099,7 +1099,7 @@ def update_contract_budget_amounts(request):
                             else:
                                 logger.info(f"Skipping update for {row['category']} - {row['item']} as budget hasn't changed ({old_budget})")
                                 
-                        except (ValueError, Decimal.InvalidOperation) as e:
+                        except (ValueError, InvalidOperation) as e:
                             logger.error(f"Invalid budget value '{row['contract_budget']}' for {row['category']} - {row['item']}: {str(e)}")
                             skipped_rows.append({
                                 'category': row['category'],
