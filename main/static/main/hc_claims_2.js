@@ -188,7 +188,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
         totalClaimedList.push(totValue);
     });
 
-    let categoryTotalsHtml = `
+    let mainTableHtml = `
         <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.7rem;">
             <thead>
                 <tr style="background-color: #f8f9fa;">
@@ -197,11 +197,6 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">This Claim</th>
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Total Claimed</th>
                     <th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Still to Claim</th>
-                    ${hc_claims
-                        .filter(c => parseInt(c.display_id) < parseInt(claim.display_id))
-                        .sort((a, b) => parseInt(a.display_id) - parseInt(b.display_id))
-                        .map(c => `<th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Claim #${c.display_id}</th>`)
-                        .join('')}
                 </tr>
             </thead>
             <tbody>
@@ -212,6 +207,7 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
         totalClaimed: 0,
         previousClaims: {}
     };
+    // Generate main table rows
     categoriesList.forEach((categoryName, index) => {
         const cbValue = contractBudgetList[index];
         const thisValue = thisClaimList[index];
@@ -219,10 +215,22 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
         columnTotals.contractBudget += cbValue;
         columnTotals.thisClaim += thisValue;
         columnTotals.totalClaimed += totValue;
-        const previousClaimsHtml = hc_claims
+
+        mainTableHtml += `
+            <tr>
+                <td style="padding: 0.15rem 0.3rem; border-bottom: 1px solid #eee;">${categoryName}</td>
+                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(cbValue)}</td>
+                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(thisValue)}</td>
+                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(totValue)}</td>
+                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(cbValue - totValue)}</td>
+            </tr>
+        `;
+
+        // Calculate previous claims totals
+        hc_claims
             .filter(c => parseInt(c.display_id) < parseInt(claim.display_id))
             .sort((a, b) => parseInt(a.display_id) - parseInt(b.display_id))
-            .map(c => {
+            .forEach(c => {
                 const prevClaimTotal = claim_category_totals
                     .find(ct => ct.display_id === c.display_id)
                     ?.categories
@@ -232,35 +240,64 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
                     columnTotals.previousClaims[c.display_id] = 0;
                 }
                 columnTotals.previousClaims[c.display_id] += Number(prevClaimTotal);
-                return `<td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(prevClaimTotal)}</td>`;
-            })
-            .join('');
-        categoryTotalsHtml += `
-            <tr>
-                <td style="padding: 0.15rem 0.3rem; border-bottom: 1px solid #eee;">${categoryName}</td>
-                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(cbValue)}</td>
-                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(thisValue)}</td>
-                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(totValue)}</td>
-                <td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(cbValue - totValue)}</td>
-                ${previousClaimsHtml}
-            </tr>
-        `;
+            });
     });
 
-    categoryTotalsHtml += `
+    // Add totals row to main table
+    mainTableHtml += `
         <tr style="border-top: 2px solid #dee2e6; font-weight: bold; background-color: #f8f9fa;">
             <td style="padding: 0.15rem 0.3rem;">Total</td>
             <td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(columnTotals.contractBudget)}</td>
             <td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(columnTotals.thisClaim)}</td>
             <td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(columnTotals.totalClaimed)}</td>
             <td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(columnTotals.contractBudget - columnTotals.totalClaimed)}</td>
-            ${Object.entries(columnTotals.previousClaims)
-                .sort(([idA], [idB]) => parseInt(idA) - parseInt(idB))
-                .map(([, total]) => `<td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(total)}</td>`)
-                .join('')}
         </tr>
     `;
-    categoryTotalsHtml += `</tbody></table>`;
+    mainTableHtml += `</tbody></table>`;
+
+    // Generate previous claims table
+    const previousClaimsHtml = `
+        <div style="margin-top: 2rem;"></div>
+        <div style="text-align: center; margin: 0 0 1rem 0; color: #2c3e50; font-size: 1rem; font-weight: bold;">Previous Claims</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.7rem;">
+            <thead>
+                <tr style="background-color: #f8f9fa;">
+                    <th style="padding: 0.15rem 0.3rem; text-align: left; border-bottom: 1px solid #dee2e6;">Claim Category</th>
+                    ${hc_claims
+                        .filter(c => parseInt(c.display_id) < parseInt(claim.display_id))
+                        .sort((a, b) => parseInt(a.display_id) - parseInt(b.display_id))
+                        .map(c => `<th style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #dee2e6;">Claim #${c.display_id}</th>`)
+                        .join('')}
+                </tr>
+            </thead>
+            <tbody>
+                ${categoriesList.map(categoryName => `
+                    <tr>
+                        <td style="padding: 0.15rem 0.3rem; border-bottom: 1px solid #eee;">${categoryName}</td>
+                        ${hc_claims
+                            .filter(c => parseInt(c.display_id) < parseInt(claim.display_id))
+                            .sort((a, b) => parseInt(a.display_id) - parseInt(b.display_id))
+                            .map(c => {
+                                const prevClaimTotal = claim_category_totals
+                                    .find(ct => ct.display_id === c.display_id)
+                                    ?.categories
+                                    ?.find(cat => cat.category === categoryName)
+                                    ?.total_hc_claimed || 0;
+                                return `<td style="padding: 0.15rem 0.3rem; text-align: right; border-bottom: 1px solid #eee;">$${formatNumber(prevClaimTotal)}</td>`;
+                            })
+                            .join('')}
+                    </tr>
+                `).join('')}
+                <tr style="border-top: 2px solid #dee2e6; font-weight: bold; background-color: #f8f9fa;">
+                    <td style="padding: 0.15rem 0.3rem;">Total</td>
+                    ${Object.entries(columnTotals.previousClaims)
+                        .sort(([idA], [idB]) => parseInt(idA) - parseInt(idB))
+                        .map(([, total]) => `<td style="padding: 0.15rem 0.3rem; text-align: right;">$${formatNumber(total)}</td>`)
+                        .join('')}
+                </tr>
+            </tbody>
+        </table>
+    `;
 
     iframe.contentDocument.body.innerHTML = `
         <div style="font-size: 0.75rem; text-align: left; margin: 0.5rem; line-height: 1.1;">
@@ -272,7 +309,8 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
                         <span style="margin-left: 2rem;"><strong>HC Date:</strong> ${formatDate(claimDate)}</span>
                     </div>
                 </div>
-                ${categoryTotalsHtml}
+                ${mainTableHtml}
+                ${previousClaimsHtml}
             </div>
         </div>`;
 }
