@@ -156,8 +156,8 @@ function toggleInvoicedDropdown(cell, costingPk) {
         var dropdownData = JSON.parse(base_table_dropdowns_json);
         var costingData = dropdownData[costingPk];
 
-        if (costingData && costingData.invoiced_direct) {
-            costingData.invoiced_direct.forEach(function(invoice) {
+        if (costingData && costingData.invoiced_all) {
+            costingData.invoiced_all.forEach(function(invoice) {
                 var row = document.createElement('div');
                 row.className = 'dropdown-row';
                 row.innerHTML = `
