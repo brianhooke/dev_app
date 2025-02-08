@@ -2,8 +2,56 @@
 {% load humanize %}
 {% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
 
+<style>
+.invoiced-cell {
+    cursor: pointer;
+    position: relative;
+}
+
+.invoiced-value {
+    display: inline-block;
+    width: 100%;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    width: 500px;
+    z-index: 999;
+    background-color: white;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    /* Position relative to the cell */
+    top: 100%;
+    /* left/right will be set by JavaScript */
+}
+
+.dropdown-header, .dropdown-row {
+    display: grid;
+    grid-template-columns: 275px 75px 150px;
+    padding: 5px;
+}
+
+.dropdown-header {
+    background-color: #f5f5f5;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+}
+
+.dropdown-row {
+    border-bottom: 1px solid #eee;
+}
+
+.dropdown-header > div, .dropdown-row > div {
+    padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+</style>
+
 <!-- base_table.html -->
-<div style="overflow-x: visible;">
+<div style="overflow-x: visible; position: relative;">
     <!-- New buttons for file uploads -->
     <div id="adminButtons" style="display: none; margin: 10px 0;">
         <button id="uploadCategoriesButton">Upload Categories</button>
@@ -17,22 +65,17 @@
     <input type="file" id="updateContractBudgetCsvFileInput" style="display:none;">
 
     <table style="width:100%; border-collapse: collapse;">
-      <thead>
-        <tr style="height: 20px; position: sticky; top: 0;">
-          <td colspan="12" style="background-color: white; border: none;"></td>
-        </tr>
+      <thead style="position: sticky; top: 0; z-index: 1;">
         <tr style="background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
-          <th style="position: sticky; top: 20px;"><strong>Category</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Item</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Contract Budget</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Working Budget</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Uncommitted</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Committed</strong></th>
-          <th style="position: sticky; top: 20px;"><strong>Invoiced</strong></th>
+          <th style="position: sticky; top: 0;"rong>Category</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Item</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Contract Budget</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Working Budget</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Uncommitted</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Committed</strong></th>
+          <th style="position: sticky; top: 0;"><strong>Invoiced</strong></th>
           {% if division == 2 %}
-            <th style="position: sticky; top: 20px;">Fixed On Site</th>
-            <th style="position: sticky; top: 20px;">HC Claimed</th>
-            <th style="position: sticky; top: 20px;">HC Received</th>
+            <th style="position: sticky; top: 0;">Fixed On Site</th>
           {% endif %}
         </tr>
       </thead>
@@ -57,7 +100,8 @@
             {% endif %}
           </tr>
           {% for costing in category.list %}
-          <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;">
+          <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;" data-costing-pk="{{ costing.costing_pk }}">
+
             <td>{{ costing.category }}</td>
             <td>{{ costing.item }}</td>
             <td>{% if costing.contract_budget|floatformat:2 == "0.00" %}-{% else %}{{ costing.contract_budget|floatformat:2|intcomma }}{% endif %}</td>
@@ -66,16 +110,24 @@
             {% endwith %}</td>
             <td><a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.uncommitted|floatformat:2|intcomma }}</a></td>
             <td>{{ costing.committed|floatformat:2|intcomma }}</td>
-            <td>{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
+            <td class="invoiced-cell" onclick="toggleInvoicedDropdown(this, {{ costing.costing_pk }})">
+                <span class="invoiced-value">{% if costing.sc_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.sc_invoiced|floatformat:2|intcomma }}{% endif %}</span>
+                <div class="dropdown-content" id="dropdown-{{ costing.costing_pk }}">
+                    <div class="dropdown-header">
+                        <div>Supplier</div>
+                        <div>Inv #</div>
+                        <div>$</div>
+                    </div>
+                    <!-- The rows will be populated by JavaScript -->
+                </div>
+            </td>
               {% if division == 2 %}
                 <td><a href="#" data-toggle="modal" data-target="#fixedOnSiteModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">{{ costing.fixed_on_site|floatformat:2|intcomma }}</a></td>
-                <td>{% if costing.hc_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
-                <td>{% if costing.hc_received|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_received|floatformat:2|intcomma }}{% endif %}</td>
               {% endif %}
             </tr>
           {% endfor %}
         {% endfor %}
-        <tr style="font-weight: bold; background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
+        <tr id="totalRow" style="font-weight: bold; background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
           <td>Total</td>
           <td></td>
           <td>{% if totals.total_contract_budget == 0 %}-{% else %}{{ totals.total_contract_budget|floatformat:2|intcomma }}{% endif %}</td>
@@ -85,11 +137,85 @@
           <td>{% if totals.total_sc_invoiced == 0 %}-{% else %}{{ totals.total_sc_invoiced|floatformat:2|intcomma }}{% endif %}</td>
           {% if division == 2 %}
             <td>{% if totals.total_fixed_on_site == 0 %}-{% else %}{{ totals.total_fixed_on_site|floatformat:2|intcomma }}{% endif %}</td>
-            <td>{% if totals.total_hc_claimed == 0 %}-{% else %}{{ totals.total_hc_claimed|floatformat:2|intcomma }}{% endif %}</td>
-            <td>{% if totals.total_hc_received == 0 %}-{% else %}{{ totals.total_hc_received|floatformat:2|intcomma }}{% endif %}</td>
           {% endif %}
         </tr>
         {% block extra_rows %}{% endblock %}
+        <!-- Spacer row after total -->
+        <tr style="height: 20px;"><td colspan="12"></td></tr>
+
+        <script>
+        // Parse the base_table_dropdowns from Django context
+        const baseTableDropdowns = JSON.parse('{{ base_table_dropdowns_json|safe }}');
+        
+        function toggleInvoicedDropdown(cell, costingPk) {
+            const dropdownContent = cell.querySelector('.dropdown-content');
+            
+            // Calculate available space and position dropdown
+            const table = cell.closest('table');
+            const tableRect = table.getBoundingClientRect();
+            const cellRect = cell.getBoundingClientRect();
+            const dropdownWidth = 500; // Fixed width of dropdown
+            
+            // Default to aligning with left edge of cell
+            let leftPosition = 0;
+            
+            // Check if dropdown would extend beyond right edge of table
+            if (cellRect.left + dropdownWidth > tableRect.right) {
+                // Align with right edge of table
+                leftPosition = tableRect.right - (cellRect.left + dropdownWidth);
+            }
+            
+            // Check if dropdown would extend beyond left edge of table
+            if (cellRect.left + leftPosition < tableRect.left) {
+                // Align with left edge of table
+                leftPosition = tableRect.left - cellRect.left;
+            }
+            
+            dropdownContent.style.left = `${leftPosition}px`;
+            
+            // Close all other dropdowns first
+            document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+                if (dropdown !== dropdownContent) {
+                    dropdown.style.display = 'none';
+                }
+            });
+            
+            // Toggle current dropdown
+            if (dropdownContent.style.display === 'block') {
+                dropdownContent.style.display = 'none';
+                return;
+            }
+            
+            // Clear previous content except header
+            const header = dropdownContent.querySelector('.dropdown-header');
+            dropdownContent.innerHTML = '';
+            dropdownContent.appendChild(header);
+            
+            // Get data for this costing_pk
+            const invoicedData = baseTableDropdowns[costingPk]?.invoiced_all;
+            if (invoicedData && Object.keys(invoicedData).length > 0) {
+                const row = document.createElement('div');
+                row.className = 'dropdown-row';
+                row.innerHTML = `
+                    <div>${invoicedData.supplier || '-'}</div>
+                    <div>${invoicedData.invoice_num || '-'}</div>
+                    <div>${invoicedData.amount ? invoicedData.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}</div>
+                `;
+                dropdownContent.appendChild(row);
+            }
+            
+            dropdownContent.style.display = 'block';
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.invoiced-cell')) {
+                document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+                    dropdown.style.display = 'none';
+                });
+            }
+        });
+        </script>
       </tbody>
     </table>
   </div>
@@ -187,6 +313,8 @@
   </div>
 </div>
 {% endfor %}
+
+<script src="{% static 'main/sticky_total.js' %}"></script>
 
 <style>
     .dropdown-arrow {

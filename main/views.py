@@ -78,11 +78,41 @@ def main(request, division):
     committed_values = {pk: amount for pk, amount in Committed()}
     for c in costings:
         c['committed'] = committed_values.get(c['costing_pk'],0)
+    print('\n=== DEBUG: Invoice Allocations ===')    
+    # Get all invoice allocations and print their details
+    all_allocations = Invoice_allocations.objects.all().select_related('invoice_pk', 'item')
+    print('\nAll Invoice Allocations:')
+    for alloc in all_allocations:
+        print(f"Invoice {alloc.invoice_pk.invoice_pk} - Item {alloc.item.costing_pk}: Amount {alloc.amount}")
+    
+    # Get and print the sums
     invoice_allocations_sums = Invoice_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
+    print('\nRaw invoice_allocations_sums:')
+    for sum_item in invoice_allocations_sums:
+        print(f"Item {sum_item['item']}: Total {sum_item['total_amount']}")
+    
     invoice_allocations_sums_dict = {i['item']: i['total_amount'] for i in invoice_allocations_sums}
+    print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
+    
+    # Print how the totals are being assigned
+    print('\nAssigning totals to costings:')
     for c in costings:
-        c['sc_invoiced'] = invoice_allocations_sums_dict.get(c['costing_pk'],0)
+        original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
+        c['sc_invoiced'] = original_value
         c['sc_paid'] = 0
+        print(f"Costing {c['costing_pk']}: Found in sums_dict: {c['costing_pk'] in invoice_allocations_sums_dict}, Value: {original_value} (type: {type(original_value)})")
+    
+    # Print category groupings and their totals
+    print('\nCategory Totals:')
+    category_totals = {}
+    for c in costings:
+        cat = c['category']
+        if cat not in category_totals:
+            category_totals[cat] = 0
+        category_totals[cat] += c['sc_invoiced']
+    
+    for cat, total in category_totals.items():
+        print(f"Category '{cat}': Total {total}")
     items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed']} for c in costings]
     committed_quotes = Quotes.objects.filter(contact_pk__division=division).values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk','contact_pk__contact_name')
     committed_quotes_list = list(committed_quotes)
@@ -259,6 +289,61 @@ def main(request, division):
     claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
     print("\nClaim Category Totals List:", claim_category_totals_list, "\n")
     claim_category_totals_json = json.dumps(claim_category_totals_list)
+    
+    # Build base_table_dropdowns
+    base_table_dropdowns = {}
+    
+    # Get all costing PKs
+    costing_pks = Costing.objects.filter(category__division=division).values_list('costing_pk', flat=True)
+    
+    for costing_pk in costing_pks:
+        base_table_dropdowns[costing_pk] = {
+            "committed": {},
+            "invoiced_direct": {},
+            "invoiced_all": {}
+        }
+        
+        # Get committed data (from Quote_allocations)
+        quote_allocation = Quote_allocations.objects.filter(
+            item_id=costing_pk
+        ).select_related('quotes_pk__contact_pk').first()
+        
+        if quote_allocation:
+            base_table_dropdowns[costing_pk]["committed"] = {
+                "supplier": quote_allocation.quotes_pk.contact_pk.contact_name,
+                "quote_num": quote_allocation.quotes_pk.supplier_quote_number,
+                "amount": float(quote_allocation.amount)
+            }
+        
+        # Get invoiced_direct data
+        invoice_directs = Invoice_allocations.objects.filter(
+            item_id=costing_pk,
+            invoice_pk__invoice_division=division
+        ).filter(
+            Q(allocation_type=1) | 
+            Q(allocation_type=0, invoice_pk__invoice_type=1)
+        ).select_related('invoice_pk__contact_pk')
+        
+        base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
+            "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+            "amount": float(invoice.amount)
+        } for invoice in invoice_directs]
+        
+        # Get invoiced_all data
+        invoice_alls = Invoice_allocations.objects.filter(
+            item_id=costing_pk,
+            invoice_pk__invoice_division=division
+        ).select_related('invoice_pk__contact_pk')
+        
+        base_table_dropdowns[costing_pk]["invoiced_all"] = [{
+            "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+            "amount": float(invoice.amount)
+        } for invoice in invoice_alls]
+    
+    print("\nbase_table_dropdowns:", json.dumps(base_table_dropdowns, indent=2), "\n")
+    
     context = {
         "division": division,
         "costings": costings,
@@ -293,7 +378,8 @@ def main(request, division):
         "spv_data": spv_data,
         "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
         "progress_claim_invoice_allocations_json": json.dumps(progress_claim_invoice_allocations),
-        "claim_category_totals": claim_category_totals_json
+        "claim_category_totals": claim_category_totals_json,
+        "base_table_dropdowns_json": json.dumps(base_table_dropdowns).replace('"', '\"')
     }
     return render(request,"homepage.html" if division == 1 else "build.html",context)
 
