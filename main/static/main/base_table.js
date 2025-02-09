@@ -175,12 +175,12 @@ function toggleDropdown(cell, costingPk, type) {
       <div><strong>$</strong></div>
     </div>
   `;
-  if (type === 'invoiced' || type === 'committed') {
+  if (type === 'invoiced' || type === 'committed' || type === 'working') {
     try {
       var dropdownData = JSON.parse(base_table_dropdowns_json);
       var costingData = dropdownData[costingPk];
       
-      if (type === 'committed') {
+      if (type === 'committed' || type === 'working') {
         // Add Quotes section header
         var quotesHeader = document.createElement('div');
         quotesHeader.className = 'dropdown-row dropdown-section-header';
@@ -188,19 +188,21 @@ function toggleDropdown(cell, costingPk, type) {
         dropdown.appendChild(quotesHeader);
         
         // Add quote data if exists
-        if (costingData.committed && costingData.committed.supplier) {
-          var quoteRow = document.createElement('div');
-          quoteRow.className = 'dropdown-row';
-          quoteRow.innerHTML = `
-            <div>${costingData.committed.supplier || '-'}</div>
-            <div>-</div>
-            <div>${costingData.committed.quote_num || '-'}</div>
-            <div>$${parseFloat(costingData.committed.amount || 0).toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })}</div>
-          `;
-          dropdown.appendChild(quoteRow);
+        if (costingData.committed && Array.isArray(costingData.committed)) {
+          costingData.committed.forEach(function(quote) {
+            var quoteRow = document.createElement('div');
+            quoteRow.className = 'dropdown-row';
+            quoteRow.innerHTML = `
+              <div>${quote.supplier || '-'}</div>
+              <div>${formatDropdownContextDate(quote.date) || '-'}</div>
+              <div>${quote.quote_num || '-'}</div>
+              <div>$${parseFloat(quote.amount || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}</div>
+            `;
+            dropdown.appendChild(quoteRow);
+          });
         }
         
         // Add Direct Costs section header

@@ -304,16 +304,18 @@ def main(request, division):
         }
         
         # Get committed data (from Quote_allocations)
-        quote_allocation = Quote_allocations.objects.filter(
+        quote_allocations = Quote_allocations.objects.filter(
             item_id=costing_pk
-        ).select_related('quotes_pk__contact_pk').first()
+        ).select_related('quotes_pk__contact_pk')
         
-        if quote_allocation:
-            base_table_dropdowns[costing_pk]["committed"] = {
-                "supplier": quote_allocation.quotes_pk.contact_pk.contact_name,
-                "quote_num": quote_allocation.quotes_pk.supplier_quote_number,
-                "amount": float(quote_allocation.amount)
-            }
+        if quote_allocations.exists():
+            base_table_dropdowns[costing_pk]["committed"] = [
+                {
+                    "supplier": qa.quotes_pk.contact_pk.contact_name,
+                    "quote_num": qa.quotes_pk.supplier_quote_number,
+                    "amount": float(qa.amount)
+                } for qa in quote_allocations
+            ]
         
         # Get invoiced_direct data
         invoice_directs = Invoice_allocations.objects.filter(
