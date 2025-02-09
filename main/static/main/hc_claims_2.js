@@ -1,4 +1,24 @@
-  document.addEventListener('DOMContentLoaded', () => {
+  // Add html2pdf library
+const html2pdfScript = document.createElement('script');
+html2pdfScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+document.head.appendChild(html2pdfScript);
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Add download button event listener
+    document.getElementById('downloadClaimSummary').addEventListener('click', () => {
+        const iframe = document.getElementById('existingClaimsPdfViewer');
+        const content = iframe.contentDocument.body;
+        
+        const opt = {
+            margin: 10,
+            filename: `claim_summary_${new Date().toISOString().split('T')[0]}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        html2pdf().set(opt).from(content).save();
+    });
     const hcDropdown = document.getElementById('hcDropdown');
     if (hcDropdown) {
         hcDropdown.addEventListener('change', (e) => {
@@ -126,6 +146,7 @@ function generateExitingClaimsModalData(claim) {
 }
 
 function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
+    console.log("Claim Type is", claimType)
     const claimField = claimType === 'hc' ? 'total_hc_claimed' : 'total_qs_claimed';
     const claimTotals = claim_category_totals.find(ct => ct.hc_claim_pk === claim.hc_claim_pk);
     const iframe = document.getElementById('existingClaimsPdfViewer');
@@ -302,12 +323,12 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
 
     iframe.contentDocument.body.innerHTML = `
         <div style="font-size: 0.75rem; text-align: left; margin: 0.5rem; line-height: 1.1;">
-            <div style="text-align: center; margin: 0 0 1rem 0; color: #2c3e50; font-size: 1.1rem; font-weight: bold;">HC Claim Summary #${claimId}</div>
+            <div style="text-align: center; margin: 0 0 1rem 0; color: #2c3e50; font-size: 1.1rem; font-weight: bold;">${claimType === 'qs' ? 'QS' : 'HC'} Claim Summary #${claimId}</div>
             <div style="background: #f8f9fa; padding: 0.4rem; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                 <div style="margin-bottom: 0.7rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.4rem; font-size: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><strong>HC Total:</strong> $${formatNumber(thisClaimTotal)}</span>
-                        <span style="margin-left: 2rem;"><strong>HC Date:</strong> ${formatDate(claimDate)}</span>
+                        <span><strong>${claimType === 'qs' ? 'QS' : 'HC'} Total:</strong> $${formatNumber(thisClaimTotal)}</span>
+                        <span style="margin-left: 2rem;"><strong>${claimType === 'qs' ? 'QS' : 'HC'} Date:</strong> ${formatDate(claimDate)}</span>
                     </div>
                 </div>
                 ${mainTableHtml}
