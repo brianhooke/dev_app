@@ -317,14 +317,38 @@ function toggleDropdown(cell, costingPk, type) {
   var cellRect = cell.getBoundingClientRect();
   var dropdownRect = dropdown.getBoundingClientRect();
   var viewportWidth = window.innerWidth;
+  var viewportHeight = window.innerHeight;
+  var totalRow = document.getElementById('totalRow');
+  var totalRowHeight = totalRow ? totalRow.offsetHeight : 0;
+  
+  // Reset positioning
   dropdown.style.left = '';
   dropdown.style.right = '';
+  dropdown.style.top = '';
+  dropdown.style.bottom = '';
+  
+  // Handle horizontal positioning
   if (cellRect.left + dropdownRect.width > viewportWidth) {
     dropdown.style.right = '0';
     dropdown.style.left = 'auto';
   } else {
     dropdown.style.left = '0';
     dropdown.style.right = 'auto';
+  }
+  
+  // Handle vertical positioning
+  var spaceBelow = viewportHeight - cellRect.bottom - totalRowHeight;
+  var spaceAbove = cellRect.top;
+  
+  if (spaceBelow >= 100) { // If there's at least 100px below
+    dropdown.style.top = '100%';
+    dropdown.style.bottom = 'auto';
+  } else if (spaceAbove > spaceBelow) { // If there's more space above than below
+    dropdown.style.bottom = '100%';
+    dropdown.style.top = 'auto';
+  } else {
+    dropdown.style.top = '100%';
+    dropdown.style.bottom = 'auto';
   }
 }
 
