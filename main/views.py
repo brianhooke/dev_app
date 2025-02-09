@@ -322,7 +322,7 @@ def main(request, division):
         ).filter(
             Q(allocation_type=1) | 
             Q(allocation_type=0, invoice_pk__invoice_type=1)
-        ).select_related('invoice_pk__contact_pk')
+        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
         
         base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
             "supplier": invoice.invoice_pk.contact_pk.contact_name,
@@ -335,7 +335,7 @@ def main(request, division):
         invoice_alls = Invoice_allocations.objects.filter(
             item_id=costing_pk,
             invoice_pk__invoice_division=division
-        ).select_related('invoice_pk__contact_pk')
+        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
         
         base_table_dropdowns[costing_pk]["invoiced_all"] = [{
             "supplier": invoice.invoice_pk.contact_pk.contact_name,

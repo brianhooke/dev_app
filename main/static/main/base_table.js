@@ -172,9 +172,111 @@ function toggleDropdown(cell, costingPk, type) {
     try {
       var dropdownData = JSON.parse(base_table_dropdowns_json);
       var costingData = dropdownData[costingPk];
-      const data = type === 'invoiced' ? costingData.invoiced_all : costingData.invoiced_direct;
-      if (data && Array.isArray(data)) {
-        data.forEach(function(invoice) {
+      
+      if (type === 'committed') {
+        // Add Quotes section header
+        var quotesHeader = document.createElement('div');
+        quotesHeader.className = 'dropdown-row dropdown-section-header';
+        quotesHeader.innerHTML = '<div>Quotes</div><div></div><div></div><div></div>';
+        dropdown.appendChild(quotesHeader);
+        
+        // Add quote data if exists
+        if (costingData.committed && costingData.committed.supplier) {
+          var quoteRow = document.createElement('div');
+          quoteRow.className = 'dropdown-row';
+          quoteRow.innerHTML = `
+            <div>${costingData.committed.supplier || '-'}</div>
+            <div>-</div>
+            <div>${costingData.committed.quote_num || '-'}</div>
+            <div>$${parseFloat(costingData.committed.amount || 0).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}</div>
+          `;
+          dropdown.appendChild(quoteRow);
+        }
+        
+        // Add Direct Costs section header
+        var directCostsHeader = document.createElement('div');
+        directCostsHeader.className = 'dropdown-row dropdown-section-header';
+        directCostsHeader.innerHTML = '<div>Invoices - Direct Costs</div><div></div><div></div><div></div>';
+        dropdown.appendChild(directCostsHeader);
+        
+        // Add direct costs data
+        if (costingData.invoiced_direct && Array.isArray(costingData.invoiced_direct)) {
+          costingData.invoiced_direct.forEach(function(invoice) {
+            var row = document.createElement('div');
+            row.className = 'dropdown-row';
+            row.innerHTML = `
+              <div>${invoice.supplier || '-'}</div>
+              <div>${formatDropdownContextDate(invoice.date)}</div>
+              <div>${invoice.invoice_num || '-'}</div>
+              <div>$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}</div>
+            `;
+            dropdown.appendChild(row);
+          });
+        }
+      } else { // type === 'invoiced'
+        const data = costingData.invoiced_all;
+        if (data && Array.isArray(data)) {
+          data.forEach(function(invoice) {
+            var row = document.createElement('div');
+            row.className = 'dropdown-row';
+            row.innerHTML = `
+              <div>${invoice.supplier || '-'}</div>
+              <div>${formatDropdownContextDate(invoice.date)}</div>
+              <div>${invoice.invoice_num || '-'}</div>
+              <div>$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}</div>
+            `;
+            dropdown.appendChild(row);
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error processing invoiced dropdown data:", error);
+    }
+  } else { // working type
+    try {
+      var dropdownData = JSON.parse(base_table_dropdowns_json);
+      var costingData = dropdownData[costingPk];
+      
+      // Add Quotes section header
+      var quotesHeader = document.createElement('div');
+      quotesHeader.className = 'dropdown-row dropdown-section-header';
+      quotesHeader.innerHTML = '<div>Quotes</div><div></div><div></div><div></div>';
+      dropdown.appendChild(quotesHeader);
+      
+      // Add quote data if exists
+      if (costingData.committed && costingData.committed.supplier) {
+        var quoteRow = document.createElement('div');
+        quoteRow.className = 'dropdown-row';
+        quoteRow.innerHTML = `
+          <div>${costingData.committed.supplier || '-'}</div>
+          <div>-</div>
+          <div>${costingData.committed.quote_num || '-'}</div>
+          <div>$${parseFloat(costingData.committed.amount || 0).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}</div>
+        `;
+        dropdown.appendChild(quoteRow);
+      }
+      
+      // Add Direct Costs section header
+      var directCostsHeader = document.createElement('div');
+      directCostsHeader.className = 'dropdown-row dropdown-section-header';
+      directCostsHeader.innerHTML = '<div>Invoices - Direct Costs</div><div></div><div></div><div></div>';
+      dropdown.appendChild(directCostsHeader);
+      
+      // Add direct costs data
+      if (costingData.invoiced_direct && Array.isArray(costingData.invoiced_direct)) {
+        costingData.invoiced_direct.forEach(function(invoice) {
           var row = document.createElement('div');
           row.className = 'dropdown-row';
           row.innerHTML = `
@@ -188,12 +290,29 @@ function toggleDropdown(cell, costingPk, type) {
           `;
           dropdown.appendChild(row);
         });
-      } else {
       }
+
+      // Add Uncommitted section header
+      var uncommittedHeader = document.createElement('div');
+      uncommittedHeader.className = 'dropdown-row dropdown-section-header';
+      uncommittedHeader.innerHTML = '<div>Uncommitted</div><div></div><div></div><div></div>';
+      dropdown.appendChild(uncommittedHeader);
+      
+      // Add uncommitted amount
+      var uncommittedRow = document.createElement('div');
+      uncommittedRow.className = 'dropdown-row';
+      var uncommittedCell = cell.closest('tr').querySelector('td:nth-child(5)');
+      var uncommittedAmount = uncommittedCell.textContent.trim();
+      uncommittedRow.innerHTML = `
+        <div>Uncommitted Amount</div>
+        <div>-</div>
+        <div>-</div>
+        <div>$${uncommittedAmount}</div>
+      `;
+      dropdown.appendChild(uncommittedRow);
     } catch (error) {
-      console.error("Error processing invoiced dropdown data:", error);
+      console.error("Error processing working dropdown data:", error);
     }
-  } else {
   }
   var cellRect = cell.getBoundingClientRect();
   var dropdownRect = dropdown.getBoundingClientRect();
