@@ -1530,7 +1530,7 @@ def post_invoice(request):
     }
     data = {
         "Type": "ACCPAY",
-        "Contact": {"ContactID": Contacts.objects.first().xero_contact_id},
+        "Contact": {"ContactID": contact.xero_contact_id},
         "Date": invoice.invoice_date.isoformat(),
         "DueDate": invoice.invoice_due_date.isoformat(),
         "InvoiceNumber": invoice.supplier_invoice_number,
