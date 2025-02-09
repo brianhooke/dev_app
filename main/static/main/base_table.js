@@ -228,6 +228,26 @@ function toggleDropdown(cell, costingPk, type) {
             dropdown.appendChild(row);
           });
         }
+
+        // Add Uncommitted section for working budget type
+        if (type === 'working') {
+          var uncommittedHeader = document.createElement('div');
+          uncommittedHeader.className = 'dropdown-row dropdown-section-header';
+          uncommittedHeader.innerHTML = '<div><strong>Uncommitted</strong></div><div></div><div></div><div></div>';
+          dropdown.appendChild(uncommittedHeader);
+          
+          var uncommittedRow = document.createElement('div');
+          uncommittedRow.className = 'dropdown-row';
+          var uncommittedCell = cell.closest('tr').querySelector('td:nth-child(5)');
+          var uncommittedAmount = uncommittedCell.textContent.trim();
+          uncommittedRow.innerHTML = `
+            <div>Uncommitted Amount</div>
+            <div>-</div>
+            <div>-</div>
+            <div>${uncommittedAmount}</div>
+          `;
+          dropdown.appendChild(uncommittedRow);
+        }
       } else { // type === 'invoiced'
         const data = costingData.invoiced_all;
         if (data && Array.isArray(data)) {
