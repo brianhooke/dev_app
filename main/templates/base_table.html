@@ -33,7 +33,7 @@
   .dropdown-content {
     display: none;
     position: absolute;
-    width: 550px;
+    width: 650px;
     z-index: 999;
     background-color: white;
     border: 1px solid #ddd;
@@ -42,7 +42,7 @@
   }
   .dropdown-header, .dropdown-row {
     display: grid;
-    grid-template-columns: 275px 125px 150px;
+    grid-template-columns: 275px 100px 125px 150px;
     padding: 5px;
   }
   .dropdown-header {
@@ -129,6 +129,7 @@
               <div class="dropdown-content" id="working-dropdown-{{ costing.costing_pk }}" style="display: none;">
                 <div class="dropdown-header">
                   <div>Supplier</div>
+                  <div>Date</div>
                   <div>Inv #</div>
                   <div>$</div>
                 </div>
@@ -146,6 +147,7 @@
               <div class="dropdown-content" id="committed-dropdown-{{ costing.costing_pk }}" style="display: none;">
                 <div class="dropdown-header">
                   <div>Supplier</div>
+                  <div>Date</div>
                   <div>Inv #</div>
                   <div>$</div>
                 </div>
@@ -162,6 +164,7 @@
               <div class="dropdown-content" id="dropdown-{{ costing.costing_pk }}" style="display: none;">
                 <div class="dropdown-header">
                   <div>Supplier</div>
+                  <div>Date</div>
                   <div>Inv #</div>
                   <div>$</div>
                 </div>

@@ -1,67 +1,97 @@
+function formatDropdownContextDate(dateString) {
+  if (!dateString) {
+    return '-';
+  }
+    var trimmed = dateString.trim();  
+  if (trimmed.indexOf('/') === -1) {
+    console.error("Date string does not contain '/':", trimmed);
+    return 'Invalid Date';
+  }
+  const parts = trimmed.split('/');  
+  if (parts.length < 3) {
+    console.error("Date string does not have at least 3 parts:", trimmed);
+    return 'Invalid Date';
+  }
+    const dayStr = parts[0].trim();
+  const monthStr = parts[1].trim();
+  const yearStr = parts[2].trim();
+  const dayNum = parseInt(dayStr, 10);
+  const monthNum = parseInt(monthStr, 10);
+  const yearNum = parseInt(yearStr, 10);
+    if (isNaN(dayNum) || isNaN(monthNum) || isNaN(yearNum)) {
+    console.error("One or more parts are not valid numbers:", {
+      original: dateString,
+      trimmed: trimmed,
+      dayStr: dayStr,
+      monthStr: monthStr,
+      yearStr: yearStr,
+      dayNum: dayNum,
+      monthNum: monthNum,
+      yearNum: yearNum
+    });
+    return 'Invalid Date';
+  }
+    const date = new Date(yearNum, monthNum - 1, dayNum);
+  if (isNaN(date.getTime())) {
+    console.error("Final constructed Date is invalid. Details:", {
+      original: dateString,
+      trimmed: trimmed,
+      constructedDate: date
+    });
+    return 'Invalid Date';
+  }
+    const day = date.getDate().toString().padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear().toString().slice(-2);
+  const formatted = `${day}-${month}-${year}`;
+  console.log("Formatted date:", formatted);
+  return formatted;
+}
+
 window.onload = function() {
-  document.querySelectorAll('tr[data-toggle="collapse"]').forEach((row) => {
-  row.click();
-  });
+  document.querySelectorAll('tr[data-toggle="collapse"]').forEach(row => row.click());
 };
-
-
 
 document.querySelectorAll('.save-costs').forEach(function(button) {
   button.addEventListener('click', function() {
-      var costing_pk = this.getAttribute('data-id');
-      // Get the uncommitted value
-      var uncommitted = document.getElementById('uncommittedInput' + costing_pk).value;
-      // Get the notes value (including line breaks)
-      var notes = document.getElementById('notesInput' + costing_pk).value;
-      if (!costing_pk || !uncommitted) {
-          alert('Costing ID or uncommitted value is missing');
-          return;
+    var costing_pk = this.getAttribute('data-id');
+    var uncommitted = document.getElementById('uncommittedInput' + costing_pk).value;
+    var notes = document.getElementById('notesInput' + costing_pk).value;
+    if (!costing_pk || !uncommitted) {
+      alert('Costing ID or uncommitted value is missing');
+      return;
+    }
+    var data = { 
+      'costing_pk': costing_pk, 
+      'uncommitted': uncommitted,
+      'notes': notes 
+    };
+    fetch('/update_uncommitted/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify(data)
+    }).then(function(response) {
+      if (response.ok) {
+        alert('Costs updated successfully');
+        location.reload();
+      } else {
+        alert('An error occurred.');
       }
-      // Prepare data object, now including 'notes'
-      var data = { 
-          'costing_pk': costing_pk, 
-          'uncommitted': uncommitted,
-          'notes': notes // Add notes to the data
-      };
-      if (!data) return;
-      // Fetch API to send the data to the server
-      fetch('/update_uncommitted/', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': getCookie('csrftoken')
-          },
-          body: JSON.stringify(data)
-      }).then(function(response) {
-          if (response.ok) {
-              alert('Costs updated successfully');
-              location.reload();
-          } else {
-              alert('An error occurred.');
-          }
-      }).catch(function(error) {
-          console.error('Error:', error);
-          alert('An error occurred while updating the costs.');
-      });
+    }).catch(function(error) {
+      console.error('Error:', error);
+      alert('An error occurred while updating the costs.');
+    });
   });
 });
 
-
 $('[data-toggle="collapse"]').on('click', function () {
   $(this).toggleClass('collapsed');
-
-  // Get the group number
   var groupNumber = $(this).data('target').replace('.group', '');
-
-  // Initialize the sums
-  var sumContractBudget = 0;
-  var sumWorkingBudget = 0;
-  var sumUncommitted = 0;
-  var sumCommitted = 0;
-  var sumFixedOnSite = 0;
-  var sumInvoiced = 0;
-
-  // Calculate the sums
+  var sumContractBudget = 0, sumWorkingBudget = 0, sumUncommitted = 0,
+      sumCommitted = 0, sumFixedOnSite = 0, sumInvoiced = 0;
   $('.group' + groupNumber).each(function () {
     var contractBudget = $(this).find('td').eq(2).text().replace(/,/g, '').trim();
     var workingBudget = $(this).find('td').eq(3).find('.working-budget-value').text().replace(/,/g, '').trim();
@@ -69,58 +99,44 @@ $('[data-toggle="collapse"]').on('click', function () {
     var committed = $(this).find('td').eq(5).text().replace(/,/g, '').trim();
     var fixedOnSite = $(this).find('td').eq(7).text().replace(/,/g, '').trim();
     var invoicedText = $(this).find('td').eq(6).find('.invoiced-value').text().trim();
-    // Extract only the numeric part from the text, removing currency symbols and commas
     var invoiced = invoicedText.replace(/[^0-9.-]+/g, '');
-
-    // Check if the text is '-' and, if so, treat it as 0
-    contractBudget = contractBudget === '-' || contractBudget === '' ? 0 : parseFloat(contractBudget);
-    workingBudget = workingBudget === '-' || workingBudget === '' ? 0 : parseFloat(workingBudget);
-    uncommitted = uncommitted === '-' || uncommitted === '' ? 0 : parseFloat(uncommitted);
-    committed = committed === '-' || committed === '' ? 0 : parseFloat(committed);
-    fixedOnSite = fixedOnSite === '-' || fixedOnSite === '' ? 0 : parseFloat(fixedOnSite);
-    invoiced = invoiced === '-' || invoiced === '' ? 0 : parseFloat(invoiced || '0');
-
-
-    sumContractBudget += parseFloat(contractBudget);
-    sumWorkingBudget += parseFloat(workingBudget);
-    sumUncommitted += parseFloat(uncommitted);
-    sumCommitted += parseFloat(committed);
-    sumFixedOnSite += parseFloat(fixedOnSite);
-    sumInvoiced += parseFloat(invoiced);
+    contractBudget = (contractBudget === '-' || contractBudget === '') ? 0 : parseFloat(contractBudget);
+    workingBudget = (workingBudget === '-' || workingBudget === '') ? 0 : parseFloat(workingBudget);
+    uncommitted = (uncommitted === '-' || uncommitted === '') ? 0 : parseFloat(uncommitted);
+    committed = (committed === '-' || committed === '') ? 0 : parseFloat(committed);
+    fixedOnSite = (fixedOnSite === '-' || fixedOnSite === '') ? 0 : parseFloat(fixedOnSite);
+    invoiced = (invoiced === '-' || invoiced === '') ? 0 : parseFloat(invoiced || '0');
+    sumContractBudget += contractBudget;
+    sumWorkingBudget += workingBudget;
+    sumUncommitted += uncommitted;
+    sumCommitted += committed;
+    sumFixedOnSite += fixedOnSite;
+    sumInvoiced += invoiced;
   });
-
-  // Helper function to format numbers with thousand comma separator
   function formatNumber(num) {
-    return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')
+    return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,');
   }
-
-  // Display the sums
-  var row = $(this).closest('tr');
-  var contractBudgetCell = row.find('td').eq(2);
-  var workingBudgetCell = row.find('td').eq(3);
-  var uncommittedCell = row.find('td').eq(4);
-  var committedCell = row.find('td').eq(5);
-  var invoicedCell = row.find('td').eq(6);
-  var fixedOnSiteCell = row.find('td').eq(7);
-
+  var row = $(this).closest('tr'),
+      contractBudgetCell = row.find('td').eq(2),
+      workingBudgetCell = row.find('td').eq(3),
+      uncommittedCell = row.find('td').eq(4),
+      committedCell = row.find('td').eq(5),
+      invoicedCell = row.find('td').eq(6),
+      fixedOnSiteCell = row.find('td').eq(7);
   if ($(this).hasClass('collapsed')) {
-    // Store the original values
     contractBudgetCell.data('original', contractBudgetCell.html());
     workingBudgetCell.data('original', workingBudgetCell.html());
     uncommittedCell.data('original', uncommittedCell.html());
     committedCell.data('original', committedCell.html());
     fixedOnSiteCell.data('original', fixedOnSiteCell.html());
     invoicedCell.data('original', invoicedCell.html());
-
-    // Display the sums
-    contractBudgetCell.html((sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>'));
-    workingBudgetCell.html((sumWorkingBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumWorkingBudget.toFixed(2)) + '</strong>'));
-    uncommittedCell.html((sumUncommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumUncommitted.toFixed(2)) + '</strong>'));
-    committedCell.html((sumCommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumCommitted.toFixed(2)) + '</strong>'));
-    fixedOnSiteCell.html((sumFixedOnSite.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumFixedOnSite.toFixed(2)) + '</strong>'));
-    invoicedCell.html((sumInvoiced.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumInvoiced.toFixed(2)) + '</strong>'));
+    contractBudgetCell.html(sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>');
+    workingBudgetCell.html(sumWorkingBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumWorkingBudget.toFixed(2)) + '</strong>');
+    uncommittedCell.html(sumUncommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumUncommitted.toFixed(2)) + '</strong>');
+    committedCell.html(sumCommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumCommitted.toFixed(2)) + '</strong>');
+    fixedOnSiteCell.html(sumFixedOnSite.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumFixedOnSite.toFixed(2)) + '</strong>');
+    invoicedCell.html(sumInvoiced.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumInvoiced.toFixed(2)) + '</strong>');
   } else {
-    // Restore the original values
     contractBudgetCell.html(contractBudgetCell.data('original'));
     workingBudgetCell.html(workingBudgetCell.data('original'));
     uncommittedCell.html(uncommittedCell.data('original'));
@@ -130,134 +146,80 @@ $('[data-toggle="collapse"]').on('click', function () {
   }
 });
 
-
 function toggleDropdown(cell, costingPk, type) {
-  // Default to 'invoiced' if type is undefined.
   type = type || 'invoiced';
-  console.log("toggleDropdown called for", type, "cell; Costing PK:", costingPk);
-  console.log("Cell element:", cell);
-  console.log("Type parameter:", type);
-
-  // Decide which dropdown element ID to use based on type:
-  var idPrefix = (type === 'invoiced') ? 'dropdown-' : ((type === 'committed') ? 'committed-dropdown-' : 'working-dropdown-');
+  var idPrefix = type === 'invoiced' ? 'dropdown-' : (type === 'committed' ? 'committed-dropdown-' : 'working-dropdown-');
   var dropdown = document.getElementById(idPrefix + costingPk);
-  
   if (!dropdown) {
     console.error("Dropdown element not found for", type, "with costingPk:", costingPk);
     return;
   }
-  console.log("Found dropdown element:", dropdown);
-
-  // Log computed style of the cell
   var cellStyle = window.getComputedStyle(cell);
-  console.log("Computed cell cursor:", cellStyle.cursor);
-
-  // Hide all other dropdowns (both invoiced and committed)
   var allDropdowns = document.querySelectorAll('.dropdown-content');
-  console.log("Total dropdowns found:", allDropdowns.length);
   allDropdowns.forEach(function(el) {
     if (el !== dropdown) {
-      console.log("Hiding dropdown with ID:", el.id);
       el.style.display = 'none';
     }
   });
-
-  // Toggle this dropdown
-  console.log("Current inline display style of dropdown:", dropdown.style.display);
   if (dropdown.style.display === 'block') {
-    console.log("Dropdown is visible. Hiding it.");
     dropdown.style.display = 'none';
     return;
   } else {
-    console.log("Dropdown is hidden. Showing it.");
     dropdown.style.display = 'block';
   }
-
-  // Clear previous content except header
-  var header = dropdown.querySelector('.dropdown-header');
-  if (header) {
-    console.log("Clearing dropdown content except header");
-    dropdown.innerHTML = '';
-    dropdown.appendChild(header);
-  } else {
-    console.warn("No header found in dropdown. Creating one.");
-    header = document.createElement('div');
-    header.className = 'dropdown-header';
-    header.innerHTML = `
-Supplier
-
-                        
-Inv #
-
-                        
-$
-`;
-    dropdown.appendChild(header);
-  }
-
-  // If type is "invoiced", populate dropdown with data.
-  if (type === 'invoiced') {
+  dropdown.innerHTML = dropdown.querySelector('.dropdown-header').outerHTML;
+  if (type === 'invoiced' || type === 'committed') {
     try {
       var dropdownData = JSON.parse(base_table_dropdowns_json);
       var costingData = dropdownData[costingPk];
-      console.log("Costing data for invoiced dropdown:", costingData);
-      if (costingData && costingData.invoiced_all && Array.isArray(costingData.invoiced_all)) {
-        costingData.invoiced_all.forEach(function(invoice) {
+      const data = type === 'invoiced' ? costingData.invoiced_all : costingData.invoiced_direct;
+      if (data && Array.isArray(data)) {
+        data.forEach(function(invoice) {
           var row = document.createElement('div');
           row.className = 'dropdown-row';
           row.innerHTML = `
-            
-${invoice.supplier || '-'}
-
-            
-${invoice.invoice_num || '-'}
-
-            
-$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            })}
-`;
+            <div>${invoice.supplier || '-'}</div>
+            <div>${formatDropdownContextDate(invoice.date)}</div>
+            <div>${invoice.invoice_num || '-'}</div>
+            <div>$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}</div>
+          `;
           dropdown.appendChild(row);
-          console.log("Added row for invoiced invoice:", invoice.invoice_num);
         });
       } else {
-        console.log("No invoiced_all data found for costingPk:", costingPk);
       }
     } catch (error) {
       console.error("Error processing invoiced dropdown data:", error);
     }
   } else {
-    console.log(type, "dropdown: no data rows added (only header shown).");
   }
-
-  // Position the dropdown relative to the cell
   var cellRect = cell.getBoundingClientRect();
   var dropdownRect = dropdown.getBoundingClientRect();
   var viewportWidth = window.innerWidth;
-  console.log("Cell bounding rect:", cellRect);
-  console.log("Dropdown bounding rect before positioning:", dropdownRect);
-
-  // Reset previous positioning
   dropdown.style.left = '';
   dropdown.style.right = '';
-
   if (cellRect.left + dropdownRect.width > viewportWidth) {
-    console.log("Adjusting dropdown position to right side");
     dropdown.style.right = '0';
     dropdown.style.left = 'auto';
   } else {
-    console.log("Adjusting dropdown position to left side");
     dropdown.style.left = '0';
     dropdown.style.right = 'auto';
   }
-
-  console.log("Dropdown computed style after toggling:", window.getComputedStyle(dropdown).display);
-  console.log("Dropdown bounding rect after positioning:", dropdown.getBoundingClientRect());
-  console.log("toggleDropdown finished for", type, "with costingPk:", costingPk);
 }
 
-
-
-
-  
+function getCookie(name) {
+  var cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+      var cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
