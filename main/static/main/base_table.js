@@ -167,7 +167,14 @@ function toggleDropdown(cell, costingPk, type) {
   } else {
     dropdown.style.display = 'block';
   }
-  dropdown.innerHTML = dropdown.querySelector('.dropdown-header').outerHTML;
+  dropdown.innerHTML = `
+    <div class="dropdown-header">
+      <div><strong>Supplier</strong></div>
+      <div><strong>Date</strong></div>
+      <div><strong>Inv #</strong></div>
+      <div><strong>$</strong></div>
+    </div>
+  `;
   if (type === 'invoiced' || type === 'committed') {
     try {
       var dropdownData = JSON.parse(base_table_dropdowns_json);
@@ -177,7 +184,7 @@ function toggleDropdown(cell, costingPk, type) {
         // Add Quotes section header
         var quotesHeader = document.createElement('div');
         quotesHeader.className = 'dropdown-row dropdown-section-header';
-        quotesHeader.innerHTML = '<div>Quotes</div><div></div><div></div><div></div>';
+        quotesHeader.innerHTML = '<div><strong>Quotes</strong></div><div></div><div></div><div></div>';
         dropdown.appendChild(quotesHeader);
         
         // Add quote data if exists
@@ -199,7 +206,7 @@ function toggleDropdown(cell, costingPk, type) {
         // Add Direct Costs section header
         var directCostsHeader = document.createElement('div');
         directCostsHeader.className = 'dropdown-row dropdown-section-header';
-        directCostsHeader.innerHTML = '<div>Invoices - Direct Costs</div><div></div><div></div><div></div>';
+        directCostsHeader.innerHTML = '<div><strong>Invoices - Direct Costs</strong></div><div></div><div></div><div></div>';
         dropdown.appendChild(directCostsHeader);
         
         // Add direct costs data
@@ -295,7 +302,7 @@ function toggleDropdown(cell, costingPk, type) {
       // Add Uncommitted section header
       var uncommittedHeader = document.createElement('div');
       uncommittedHeader.className = 'dropdown-row dropdown-section-header';
-      uncommittedHeader.innerHTML = '<div>Uncommitted</div><div></div><div></div><div></div>';
+      uncommittedHeader.innerHTML = '<div><strong>Uncommitted</strong></div><div></div><div></div><div></div>';
       dropdown.appendChild(uncommittedHeader);
       
       // Add uncommitted amount
@@ -314,42 +321,51 @@ function toggleDropdown(cell, costingPk, type) {
       console.error("Error processing working dropdown data:", error);
     }
   }
+  // First display the dropdown so we can measure it
+  dropdown.style.display = 'block';
+  dropdown.style.visibility = 'hidden'; // Hide it while measuring
+
+  // Get measurements after content is populated
   var cellRect = cell.getBoundingClientRect();
   var dropdownRect = dropdown.getBoundingClientRect();
   var viewportWidth = window.innerWidth;
-  var viewportHeight = window.innerHeight;
-  var totalRow = document.getElementById('totalRow');
-  var totalRowHeight = totalRow ? totalRow.offsetHeight : 0;
-  
+  const borderWidth = 2;
+
+  // Get table measurements
+  var table = cell.closest('table');
+  var tableRect = table.getBoundingClientRect();
+  var tableBottom = tableRect.bottom;
+
   // Reset positioning
   dropdown.style.left = '';
   dropdown.style.right = '';
   dropdown.style.top = '';
   dropdown.style.bottom = '';
-  
-  // Handle horizontal positioning
-  if (cellRect.left + dropdownRect.width > viewportWidth) {
-    dropdown.style.right = '0';
-    dropdown.style.left = 'auto';
-  } else {
-    dropdown.style.left = '0';
-    dropdown.style.right = 'auto';
-  }
-  
+
   // Handle vertical positioning
-  var spaceBelow = viewportHeight - cellRect.bottom - totalRowHeight;
-  var spaceAbove = cellRect.top;
-  
-  if (spaceBelow >= 100) { // If there's at least 100px below
-    dropdown.style.top = '100%';
-    dropdown.style.bottom = 'auto';
-  } else if (spaceAbove > spaceBelow) { // If there's more space above than below
-    dropdown.style.bottom = '100%';
+  if (cellRect.bottom + dropdownRect.height > tableBottom) {
+    // Position from bottom of row if it would go below table bottom
+    dropdown.style.bottom = (cellRect.height + borderWidth) + 'px';
     dropdown.style.top = 'auto';
   } else {
-    dropdown.style.top = '100%';
+    // Position from top of row
+    dropdown.style.top = (cellRect.height - borderWidth) + 'px';
     dropdown.style.bottom = 'auto';
   }
+
+  // Handle horizontal positioning
+  if (cellRect.left + dropdownRect.width > viewportWidth) {
+    // Position from right edge if it would go beyond viewport
+    dropdown.style.right = borderWidth + 'px';
+    dropdown.style.left = 'auto';
+  } else {
+    // Position from left edge
+    dropdown.style.left = -borderWidth + 'px';
+    dropdown.style.right = 'auto';
+  }
+
+  // Make the dropdown visible again
+  dropdown.style.visibility = 'visible';
 }
 
 function getCookie(name) {
