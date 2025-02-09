@@ -39,7 +39,7 @@ function populateCommittedQuotesTable() {
             <td style="padding: 4px;">${totalCostFormatted}</td>
             <td style="padding: 4px;"><a href="#" class="view-pdf">View</a></td>
             <td style="padding: 4px;"><a href="#" class="quote-link">Update</a></td>
-            <td style="padding: 4px;"><button class="btn delete-btn" style="width: 12px; height: 12px; padding: 0; font-size: 10px; line-height: 10px; text-align: center; border-radius: 0; background-color: white; color: black; border: 1px solid #ddd;">X</button></td>
+            <td style="padding: 4px;"><a href="#" class="delete-link">Delete</a></td>
         `;
         
         tableBody.appendChild(newRow);
@@ -50,8 +50,8 @@ function populateCommittedQuotesTable() {
             document.getElementById('quotePdfViewer').src = quote.pdf;
         });
         
-        // Add event listener to the delete button
-        newRow.querySelector('.delete-btn').addEventListener('click', function(event) {
+        // Add event listener to the delete link
+        newRow.querySelector('.delete-link').addEventListener('click', function(event) {
         event.preventDefault();
         var confirmed = window.confirm('Are you sure you want to delete this quote?');
         if (confirmed) {
