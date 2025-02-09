@@ -64,7 +64,7 @@ $('[data-toggle="collapse"]').on('click', function () {
   // Calculate the sums
   $('.group' + groupNumber).each(function () {
     var contractBudget = $(this).find('td').eq(2).text().replace(/,/g, '').trim();
-    var workingBudget = $(this).find('td').eq(3).text().replace(/,/g, '').trim();
+    var workingBudget = $(this).find('td').eq(3).find('.working-budget-value').text().replace(/,/g, '').trim();
     var uncommitted = $(this).find('td').eq(4).text().replace(/,/g, '').trim();
     var committed = $(this).find('td').eq(5).text().replace(/,/g, '').trim();
     var fixedOnSite = $(this).find('td').eq(7).text().replace(/,/g, '').trim();
@@ -131,63 +131,133 @@ $('[data-toggle="collapse"]').on('click', function () {
 });
 
 
-function toggleInvoicedDropdown(cell, costingPk) {
-    var dropdown = document.getElementById('dropdown-' + costingPk);
+function toggleDropdown(cell, costingPk, type) {
+  // Default to 'invoiced' if type is undefined.
+  type = type || 'invoiced';
+  console.log("toggleDropdown called for", type, "cell; Costing PK:", costingPk);
+  console.log("Cell element:", cell);
+  console.log("Type parameter:", type);
 
-    // Hide any other open dropdowns
-    document.querySelectorAll('.dropdown-content').forEach(function(content) {
-        if (content !== dropdown) {
-            content.style.display = 'none';
-        }
-    });
+  // Decide which dropdown element ID to use based on type:
+  var idPrefix = (type === 'invoiced') ? 'dropdown-' : ((type === 'committed') ? 'committed-dropdown-' : 'working-dropdown-');
+  var dropdown = document.getElementById(idPrefix + costingPk);
+  
+  if (!dropdown) {
+    console.error("Dropdown element not found for", type, "with costingPk:", costingPk);
+    return;
+  }
+  console.log("Found dropdown element:", dropdown);
 
-    // Toggle this dropdown
-    if (dropdown.style.display === 'block') {
-        dropdown.style.display = 'none';
-    } else {
-        // First display it to get its dimensions
-        dropdown.style.display = 'block';
+  // Log computed style of the cell
+  var cellStyle = window.getComputedStyle(cell);
+  console.log("Computed cell cursor:", cellStyle.cursor);
 
-        // Clear any existing rows
-        var existingRows = dropdown.querySelectorAll('.dropdown-row');
-        existingRows.forEach(row => row.remove());
-
-        // Get the data for this costing
-        var dropdownData = JSON.parse(base_table_dropdowns_json);
-        var costingData = dropdownData[costingPk];
-
-        if (costingData && costingData.invoiced_all) {
-            costingData.invoiced_all.forEach(function(invoice) {
-                var row = document.createElement('div');
-                row.className = 'dropdown-row';
-                row.innerHTML = `
-                    <div>${invoice.supplier || '-'}</div>
-                    <div>${invoice.invoice_num || '-'}</div>
-                    <div>$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                `;
-                dropdown.appendChild(row);
-            });
-        }
-
-        // Get dimensions and positions
-        var cellRect = cell.getBoundingClientRect();
-        var dropdownRect = dropdown.getBoundingClientRect();
-        var viewportWidth = window.innerWidth;
-
-        // Reset any previous positioning
-        dropdown.style.left = '';
-        dropdown.style.right = '';
-
-        // Check if dropdown would overflow right side
-        if (cellRect.left + dropdownRect.width > viewportWidth) {
-            // Position from right edge of cell
-            dropdown.style.right = '0';
-            dropdown.style.left = 'auto';
-        } else {
-            // Position from left edge of cell
-            dropdown.style.left = '0';
-            dropdown.style.right = 'auto';
-        }
+  // Hide all other dropdowns (both invoiced and committed)
+  var allDropdowns = document.querySelectorAll('.dropdown-content');
+  console.log("Total dropdowns found:", allDropdowns.length);
+  allDropdowns.forEach(function(el) {
+    if (el !== dropdown) {
+      console.log("Hiding dropdown with ID:", el.id);
+      el.style.display = 'none';
     }
+  });
+
+  // Toggle this dropdown
+  console.log("Current inline display style of dropdown:", dropdown.style.display);
+  if (dropdown.style.display === 'block') {
+    console.log("Dropdown is visible. Hiding it.");
+    dropdown.style.display = 'none';
+    return;
+  } else {
+    console.log("Dropdown is hidden. Showing it.");
+    dropdown.style.display = 'block';
+  }
+
+  // Clear previous content except header
+  var header = dropdown.querySelector('.dropdown-header');
+  if (header) {
+    console.log("Clearing dropdown content except header");
+    dropdown.innerHTML = '';
+    dropdown.appendChild(header);
+  } else {
+    console.warn("No header found in dropdown. Creating one.");
+    header = document.createElement('div');
+    header.className = 'dropdown-header';
+    header.innerHTML = `
+Supplier
+
+                        
+Inv #
+
+                        
+$
+`;
+    dropdown.appendChild(header);
+  }
+
+  // If type is "invoiced", populate dropdown with data.
+  if (type === 'invoiced') {
+    try {
+      var dropdownData = JSON.parse(base_table_dropdowns_json);
+      var costingData = dropdownData[costingPk];
+      console.log("Costing data for invoiced dropdown:", costingData);
+      if (costingData && costingData.invoiced_all && Array.isArray(costingData.invoiced_all)) {
+        costingData.invoiced_all.forEach(function(invoice) {
+          var row = document.createElement('div');
+          row.className = 'dropdown-row';
+          row.innerHTML = `
+            
+${invoice.supplier || '-'}
+
+            
+${invoice.invoice_num || '-'}
+
+            
+$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })}
+`;
+          dropdown.appendChild(row);
+          console.log("Added row for invoiced invoice:", invoice.invoice_num);
+        });
+      } else {
+        console.log("No invoiced_all data found for costingPk:", costingPk);
+      }
+    } catch (error) {
+      console.error("Error processing invoiced dropdown data:", error);
+    }
+  } else {
+    console.log(type, "dropdown: no data rows added (only header shown).");
+  }
+
+  // Position the dropdown relative to the cell
+  var cellRect = cell.getBoundingClientRect();
+  var dropdownRect = dropdown.getBoundingClientRect();
+  var viewportWidth = window.innerWidth;
+  console.log("Cell bounding rect:", cellRect);
+  console.log("Dropdown bounding rect before positioning:", dropdownRect);
+
+  // Reset previous positioning
+  dropdown.style.left = '';
+  dropdown.style.right = '';
+
+  if (cellRect.left + dropdownRect.width > viewportWidth) {
+    console.log("Adjusting dropdown position to right side");
+    dropdown.style.right = '0';
+    dropdown.style.left = 'auto';
+  } else {
+    console.log("Adjusting dropdown position to left side");
+    dropdown.style.left = '0';
+    dropdown.style.right = 'auto';
+  }
+
+  console.log("Dropdown computed style after toggling:", window.getComputedStyle(dropdown).display);
+  console.log("Dropdown bounding rect after positioning:", dropdown.getBoundingClientRect());
+  console.log("toggleDropdown finished for", type, "with costingPk:", costingPk);
 }
+
+
+
+
   

@@ -326,6 +326,7 @@ def main(request, division):
         
         base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
             "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
             "invoice_num": invoice.invoice_pk.supplier_invoice_number,
             "amount": float(invoice.amount)
         } for invoice in invoice_directs]
@@ -338,6 +339,7 @@ def main(request, division):
         
         base_table_dropdowns[costing_pk]["invoiced_all"] = [{
             "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
             "invoice_num": invoice.invoice_pk.supplier_invoice_number,
             "amount": float(invoice.amount)
         } for invoice in invoice_alls]
