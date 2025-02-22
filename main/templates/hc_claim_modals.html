@@ -116,7 +116,7 @@
 
 
 <!-- 3a: HC Claim Prep Sheet -->
-<div class="modal fade" id="hcPrepSheetModal" tabindex="-1" role="dialog" aria-labelledby="hcPrepSheetModalLabel" aria-hidden="true">
+<div class="modal fade" id="hcPrepSheetModal" tabindex="-1" role="dialog" aria-labelledby="hcPrepSheetModalLabel" aria-hidden="true" data-current-hc-claim-id="{{current_hc_claim_display_id}}">
     <div class="modal-dialog modal-lg" role="document" style="max-width: 90%;">
         <div class="modal-content" style="font-size: 0.8em;">
             <div class="modal-header">
@@ -203,9 +203,15 @@
                                     {% endwith %}
                                 </td>                              
                                 <td id="hc-claim-uncommitted-{{ costing.costing_pk }}">
-                                    <a href="#" data-toggle="modal" data-target="#hc-claim-editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
-                                        {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
-                                    </a>
+                                    {% if costing.category_order_in_list|floatformat:0 != '-1' %}
+                                        <a href="#" data-toggle="modal" data-target="#hc-claim-editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
+                                            {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
+                                        </a>
+                                    {% else %}
+                                        <span>
+                                            {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td id="hc-claim-committed-{{ costing.costing_pk }}">{% if costing.committed|floatformat:2 == "0.00" %}-{% else %}{{ costing.committed|floatformat:2|intcomma }}{% endif %}</td>
                                 <!-- <td id="fixed-on-site-display-{{ costing.costing_pk }}">
@@ -221,7 +227,19 @@
                                 <td id="prev-fixed-on-site-display-{{ costing.costing_pk }}">{% if costing.hc_prev_fixedonsite|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_fixedonsite|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="difference-{{ costing.costing_pk }}"></td>
                                 <td id="hc-prev-invoiced-{{costing.costing_pk}}">{% if costing.hc_prev_invoiced|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_invoiced|floatformat:2|intcomma }}{% endif %}</td>
-                                <td id="hc-this-claim-invoices-{{costing.costing_pk}}">{% if costing.hc_this_claim_invoices|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_this_claim_invoices|floatformat:2|intcomma }}{% endif %}</td>
+                                <td id="hc-this-claim-invoices-{{costing.costing_pk}}">
+                                    {% if costing.category_order_in_list|floatformat:0 == '-1' %}
+                                        <input type="number" 
+                                               step="0.01" 
+                                               style="width: 100%;" 
+                                               id="hc-this-claim-input-{{ costing.costing_pk }}" 
+                                               class="margin-item-input"
+                                               value="{% if costing.hc_this_claim_invoices %}{{ costing.hc_this_claim_invoices|floatformat:2 }}{% endif %}"
+                                        >
+                                    {% else %}
+                                        {% if costing.hc_this_claim_invoices|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_this_claim_invoices|floatformat:2|intcomma }}{% endif %}
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% with hc_claim_wip_adjustments|get_dict_value:costing.costing_pk as adjustment_value %}
                                         <input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{ costing.costing_pk }}"

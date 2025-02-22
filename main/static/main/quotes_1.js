@@ -164,7 +164,8 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
                 var amountInput = row.cells[4].querySelector('input');
                 var amount = amountInput ? amountInput.value : '';
                 var uncommittedInput = row.cells[2].querySelector('input');
-                var uncommitted = uncommittedInput ? uncommittedInput.value : '';
+                var uncommittedSpan = row.cells[2].querySelector('span');
+                var uncommitted = uncommittedInput ? uncommittedInput.value : (uncommittedSpan ? uncommittedSpan.textContent : '0.00');
                 var notesInput = row.cells[6].querySelector('input');
                 var notes = notesInput ? notesInput.value : '';
                 return {
@@ -192,7 +193,10 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
     
     document.getElementById('commitBtn').addEventListener('click', function() {
         var data = gatherData();
-        if (!data) return;
+        if (!data) {
+            console.log('Validation failed, stopping POST request');
+            return false;
+        }
         data.pdf = document.querySelector('.pdf-frame').src;
         fetch('/commit_data/', {
             method: 'POST',
@@ -214,7 +218,10 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
     document.getElementById('updateBtn').addEventListener('click', function() {
         var data = gatherData();
         console.log(data);
-        if (!data) return;
+        if (!data) {
+            console.log('Validation failed, stopping POST request');
+            return false;
+        }
         fetch('/update_quote/', {
             method: 'POST',
             headers: {
@@ -243,8 +250,15 @@ function addLineItem(item, amount, notes = '') {
     select.style.maxWidth = "100%";
     select.innerHTML = '<option value="">Select an item</option>';
     console.log("costings are: " + costings);
+    // Filter out items where category's order_in_list is -1
+    // Create a map of items to filter out margin items
+    const marginItems = new Set(itemsData.filter(item => item.order_in_list === '-1').map(item => item.item));
+    
     costings.forEach(function(costing) {
-        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
+        // Only add items that are not in the marginItems set
+        if (!marginItems.has(costing.item)) {
+            select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
+        }
     });
     var firstCell = newRow.insertCell(0);
     firstCell.appendChild(select);
@@ -284,10 +298,24 @@ function addLineItem(item, amount, notes = '') {
             return item.item === this.value;
         }.bind(this));
         console.log('Selected item:', selectedItem);
+        console.log('Category order_in_list:', selectedItem ? selectedItem.order_in_list : 'not found');
+        
         if (selectedItem) {
             var formattedUncommitted = parseFloat(selectedItem.uncommitted).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
             newRow.cells[1].innerHTML = formattedUncommitted;
-            newRow.cells[2].children[0].value = parseFloat(selectedItem.uncommitted).toFixed(2);
+            
+            // Always use input field since margin items are filtered out
+            var uncommittedCell = newRow.cells[2];
+            var uncommittedValue = parseFloat(selectedItem.uncommitted).toFixed(2);
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.step = '0.01';
+            input.style.width = '100%';
+            input.value = uncommittedValue;
+            input.addEventListener('input', updateStillToAllocateValue);
+            uncommittedCell.innerHTML = '';
+            uncommittedCell.appendChild(input);
+            
             var sum = parseFloat(newRow.cells[1].innerHTML.replace(/,/g, '')) + parseFloat(newRow.cells[3].innerHTML.replace(/,/g, ''));
             newRow.cells[5].innerHTML = (isNaN(sum) ? '0' : sum.toFixed(2)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
             updateStillToAllocateValue();
@@ -326,22 +354,46 @@ function updateStillToAllocateValue() {
     totalCost = isNaN(totalCost) ? 0 : totalCost;
     var allocated = 0;
     var tableBody = document.getElementById('lineItemsTable').tBodies[0];
+    
     for (var i = 0; i < tableBody.rows.length - 1; i++) {
-        var cellValue = parseFloat(tableBody.rows[i].cells[4].firstChild.value.replace(/,/g, ''));
+        var row = tableBody.rows[i];
+        
+        // Get committed value (always input)
+        var committedElement = row.cells[4].firstChild;
+        var cellValue = parseFloat(committedElement.value ? committedElement.value.replace(/,/g, '') : '0');
         cellValue = isNaN(cellValue) ? 0 : cellValue;
         allocated += cellValue;
+        
+        // Only add event listeners if elements are inputs
+        var uncommittedElement = row.cells[2].firstChild;
+        if (uncommittedElement.tagName === 'INPUT') {
+            ['input', 'change'].forEach(function(evt) {
+                uncommittedElement.addEventListener(evt, updateCellFive);
+            });
+        }
+        
         ['input', 'change'].forEach(function(evt) {
-            tableBody.rows[i].cells[2].firstChild.addEventListener(evt, updateCellFive);
-            tableBody.rows[i].cells[4].firstChild.addEventListener(evt, updateCellFive);
+            committedElement.addEventListener(evt, updateCellFive);
         });
     }
+    
     var stillToAllocateValue = totalCost - allocated;
     document.getElementById('stillToAllocateValue').innerHTML = stillToAllocateValue.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function updateCellFive() {
     var row = this.parentNode.parentNode;
-    var sum = parseFloat(row.cells[2].firstChild.value || 0) + parseFloat(row.cells[4].firstChild.value || 0);
+    
+    // Get uncommitted value (could be input or span)
+    var uncommittedElement = row.cells[2].firstChild;
+    var uncommittedValue = uncommittedElement.tagName === 'INPUT' ?
+        parseFloat(uncommittedElement.value || 0) :
+        parseFloat(uncommittedElement.textContent || 0);
+    
+    // Get committed value (always input)
+    var committedValue = parseFloat(row.cells[4].firstChild.value || 0);
+    
+    var sum = uncommittedValue + committedValue;
     row.cells[5].innerHTML = (isNaN(sum) ? '0' : sum.toFixed(2)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 

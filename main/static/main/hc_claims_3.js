@@ -189,6 +189,12 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
     
+    // Handle margin item input changes
+    $('#hcPrepSheetModal').on('input', '.margin-item-input', function() {
+        const costingId = this.id.split('-')[4]; // Get ID from hc-this-claim-input-{id}
+        recalcRow(costingId);
+    });
+
     // Add event listener for real-time validation
     $('#hcPrepSheetModal').on('shown.bs.modal', function() {
       $('input[id^="hc-claim-newFixedOnSite"]').on('input', function() {
@@ -218,6 +224,18 @@ document.addEventListener('DOMContentLoaded', function() {
   
     // Helper that re-reads relevant fields for a row and updates "hc-this-claim" + "qs-this-claim"
     function recalcRow(costingId) {
+      // Check if this is a margin item by looking for the margin-item-input
+      const marginItemInput = $('#hc-this-claim-input-' + costingId);
+      const isMarginItem = marginItemInput.length > 0;
+      
+      // For margin items, we don't need to calculate - just use the input value
+      if (isMarginItem) {
+        const marginValue = parseFloat(marginItemInput.val()) || 0;
+        // Update any totals that depend on this value
+        calculateTotals(marginItemInput.closest('tr').data('group'));
+        return;
+      }
+
       let contractBudget = parseFloat($('#hc-contract-budget-' + costingId).text().replace(/,/g, '')) || 0;
       let committed = parseFloat($('#hc-claim-committed-' + costingId).text().replace(/,/g, '')) || 0;
       let uncommitted = parseFloat($('#hc-claim-uncommitted-' + costingId + ' a').text().replace(/,/g, '')) || 0;
@@ -372,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 6) “Save” + “Finalise” => gather the entire table and POST to server
     //////////////////////////////////////////////////////
   
-    function gatherAndPostHCClaimData(currentHcClaimId) {
+    function gatherAndPostHCClaimData(currentHcClaimId, save_or_final) {
       let data = [];
       // Loop over table rows
       $('table.myTable tbody tr:not(#hcPrepSheetTotalRow)').each(function() {
@@ -391,7 +409,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let fixedOnSitePrev = parseFloat(row.find('td').eq(7).text().replace(/,/g, '')) || 0;
         let fixedOnSiteThis = parseFloat(row.find('td').eq(8).text().replace(/,/g, '')) || 0;
         let scPrev = parseFloat(row.find('td').eq(9).text().replace(/,/g, '')) || 0;
-        let scThis = parseFloat(row.find('td').eq(10).text().replace(/,/g, '')) || 0;
+        // For SC This, check if it's a margin item input first
+        let scThis;
+        const marginItemInput = row.find('td').eq(10).find('input.margin-item-input');
+        if (marginItemInput.length > 0) {
+            scThis = parseFloat(marginItemInput.val()) || 0;
+        } else {
+            scThis = parseFloat(row.find('td').eq(10).text().replace(/,/g, '')) || 0;
+        }
         let adjustment = parseFloat(row.find('td').eq(11).find('input').val()) || 0;
         let hcPrev = parseFloat(row.find('td').eq(12).text().replace(/,/g, '')) || 0;
         let hcThis = parseFloat(row.find('td').eq(13).text().replace(/,/g, '')) || 0;
@@ -426,7 +451,8 @@ document.addEventListener('DOMContentLoaded', function() {
         contentType: "application/json",
         data: JSON.stringify({
           hc_claim_data: data,
-          current_hc_claim_display_id: currentHcClaimId
+          current_hc_claim_display_id: currentHcClaimId,
+          save_or_final: save_or_final
         }),
         success: function(response) {
           alert('Head Contract Claim Finalised. Data saved successfully.');
@@ -442,13 +468,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // The two buttons in the modal
     $('#saveAdjustmentsButton').on('click', function(event) {
       event.preventDefault();
-      gatherAndPostHCClaimData(0);  // pass 0 to indicate "not finalised"
+      const currentHcClaimId = $('#hcPrepSheetModal').data('current-hc-claim-id');
+      gatherAndPostHCClaimData(currentHcClaimId || 0, 0);  // Save mode
     });
   
     $('#finalise_hc_claim_btn').on('click', function(event) {
       event.preventDefault();
       let claimId = $(this).data('claim-id');
-      gatherAndPostHCClaimData(claimId);  // pass real ID => finalise
+      gatherAndPostHCClaimData(claimId, 1);  // Finalise mode
     });
 
     $('#hcPrepSheetModal').on('shown.bs.modal', function() {

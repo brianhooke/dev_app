@@ -180,3 +180,67 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Event listeners for margin category and lines upload
+document.getElementById('uploadMarginCategoryAndLinesButton').addEventListener('click', function() {
+    document.getElementById('marginCategoryAndLinesCsvFileInput').click();
+});
+
+document.getElementById('marginCategoryAndLinesCsvFileInput').addEventListener('change', function(event) {
+    var file = event.target.files[0];
+    if (file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var csvData = e.target.result;
+            var lines = csvData.split('\n');
+            var headers = lines[0].split(',');
+            var rows = [];
+            
+            // Process each line after headers
+            for (var i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue; // Skip empty lines
+                
+                var currentLine = lines[i].split(',');
+                console.log('CSV line:', currentLine);
+                var row = {
+                    category: currentLine[0],
+                    item: currentLine[1],
+                    xero_code: currentLine[2],
+                    contract_budget: currentLine[3],
+                    invoice_category: currentLine[4] // Now at index 4 with no empty column
+                };
+                rows.push(row);
+            }
+
+            // Get division from the page and convert to integer
+            var division = parseInt(document.getElementById('division').value, 10);
+
+            // Send the processed data to the server
+            fetch('/upload_margin_category_and_lines/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ 
+                    rows: rows,
+                    division: division
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                alert('Margin categories and lines uploaded successfully');
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error uploading margin categories and lines: ' + error.message);
+            });
+        };
+        reader.readAsText(file);
+    }
+});

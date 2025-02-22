@@ -73,6 +73,7 @@ class Categories(models.Model):
     categories_pk = models.AutoField(primary_key=True)
     division = models.IntegerField()
     category = models.CharField(max_length=100)
+    invoice_category = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
     def __str__(self):
         return self.category
@@ -95,8 +96,8 @@ class Quotes(models.Model):
     quotes_pk = models.AutoField(primary_key=True)
     supplier_quote_number = models.CharField(max_length=255)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
-    pdf = models.FileField(upload_to='pdfs/')
-    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
+    pdf = models.FileField(upload_to='pdfs/', null=True)
+    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True)
     def __str__(self):
         return f"Quote #{self.quotes_pk} - Cost: {self.total_cost}"
 

@@ -71,7 +71,7 @@ class InvoiceAllocationsForm(forms.ModelForm):
 
 # Custom admin classes
 class CategoriesAdmin(admin.ModelAdmin):
-    list_display = ("categories_pk", "division", "category", "order_in_list")
+    list_display = ("categories_pk", "division", "category", "invoice_category", "order_in_list")
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm

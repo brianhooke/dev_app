@@ -113,8 +113,14 @@ function addInvoiceLineItem(item, amount, notes = '') {
     select.style.maxWidth = "100%";
     select.innerHTML = '<option value="">Select an item</option>';
     console.log("costings are: " + costings);
+    // Create a map of items to filter out margin items
+    const marginItems = new Set(itemsData.filter(item => item.order_in_list === '-1').map(item => item.item));
+    
     costings.forEach(function(costing) {
-        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
+        // Only add items that are not in the marginItems set
+        if (!marginItems.has(costing.item)) {
+            select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
+        }
     });
     var firstCell = newRow.insertCell(0);
     firstCell.appendChild(select);

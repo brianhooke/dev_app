@@ -7,7 +7,7 @@ from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, De
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
-from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch
+from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -44,7 +44,7 @@ from django.forms.models import model_to_dict
 from django.db.models import Sum
 from .models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
 import json
-from django.db.models import Q
+from django.db.models import Q, Sum
 import ssl
 import urllib.request
 from django.core.exceptions import ValidationError
@@ -63,10 +63,18 @@ def drawings(request):
 
 def main(request, division):
     costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list','category__category','item')
-    costings = [model_to_dict(costing) for costing in costings]
-    for c in costings:
-        cat_obj = Categories.objects.get(pk=c['category'])
-        c['category'] = cat_obj.category
+    costings_data = []
+    for costing in costings:
+        costing_dict = model_to_dict(costing)
+        # Keep original category ID
+        category_id = costing_dict['category']
+        # Add category name and order_in_list
+        cat_obj = costing.category
+        costing_dict['category'] = cat_obj.category  # Keep the name for display
+        costing_dict['category_id'] = category_id    # Keep the ID for relationships
+        costing_dict['category_order_in_list'] = cat_obj.order_in_list  # Add this for quotes modal
+        costings_data.append(costing_dict)
+    costings = costings_data
     contacts = Contacts.objects.filter(division=division,checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
@@ -97,10 +105,18 @@ def main(request, division):
     # Print how the totals are being assigned
     print('\nAssigning totals to costings:')
     for c in costings:
-        original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
-        c['sc_invoiced'] = original_value
+        if c['category_order_in_list'] == -1:
+            # For margin items, get sc_invoiced from HC_claim_allocations
+            hc_alloc = HC_claim_allocations.objects.filter(
+                item=c['costing_pk']
+            ).first()
+            c['sc_invoiced'] = hc_alloc.sc_invoiced if hc_alloc else 0
+        else:
+            # For non-margin items, use existing Invoice_allocations logic
+            original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
+            c['sc_invoiced'] = original_value
         c['sc_paid'] = 0
-        print(f"Costing {c['costing_pk']}: Found in sums_dict: {c['costing_pk'] in invoice_allocations_sums_dict}, Value: {original_value} (type: {type(original_value)})")
+
     
     # Print category groupings and their totals
     print('\nCategory Totals:')
@@ -113,7 +129,7 @@ def main(request, division):
     
     for cat, total in category_totals.items():
         print(f"Category '{cat}': Total {total}")
-    items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed']} for c in costings]
+    items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed'],'order_in_list': c['category_order_in_list']} for c in costings]
     committed_quotes = Quotes.objects.filter(contact_pk__division=division).values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk','contact_pk__contact_name')
     committed_quotes_list = list(committed_quotes)
     for q in committed_quotes_list:
@@ -193,13 +209,25 @@ def main(request, division):
         for c in costings:
             c['hc_prev_invoiced'] = 0
             c['hc_this_claim_invoices'] = 0
-            allocs = Invoice_allocations.objects.filter(item=c['costing_pk'])
-            for al in allocs:
-                inv = Invoices.objects.get(invoice_pk=al.invoice_pk.pk)
-                if inv.associated_hc_claim and inv.associated_hc_claim.pk == current_hc_claim.pk:
-                    c['hc_this_claim_invoices'] += al.amount
-                elif inv.associated_hc_claim and inv.associated_hc_claim.pk < current_hc_claim.pk:
-                    c['hc_prev_invoiced'] += al.amount
+            
+            # Handle margin items (category_order_in_list = -1) differently
+            if c['category_order_in_list'] == -1 and current_hc_claim:
+                # For margin items, get sc_invoiced from HC_claim_allocations
+                hc_alloc = HC_claim_allocations.objects.filter(
+                    hc_claim_pk=current_hc_claim,
+                    item=c['costing_pk']
+                ).first()
+                if hc_alloc:
+                    c['hc_this_claim_invoices'] = hc_alloc.sc_invoiced
+            else:
+                # For non-margin items, use existing Invoice_allocations logic
+                allocs = Invoice_allocations.objects.filter(item=c['costing_pk'])
+                for al in allocs:
+                    inv = Invoices.objects.get(invoice_pk=al.invoice_pk.pk)
+                    if inv.associated_hc_claim and inv.associated_hc_claim.pk == current_hc_claim.pk:
+                        c['hc_this_claim_invoices'] += al.amount
+                    elif inv.associated_hc_claim and inv.associated_hc_claim.pk < current_hc_claim.pk:
+                        c['hc_prev_invoiced'] += al.amount
     else:
         for c in costings:
             c['hc_prev_invoiced'] = 0
@@ -253,26 +281,38 @@ def main(request, division):
                 alloc_list.append({"item_pk": ia.item.pk,"item_name": ia.item.item,"amount": str(ia.amount),"invoice_allocation_type": allocation_type_str})
             c_entry["invoices"].append({"invoice_number": inv.invoice_pk,"allocations": alloc_list})
         progress_claim_invoice_allocations.append(c_entry)
+    # Generate contract_budget_totals, grouped by invoice_category
+    contract_budget_totals = (Costing.objects.filter(category__division=division)
+        .values('category__invoice_category')  # Group by invoice_category
+        .annotate(
+            total_contract_budget=Sum('contract_budget'),
+            max_order=Max('category__order_in_list'),  # To determine the latest category
+            latest_category=Max('category__category')  # Get the latest category name
+        ).order_by('max_order'))
+
+    # Generate claim_category_totals, grouped by hc_claim_pk and invoice_category
     claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division)
-        .values('hc_claim_pk', 'hc_claim_pk__display_id', 'category__categories_pk', 'category__category')
+        .values('hc_claim_pk', 'hc_claim_pk__display_id', 'category__invoice_category')
         .annotate(
             total_hc_claimed=Sum('hc_claimed'),
-            total_qs_claimed=Sum('qs_claimed')
-        ).order_by('hc_claim_pk', 'category__order_in_list'))
-    contract_budget_totals = (Costing.objects.filter(category__division=division)
-        .values('category__categories_pk', 'category__category')
-        .annotate(total_contract_budget=Sum('contract_budget'))
-        .order_by('category__order_in_list'))
+            total_qs_claimed=Sum('qs_claimed'),
+            max_order=Max('category__order_in_list'),  # To determine the latest category
+            latest_category=Max('category__category')  # Get the latest category name
+        ).order_by('hc_claim_pk', 'max_order'))
+
+    # Build the dictionary for the final list
     claim_category_totals_dict = {}
     claim_category_totals_dict[0] = {
         "display_id": "Contract Budget",
         "categories": [{
-            "categories_pk": i['category__categories_pk'],
-            "category": i['category__category'],
+            "categories_pk": None,  # No PK since we're aggregating by invoice_category
+            "category": i['category__invoice_category'],  # Use invoice_category as the category value
             "total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0,
             "total_qs_claimed": 0.0
         } for i in contract_budget_totals]
     }
+
+    # Process claim_category_totals
     for i in claim_category_totals:
         pk = i['hc_claim_pk']
         if pk not in claim_category_totals_dict:
@@ -281,26 +321,29 @@ def main(request, division):
                 "categories": []
             }
         claim_category_totals_dict[pk]["categories"].append({
-            "categories_pk": i['category__categories_pk'],
-            "category": i['category__category'],
+            "categories_pk": None,  # No PK since we're aggregating by invoice_category
+            "category": i['category__invoice_category'],  # Use invoice_category as the category value
             "total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0,
             "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0
         })
+
+    # Convert to list
     claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
-    print("\nClaim Category Totals List:", claim_category_totals_list, "\n")
+
+    # Convert to JSON
     claim_category_totals_json = json.dumps(claim_category_totals_list)
-    
     # Build base_table_dropdowns
     base_table_dropdowns = {}
     
-    # Get all costing PKs
+    # Get all costing PKs, excluding those with Categories.order_in_list = -1
     costing_pks = Costing.objects.filter(category__division=division).values_list('costing_pk', flat=True)
     
     for costing_pk in costing_pks:
         base_table_dropdowns[costing_pk] = {
             "committed": {},
             "invoiced_direct": {},
-            "invoiced_all": {}
+            "invoiced_all": {},
+            "uncommitted": 0.0  # Initialize uncommitted value
         }
         
         # Get committed data (from Quote_allocations)
@@ -308,45 +351,83 @@ def main(request, division):
             item_id=costing_pk
         ).select_related('quotes_pk__contact_pk')
         
+        costing = Costing.objects.get(costing_pk=costing_pk)
+        is_margin = costing.category.order_in_list == -1
+
+        # Calculate total committed amount
+        total_committed = 0.0
         if quote_allocations.exists():
-            base_table_dropdowns[costing_pk]["committed"] = [
+            committed_items = [
                 {
-                    "supplier": qa.quotes_pk.contact_pk.contact_name,
-                    "quote_num": qa.quotes_pk.supplier_quote_number,
+                    "supplier": "Margin" if is_margin else (qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown'),
+                    "quote_num": "Margin" if is_margin else (qa.quotes_pk.supplier_quote_number if qa.quotes_pk else '-'),
                     "amount": float(qa.amount)
                 } for qa in quote_allocations
             ]
+            base_table_dropdowns[costing_pk]["committed"] = committed_items
+            total_committed = sum(item["amount"] for item in committed_items)
+
+        # Calculate uncommitted amount (contract_budget - committed)
+        base_table_dropdowns[costing_pk]["uncommitted"] = float(costing.contract_budget) - total_committed
         
-        # Get invoiced_direct data
-        invoice_directs = Invoice_allocations.objects.filter(
-            item_id=costing_pk,
-            invoice_pk__invoice_division=division
-        ).filter(
-            Q(allocation_type=1) | 
-            Q(allocation_type=0, invoice_pk__invoice_type=1)
-        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-        
-        base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
-            "supplier": invoice.invoice_pk.contact_pk.contact_name,
-            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-            "amount": float(invoice.amount)
-        } for invoice in invoice_directs]
-        
-        # Get invoiced_all data
-        invoice_alls = Invoice_allocations.objects.filter(
-            item_id=costing_pk,
-            invoice_pk__invoice_division=division
-        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-        
-        base_table_dropdowns[costing_pk]["invoiced_all"] = [{
-            "supplier": invoice.invoice_pk.contact_pk.contact_name,
-            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-            "amount": float(invoice.amount)
-        } for invoice in invoice_alls]
+        if is_margin:
+            # For margin items, leave invoiced_direct empty
+            base_table_dropdowns[costing_pk]["invoiced_direct"] = []
+            
+            # For invoiced_all, get data from HC_claims and HC_claim_allocations
+            hc_claims_data = HC_claims.objects.filter(
+                status__gt=0,
+                hc_claim_allocations__item=costing_pk
+            ).annotate(
+                total_sc_invoiced=Sum('hc_claim_allocations__sc_invoiced', 
+                                      filter=Q(hc_claim_allocations__item=costing_pk))
+            ).values('display_id', 'date', 'total_sc_invoiced')
+            
+            base_table_dropdowns[costing_pk]["invoiced_all"] = [{
+                "supplier": f"HC Claim {claim['display_id']}",
+                "date": claim['date'].strftime('%d/%m/%Y'),
+                "invoice_num": str(claim['display_id']),
+                "amount": float(claim['total_sc_invoiced'])
+            } for claim in hc_claims_data]
+            
+        else:
+            # For non-margin items, use original logic
+            # Get invoiced_direct data
+            invoice_directs = Invoice_allocations.objects.filter(
+                item_id=costing_pk,
+                invoice_pk__invoice_division=division
+            ).filter(
+                Q(allocation_type=1) | 
+                Q(allocation_type=0, invoice_pk__invoice_type=1)
+            ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
+            
+            base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
+                "supplier": invoice.invoice_pk.contact_pk.contact_name,
+                "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
+                "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+                "amount": float(invoice.amount)
+            } for invoice in invoice_directs]
+            
+            # Get invoiced_all data
+            invoice_alls = Invoice_allocations.objects.filter(
+                item_id=costing_pk,
+                invoice_pk__invoice_division=division
+            ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
+            
+            base_table_dropdowns[costing_pk]["invoiced_all"] = [{
+                "supplier": invoice.invoice_pk.contact_pk.contact_name,
+                "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
+                "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+                "amount": float(invoice.amount)
+            } for invoice in invoice_alls]
     
-    print("\nbase_table_dropdowns:", json.dumps(base_table_dropdowns, indent=2), "\n")
+    print("\nDEBUG - All costing_pks:", list(costing_pks))
+    print("\nDEBUG - base_table_dropdowns for each costing_pk:")
+    for pk in costing_pks:
+        costing = Costing.objects.get(costing_pk=pk)
+        print(f"\nCosting PK: {pk}")
+        print(f"Category order_in_list: {costing.category.order_in_list}")
+        print(f"Data: {json.dumps(base_table_dropdowns.get(pk), indent=2)}")
     
     context = {
         "division": division,
@@ -1669,6 +1750,7 @@ def update_hc_claim_data(request):
         try:
             data = json.loads(request.body)
             current_hc_claim_display_id = data.get('current_hc_claim_display_id', '0')
+            save_or_final = data.get('save_or_final', 0)  # Default to save mode
             hc_claim = HC_claims.objects.get(status=0)  # There will only be one entry with status=0
             for entry in data.get('hc_claim_data', []):
                 category = Categories.objects.get(category=entry['category'])
@@ -1696,8 +1778,9 @@ def update_hc_claim_data(request):
                 )
             if current_hc_claim_display_id != '0':
                 hc_claim_to_update = HC_claims.objects.get(display_id=current_hc_claim_display_id)
-                hc_claim_to_update.status = 1  # Set status to 1 for approved
-                hc_claim_to_update.save()
+                if save_or_final == 1:  # Only update status if in finalise mode
+                    hc_claim_to_update.status = 1  # Set status to 1 for approved
+                    hc_claim_to_update.save()
             return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
         except json.JSONDecodeError:
             return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
@@ -1966,3 +2049,79 @@ def send_hc_claim_to_xero(request):
             })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+@csrf_exempt
+def upload_margin_category_and_lines(request):
+    if request.method == 'POST':
+        try:
+            logger.info('Received margin category upload request')
+            data = json.loads(request.body)
+            logger.info(f'Parsed request body: {data}')
+            rows = data['rows']
+            division = data['division']
+            logger.info(f'Processing {len(rows)} rows for division {division}')
+            
+            with transaction.atomic():
+                # 1. Create or replace the Categories entry
+                if not rows:
+                    raise ValueError('No data rows found in CSV')
+                    
+                try:
+                    category_name = rows[0]['category']
+                    invoice_category = rows[0].get('invoice_category', category_name)  # Default to category name if not specified
+                    logger.info(f'Processing category: {category_name}, invoice_category: {invoice_category}')
+                except (KeyError, IndexError) as e:
+                    raise ValueError(f'Missing required field in CSV: {str(e)}')
+                
+                Categories.objects.update_or_create(
+                    division=division,
+                    order_in_list=-1,
+                    defaults={
+                        'category': category_name,
+                        'invoice_category': invoice_category
+                    }
+                )
+                
+                # 2. Calculate total cost from contract_budget values
+                total_cost = sum(Decimal(row['contract_budget']) for row in rows)
+                
+                # 3. Create or replace the Quotes entry
+                quote, created = Quotes.objects.update_or_create(
+                    supplier_quote_number='Internal_Margin_Quote',
+                    defaults={
+                        'total_cost': total_cost
+                    }
+                )
+                
+                # 4. Delete existing allocations for this quote
+                Quote_allocations.objects.filter(quotes_pk=quote).delete()
+                
+                # 5. Create new allocations
+                category = Categories.objects.get(division=division, order_in_list=-1)
+                for row in rows:
+                    costing, created = Costing.objects.update_or_create(
+                        category=category,
+                        item=row['item'],
+                        defaults={
+                            'xero_account_code': row['xero_code'],
+                            'contract_budget': row['contract_budget'],
+                            'uncommitted': 0,
+                            'fixed_on_site': 0,
+                            'sc_invoiced': 0,
+                            'sc_paid': 0
+                        }
+                    )
+                    
+                    Quote_allocations.objects.create(
+                        quotes_pk=quote,
+                        item=costing,
+                        amount=row['contract_budget']
+                    )
+                
+            return JsonResponse({'status': 'success'})
+            
+        except Exception as e:
+            logger.error(f'Error in upload_margin_category_and_lines: {str(e)}')
+            return JsonResponse({'error': str(e)}, status=400)
+            
+    return JsonResponse({'error': 'Invalid request method'}, status=405)

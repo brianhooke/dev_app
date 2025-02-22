@@ -1,6 +1,7 @@
 {% load static %}
 {% load humanize %}
 {% load math_filters %}
+{% csrf_token %}
 
 <style>
   .invoiced-cell {
@@ -77,11 +78,14 @@
     <button id="uploadCategoriesButton">Upload Categories</button>
     <button id="uploadCostingsButton">Upload Costings</button>
     <button id="updateContractBudgetButton">Update Contract Budget</button>
+    <button id="uploadMarginCategoryAndLinesButton">Upload Margin Categories and Lines</button>
   </div>
 
   <input type="file" id="csvFileInput" style="display:none;">
   <input type="file" id="costingCsvFileInput" style="display:none;">
   <input type="file" id="updateContractBudgetCsvFileInput" style="display:none;">
+  <input type="file" id="marginCategoryAndLinesCsvFileInput" style="display:none;">
+  <input type="hidden" id="division" value="{{ division }}">
 
   <table style="width:100%; border-collapse: collapse; border-radius: 8px; overflow: hidden;">
     <thead style="position: sticky; top: 0;">
@@ -147,9 +151,15 @@
               </div>
             </td>
             <td>
-              <a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
-                {{ costing.uncommitted|floatformat:2|intcomma }}
-              </a>
+              <div class="uncommitted-value {% if costing.category_order_in_list != -1 %}editable{% else %}non-editable{% endif %}">
+                {% if costing.category_order_in_list != -1 %}
+                  <a href="#" data-toggle="modal" data-target="#editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
+                    {{ costing.uncommitted|floatformat:2|intcomma }}
+                  </a>
+                {% else %}
+                  <span>{{ costing.uncommitted|floatformat:2|intcomma }}</span>
+                {% endif %}
+              </div>
             </td>
             <td class="committed-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'committed')">
               <span class="committed-value" style="color: #28a745;">
