@@ -5,6 +5,11 @@ $(document).ready(function() {
         }
     });
 
+    // Reset dropdown when createPoViewSendModal is closed
+    $('#createPoViewSendModal').on('hidden.bs.modal', function() {
+        $('#poDropdown').val('PurchaseOrders');
+    });
+
     // Function to send emails for selected PO boxes when 'send email' clicked
     $('#sendEmailButton').click(function() {
         console.log('Send Email Button Clicked');

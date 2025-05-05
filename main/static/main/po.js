@@ -5,17 +5,21 @@ $(document).ready(function() {
         }
     });
 
-    $('#poSupplierSelect').change(function() {
-      var selectedContact = $(this).find('option:selected');
-      var quotes = JSON.parse(selectedContact.attr('data-quotes'));
-      var poQuoteSelect = $('#poQuoteSelect');
-      poQuoteSelect.empty();
-      poQuoteSelect.append('<option selected>Select Quote...</option>');
-      $.each(quotes, function(index, quote) {
-        poQuoteSelect.append('<option value="' + quote.quotes_pk + '">' + quote.supplier_quote_number + '</option>');
-      });
+    // Reset dropdown when modals are closed
+    $('#createPoSelectModal, #createPoModal').on('hidden.bs.modal', function() {
+        $('#poDropdown').val('PurchaseOrders');
     });
 
+    $('#poSupplierSelect').change(function() {
+        var selectedContact = $(this).find('option:selected');
+        var quotes = JSON.parse(selectedContact.attr('data-quotes'));
+        var poQuoteSelect = $('#poQuoteSelect');
+        poQuoteSelect.empty();
+        poQuoteSelect.append('<option selected>Select Quote...</option>');
+        $.each(quotes, function(index, quote) {
+            poQuoteSelect.append('<option value="' + quote.quotes_pk + '">' + quote.supplier_quote_number + '</option>');
+        });
+    });
 
     $('#saveCategoryButton').click(function() {
         var selectedSupplierPk = $('#poSupplierSelect option:selected').val();
@@ -92,7 +96,7 @@ $(document).ready(function() {
                 <div class="form-group" style="display: flex; align-items: center;"><label for="note1" style="flex: 1;">Note 1:</label><input type="text" id="note1" class="form-control" style="flex: 4;"></div>
                 <div class="form-group" style="display: flex; align-items: center;"><label for="note2" style="flex: 1;">Note 2:</label><input type="text" id="note2" class="form-control" style="flex: 4;"></div>
                 <div class="form-group" style="display: flex; align-items: center;"><label for="note3" style="flex: 1;">Note 3:</label><input type="text" id="note3" class="form-control" style="flex: 4;"></div>
-            `;            
+            `;
                 $('#createPoModal .modal-body').append(notesRows); 
                 // Add event listener to the "Add new Item" button
                 $('.addItemButton').click(function() {

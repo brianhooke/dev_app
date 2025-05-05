@@ -7,11 +7,10 @@ $(document).ready(function() {
             populateCommittedQuotesTable();
         }
     });
-
-    // Reload page when modal is closed
-    $('.modal-footer .btn-secondary').on('click', function() {
-        location.reload();
-    });
+// Reset dropdown when committedQuotesModal is closed
+$('#committedQuotesModal').on('hidden.bs.modal', function() {
+    $('#dropdown').val('Quotes');
+});
 });
 
 // Function to populate the committed quotes table
