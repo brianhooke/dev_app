@@ -6,10 +6,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Reset dropdown when modals are closed
+    $('#unallocatedInvoicesModal, #selectInvoiceTypeModal, #allocatedInvoicesModal').on('hidden.bs.modal', function() {
+        console.log('Modal closed, resetting claimsDropdownInvoices');
+        $('#claimsDropdownInvoices').val('Invoices');
+    });
+
     // Handle "View" link click in the existing invoices modal
     document.querySelectorAll('.view-pdf-invoices').forEach(link => {
         link.addEventListener('click', function(event) {
-            console.log("View PDF link clicked")
+            console.log("View PDF link clicked");
             event.preventDefault();
             const pdfUrl = this.getAttribute('data-url');
             fetch(pdfUrl, {

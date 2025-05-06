@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
             fileInput.click();
         }
     });
+
+
+    
     // Event listener for the save invoice button
     document.getElementById('saveInvoiceButton').addEventListener('click', gatherInvoiceData);
     // Setup for real-time calculation and display of invoice totals

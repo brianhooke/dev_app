@@ -1,4 +1,4 @@
-  // Add html2pdf library
+// Add html2pdf library
 const html2pdfScript = document.createElement('script');
 html2pdfScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
 document.head.appendChild(html2pdfScript);
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         html2pdf().set(opt).from(content).save();
     });
+
     const hcDropdown = document.getElementById('hcDropdown');
     if (hcDropdown) {
         hcDropdown.addEventListener('change', (e) => {
@@ -28,9 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Reset dropdown when modals are closed
+    $('#existingClaimsModal, #hcPrepSheetModal').on('hidden.bs.modal', function() {
+        console.log('Modal closed, resetting hcDropdown to HCClaims');
+        $('#hcDropdown').val('HCClaims');
+    });
 });
 
-//Globals 
+// Globals 
 function formatNumber(num) {
     if (num === null || num === undefined) return '0.00';
     return parseFloat(num).toLocaleString('en-US', {
@@ -139,14 +146,14 @@ function generateExitingClaimsModalData(claim) {
             .attr('data-claim-id', claim.hc_claim_pk);   // unify the attribute name
         xeroCell.append(checkbox);
     } else if (claim.status >= 2) {
-        xeroCell.append($('<span>').css('color', 'green').html('&#10004;'));
+        xeroCell.append($('<span>').css('color', 'green').html('✔'));
     }
     row.append(xeroCell);
     return row;
 }
 
 function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
-    console.log("Claim Type is", claimType)
+    console.log("Claim Type is", claimType);
     const claimField = claimType === 'hc' ? 'total_hc_claimed' : 'total_qs_claimed';
     const claimTotals = claim_category_totals.find(ct => ct.hc_claim_pk === claim.hc_claim_pk);
     const iframe = document.getElementById('existingClaimsPdfViewer');
@@ -418,7 +425,7 @@ $('#sendToXeroButton').on('click', function() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            checkedBox.closest('td').html('<span style="color: green;">&#10004;</span>');
+            checkedBox.closest('td').html('<span style="color: green;">✔</span>');
             $('#sendToXeroButton').prop('disabled', true);
             alert('Successfully sent to Xero');
             location.reload();
