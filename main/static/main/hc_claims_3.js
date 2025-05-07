@@ -251,22 +251,22 @@ document.addEventListener('DOMContentLoaded', function() {
       // Calculate "hc-this-claim"
       let hcThisClaim = Math.min(
         contractBudget - hcPrevClaimed,
-        Math.max(
-          0,
-          contractBudget - c2c + hcThisClaimInvoices - hcPrevClaimed + adjustment
-        )
+        contractBudget - c2c + hcThisClaimInvoices - hcPrevClaimed + adjustment
       );
       // Calculate "qs-this-claim"
-      let qsThisClaim = Math.min(
-          fixedOnSite*(contractBudget/workingBudget), //Note, fixedOnSite is in terms of WorkingBudget
-          Math.max(
-              0,
-              contractBudget - c2c + hcThisClaimInvoices  - qsClaimed + adjustment
-          )
-      );
+      let qsThisClaim;
+      if (workingBudget === 0 || isNaN(workingBudget)) {
+          // Handle division by zero
+          qsThisClaim = fixedOnSite > 0 ? fixedOnSite : 0;
+      } else {
+          qsThisClaim = Math.min(
+              fixedOnSite*(contractBudget/workingBudget), //Note, fixedOnSite is in terms of WorkingBudget
+              contractBudget - c2c + hcThisClaimInvoices - qsClaimed + adjustment
+          );
+      }
   
-      $('#hc-this-claim-' + costingId).text(hcThisClaim > 0 ? formatNumber(hcThisClaim) : '-');
-      $('#qs-this-claim-' + costingId).text(qsThisClaim > 0 ? formatNumber(qsThisClaim) : '-');
+      $('#hc-this-claim-' + costingId).text(formatNumber(hcThisClaim));
+      $('#qs-this-claim-' + costingId).text(formatNumber(qsThisClaim));
   
       flashCell('#hc-this-claim-' + costingId);
       flashCell('#qs-this-claim-' + costingId);
@@ -351,20 +351,20 @@ document.addEventListener('DOMContentLoaded', function() {
       $('.unique-group' + groupNumber).each(function() {
         let cc = $(this).find('td');
         if (cc.length >= 16) {
-          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '')) || 0;
+          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '')) || 0;
+          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '')) || 0;
+          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '')) || 0;
+          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '')) || 0;
+          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '')) || 0;
+          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '')) || 0;
+          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '')) || 0;
+          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '')) || 0;
           gAdj += parseFloat(cc.eq(11).find('input').val()) || 0;
-          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '')) || 0;
+          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '')) || 0;
+          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '')) || 0;
+          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '')) || 0;
         }
       });
     

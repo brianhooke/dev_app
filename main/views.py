@@ -267,7 +267,7 @@ def main(request, division):
             if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
                 c['qs_claimed'] += al.qs_claimed
     for c in costings:
-        c['qs_this_claim'] = max(0,min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed']))
+        c['qs_this_claim'] = min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed'])
     spv_data = SPVData.objects.first()
     distinct_contacts_quotes = Quotes.objects.values_list("contact_pk", flat=True).distinct()
     progress_claim_quote_allocations = []

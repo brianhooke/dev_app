@@ -251,13 +251,7 @@
                                 <td id="hc-this-claim-{{ costing.costing_pk }}">
                                     {% with result=costing.contract_budget|subtract:costing.committed|subtract:costing.uncommitted|add:costing.hc_prev_invoiced|add:costing.hc_this_claim_invoices|subtract:costing.hc_prev_claimed %}
                                         {% if result %}
-                                            {% with max_result=result|add:0|max_value:0 %}
-                                                {% if max_result == 0 %}
-                                                    -
-                                                {% else %}
-                                                    {{ max_result|floatformat:2|intcomma }}
-                                                {% endif %}
-                                            {% endwith %}
+                                            {{ result|floatformat:2|intcomma }}
                                         {% else %}
                                             -
                                         {% endif %}
@@ -265,10 +259,10 @@
                                 </td>
                                 <td id="qs-claimed-{{costing.costing_pk}}">{% if costing.qs_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.qs_claimed|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="qs-this-claim-{{ costing.costing_pk }}">
-                                    {% if costing.qs_this_claim == 0 %}
-                                        -
-                                    {% else %}
+                                    {% if costing.qs_this_claim != None %}
                                         {{ costing.qs_this_claim|floatformat:2|intcomma }}
+                                    {% else %}
+                                        -
                                     {% endif %}
                                 </td>
                             </tr>
