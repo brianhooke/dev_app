@@ -96,6 +96,7 @@
         <th style="position: sticky; top: 0;"><strong>Working Budget</strong></th>
         <th style="position: sticky; top: 0;"><strong>Uncommitted</strong></th>
         <th style="position: sticky; top: 0;"><strong>Committed</strong></th>
+        <th style="position: sticky; top: 0;"><strong>C2C</strong></th>
         <th style="position: sticky; top: 0;"><strong>Invoiced</strong></th>
         {% if division == 2 %}
           <th style="position: sticky; top: 0;">Fixed On Site</th>
@@ -110,6 +111,7 @@
             <strong>{{ category.grouper }}</strong>
             <span class="dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">▼</span>
           </td>
+          <td></td>
           <td></td>
           <td></td>
           <td></td>
@@ -174,6 +176,15 @@
                 </div>
               </div>
             </td>
+            <td>
+              <span style="color: #28a745;">
+                {% if costing.c2c|floatformat:2 == "0.00" %}
+                  -
+                {% else %}
+                  {{ costing.c2c|floatformat:2|intcomma }}
+                {% endif %}
+              </span>
+            </td>
             <td class="invoiced-cell" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'invoiced')">
               <span class="invoiced-value" style="color: #28a745;">
                 {% if costing.sc_invoiced|floatformat:2 == "0.00" %}
@@ -230,6 +241,13 @@
             -
           {% else %}
             {{ totals.total_committed|floatformat:2|intcomma }}
+          {% endif %}
+        </td>
+        <td>
+          {% if totals.total_c2c == 0 %}
+            -
+          {% else %}
+            {{ totals.total_c2c|floatformat:2|intcomma }}
           {% endif %}
         </td>
         <td>

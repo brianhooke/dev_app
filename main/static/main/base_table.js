@@ -91,25 +91,42 @@ $('[data-toggle="collapse"]').on('click', function () {
   $(this).toggleClass('collapsed');
   var groupNumber = $(this).data('target').replace('.group', '');
   var sumContractBudget = 0, sumWorkingBudget = 0, sumUncommitted = 0,
-      sumCommitted = 0, sumFixedOnSite = 0, sumInvoiced = 0;
+      sumCommitted = 0, sumC2C = 0, sumInvoiced = 0, sumFixedOnSite = 0;
   $('.group' + groupNumber).each(function () {
+    // Extract values from cells, using appropriate selectors
     var contractBudget = $(this).find('td').eq(2).text().replace(/,/g, '').trim();
     var workingBudget = $(this).find('td').eq(3).find('.working-budget-value').text().replace(/,/g, '').trim();
     var uncommitted = $(this).find('td').eq(4).text().replace(/,/g, '').trim();
     var committed = $(this).find('td').eq(5).text().replace(/,/g, '').trim();
-    var fixedOnSite = $(this).find('td').eq(7).text().replace(/,/g, '').trim();
-    var invoicedText = $(this).find('td').eq(6).find('.invoiced-value').text().trim();
-    var invoiced = invoicedText.replace(/[^0-9.-]+/g, '');
+    
+    // For C2C - try both with and without span selector
+    var c2c = $(this).find('td').eq(6).text().replace(/,/g, '').trim();
+    if (c2c === '-') c2c = '0';
+    
+    // For invoiced - be careful with the selection
+    var invoicedCell = $(this).find('td').eq(7);
+    var invoicedText = invoicedCell.find('.invoiced-value').length > 0 ? 
+                       invoicedCell.find('.invoiced-value').text().replace(/,/g, '').trim() : 
+                       invoicedCell.text().replace(/,/g, '').trim();
+    if (invoicedText === '-') invoicedText = '0';
+    
+    var fixedOnSite = $(this).find('td').eq(8).text().replace(/,/g, '').trim();
+    if (fixedOnSite === '-') fixedOnSite = '0';
+    
+    // Make sure we have valid numbers
+    var invoiced = invoicedText;
     contractBudget = (contractBudget === '-' || contractBudget === '') ? 0 : parseFloat(contractBudget);
     workingBudget = (workingBudget === '-' || workingBudget === '') ? 0 : parseFloat(workingBudget);
     uncommitted = (uncommitted === '-' || uncommitted === '') ? 0 : parseFloat(uncommitted);
     committed = (committed === '-' || committed === '') ? 0 : parseFloat(committed);
+    c2c = (c2c === '-' || c2c === '') ? 0 : parseFloat(c2c);
     fixedOnSite = (fixedOnSite === '-' || fixedOnSite === '') ? 0 : parseFloat(fixedOnSite);
     invoiced = (invoiced === '-' || invoiced === '') ? 0 : parseFloat(invoiced || '0');
     sumContractBudget += contractBudget;
     sumWorkingBudget += workingBudget;
     sumUncommitted += uncommitted;
     sumCommitted += committed;
+    sumC2C += c2c;
     sumFixedOnSite += fixedOnSite;
     sumInvoiced += invoiced;
   });
@@ -121,28 +138,43 @@ $('[data-toggle="collapse"]').on('click', function () {
       workingBudgetCell = row.find('td').eq(3),
       uncommittedCell = row.find('td').eq(4),
       committedCell = row.find('td').eq(5),
-      invoicedCell = row.find('td').eq(6),
-      fixedOnSiteCell = row.find('td').eq(7);
+      c2cCell = row.find('td').eq(6),
+      invoicedCell = row.find('td').eq(7),
+      fixedOnSiteCell = row.find('td').eq(8);
   if ($(this).hasClass('collapsed')) {
     contractBudgetCell.data('original', contractBudgetCell.html());
     workingBudgetCell.data('original', workingBudgetCell.html());
     uncommittedCell.data('original', uncommittedCell.html());
     committedCell.data('original', committedCell.html());
+    c2cCell.data('original', c2cCell.html());
     fixedOnSiteCell.data('original', fixedOnSiteCell.html());
     invoicedCell.data('original', invoicedCell.html());
+    // Debug info to help identify issues
+    console.log('Category totals:', {
+      contractBudget: sumContractBudget,
+      workingBudget: sumWorkingBudget,
+      uncommitted: sumUncommitted,
+      committed: sumCommitted,
+      c2c: sumC2C,
+      invoiced: sumInvoiced,
+      fixedOnSite: sumFixedOnSite
+    });
+    
     contractBudgetCell.html(sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>');
     workingBudgetCell.html(sumWorkingBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumWorkingBudget.toFixed(2)) + '</strong>');
     uncommittedCell.html(sumUncommitted.toFixed(2) == 0.00 ? '-' : '<div class="uncommitted-value"><strong>' + formatNumber(sumUncommitted.toFixed(2)) + '</strong></div>');
     committedCell.html(sumCommitted.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumCommitted.toFixed(2)) + '</strong>');
-    fixedOnSiteCell.html(sumFixedOnSite.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumFixedOnSite.toFixed(2)) + '</strong>');
+    c2cCell.html(sumC2C.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumC2C.toFixed(2)) + '</strong>');
     invoicedCell.html(sumInvoiced.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumInvoiced.toFixed(2)) + '</strong>');
+    fixedOnSiteCell.html(sumFixedOnSite.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumFixedOnSite.toFixed(2)) + '</strong>');
   } else {
     contractBudgetCell.html(contractBudgetCell.data('original'));
     workingBudgetCell.html(workingBudgetCell.data('original'));
     uncommittedCell.html(uncommittedCell.data('original'));
     committedCell.html(committedCell.data('original'));
-    fixedOnSiteCell.html(fixedOnSiteCell.data('original'));
+    c2cCell.html(c2cCell.data('original'));
     invoicedCell.html(invoicedCell.data('original'));
+    fixedOnSiteCell.html(fixedOnSiteCell.data('original'));
   }
 });
 

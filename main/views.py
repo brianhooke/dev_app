@@ -102,6 +102,14 @@ def main(request, division):
     invoice_allocations_sums_dict = {i['item']: i['total_amount'] for i in invoice_allocations_sums}
     print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
     
+    # Calculate paid invoices (status 2 or 3) for sc_paid
+    paid_invoice_allocations = Invoice_allocations.objects.filter(
+        invoice_pk__invoice_status__in=[2, 3]  # Only include paid or sent to Xero invoices
+    ).values('item').annotate(total_amount=Sum('amount'))
+    
+    paid_invoice_allocations_dict = {i['item']: i['total_amount'] for i in paid_invoice_allocations}
+    print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
+    
     # Print how the totals are being assigned
     print('\nAssigning totals to costings:')
     for c in costings:
@@ -115,8 +123,12 @@ def main(request, division):
             # For non-margin items, use existing Invoice_allocations logic
             original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
             c['sc_invoiced'] = original_value
-        c['sc_paid'] = 0
-
+        
+        # Get paid amount from paid_invoice_allocations_dict (invoices with status 2 or 3)
+        c['sc_paid'] = paid_invoice_allocations_dict.get(c['costing_pk'], 0)
+        
+        # Calculate C2C (Cost to Complete) as committed + uncommitted - sc_paid
+        c['c2c'] = c['committed'] + c['uncommitted'] - c['sc_paid']
     
     # Print category groupings and their totals
     print('\nCategory Totals:')
@@ -153,6 +165,7 @@ def main(request, division):
     total_sc_invoiced = sum(c['sc_invoiced'] for c in costings)
     total_fixed_on_site = sum(c['fixed_on_site'] for c in costings)
     total_sc_paid = sum(c['sc_paid'] for c in costings)
+    total_c2c = sum(c['c2c'] for c in costings)
     po_globals = Po_globals.objects.first()
     po_orders = Po_orders.objects.filter(po_supplier__division=division).select_related('po_supplier').all()
     po_orders_list = []
@@ -451,7 +464,8 @@ def main(request, division):
             "total_committed": total_committed,
             "total_sc_invoiced": total_sc_invoiced,
             "total_fixed_on_site": total_fixed_on_site,
-            "total_sc_paid": total_sc_paid
+            "total_sc_paid": total_sc_paid,
+            "total_c2c": total_c2c
         },
         "po_globals": po_globals,
         "po_orders": po_orders_list,
