@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.template import loader
 from .forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects
+from .models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -196,6 +196,7 @@ def main(request, division):
     )
     sc_totals_dict = {item['associated_hc_claim']: float(item['sc_total'] or 0) for item in sc_totals}
     
+    # HC Claims data
     hc_claims_list = []
     hc_claims_qs = HC_claims.objects.all().order_by('-display_id')
     for claim in hc_claims_qs:
@@ -212,6 +213,35 @@ def main(request, division):
         }
         hc_claims_list.append(d)
     hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
+    
+    # HC Variations data
+    hc_variations_list = []
+    hc_variations_qs = Hc_variation.objects.all().order_by('-number')
+    for variation in hc_variations_qs:
+        # Get the total amount for this variation
+        variation_allocations = Hc_variation_allocations.objects.filter(hc_variation=variation)
+        total_amount = sum(allocation.amount for allocation in variation_allocations)
+        
+        # Get a list of items for this variation
+        items_list = []
+        for allocation in variation_allocations:
+            items_list.append({
+                'item': allocation.costing.item,
+                'amount': float(allocation.amount),
+                'notes': allocation.notes
+            })
+        
+        # Create the variation dictionary
+        v = {
+            'hc_variation_pk': variation.hc_variation_pk,
+            'number': variation.number,
+            'date': variation.date.strftime('%Y-%m-%d') if variation.date else None,
+            'claimed': variation.claimed,
+            'total_amount': float(total_amount),
+            'items': items_list
+        }
+        hc_variations_list.append(v)
+    hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
     current_hc_claim = HC_claims.objects.filter(status=0).first()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     hc_claim_wip_adjustments = {}
@@ -473,6 +503,7 @@ def main(request, division):
         "invoices_unallocated": invoices_unallocated_list,
         "invoices_allocated": invoices_allocated_list,
         "hc_claims": hc_claims_json,
+        "hc_variations": hc_variations_json,
         "current_hc_claim_display_id": current_hc_claim_display_id,
         "spv_data": spv_data,
         "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
@@ -1994,7 +2025,7 @@ def send_hc_claim_to_xero(request):
         contact_name = data.get('contact_name')
         categories = data.get('categories', [])
         if not all([hc_claim_pk, xero_contact_id, contact_name]):
-            return JsonResponse({'success': False, 'error': 'Missing required data'})
+            return JsonResponse({'success': False, 'error': 'Missing required fields'})
         hc_claim = HC_claims.objects.get(pk=hc_claim_pk)
         get_xero_token(request, 2)  # Ignoring the returned JsonResponse
         access_token = request.session.get('access_token')
@@ -2063,6 +2094,84 @@ def send_hc_claim_to_xero(request):
             })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def create_variation(request):
+    """Create a new HC variation and its allocation entries"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        # Parse the JSON data from the request
+        data = json.loads(request.body)
+        variation_date = data.get('variation_date')
+        items = data.get('items', [])
+        
+        # Validate required fields
+        if not variation_date:
+            return JsonResponse({'status': 'error', 'message': 'Variation date is required'}, status=400)
+        if not items or len(items) == 0:
+            return JsonResponse({'status': 'error', 'message': 'At least one item is required'}, status=400)
+        
+        # Validate that the variation date is after the most recent HC claim
+        latest_hc_claim = HC_claims.objects.all().order_by('-date').first()
+        if latest_hc_claim:
+            latest_date = latest_hc_claim.date
+            variation_date_obj = datetime.strptime(variation_date, '%Y-%m-%d').date()
+            if variation_date_obj <= latest_date:
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': f'Variation date must be after the most recent HC claim date ({latest_date.strftime("%d-%b-%y")})'
+                }, status=400)
+        
+        # Create the HC variation entry
+        with transaction.atomic():
+            # Create the variation
+            variation = Hc_variation.objects.create(
+                date=variation_date,
+                claimed=0  # Default to not claimed
+            )
+            
+            # Create allocations for each item
+            for item_data in items:
+                costing_pk = item_data.get('costing_pk')
+                amount = item_data.get('amount')
+                notes = item_data.get('notes', '')
+                
+                # Validate each item
+                if not costing_pk or not amount:
+                    transaction.set_rollback(True)
+                    return JsonResponse({'status': 'error', 'message': 'Costing and amount are required for each item'}, status=400)
+                
+                # Get the costing item
+                try:
+                    costing = Costing.objects.get(costing_pk=costing_pk)
+                except Costing.DoesNotExist:
+                    transaction.set_rollback(True)
+                    return JsonResponse({'status': 'error', 'message': f'Costing item with id {costing_pk} does not exist'}, status=404)
+                
+                # Create the allocation
+                Hc_variation_allocations.objects.create(
+                    hc_variation=variation,
+                    costing=costing,
+                    amount=amount,
+                    notes=notes
+                )
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Variation created successfully',
+            'variation_id': variation.hc_variation_pk,
+            'variation_number': variation.number
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error creating HC variation: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': f'Error creating variation: {str(e)}'}, status=500)
+
 
 @csrf_exempt
 def upload_margin_category_and_lines(request):

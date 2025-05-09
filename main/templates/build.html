@@ -75,6 +75,14 @@
       <option id="hcExistingClaims" value="existingClaims">Existing Claims</option>
   </select>
   </div>
+
+  <div style="width: 125px; padding: 10px; text-align: center; border-radius: 10px; margin-right: 10px;">
+    <select id="hcVariationsDropdown" style="width: 100%; background-color: white; color: black; border: 3px solid transparent; border-radius: 10px; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1;">
+      <option selected disabled value="HCVariations">HC Variations</option>
+      <option id="hcVariationsMakeClaim" value="makeClaim">New Claim</option>
+      <option id="hcVariationsExistingClaims" value="existingClaims">Existing Claims</option>
+    </select>
+  </div>
 </div>
 
 <input type="file" id="pdfInput" style="opacity: 0; position: absolute; left: -9999px;">
@@ -86,11 +94,13 @@
 {% include 'invoices_modals.html' %}
 {% include 'hc_claim_modals.html' %}
 {% include 'quotes_modals.html' %}
+{% include 'hc_variation_modals.html' %}
 {{ items|json_script:"items-data" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
 {{ costings|json_script:"costings" }}
 {{ hc_claims|json_script:"hc_claims" }}
+{{ hc_variations|json_script:"hc_variations" }}
 {{ contacts|json_script:"contacts" }}
 {{ contacts_unfiltered|json_script:"contacts_unfiltered" }}
 {{ hc_claim_lines_sums|json_script:"hc_claim_lines_sums" }}
@@ -104,6 +114,9 @@
   const committedQuotes = JSON.parse('{{ committed_quotes|escapejs|safe }}');
   const costings = JSON.parse(document.getElementById('costings').textContent);
   const hc_claims = JSON.parse('{{ hc_claims|escapejs|safe }}');
+  const hc_variations = JSON.parse(document.getElementById('hc_variations').textContent);
+  // For debugging HC variations data
+  console.log('HC variations loaded:', hc_variations);
   const category_summary = JSON.parse(document.getElementById('category_summary').textContent);
   const current_hc_claim_display_id = "{{ current_hc_claim_display_id }}";
   const hc_prev_fixedonsite = "{{ hc_prev_fixedonsite }}";
@@ -145,5 +158,7 @@
 <script src="{% static 'main/hc_claims_1.js' %}"></script>
 <script src="{% static 'main/hc_claims_2.js' %}"></script>
 <script src="{% static 'main/hc_claims_3.js' %}"></script>
+<script src="{% static 'main/hc_variations_1.js' %}"></script>
+<script src="{% static 'main/hc_variations_2.js' %}"></script>
 
 {% endblock %}

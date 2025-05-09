@@ -1,0 +1,140 @@
+{% load humanize %}
+{% load math_filters %} <!-- Custom library to be able to subtract with Django tags-->
+
+<!-- 1: New HC Variation Modal -->
+<div class="modal fade" id="hcVariationNewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 36%;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                <h5 class="modal-title">Create New HC Variation</h5>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; max-height: 70vh;">
+                <form id="newVariationForm">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="variationDate" style="font-size: 12px; font-weight: bold;">Variation Date: <span style="font-weight: normal;">must be later than: <span id="latestHCClaimDate"></span></span></label>
+                        <input type="date" class="form-control" id="variationDate" required style="font-size: 12px;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-size: 12px; font-weight: bold;">Variation Items:</label>
+                        <table class="table table-sm" id="variationItemsTable" style="font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40%;">Item</th>
+                                    <th style="width: 20%;">Amount</th>
+                                    <th style="width: 35%;">Notes</th>
+                                    <th style="width: 5%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <select class="form-control variation-item" required style="font-size: 12px;">
+                                            <option value="">Select Item</option>
+                                            {% for costing in costings %}
+                                                {% if costing.category_order_in_list != -1 %}
+                                                    <option value="{{ costing.costing_pk }}">{{ costing.item }}</option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control variation-amount" step="0.01" min="0" pattern="^\d+(\.\d{1,2})?$" title="Please enter a number with up to 2 decimal places" required style="font-size: 12px;">
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control variation-notes" maxlength="200" style="font-size: 12px;">
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-secondary remove-row" title="Remove" style="padding: 2px 5px; font-size: 10px;">✕</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div style="margin-top: 5px;">
+                            <button id="addVariationRow" type="button" class="btn btn-sm btn-primary" style="font-size: 12px; padding: 2px 8px;">+</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <div>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" style="font-size: 12px;">Close</button>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-primary" id="createVariationBtn" style="font-size: 12px;">Create Variation</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2: Existing HC Variations Modal -->
+<div class="modal fade" id="existingVariationsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 90%; height: 90vh;">
+        <div class="modal-content" style="border: 3px solid black; height: 100%;">
+            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                <h5 class="modal-title">Existing HC Variations</h5>
+            </div>
+            <div class="modal-body row">
+                <div class="col-md-5" style="height: 100%;">
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+                        <button id="downloadVariationSummary" class="btn btn-sm btn-primary" style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); border: none;">
+                            <i class="fas fa-download"></i> Download PDF
+                        </button>
+                    </div>
+                    <!-- The panel for displaying variation details -->
+                    <div id="variationDetailPanel" style="width: 100%; height: calc(100% - 40px); border: 1px solid #ddd; overflow-y: auto; padding: 15px;">
+                        <div class="no-variation-selected" style="text-align: center; padding-top: 50px; color: #888;">
+                            <i class="fas fa-file-alt" style="font-size: 48px;"></i>
+                            <p>Select a variation to view details</p>
+                        </div>
+                        <div class="variation-details" style="display: none;">
+                            <h4>Variation #<span id="detailVariationNumber"></span></h4>
+                            <p><strong>Date:</strong> <span id="detailVariationDate"></span></p>
+                            <p><strong>Total Amount:</strong> $<span id="detailVariationAmount"></span></p>
+                            <p><strong>Status:</strong> <span id="detailVariationStatus"></span></p>
+                            
+                            <h5 style="margin-top: 20px;">Items:</h5>
+                            <table class="table table-sm" style="font-size: 12px;">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Amount</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detailVariationItems">
+                                    <!-- Items will be added dynamically via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-7" style="height: 100%;">
+                    <div style="overflow-x: auto; white-space: nowrap;">
+                        <table id="existingVariationsTable" class="table" style="font-size: 10px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Variation #</th>
+                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Date</th>
+                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Amount</th>
+                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">View</th>
+                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Included in HC Claim</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Rows will be added dynamically by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="d-flex justify-content-between w-100">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="includeInHCClaimButton" disabled>Include in HC Claim</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

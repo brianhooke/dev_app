@@ -3,7 +3,8 @@ from django import forms
 from .models import (
     Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
-    SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations
+    SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
+    Hc_variation, Hc_variation_allocations
 )
 
 # Helper function to set nullable fields as not required
@@ -64,6 +65,19 @@ class InvoicesForm(forms.ModelForm):
 class InvoiceAllocationsForm(forms.ModelForm):
     class Meta:
         model = Invoice_allocations
+        fields = '__all__'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_nullable_fields_not_required(self, ['notes'])
+
+class HcVariationForm(forms.ModelForm):
+    class Meta:
+        model = Hc_variation
+        fields = '__all__'    
+
+class HcVariationAllocationsForm(forms.ModelForm):
+    class Meta:
+        model = Hc_variation_allocations
         fields = '__all__'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -138,6 +152,14 @@ class HC_claimsAdmin(admin.ModelAdmin):
 class HC_claim_allocationsAdmin(admin.ModelAdmin):
     list_display = ('hc_claim_pk', 'item', 'committed', 'uncommitted', 'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this', 'sc_invoiced', 'sc_invoiced_previous', 'adjustment', 'hc_claimed', 'hc_claimed_previous', 'qs_claimed', 'qs_claimed_previous')
 
+class HcVariationAdmin(admin.ModelAdmin):
+    form = HcVariationForm
+    list_display = ('hc_variation_pk', 'number', 'date', 'claimed')
+    
+class HcVariationAllocationsAdmin(admin.ModelAdmin):
+    form = HcVariationAllocationsForm
+    list_display = ('hc_variation_allocation_pk', 'hc_variation', 'costing', 'amount', 'notes')
+
 # Register models with custom admin classes
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
@@ -159,3 +181,5 @@ admin.site.register(Invoices, InvoicesAdmin)
 admin.site.register(Invoice_allocations, InvoiceAllocationsAdmin)
 admin.site.register(HC_claims, HC_claimsAdmin)
 admin.site.register(HC_claim_allocations, HC_claim_allocationsAdmin)
+admin.site.register(Hc_variation, HcVariationAdmin)
+admin.site.register(Hc_variation_allocations, HcVariationAllocationsAdmin)
