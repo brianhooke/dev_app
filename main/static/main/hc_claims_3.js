@@ -1,6 +1,15 @@
 // HC Claim Prep Sheet
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize contract budgets with variations when modal is shown
+    $('#hcPrepSheetModal').on('shown.bs.modal', function() {
+        // Update all contract budget cells with variations
+        updateAllContractBudgetsWithVariations();
+        
+        // Recalculate all totals
+        calculateTotals();
+    });
+    
 
     //////////////////////////////////////////////////////
     // Utility functions (you can put these in a shared .js if desired)
@@ -48,6 +57,75 @@ document.addEventListener('DOMContentLoaded', function() {
       return parseFloat(num).toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
+      });
+    }
+    
+    /**
+     * Calculate the contract budget with HC variations up to the HC claim date
+     * @param {string} costingPk - The costing primary key
+     * @returns {number} - Total contract budget with applicable variations
+     */
+    function calculateContractBudgetWithVariationsForHCClaim(costingPk) {
+      // Get the original contract budget
+      const budgetElement = document.getElementById('hc-contract-budget-' + costingPk);
+      if (!budgetElement) return 0;
+      
+      let originalBudget = parseFloat(budgetElement.textContent.replace(/,/g, '')) || 0;
+      let totalVariations = 0;
+      
+      // Get the HC claim date from the modal data attribute
+      const hcClaimDateStr = $('#hcPrepSheetModal').data('current-hc-claim-date');
+      if (!hcClaimDateStr) return originalBudget; // Return original budget if date not available
+      
+      const hcClaimDate = new Date(hcClaimDateStr);
+      
+      // Find all variation allocations for this costing item up to the HC claim date
+      if (typeof hc_variation_allocations !== 'undefined') {
+        const variations = hc_variation_allocations.filter(v => {
+          // Only include variations for this costing item
+          if (v.costing_pk != costingPk) return false;
+          
+          // Check if variation date is on or before the HC claim date
+          const variationDate = new Date(v.variation_date);
+          return variationDate <= hcClaimDate;
+        });
+        
+        // Sum up the applicable variation amounts
+        for (const variation of variations) {
+          totalVariations += parseFloat(variation.amount || 0);
+        }
+      }
+      
+      // Return the sum of original budget and applicable variations
+      return originalBudget + totalVariations;
+    }
+    
+    /**
+     * Update all contract budget cells in the HC Prep Sheet with variations
+     */
+    function updateAllContractBudgetsWithVariations() {
+      console.log('Updating all contract budgets with variations');
+      // Find all rows in the HC prep sheet
+      $('table.myTable tbody tr.collapse').each(function() {
+        const costingPk = $(this).find('td:eq(1)').data('item-id');
+        if (!costingPk) return; // Skip if no costing PK
+        
+        // Get original budget from the cell (before we modify it)
+        const contractBudgetCell = $('#hc-contract-budget-' + costingPk);
+        const originalBudget = parseFloat(contractBudgetCell.text().replace(/,/g, '')) || 0;
+        
+        // Get total budget with variations
+        const totalBudget = calculateContractBudgetWithVariationsForHCClaim(costingPk);
+        
+        // Only update if different (avoid unnecessary DOM updates)
+        if (Math.abs(originalBudget - totalBudget) > 0.01) {
+          // Update the cell content
+          contractBudgetCell.text(formatNumber(totalBudget));
+          console.log(`Updated budget for costing ${costingPk}: ${originalBudget} -> ${totalBudget}`);
+        }
+        
+        // Store the calculated value as a data attribute for recalculations
+        contractBudgetCell.attr('data-including-variations', totalBudget);
       });
     }
   
@@ -236,7 +314,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      let contractBudget = parseFloat($('#hc-contract-budget-' + costingId).text().replace(/,/g, '')) || 0;
+      // Use the variation-aware contract budget function
+      let contractBudget = calculateContractBudgetWithVariationsForHCClaim(costingId);
       let committed = parseFloat($('#hc-claim-committed-' + costingId).text().replace(/,/g, '')) || 0;
       let uncommitted = parseFloat($('#hc-claim-uncommitted-' + costingId + ' a').text().replace(/,/g, '')) || 0;
       let workingBudget = committed + uncommitted;
@@ -249,9 +328,21 @@ document.addEventListener('DOMContentLoaded', function() {
       let adjustment = parseFloat($('#hc-adjustment-' + costingId).val()) || 0;
   
       // Calculate "hc-this-claim"
+      // Add debug logging to understand the values
+      console.log(`Calculating HC This Claim for costing ${costingId}:`);
+      console.log(`- contractBudget: ${contractBudget}`);
+      console.log(`- hcPrevClaimed: ${hcPrevClaimed}`);
+      console.log(`- c2c: ${c2c}`);
+      console.log(`- hcThisClaimInvoices: ${hcThisClaimInvoices}`);
+      console.log(`- adjustment: ${adjustment}`);
+      
+      // Fix the calculation to avoid double-counting
+      // The calculation should reflect how much we can claim this time based on:
+      // 1. The remaining budget after previous claims
+      // 2. How much work is completed (represented by invoices) that hasn't been claimed yet
       let hcThisClaim = Math.min(
-        contractBudget - hcPrevClaimed,
-        contractBudget - c2c + hcThisClaimInvoices - hcPrevClaimed + adjustment
+        contractBudget - hcPrevClaimed, // Can't claim more than what's left in the budget
+        hcThisClaimInvoices + adjustment // We claim what we've been invoiced for (plus adjustments)
       );
       // Calculate "qs-this-claim"
       let qsThisClaim;
@@ -305,6 +396,8 @@ document.addEventListener('DOMContentLoaded', function() {
       $('tbody tr.collapse').each(function() {
         let cells = $(this).find('td');
         if (cells.length >= 16) {
+          // Use the displayed value which already includes variations
+          // This avoids double-counting variations
           totalContractBudget += parseFloat(cells.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
           totalWorkingBudget += parseFloat(cells.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
           totalUncommitted += parseFloat(cells.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
@@ -351,7 +444,9 @@ document.addEventListener('DOMContentLoaded', function() {
       $('.unique-group' + groupNumber).each(function() {
         let cc = $(this).find('td');
         if (cc.length >= 16) {
-          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '')) || 0;
+          // Use the displayed value which already includes variations
+          // This avoids double-counting variations
+          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
           gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '')) || 0;
           gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '')) || 0;
           gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '')) || 0;

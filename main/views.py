@@ -299,6 +299,7 @@ def main(request, division):
     hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
     current_hc_claim = HC_claims.objects.filter(status=0).first()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
+    current_hc_claim_date = current_hc_claim.date if current_hc_claim else None
     hc_claim_wip_adjustments = {}
     if current_hc_claim:
         hc_claim_allocs = HC_claim_allocations.objects.filter(hc_claim_pk=current_hc_claim.hc_claim_pk)
@@ -561,6 +562,7 @@ def main(request, division):
         "hc_variations": hc_variations_json,
         "hc_variation_allocations": hc_variation_allocations_json,
         "current_hc_claim_display_id": current_hc_claim_display_id,
+        "current_hc_claim_date": current_hc_claim_date,
         "spv_data": spv_data,
         "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
         "progress_claim_invoice_allocations_json": json.dumps(progress_claim_invoice_allocations),
