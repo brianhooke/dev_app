@@ -486,6 +486,7 @@ function toggleDropdown(cell, costingPk, type) {
     
     dropdown.innerHTML = `
       <div class="dropdown-header">
+        <div><strong>Item</strong></div>
         <div><strong>Date</strong></div>
         <div><strong>Notes</strong></div>
         <div><strong>$</strong></div>
@@ -493,6 +494,7 @@ function toggleDropdown(cell, costingPk, type) {
       <div class="dropdown-body">
         <div class="dropdown-row">
           <div>Contract Budget</div>
+          <div></div>
           <div></div>
           <div>$${originalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
@@ -509,13 +511,16 @@ function toggleDropdown(cell, costingPk, type) {
         // Add HC Variations section header
         const variationsHeader = document.createElement('div');
         variationsHeader.className = 'dropdown-row dropdown-section-header';
-        variationsHeader.innerHTML = '<div><strong>HC Variations</strong></div><div></div><div></div>';
+        variationsHeader.innerHTML = '<div><strong>HC Variations</strong></div><div></div><div></div><div></div>';
         dropdownBody.appendChild(variationsHeader);
         
         // Add rows for each variation allocation
         for (const variation of variations) {
           const row = document.createElement('div');
           row.className = 'dropdown-row';
+          
+          const itemCell = document.createElement('div');
+          itemCell.textContent = 'HC Variation';
           
           const dateCell = document.createElement('div');
           dateCell.textContent = formatDropdownDate(variation.variation_date) || '-';
@@ -530,6 +535,7 @@ function toggleDropdown(cell, costingPk, type) {
             maximumFractionDigits: 2 
           });
           
+          row.appendChild(itemCell);
           row.appendChild(dateCell);
           row.appendChild(notesCell);
           row.appendChild(amountCell);
