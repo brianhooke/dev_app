@@ -240,7 +240,10 @@ function populateExistingVariationsTable() {
     }
 }
 
-// Populate the iframe template with details on initialization
+// Track click state for each variation
+let clickedVariations = {};
+
+// Populate the iframe template with initial content
 function initializeVariationDetailPanel() {
     console.log('Initializing variation detail panel');
     const iframe = document.getElementById('variationDetailPanel');
@@ -349,9 +352,9 @@ function initializeVariationDetailPanel() {
                     <table>
                         <thead>
                             <tr>
-                                <th width='30%'>Item</th>
-                                <th width='20%'>Amount</th>
-                                <th width='50%'>Notes</th>
+                                <th width='45%'>Item</th>
+                                <th width='15%'>Amount</th>
+                                <th width='40%'>Notes</th>
                             </tr>
                         </thead>
                         <tbody id='iframe-detailVariationItems'>
@@ -366,49 +369,75 @@ function initializeVariationDetailPanel() {
     iframeDoc.close();
 }
 
-// Initialize the panel when the modal is shown with placeholder message
+// Initialize the panel when the modal is shown
 $('#existingVariationsModal').on('shown.bs.modal', function() {
+    // Initialize the panel with the default message
     initializeVariationDetailPanel();
 });
 
-// Show variation details in the left panel - single click behavior
+// Show variation details in the left panel - now with two-click behavior
 function showVariationDetails(variationPk) {
-    console.log('Showing details for variation:', variationPk);
+    console.log('Processing click for variation:', variationPk);
     
-    // Get the iframe document
+    // Get the iframe and its document
     const iframe = document.getElementById('variationDetailPanel');
     if (!iframe) return;
     
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    let iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
     if (!iframeDoc) return;
     
     // Initialize iframe if needed
-    if (!iframeDoc.querySelector('.variation-details')) {
+    if (!iframeDoc.querySelector('.no-variation-selected')) {
         initializeVariationDetailPanel();
-        // Need to get the document again after initialization
-        const updatedDoc = iframe.contentDocument || iframe.contentWindow.document;
-        if (!updatedDoc) return;
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!iframeDoc) return;
     }
     
-    // Make sure we handle both string and object formats
-    const variations = typeof hc_variations === 'string' ? JSON.parse(hc_variations) : hc_variations;
-    const variation = variations.find(v => v.hc_variation_pk == variationPk);
+    // Initialize the click state if not already tracked
+    if (typeof clickedVariations[variationPk] === 'undefined') {
+        clickedVariations[variationPk] = 0;
+    }
     
-    if (variation) {
-        // Hide the placeholder and show the details
-        iframeDoc.querySelector('.no-variation-selected').style.display = 'none';
-        iframeDoc.querySelector('.variation-details').style.display = 'block';
+    // Increment the click count for this variation
+    clickedVariations[variationPk]++;
+    console.log(`Click count for variation ${variationPk}: ${clickedVariations[variationPk]}`);
+    
+    // On first click, just show the placeholder
+    if (clickedVariations[variationPk] === 1) {
+        // Reset all click states except the current one
+        Object.keys(clickedVariations).forEach(key => {
+            if (key !== variationPk.toString()) {
+                clickedVariations[key] = 0;
+            }
+        });
         
-        // Fill in the details
-        iframeDoc.getElementById('iframe-detailVariationDate').textContent = formatDateToDDMMMYY(variation.date);
-        iframeDoc.getElementById('iframe-detailVariationAmount').textContent = formatCurrency(variation.total_amount);
+        // Make sure the placeholder is showing
+        iframeDoc.querySelector('.no-variation-selected').style.display = 'block';
+        iframeDoc.querySelector('.variation-details').style.display = 'none';
+        return;
+    }
+    
+    // On second click, actually show the data
+    if (clickedVariations[variationPk] >= 2) {
+        // Make sure we handle both string and object formats
+        const variations = typeof hc_variations === 'string' ? JSON.parse(hc_variations) : hc_variations;
+        const variation = variations.find(v => v.hc_variation_pk == variationPk);
         
-        // Populate items table
-        const itemsTableBody = iframeDoc.getElementById('iframe-detailVariationItems');
-        itemsTableBody.innerHTML = ''; // Clear existing rows
-        
-        // Calculate total for footer
-        let totalAmount = 0;
+        if (variation) {
+            // Hide the placeholder and show the details
+            iframeDoc.querySelector('.no-variation-selected').style.display = 'none';
+            iframeDoc.querySelector('.variation-details').style.display = 'block';
+            
+            // Fill in the details
+            iframeDoc.getElementById('iframe-detailVariationDate').textContent = formatDateToDDMMMYY(variation.date);
+            iframeDoc.getElementById('iframe-detailVariationAmount').textContent = formatCurrency(variation.total_amount);
+            
+            // Populate items table
+            const itemsTableBody = iframeDoc.getElementById('iframe-detailVariationItems');
+            itemsTableBody.innerHTML = ''; // Clear existing rows
+            
+            // Calculate total for footer
+            let totalAmount = 0;
         
         // Add each item row with enhanced styling
         variation.items.forEach((item, index) => {
@@ -463,7 +492,6 @@ function showVariationDetails(variationPk) {
         itemsTableBody.appendChild(totalRow);
     }
 }
-
 
 // Update the Include in HC Claim button based on checkbox selections
 function updateIncludeInHCClaimButton() {

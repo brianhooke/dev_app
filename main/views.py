@@ -216,7 +216,7 @@ def main(request, division):
     
     # HC Variations data
     hc_variations_list = []
-    hc_variations_qs = Hc_variation.objects.all().order_by('-number')
+    hc_variations_qs = Hc_variation.objects.all().order_by('date')
     for variation in hc_variations_qs:
         # Get the total amount for this variation
         variation_allocations = Hc_variation_allocations.objects.filter(hc_variation=variation)
@@ -234,7 +234,6 @@ def main(request, division):
         # Create the variation dictionary
         v = {
             'hc_variation_pk': variation.hc_variation_pk,
-            'number': variation.number,
             'date': variation.date.strftime('%Y-%m-%d') if variation.date else None,
             'claimed': variation.claimed,
             'total_amount': float(total_amount),
@@ -2162,8 +2161,7 @@ def create_variation(request):
         return JsonResponse({
             'status': 'success',
             'message': 'Variation created successfully',
-            'variation_id': variation.hc_variation_pk,
-            'variation_number': variation.number
+            'variation_id': variation.hc_variation_pk
         })
         
     except json.JSONDecodeError:

@@ -184,22 +184,11 @@ class HC_claim_allocations(models.Model):
 
 class Hc_variation(models.Model):
     hc_variation_pk = models.AutoField(primary_key=True)
-    number = models.IntegerField(blank=True, null=True)
     date = models.DateField()
     claimed = models.IntegerField(default=0)  # 0 = not part of HC claim, 1 = part of HC claim
     
-    def save(self, *args, **kwargs):
-        if not self.number:
-            # Get the highest number in the table
-            highest_number = Hc_variation.objects.order_by('-number').values('number').first()
-            if highest_number:
-                self.number = highest_number['number'] + 1
-            else:
-                self.number = 1
-        super().save(*args, **kwargs)
-    
     def __str__(self):
-        return f"HC Variation #{self.number} - Date: {self.date}, Claimed: {self.claimed}"
+        return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}, Claimed: {self.claimed}"
 
 class Hc_variation_allocations(models.Model):
     hc_variation_allocation_pk = models.AutoField(primary_key=True)
@@ -209,7 +198,7 @@ class Hc_variation_allocations(models.Model):
     notes = models.CharField(max_length=200, blank=True, null=True)
     
     def __str__(self):
-        return f"HC Variation Allocation - Variation: {self.hc_variation.number}, Costing: {self.costing.pk}, Amount: {self.amount}"
+        return f"HC Variation Allocation - Variation PK: {self.hc_variation.hc_variation_pk}, Costing: {self.costing.pk}, Amount: {self.amount}"
 
 #Builder/Developer Model Set 2:
 class Contacts(models.Model):

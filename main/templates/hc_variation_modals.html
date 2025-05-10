@@ -76,50 +76,24 @@
                 <h5 class="modal-title">Existing HC Variations</h5>
             </div>
             <div class="modal-body row">
-                <div class="col-md-5" style="height: 100%;">
+                <div class="col-md-6" style="height: 100%;">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
                         <button id="downloadVariationSummary" class="btn btn-sm btn-primary" style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); border: none;">
                             <i class="fas fa-download"></i> Download PDF
                         </button>
                     </div>
-                    <!-- The panel for displaying variation details -->
-                    <div id="variationDetailPanel" style="width: 100%; height: calc(100% - 40px); border: 1px solid #ddd; overflow-y: auto; padding: 15px;">
-                        <div class="no-variation-selected" style="text-align: center; padding-top: 50px; color: #888;">
-                            <i class="fas fa-file-alt" style="font-size: 48px;"></i>
-                            <p>Select a variation to view details</p>
-                        </div>
-                        <div class="variation-details" style="display: none;">
-                            <h4>Variation #<span id="detailVariationNumber"></span></h4>
-                            <p><strong>Date:</strong> <span id="detailVariationDate"></span></p>
-                            <p><strong>Total Amount:</strong> $<span id="detailVariationAmount"></span></p>
-                            <p><strong>Status:</strong> <span id="detailVariationStatus"></span></p>
-                            
-                            <h5 style="margin-top: 20px;">Items:</h5>
-                            <table class="table table-sm" style="font-size: 12px;">
-                                <thead>
-                                    <tr>
-                                        <th>Item</th>
-                                        <th>Amount</th>
-                                        <th>Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="detailVariationItems">
-                                    <!-- Items will be added dynamically via JavaScript -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <!-- The panel for displaying variation details - styled to match claim modal -->
+                    <iframe id="variationDetailPanel" style="width: 100%; height: calc(100% - 40px); border: 1px solid #ddd; background-color: white;" frameborder="0" src=""></iframe>
                 </div>
-                <div class="col-md-7" style="height: 100%;">
+                <div class="col-md-6" style="height: 100%;">
                     <div style="overflow-x: auto; white-space: nowrap;">
                         <table id="existingVariationsTable" class="table" style="font-size: 10px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 10%; padding: 4px; line-height: 1.2;">Variation #</th>
-                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Date</th>
-                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Amount</th>
-                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">View</th>
-                                    <th style="width: 15%; padding: 4px; line-height: 1.2;">Included in HC Claim</th>
+                                    <th style="width: 20%; padding: 4px; line-height: 1.2;">Date</th>
+                                    <th style="width: 20%; padding: 4px; line-height: 1.2;">Amount</th>
+                                    <th style="width: 20%; padding: 4px; line-height: 1.2;">View</th>
+                                    <th style="width: 20%; padding: 4px; line-height: 1.2;">Included in HC Claim</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -132,7 +106,6 @@
             <div class="modal-footer">
                 <div class="d-flex justify-content-between w-100">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="includeInHCClaimButton" disabled>Include in HC Claim</button>
                 </div>
             </div>
         </div>
