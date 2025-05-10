@@ -117,14 +117,16 @@
   const hc_claims = JSON.parse('{{ hc_claims|escapejs }}');
   const approved_claims = JSON.parse('{{ approved_claims|escapejs }}');
   const hc_variations = JSON.parse('{{ hc_variations|escapejs }}');
-  // For debugging HC variations data
-  console.log('HC variations loaded:', hc_variations);
+  const hc_variation_allocations = JSON.parse('{{ hc_variation_allocations|escapejs }}');
+  
+  // Debug logs for costings and hc_variation_allocations
+  console.log('DEBUG - Costings data:', costings);
+  console.log('DEBUG - HC Variation Allocations data:', hc_variation_allocations);
   const category_summary = JSON.parse(document.getElementById('category_summary').textContent);
   const current_hc_claim_display_id = "{{ current_hc_claim_display_id }}";
   const hc_prev_fixedonsite = "{{ hc_prev_fixedonsite }}";
   const quote_allocations = JSON.parse('{{ quote_allocations|escapejs|safe }}');
   const division = "{{ division }}";
-  console.log("division is:" + division);
   const progress_claim_quote_allocations = JSON.parse('{{ progress_claim_quote_allocations_json|escapejs }}');
   const progress_claim_invoice_allocations = JSON.parse('{{ progress_claim_invoice_allocations_json|escapejs }}');
   const claim_category_totals = JSON.parse('{{ claim_category_totals|escapejs }}');

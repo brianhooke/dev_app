@@ -48,9 +48,254 @@ function formatDropdownContextDate(dateString) {
   return formatted;
 }
 
-window.onload = function() {
-  document.querySelectorAll('tr[data-toggle="collapse"]').forEach(row => row.click());
-};
+// Initialize once DOM is fully loaded to avoid race conditions
+document.addEventListener('DOMContentLoaded', function() {
+  // Step 1: Update all contract budgets to include variation amounts
+  updateAllContractBudgets();
+  
+  // Step 2: After updating budgets, toggle collapse state
+  setTimeout(function() {
+    // First expand all rows so category values can be calculated
+    document.querySelectorAll('tr[data-toggle="collapse"]').forEach(row => {
+      if (row.classList.contains('collapsed')) {
+        row.click();
+      }
+    });
+    
+    // Then recalculate all category totals
+    recalculateAllCategoryTotals();
+    
+    // Then collapse all rows to start with a clean view
+    document.querySelectorAll('tr[data-toggle="collapse"]').forEach(row => {
+      if (!row.classList.contains('collapsed')) {
+        row.click();
+      }
+    });
+  }, 100);
+  
+  // Add event listener to close dropdowns when clicking outside
+  document.addEventListener('click', function(event) {
+    closeAllDropdownsExcept(event, null);
+  });
+  
+  // Add click event listeners for contract budget cells
+  document.querySelectorAll('.contract-budget-cell').forEach(cell => {
+    cell.addEventListener('click', function(event) {
+      const costingPk = this.getAttribute('data-costing-pk');
+      toggleContractBudgetDropdown(this, costingPk, event);
+    });
+  });
+  
+  // Update the main totals row to include HC variations
+  updateMainTotalsRow();
+});
+
+/**
+ * Recalculate all category totals
+ */
+function recalculateAllCategoryTotals() {
+  document.querySelectorAll('tr[data-toggle="collapse"]').forEach(row => {
+    const groupNumber = row.getAttribute('data-target')?.replace('.group', '');
+    if (groupNumber) {
+      // Force recalculation of category totals
+      $(row).trigger('click').trigger('click');
+    }
+  });
+}
+
+/**
+ * Update the main totals row to correctly include HC variations in the Contract Budget column
+ */
+function updateMainTotalsRow() {
+  var grandTotalContractBudget = 0;
+  
+  // Process each costing item to recalculate the total contract budget
+  const costingRows = document.querySelectorAll('tr[data-costing-pk]');
+  costingRows.forEach(row => {
+    const costingPk = row.getAttribute('data-costing-pk');
+    if (costingPk) {
+      // Use our function that includes HC variations
+      const totalBudget = calculateContractBudgetWithVariations(costingPk);
+      grandTotalContractBudget += totalBudget;
+    }
+  });
+  
+  // Update the HTML in the totals row
+  const totalRowContractBudgetCell = document.querySelector('#totalRow td:nth-child(3)');
+  if (totalRowContractBudgetCell) {
+    if (grandTotalContractBudget === 0) {
+      totalRowContractBudgetCell.innerHTML = '-';
+    } else {
+      const formattedTotal = grandTotalContractBudget.toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      });
+      totalRowContractBudgetCell.innerHTML = '<strong>' + formattedTotal + '</strong>';
+    }
+  }
+}
+
+/**
+ * Calculate the total contract budget for a costing item by adding the original budget
+ * and any variation amounts allocated to that item
+ */
+function calculateContractBudgetWithVariations(costingPk) {
+  // Get the original contract budget
+  const budgetElement = document.getElementById(`contract-budget-${costingPk}`);
+  if (!budgetElement) return 0;
+  
+  const originalBudget = parseFloat(budgetElement.getAttribute('data-original-budget') || 0);
+  let totalVariations = 0;
+  
+  // Find all variation allocations for this costing item
+  if (typeof hc_variation_allocations !== 'undefined') {
+    const variations = hc_variation_allocations.filter(v => v.costing_pk == costingPk);
+    
+    // Sum up the variation amounts
+    for (const variation of variations) {
+      totalVariations += parseFloat(variation.amount || 0);
+    }
+  }
+  
+  // Return the sum of original budget and all variations
+  return originalBudget + totalVariations;
+}
+
+/**
+ * Update all contract budget displays to include variations
+ */
+function updateAllContractBudgets() {
+  // Process each costing item
+  const costingRows = document.querySelectorAll('tr[data-costing-pk]');
+  costingRows.forEach(row => {
+    const costingPk = row.getAttribute('data-costing-pk');
+    const budgetElement = document.getElementById(`contract-budget-${costingPk}`);
+    
+    if (budgetElement) {
+      const totalBudget = calculateContractBudgetWithVariations(costingPk);
+      
+      // Format the amount with commas and 2 decimal places
+      const formattedBudget = totalBudget === 0 ? '-' : 
+        totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      budgetElement.textContent = formattedBudget;
+      
+      // Populate the dropdown with variation details
+      populateContractBudgetDropdown(costingPk);
+    }
+  });
+}
+
+/**
+ * Format date for display in dropdowns
+ */
+function formatDropdownDate(dateStr) {
+  if (!dateStr) return '-';
+  
+  try {
+    // Parse the date string (format: YYYY-MM-DD)
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    
+    // Create a Date object (months are 0-indexed in JavaScript)
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    
+    // Get the day
+    const day = date.getDate().toString().padStart(2, '0');
+    
+    // Get the 3-letter month name
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[date.getMonth()];
+    
+    // Get the 2-digit year
+    const year = date.getFullYear().toString().slice(2);
+    
+    // Format as DD-MMM-YY
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    console.error('Error formatting date:', e);
+    return dateStr;
+  }
+}
+
+/**
+ * Populate the contract budget dropdown with variation details
+ */
+function populateContractBudgetDropdown(costingPk) {
+  if (typeof hc_variation_allocations === 'undefined') return;
+  
+  const dropdown = document.getElementById(`contract-budget-dropdown-${costingPk}`);
+  if (!dropdown) return;
+  
+  const dropdownBody = dropdown.querySelector('.dropdown-body');
+  if (!dropdownBody) return;
+  
+  // Find all variation allocations for this costing item
+  const variations = hc_variation_allocations.filter(v => v.costing_pk == costingPk);
+  
+  // Clear existing variation rows (except the original budget row)
+  const originalRow = dropdownBody.querySelector('.dropdown-row');
+  dropdownBody.innerHTML = '';
+  if (originalRow) {
+    dropdownBody.appendChild(originalRow);
+  }
+  
+  // Only add HC Variations section if there are variations for this costing
+  if (variations.length > 0) {
+    // Add HC Variations section header
+    const variationsHeader = document.createElement('div');
+    variationsHeader.className = 'dropdown-row dropdown-section-header';
+    variationsHeader.innerHTML = '<div><strong>HC Variations</strong></div><div></div><div></div>';
+    dropdownBody.appendChild(variationsHeader);
+    
+    // Add rows for each variation allocation
+    for (const variation of variations) {
+      const row = document.createElement('div');
+      row.className = 'dropdown-row';
+      
+      const dateCell = document.createElement('div');
+      dateCell.textContent = formatDropdownDate(variation.variation_date) || '-';
+      
+      const notesCell = document.createElement('div');
+      notesCell.textContent = variation.notes || '-';
+      
+      const amountCell = document.createElement('div');
+      const amount = parseFloat(variation.amount || 0);
+      amountCell.textContent = '$' + amount.toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      });
+      
+      row.appendChild(dateCell);
+      row.appendChild(notesCell);
+      row.appendChild(amountCell);
+      
+      dropdownBody.appendChild(row);
+    }
+  }
+}
+
+/**
+ * Initialize the displayed contract budgets with variation amounts
+ */
+function updateAllContractBudgets() {
+  // Process each costing item
+  const costingRows = document.querySelectorAll('tr[data-costing-pk]');
+  costingRows.forEach(row => {
+    const costingPk = row.getAttribute('data-costing-pk');
+    const budgetElement = document.getElementById(`contract-budget-${costingPk}`);
+    
+    if (budgetElement) {
+      const totalBudget = calculateContractBudgetWithVariations(costingPk);
+      
+      // Format the amount with commas and 2 decimal places
+      const formattedBudget = totalBudget === 0 ? '-' : 
+        totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      budgetElement.textContent = formattedBudget;
+    }
+  });
+}
 
 document.querySelectorAll('.save-costs').forEach(function(button) {
   button.addEventListener('click', function() {
@@ -93,8 +338,11 @@ $('[data-toggle="collapse"]').on('click', function () {
   var sumContractBudget = 0, sumWorkingBudget = 0, sumUncommitted = 0,
       sumCommitted = 0, sumC2C = 0, sumInvoiced = 0, sumFixedOnSite = 0;
   $('.group' + groupNumber).each(function () {
+    // Get the costing PK from the row's data attribute
+    var costingPk = $(this).data('costing-pk');
+    
     // Extract values from cells, using appropriate selectors
-    var contractBudget = $(this).find('td').eq(2).text().replace(/,/g, '').trim();
+    var contractBudgetCell = $(this).find('td').eq(2);
     var workingBudget = $(this).find('td').eq(3).find('.working-budget-value').text().replace(/,/g, '').trim();
     var uncommitted = $(this).find('td').eq(4).text().replace(/,/g, '').trim();
     var committed = $(this).find('td').eq(5).text().replace(/,/g, '').trim();
@@ -113,15 +361,27 @@ $('[data-toggle="collapse"]').on('click', function () {
     var fixedOnSite = $(this).find('td').eq(8).text().replace(/,/g, '').trim();
     if (fixedOnSite === '-') fixedOnSite = '0';
     
+    // Calculate contract budget properly to include HC variations
+    var contractBudget = 0;
+    if (costingPk) {
+      // Use our dedicated function that includes HC variations
+      contractBudget = calculateContractBudgetWithVariations(costingPk);
+    } else {
+      // Fallback to displayed text if no costingPk is available
+      var contractBudgetText = contractBudgetCell.text().replace(/,/g, '').trim();
+      contractBudget = (contractBudgetText === '-' || contractBudgetText === '' || isNaN(parseFloat(contractBudgetText))) ? 0 : parseFloat(contractBudgetText);
+    }
+    
     // Make sure we have valid numbers
     var invoiced = invoicedText;
-    contractBudget = (contractBudget === '-' || contractBudget === '') ? 0 : parseFloat(contractBudget);
     workingBudget = (workingBudget === '-' || workingBudget === '') ? 0 : parseFloat(workingBudget);
     uncommitted = (uncommitted === '-' || uncommitted === '') ? 0 : parseFloat(uncommitted);
     committed = (committed === '-' || committed === '') ? 0 : parseFloat(committed);
     c2c = (c2c === '-' || c2c === '') ? 0 : parseFloat(c2c);
     fixedOnSite = (fixedOnSite === '-' || fixedOnSite === '') ? 0 : parseFloat(fixedOnSite);
     invoiced = (invoiced === '-' || invoiced === '') ? 0 : parseFloat(invoiced || '0');
+    
+    // Add to running totals
     sumContractBudget += contractBudget;
     sumWorkingBudget += workingBudget;
     sumUncommitted += uncommitted;
@@ -178,27 +438,111 @@ $('[data-toggle="collapse"]').on('click', function () {
   }
 });
 
+/**
+ * Handle dropdown toggling for all dropdown types
+ */
 function toggleDropdown(cell, costingPk, type) {
   type = type || 'invoiced';
-  var idPrefix = type === 'invoiced' ? 'dropdown-' : (type === 'committed' ? 'committed-dropdown-' : 'working-dropdown-');
+  var idPrefix;
+  
+  // Set the correct prefix based on dropdown type
+  if (type === 'contract') {
+    idPrefix = 'contract-dropdown-';
+  } else if (type === 'invoiced') {
+    idPrefix = 'dropdown-';
+  } else if (type === 'committed') {
+    idPrefix = 'committed-dropdown-';
+  } else { // working
+    idPrefix = 'working-dropdown-';
+  }
+  
   var dropdown = document.getElementById(idPrefix + costingPk);
   if (!dropdown) {
     console.error("Dropdown element not found for", type, "with costingPk:", costingPk);
     return;
   }
-  var cellStyle = window.getComputedStyle(cell);
+  
+  // Close all other dropdowns
   var allDropdowns = document.querySelectorAll('.dropdown-content');
   allDropdowns.forEach(function(el) {
     if (el !== dropdown) {
       el.style.display = 'none';
     }
   });
+  
+  // Toggle this dropdown
   if (dropdown.style.display === 'block') {
     dropdown.style.display = 'none';
     return;
   } else {
     dropdown.style.display = 'block';
   }
+  
+  // Special handling for contract budget dropdown
+  if (type === 'contract') {
+    // Get the original budget value
+    const budgetElement = document.getElementById(`contract-budget-${costingPk}`);
+    const originalBudget = parseFloat(budgetElement.getAttribute('data-original-budget') || 0);
+    
+    dropdown.innerHTML = `
+      <div class="dropdown-header">
+        <div><strong>Date</strong></div>
+        <div><strong>Notes</strong></div>
+        <div><strong>$</strong></div>
+      </div>
+      <div class="dropdown-body">
+        <div class="dropdown-row">
+          <div>Contract Budget</div>
+          <div></div>
+          <div>$${originalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+      </div>
+    `;
+    
+    // Add HC Variations section if there are variations for this costing
+    if (typeof hc_variation_allocations !== 'undefined') {
+      const variations = hc_variation_allocations.filter(v => v.costing_pk == costingPk);
+      
+      if (variations.length > 0) {
+        const dropdownBody = dropdown.querySelector('.dropdown-body');
+        
+        // Add HC Variations section header
+        const variationsHeader = document.createElement('div');
+        variationsHeader.className = 'dropdown-row dropdown-section-header';
+        variationsHeader.innerHTML = '<div><strong>HC Variations</strong></div><div></div><div></div>';
+        dropdownBody.appendChild(variationsHeader);
+        
+        // Add rows for each variation allocation
+        for (const variation of variations) {
+          const row = document.createElement('div');
+          row.className = 'dropdown-row';
+          
+          const dateCell = document.createElement('div');
+          dateCell.textContent = formatDropdownDate(variation.variation_date) || '-';
+          
+          const notesCell = document.createElement('div');
+          notesCell.textContent = variation.notes || '-';
+          
+          const amountCell = document.createElement('div');
+          const amount = parseFloat(variation.amount || 0);
+          amountCell.textContent = '$' + amount.toLocaleString('en-US', {
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+          });
+          
+          row.appendChild(dateCell);
+          row.appendChild(notesCell);
+          row.appendChild(amountCell);
+          
+          dropdownBody.appendChild(row);
+        }
+      }
+    }
+    
+    return;
+  }
+  
+  // Standard dropdown for other types
   dropdown.innerHTML = `
     <div class="dropdown-header">
       <div><strong>Supplier</strong></div>

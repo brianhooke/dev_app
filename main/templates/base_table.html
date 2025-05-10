@@ -126,12 +126,14 @@
           <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;" data-costing-pk="{{ costing.costing_pk }}">
             <td>{{ costing.category }}</td>
             <td>{{ costing.item }}</td>
-            <td>
-              {% if costing.contract_budget|floatformat:2 == "0.00" %}
-                -
-              {% else %}
+            <td class="contract-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'contract');">
+              <span class="contract-budget-value" id="contract-budget-{{ costing.costing_pk }}" data-original-budget="{{ costing.contract_budget }}" style="color: #28a745;">
+                <!-- This will be filled by JavaScript to include variations -->
                 {{ costing.contract_budget|floatformat:2|intcomma }}
-              {% endif %}
+              </span>
+              <div class="dropdown-content" id="contract-dropdown-{{ costing.costing_pk }}" style="display: none;">
+                <!-- Dropdown content will be populated by JavaScript -->
+              </div>
             </td>
             <td class="working-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'working')">
               <span class="working-budget-value" style="color: #28a745;">
@@ -177,7 +179,7 @@
               </div>
             </td>
             <td>
-              <span style="color: #28a745;">
+              <span>
                 {% if costing.c2c|floatformat:2 == "0.00" %}
                   -
                 {% else %}

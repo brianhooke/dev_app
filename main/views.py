@@ -75,6 +75,8 @@ def main(request, division):
         costing_dict['category_order_in_list'] = cat_obj.order_in_list  # Add this for quotes modal
         costings_data.append(costing_dict)
     costings = costings_data
+    
+
     contacts = Contacts.objects.filter(division=division,checked=True).order_by('contact_name').values()
     contacts_list = list(contacts)
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
@@ -260,6 +262,41 @@ def main(request, division):
         }
         hc_variations_list.append(v)
     hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
+    
+    # Create a list of all HC variation allocations with variation details included
+    hc_variation_allocations_list = []
+    for allocation in Hc_variation_allocations.objects.all():
+        # Convert model to dictionary, similar to costings format
+        allocation_dict = model_to_dict(allocation)
+        # Store relationship IDs
+        variation_id = allocation_dict['hc_variation']
+        costing_id = allocation_dict['costing']
+        
+        # Get related objects
+        variation_obj = allocation.hc_variation
+        costing_obj = allocation.costing
+        
+        # Add appropriate fields from related objects
+        allocation_dict['hc_variation_pk'] = variation_id
+        allocation_dict['variation_date'] = variation_obj.date.strftime('%Y-%m-%d')
+        allocation_dict['costing_pk'] = costing_id
+        allocation_dict['item'] = costing_obj.item
+        
+        # Get category details from costing object - following same pattern as costings section
+        cat_obj = costing_obj.category
+        category_id = model_to_dict(costing_obj)['category']  # Get the ID from the foreign key
+        allocation_dict['category'] = cat_obj.category  # Category name
+        allocation_dict['category_id'] = category_id  # Category ID for relationships
+        allocation_dict['category_order_in_list'] = cat_obj.order_in_list
+        
+        # Convert Decimal fields to float for JSON serialization
+        allocation_dict['amount'] = float(allocation.amount)
+        
+        hc_variation_allocations_list.append(allocation_dict)
+    
+
+    
+    hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
     current_hc_claim = HC_claims.objects.filter(status=0).first()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     hc_claim_wip_adjustments = {}
@@ -482,13 +519,12 @@ def main(request, division):
                 "amount": float(invoice.amount)
             } for invoice in invoice_alls]
     
-    print("\nDEBUG - All costing_pks:", list(costing_pks))
-    print("\nDEBUG - base_table_dropdowns for each costing_pk:")
+
+
     for pk in costing_pks:
         costing = Costing.objects.get(costing_pk=pk)
-        print(f"\nCosting PK: {pk}")
-        print(f"Category order_in_list: {costing.category.order_in_list}")
-        print(f"Data: {json.dumps(base_table_dropdowns.get(pk), indent=2)}")
+
+
     
     context = {
         "division": division,
@@ -523,6 +559,7 @@ def main(request, division):
         "hc_claims": hc_claims_json,
         "approved_claims": approved_claims_json,
         "hc_variations": hc_variations_json,
+        "hc_variation_allocations": hc_variation_allocations_json,
         "current_hc_claim_display_id": current_hc_claim_display_id,
         "spv_data": spv_data,
         "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
