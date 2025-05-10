@@ -154,7 +154,7 @@ class HC_claim_allocationsAdmin(admin.ModelAdmin):
 
 class HcVariationAdmin(admin.ModelAdmin):
     form = HcVariationForm
-    list_display = ('hc_variation_pk', 'date', 'claimed')
+    list_display = ('hc_variation_pk', 'date')
     
 class HcVariationAllocationsAdmin(admin.ModelAdmin):
     form = HcVariationAllocationsForm

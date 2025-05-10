@@ -35,47 +35,67 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 100);
     
-    // Get the latest HC claim date and display it in the correct format
+    // Get the latest APPROVED HC claim date and display it in the correct format
     let latestDate = null;
     let minAllowedDate = null;
     
-    if (typeof hc_claims !== 'undefined' && hc_claims.length > 0) {
-        // Find the most recent HC claim by looking at the dates
-        hc_claims.forEach(claim => {
+    // Debug to check what's happening with approved_claims
+    console.log('approved_claims:', typeof approved_claims, approved_claims);
+    console.log('hc_claims:', typeof hc_claims, hc_claims);
+    
+    // First try approved_claims, then fallback to filtering hc_claims if necessary
+    if (typeof approved_claims !== 'undefined' && approved_claims.length > 0) {
+        // Find the most recent approved HC claim by looking at the dates
+        approved_claims.forEach(claim => {
             const claimDate = new Date(claim.date);
             if (!latestDate || claimDate > latestDate) {
                 latestDate = claimDate;
             }
         });
+    } else if (typeof hc_claims !== 'undefined' && hc_claims.length > 0) {
+        // Fallback: Filter hc_claims to only include those with status > 0
+        console.log('Using fallback: filtering hc_claims');
         
-        // If we found a date, format it and display it
-        if (latestDate) {
-            const formattedDate = formatDateToDDMMMYY(latestDate);
-            document.getElementById('latestHCClaimDate').textContent = formattedDate;
-            
-            // Set the min date attribute on the date input
-            minAllowedDate = new Date(latestDate);
-            minAllowedDate.setDate(minAllowedDate.getDate() + 1); // Set to day after latest claim
-            document.getElementById('variationDate').min = minAllowedDate.toISOString().split('T')[0];
-            
-            // Add an error message div after the date input
-            const dateInput = document.getElementById('variationDate');
-            let errorDiv = document.getElementById('dateErrorMessage');
-            if (!errorDiv) {
-                errorDiv = document.createElement('div');
-                errorDiv.id = 'dateErrorMessage';
-                errorDiv.style.color = 'red';
-                errorDiv.style.fontSize = '11px';
-                errorDiv.style.display = 'none';
-                errorDiv.textContent = 'Date must be after ' + formattedDate;
-                dateInput.parentNode.insertBefore(errorDiv, dateInput.nextSibling);
+        // Filter claims with status > 0
+        const approvedHcClaims = hc_claims.filter(claim => claim.status > 0);
+        console.log('Filtered approved claims:', approvedHcClaims);
+        
+        // Find the most recent approved HC claim by looking at the dates
+        approvedHcClaims.forEach(claim => {
+            const claimDate = new Date(claim.date);
+            if (!latestDate || claimDate > latestDate) {
+                latestDate = claimDate;
             }
-            
-            // Add event listener to validate the date input
-            dateInput.addEventListener('change', function() {
-                validateVariationDate(this, minAllowedDate);
-            });
+        });
+    }
+    
+    // If we found a date, format it and display it
+    if (latestDate) {
+        const formattedDate = formatDateToDDMMMYY(latestDate);
+        document.getElementById('latestHCClaimDate').textContent = formattedDate;
+        
+        // Set the min date attribute on the date input
+        minAllowedDate = new Date(latestDate);
+        minAllowedDate.setDate(minAllowedDate.getDate() + 1); // Set to day after latest claim
+        document.getElementById('variationDate').min = minAllowedDate.toISOString().split('T')[0];
+        
+        // Add an error message div after the date input
+        const dateInput = document.getElementById('variationDate');
+        let errorDiv = document.getElementById('dateErrorMessage');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.id = 'dateErrorMessage';
+            errorDiv.style.color = 'red';
+            errorDiv.style.fontSize = '11px';
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = 'Date must be after ' + formattedDate;
+            dateInput.parentNode.insertBefore(errorDiv, dateInput.nextSibling);
         }
+        
+        // Add event listener to validate the date input
+        dateInput.addEventListener('change', function() {
+            validateVariationDate(this, minAllowedDate);
+        });
     }
     
     // 1) If user chooses "makeClaim" in #hcVariationsDropdown => show #hcVariationNewModal
@@ -201,11 +221,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Validate the date against the minimum allowed date
-            if (minAllowedDate && !validateVariationDate(dateInput, minAllowedDate)) {
-                alert('Variation date must be after the most recent HC claim date (' + formatDateToDDMMMYY(latestDate) + ')');
-                return;
-            }
+            // // Validate the date against the minimum allowed date
+            // if (minAllowedDate && !validateVariationDate(dateInput, minAllowedDate)) {
+            //     alert('Variation date must be after the most recent HC claim date (' + formatDateToDDMMMYY(latestDate) + ')');
+            //     return;
+            // }
             
             // Validate all amount fields
             let amountValidationPassed = true;

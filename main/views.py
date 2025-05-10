@@ -197,8 +197,12 @@ def main(request, division):
     sc_totals_dict = {item['associated_hc_claim']: float(item['sc_total'] or 0) for item in sc_totals}
     
     # HC Claims data
+    # For HC claims in general UI display
     hc_claims_list = []
     hc_claims_qs = HC_claims.objects.all().order_by('-display_id')
+    
+    # For variation date validation - only approved claims (status > 0)
+    approved_claims_list = []
     for claim in hc_claims_qs:
         claim_totals = hc_qs_totals_dict.get(claim.hc_claim_pk, {'hc_total': 0.0, 'qs_total': 0.0})
         d = {
@@ -212,10 +216,18 @@ def main(request, division):
             'sc_total': sc_totals_dict.get(claim.hc_claim_pk, 0.0)
         }
         hc_claims_list.append(d)
+        
+        # Only add approved claims to the approved list for validation
+        if claim.status > 0:
+            approved_claims_list.append(d)
     hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
+    approved_claims_json = json.dumps(approved_claims_list, cls=DjangoJSONEncoder)
     
     # HC Variations data
     hc_variations_list = []
+    # Get the maximum date of HC_claims with status not 0 (i.e., approved claims)
+    max_approved_claim_date = HC_claims.objects.filter(status__gt=0).aggregate(Max('date'))['date__max']
+    
     hc_variations_qs = Hc_variation.objects.all().order_by('date')
     for variation in hc_variations_qs:
         # Get the total amount for this variation
@@ -228,14 +240,21 @@ def main(request, division):
             items_list.append({
                 'item': allocation.costing.item,
                 'amount': float(allocation.amount),
-                'notes': allocation.notes
+                'notes': allocation.notes,
+                'category_order_in_list': allocation.costing.category.order_in_list
             })
+        
+        # Calculate the claimed status
+        # 0 = claimed (part of HC claim), 1 = not claimed
+        claimed = 0  # Default to claimed
+        if max_approved_claim_date and variation.date <= max_approved_claim_date:
+            claimed = 1  # Variation is claimed if its date is <= the max approved claim date
         
         # Create the variation dictionary
         v = {
             'hc_variation_pk': variation.hc_variation_pk,
             'date': variation.date.strftime('%Y-%m-%d') if variation.date else None,
-            'claimed': variation.claimed,
+            'claimed': claimed,
             'total_amount': float(total_amount),
             'items': items_list
         }
@@ -502,6 +521,7 @@ def main(request, division):
         "invoices_unallocated": invoices_unallocated_list,
         "invoices_allocated": invoices_allocated_list,
         "hc_claims": hc_claims_json,
+        "approved_claims": approved_claims_json,
         "hc_variations": hc_variations_json,
         "current_hc_claim_display_id": current_hc_claim_display_id,
         "spv_data": spv_data,
@@ -2096,6 +2116,43 @@ def send_hc_claim_to_xero(request):
 
 
 @csrf_exempt
+def delete_variation(request):
+    """Delete a HC variation and its allocations"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        variation_pk = request.POST.get('variation_pk')
+        if not variation_pk:
+            return JsonResponse({'success': False, 'error': 'Variation PK is required'}, status=400)
+        
+        # Get the variation
+        try:
+            variation = Hc_variation.objects.get(hc_variation_pk=variation_pk)
+        except Hc_variation.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Variation not found'}, status=404)
+        
+        # Check if the variation is already claimed (part of an HC claim)
+        # Get the maximum date of approved HC claims
+        max_approved_claim_date = HC_claims.objects.filter(status__gt=0).aggregate(Max('date'))['date__max']
+        
+        # If the variation date is less than or equal to the max approved claim date, it's claimed
+        if max_approved_claim_date and variation.date <= max_approved_claim_date:
+            return JsonResponse({
+                'success': False, 
+                'error': 'Cannot delete a variation that is already part of an HC claim'
+            }, status=400)
+        
+        # Delete the variation (this will cascade delete allocations due to FK relationship)
+        variation.delete()
+        
+        return JsonResponse({'success': True})
+    
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
 def create_variation(request):
     """Create a new HC variation and its allocation entries"""
     if request.method != 'POST':
@@ -2113,23 +2170,15 @@ def create_variation(request):
         if not items or len(items) == 0:
             return JsonResponse({'status': 'error', 'message': 'At least one item is required'}, status=400)
         
-        # Validate that the variation date is after the most recent HC claim
-        latest_hc_claim = HC_claims.objects.all().order_by('-date').first()
-        if latest_hc_claim:
-            latest_date = latest_hc_claim.date
-            variation_date_obj = datetime.strptime(variation_date, '%Y-%m-%d').date()
-            if variation_date_obj <= latest_date:
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': f'Variation date must be after the most recent HC claim date ({latest_date.strftime("%d-%b-%y")})'
-                }, status=400)
+        # Date validation now happens on the client side
+        variation_date_obj = datetime.strptime(variation_date, '%Y-%m-%d').date()
         
         # Create the HC variation entry
         with transaction.atomic():
             # Create the variation
             variation = Hc_variation.objects.create(
-                date=variation_date,
-                claimed=0  # Default to not claimed
+                date=variation_date
+                # claimed field has been removed - now calculated dynamically
             )
             
             # Create allocations for each item

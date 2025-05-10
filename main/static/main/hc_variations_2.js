@@ -16,6 +16,38 @@ $(document).ready(function() {
         }
     });
     
+    // Add event listener for delete variation buttons
+    $(document).on('click', '.delete-variation', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const variationPk = $(this).data('variation-pk');
+        
+        if (confirm('Are you sure you want to delete this HC Variation?')) {
+            // Send delete request to server
+            $.ajax({
+                url: '/delete_variation/',
+                type: 'POST',
+                data: {
+                    'variation_pk': variationPk
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Show success alert
+                        alert('Variation deleted successfully!');
+                        // Reload the page
+                        location.reload();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function() {
+                    alert('An error occurred while trying to delete the variation.');
+                }
+            });
+        }
+    });
+    
     // Add download button event listener for variations
     $('#downloadVariationSummary').on('click', function() {
         console.log('Download variation button clicked');
@@ -199,16 +231,43 @@ function populateExistingVariationsTable() {
         // 5. Create claimed status cell
         const claimedCell = document.createElement('td');
         claimedCell.style.padding = '4px';
-        if (variation.claimed === 0) {
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'include-in-hc-claim';
-            checkbox.setAttribute('data-variation-pk', variation.hc_variation_pk);
-            claimedCell.appendChild(checkbox);
+        claimedCell.style.textAlign = 'center';
+        
+        if (variation.claimed === 1) {
+            // Claimed - show green tick
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-check';
+            icon.style.color = 'green';
+            icon.title = 'Included in HC Claim';
+            claimedCell.appendChild(icon);
         } else {
-            claimedCell.textContent = 'Yes';
+            // Not claimed - show 'Not Yet' text
+            claimedCell.textContent = 'Not Yet';
+            claimedCell.style.color = '#666';
         }
+        
+        // 6. Create delete button cell for unclaimed variations
+        const deleteCell = document.createElement('td');
+        deleteCell.style.padding = '4px';
+        deleteCell.style.textAlign = 'center';
+        
+        if (variation.claimed === 0) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-sm btn-link delete-variation';
+            deleteBtn.style.padding = '0';
+            deleteBtn.style.color = 'red';
+            deleteBtn.setAttribute('data-variation-pk', variation.hc_variation_pk);
+            
+            const deleteIcon = document.createElement('i');
+            deleteIcon.className = 'fas fa-times';
+            deleteIcon.title = 'Delete this variation';
+            
+            deleteBtn.appendChild(deleteIcon);
+            deleteCell.appendChild(deleteBtn);
+        }
+        
         row.appendChild(claimedCell);
+        row.appendChild(deleteCell);
         
         // Add the complete row to the table
         tableBody.appendChild(row);

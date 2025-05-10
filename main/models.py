@@ -185,10 +185,9 @@ class HC_claim_allocations(models.Model):
 class Hc_variation(models.Model):
     hc_variation_pk = models.AutoField(primary_key=True)
     date = models.DateField()
-    claimed = models.IntegerField(default=0)  # 0 = not part of HC claim, 1 = part of HC claim
     
     def __str__(self):
-        return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}, Claimed: {self.claimed}"
+        return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}"
 
 class Hc_variation_allocations(models.Model):
     hc_variation_allocation_pk = models.AutoField(primary_key=True)
