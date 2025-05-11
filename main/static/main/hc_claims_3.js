@@ -63,41 +63,129 @@ document.addEventListener('DOMContentLoaded', function() {
     /**
      * Calculate the contract budget with HC variations up to the HC claim date
      * @param {string} costingPk - The costing primary key
-     * @returns {number} - Total contract budget with applicable variations
+     * @param {boolean} [returnDetails=false] - Whether to return details including the variation amount
+     * @returns {number|object} - Total budget or object with budget details
      */
-    function calculateContractBudgetWithVariationsForHCClaim(costingPk) {
+    function calculateContractBudgetWithVariationsForHCClaim(costingPk, returnDetails = false) {
+      console.log(`============= DETAILED BUDGET CALCULATION FOR COSTING ${costingPk} =============`);
       // Get the original contract budget
       const budgetElement = document.getElementById('hc-contract-budget-' + costingPk);
-      if (!budgetElement) return 0;
+      if (!budgetElement) {
+        console.log(`Budget element not found for costing ${costingPk}`);
+        return returnDetails ? { total: 0, original: 0, variations: 0 } : 0;
+      }
       
-      let originalBudget = parseFloat(budgetElement.textContent.replace(/,/g, '')) || 0;
+      // Get the original budget
+      let originalBudget = 0;
+      
+      // Try to get the original budget from data-original-budget attribute first
+      if (budgetElement.hasAttribute('data-original-budget')) {
+        originalBudget = parseFloat(budgetElement.getAttribute('data-original-budget')) || 0;
+        console.log(`Original budget from data attribute: ${originalBudget}`);
+      } else {
+        // If there's no data attribute, we need to be careful - we might be getting a value that already includes variations
+        // In this case, let's try to get the original budget from another source if available
+        const originalBudgetFromServer = budgetElement.getAttribute('data-server-original-budget');
+        if (originalBudgetFromServer) {
+          originalBudget = parseFloat(originalBudgetFromServer) || 0;
+          console.log(`Original budget from server data: ${originalBudget}`);
+        } else {
+          // Last resort - use the text content, but be aware it might include variations
+          originalBudget = parseFloat(budgetElement.textContent.replace(/,/g, '')) || 0;
+          console.log(`WARNING: Using text content for original budget (may include variations): ${originalBudget}`);
+          
+          // If we have variation data and are using the text content, we need to be really careful
+          // The text might already include variations, so we should adjust our calculations
+          if (typeof hc_variation_allocations !== 'undefined') {
+            const variationsForCosting = hc_variation_allocations.filter(v => 
+              v.costing_pk == costingPk && v.variation_pk // Only count real variations with a PK
+            );
+            
+            if (variationsForCosting.length > 0) {
+              console.log(`WARNING: Found ${variationsForCosting.length} variations but no original budget attribute.`);
+              console.log(`This could lead to double-counting variations.`);
+            }
+          }
+        }
+      }
+      
       let totalVariations = 0;
       
       // Get the HC claim date from the modal data attribute
       const hcClaimDateStr = $('#hcPrepSheetModal').data('current-hc-claim-date');
-      if (!hcClaimDateStr) return originalBudget; // Return original budget if date not available
+      console.log(`HC claim date from modal: ${hcClaimDateStr}`);
+      if (!hcClaimDateStr) {
+        console.log('No HC claim date found, returning original budget only');
+        return returnDetails ? { total: originalBudget, original: originalBudget, variations: 0 } : originalBudget;
+      }
       
       const hcClaimDate = new Date(hcClaimDateStr);
+      console.log(`Parsed HC claim date: ${hcClaimDate}`);
+      
       
       // Find all variation allocations for this costing item up to the HC claim date
       if (typeof hc_variation_allocations !== 'undefined') {
+        console.log(`Total hc_variation_allocations available: ${hc_variation_allocations.length}`);
+        
+        // Log all variations for this costing item
+        console.log(`All variations for costing ${costingPk}:`);
+        const costingVariations = hc_variation_allocations.filter(v => v.costing_pk == costingPk);
+        costingVariations.forEach((v, index) => {
+          console.log(`  [${index}] pk: ${v.variation_pk}, amount: ${v.amount}, date: ${v.variation_date}`);
+        });
+        
+        // Check if there's a potential duplicate of the original budget in the variations array
+        const potentialDuplicate = costingVariations.find(v => 
+          Math.abs(parseFloat(v.amount || 0) - originalBudget) < 0.01 && !v.variation_pk
+        );
+        
+        if (potentialDuplicate) {
+          console.log(`WARNING: Found potential duplicate of original budget in variations array: ${JSON.stringify(potentialDuplicate)}`);
+          console.log(`Will exclude this entry to avoid double-counting`);
+        }
+        
         const variations = hc_variation_allocations.filter(v => {
           // Only include variations for this costing item
           if (v.costing_pk != costingPk) return false;
           
+          // Skip potential duplicates of the original budget
+          if (Math.abs(parseFloat(v.amount || 0) - originalBudget) < 0.01 && !v.variation_pk) {
+            console.log(`  Skipping potential duplicate of original budget: amount=${v.amount}`);
+            return false;
+          }
+          
           // Check if variation date is on or before the HC claim date
           const variationDate = new Date(v.variation_date);
-          return variationDate <= hcClaimDate;
+          const isIncluded = variationDate <= hcClaimDate;
+          console.log(`  Variation ${v.variation_pk}: date=${v.variation_date} <= ${hcClaimDateStr}? ${isIncluded}`);
+          return isIncluded;
         });
         
+        console.log(`Applicable variations (${variations.length}):`); 
         // Sum up the applicable variation amounts
         for (const variation of variations) {
-          totalVariations += parseFloat(variation.amount || 0);
+          const amount = parseFloat(variation.amount || 0);
+          console.log(`  Adding variation ${variation.variation_pk}: ${amount}`);
+          totalVariations += amount;
         }
+      } else {
+        console.log('hc_variation_allocations is undefined');
       }
       
-      // Return the sum of original budget and applicable variations
-      return originalBudget + totalVariations;
+      const totalBudget = originalBudget + totalVariations;
+      
+      // Return either just the total or the detailed object
+      console.log(`Budget calculation summary:`);
+      console.log(`  Original budget: ${originalBudget}`);
+      console.log(`  Total variations: ${totalVariations}`);
+      console.log(`  Total budget (original + variations): ${totalBudget}`);
+      console.log(`============= END BUDGET CALCULATION =============`);
+      
+      return returnDetails ? {
+        total: totalBudget,
+        original: originalBudget,
+        variations: totalVariations
+      } : totalBudget;
     }
     
     /**
@@ -110,22 +198,35 @@ document.addEventListener('DOMContentLoaded', function() {
         const costingPk = $(this).find('td:eq(1)').data('item-id');
         if (!costingPk) return; // Skip if no costing PK
         
-        // Get original budget from the cell (before we modify it)
+        // Get detailed budget information with variations
+        const budgetDetails = calculateContractBudgetWithVariationsForHCClaim(costingPk, true);
+        const originalBudget = budgetDetails.original;
+        const variations = budgetDetails.variations;
+        const totalBudget = budgetDetails.total;
+        
+        // Get the current value from the cell
         const contractBudgetCell = $('#hc-contract-budget-' + costingPk);
-        const originalBudget = parseFloat(contractBudgetCell.text().replace(/,/g, '')) || 0;
+        const currentDisplayValue = parseFloat(contractBudgetCell.text().replace(/,/g, '')) || 0;
         
-        // Get total budget with variations
-        const totalBudget = calculateContractBudgetWithVariationsForHCClaim(costingPk);
+        console.log(`Costing ${costingPk} budget details:`);
+        console.log(`- Original budget: ${originalBudget}`);
+        console.log(`- Variations: ${variations}`);
+        console.log(`- Total (original + variations): ${totalBudget}`);
+        console.log(`- Current display value: ${currentDisplayValue}`);
         
-        // Only update if different (avoid unnecessary DOM updates)
-        if (Math.abs(originalBudget - totalBudget) > 0.01) {
-          // Update the cell content
-          contractBudgetCell.text(formatNumber(totalBudget));
-          console.log(`Updated budget for costing ${costingPk}: ${originalBudget} -> ${totalBudget}`);
-        }
+        // Store the original budget as a data attribute
+        // This is crucial to prevent double-counting on subsequent updates
+        contractBudgetCell.attr('data-original-budget', originalBudget);
         
-        // Store the calculated value as a data attribute for recalculations
+        // Update the cell content with the total (original + variations)
+        contractBudgetCell.text(formatNumber(totalBudget));
+        
+        // Also store the total as a data attribute for recalculations
         contractBudgetCell.attr('data-including-variations', totalBudget);
+        
+        if (Math.abs(currentDisplayValue - totalBudget) > 0.01) {
+          console.log(`Updated budget for costing ${costingPk}: ${currentDisplayValue} -> ${totalBudget}`);
+        }
       });
     }
   
@@ -314,8 +415,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      // Use the variation-aware contract budget function
-      let contractBudget = calculateContractBudgetWithVariationsForHCClaim(costingId);
+      // Use the variation-aware contract budget function with details
+      const budgetDetails = calculateContractBudgetWithVariationsForHCClaim(costingId, true);
+      const contractBudget = budgetDetails.total;
+      const X = budgetDetails.variations; // This is the sum of variations <= HC claim date
       let committed = parseFloat($('#hc-claim-committed-' + costingId).text().replace(/,/g, '')) || 0;
       let uncommitted = parseFloat($('#hc-claim-uncommitted-' + costingId + ' a').text().replace(/,/g, '')) || 0;
       let workingBudget = committed + uncommitted;
@@ -336,25 +439,97 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log(`- hcThisClaimInvoices: ${hcThisClaimInvoices}`);
       console.log(`- adjustment: ${adjustment}`);
       
-      // Fix the calculation to avoid double-counting
-      // The calculation should reflect how much we can claim this time based on:
-      // 1. The remaining budget after previous claims
-      // 2. How much work is completed (represented by invoices) that hasn't been claimed yet
-      let hcThisClaim = Math.min(
-        contractBudget - hcPrevClaimed, // Can't claim more than what's left in the budget
-        hcThisClaimInvoices + adjustment // We claim what we've been invoiced for (plus adjustments)
-      );
+      // IMPORTANT FIX FOR DOUBLE-COUNTING:
+      // If we don't have a data-original-budget attribute, we're likely reading a value that already includes variations
+      // In this case, we should correct our calculations to avoid double-counting
+      const hasDataAttribute = $('#hc-contract-budget-' + costingId).attr('data-original-budget') !== undefined;
+      const potentialDoubleCounting = !hasDataAttribute && X > 0;
+      
+      console.log(`========== DETAILED HC THIS CLAIM CALCULATION ==========`);
+      console.log(`All input values:`);
+      console.log(`- contractBudget (display value): ${contractBudget}`);
+      console.log(`- original budget (from calculation): ${budgetDetails.original}`);
+      console.log(`- X (variation amount): ${X}`);
+      console.log(`- Has data-original-budget attribute: ${hasDataAttribute}`);
+      console.log(`- Potential double-counting detected: ${potentialDoubleCounting}`);
+      console.log(`- workingBudget (committed + uncommitted): ${workingBudget} = ${committed} + ${uncommitted}`);
+      console.log(`- hcThisClaimInvoices: ${hcThisClaimInvoices}`);
+      console.log(`- hcPrevInvoiced: ${hcPrevInvoiced}`);
+      console.log(`- hcPrevClaimed: ${hcPrevClaimed}`);
+      console.log(`- adjustment: ${adjustment}`);
+      
+      // If we've detected potential double-counting, adjust contractBudget by subtracting X
+      let adjustedContractBudget = contractBudget;
+      if (potentialDoubleCounting) {
+        // We're reading a value that already includes variations, but we're also adding X separately
+        // So remove X to avoid double-counting
+        adjustedContractBudget = contractBudget - X;
+        console.log(`Adjusted contractBudget to avoid double-counting: ${contractBudget} - ${X} = ${adjustedContractBudget}`);
+      }
+      
+      const remainingBudget = contractBudget - hcPrevClaimed;
+      console.log(`Step 1: remainingBudget = contractBudget - hcPrevClaimed = ${contractBudget} - ${hcPrevClaimed} = ${remainingBudget}`);
+      
+      const invoicesTotalForThisClaim = hcThisClaimInvoices + hcPrevInvoiced;
+      console.log(`Step 2: invoicesTotalForThisClaim = hcThisClaimInvoices + hcPrevInvoiced = ${hcThisClaimInvoices} + ${hcPrevInvoiced} = ${invoicesTotalForThisClaim}`);
+      
+      const workRemaining = workingBudget - invoicesTotalForThisClaim;
+      console.log(`Step 3: workRemaining = workingBudget - invoicesTotalForThisClaim = ${workingBudget} - ${invoicesTotalForThisClaim} = ${workRemaining}`);
+      
+      // Use the adjusted contract budget for the formula if we detected double-counting
+      const completedWork = (potentialDoubleCounting ? adjustedContractBudget : contractBudget) - 
+                           workRemaining - hcPrevClaimed + adjustment;
+      
+      console.log(`Step 4: completedWork = ${potentialDoubleCounting ? 'adjustedContractBudget' : 'contractBudget'} - workRemaining - hcPrevClaimed + adjustment = ${potentialDoubleCounting ? adjustedContractBudget : contractBudget} - ${workRemaining} - ${hcPrevClaimed} + ${adjustment} = ${completedWork}`);
+      
+      const adjustedCompletedWork = Math.max(0, completedWork);
+      console.log(`Step 5: adjustedCompletedWork = Math.max(0, completedWork) = Math.max(0, ${completedWork}) = ${adjustedCompletedWork}`);
+      
+      let hcThisClaim = Math.min(remainingBudget, adjustedCompletedWork);
+      console.log(`Step 6: hcThisClaim = Math.min(remainingBudget, adjustedCompletedWork) = Math.min(${remainingBudget}, ${adjustedCompletedWork}) = ${hcThisClaim}`);
+      console.log(`========== END HC THIS CLAIM CALCULATION ==========`);
       // Calculate "qs-this-claim"
+      console.log(`========== DETAILED QS THIS CLAIM CALCULATION ==========`);
+      console.log(`Input values for QS This Claim:`);
+      console.log(`- contractBudget: ${contractBudget}`);
+      console.log(`- workingBudget: ${workingBudget}`);
+      console.log(`- fixedOnSite: ${fixedOnSite}`);
+      console.log(`- c2c (workingBudget - hcPrevInvoiced): ${c2c}`);
+      console.log(`- hcThisClaimInvoices: ${hcThisClaimInvoices}`);
+      console.log(`- qsClaimed (previous): ${qsClaimed}`);
+      console.log(`- adjustment: ${adjustment}`);
+      
       let qsThisClaim;
       if (workingBudget === 0 || isNaN(workingBudget)) {
           // Handle division by zero
+          console.log(`Step QS-1: Working budget is zero or invalid, using fixedOnSite directly`);
           qsThisClaim = fixedOnSite > 0 ? fixedOnSite : 0;
+          console.log(`Step QS-2: Result = ${qsThisClaim}`);
       } else {
-          qsThisClaim = Math.min(
-              fixedOnSite*(contractBudget/workingBudget), //Note, fixedOnSite is in terms of WorkingBudget
-              contractBudget - c2c + hcThisClaimInvoices - qsClaimed + adjustment
-          );
+          // Formula part 1: (contract budget to working budget ratio * fixedOnSite) - qsClaimed + adjustment
+          const contractToWorkingRatio = contractBudget / workingBudget;
+          console.log(`Step QS-1: Calculate contract to working budget ratio = ${contractBudget} / ${workingBudget} = ${contractToWorkingRatio}`);
+          
+          const adjustedFixedOnSite = contractToWorkingRatio * fixedOnSite;
+          console.log(`Step QS-2: Calculate adjusted fixedOnSite = ${contractToWorkingRatio} * ${fixedOnSite} = ${adjustedFixedOnSite}`);
+          
+          // Subtract previous QS claimed from adjusted fixed on site
+          const baseFirstPart = adjustedFixedOnSite - qsClaimed;
+          console.log(`Step QS-3: Base first part = adjustedFixedOnSite - qsClaimed = ${adjustedFixedOnSite} - ${qsClaimed} = ${baseFirstPart}`);
+          
+          // Add adjustment to this result
+          const firstPart = baseFirstPart + adjustment;
+          console.log(`Step QS-4: First part with adjustment = (adjustedFixedOnSite - qsClaimed) + adjustment = ${baseFirstPart} + ${adjustment} = ${firstPart}`);
+          
+          // Formula part 2: contract budget minus previous QS claimed
+          const secondPart = contractBudget - qsClaimed;
+          console.log(`Step QS-5: Second part = contractBudget - qsClaimed = ${contractBudget} - ${qsClaimed} = ${secondPart}`);
+          
+          // Take minimum of both parts
+          qsThisClaim = Math.min(firstPart, secondPart);
+          console.log(`Step QS-6: Final QS This Claim = Math.min(${firstPart}, ${secondPart}) = ${qsThisClaim}`);
       }
+      console.log(`========== END QS THIS CLAIM CALCULATION ==========`);
   
       $('#hc-this-claim-' + costingId).text(formatNumber(hcThisClaim));
       $('#qs-this-claim-' + costingId).text(formatNumber(qsThisClaim));
@@ -447,19 +622,19 @@ document.addEventListener('DOMContentLoaded', function() {
           // Use the displayed value which already includes variations
           // This avoids double-counting variations
           gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '')) || 0;
-          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '')) || 0;
-          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '')) || 0;
-          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '')) || 0;
-          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '')) || 0;
-          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '')) || 0;
-          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '')) || 0;
-          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '')) || 0;
+          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
           gAdj += parseFloat(cc.eq(11).find('input').val()) || 0;
-          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '')) || 0;
-          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '')) || 0;
-          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '')) || 0;
-          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '')) || 0;
+          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
         }
       });
     

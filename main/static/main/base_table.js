@@ -73,6 +73,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }, 100);
   
+  /**
+   * Closes all dropdown menus except for the one specified
+   * @param {Event} event - The click event
+   * @param {Element|null} exceptDropdown - The dropdown to keep open, or null to close all
+   */
+  function closeAllDropdownsExcept(event, exceptDropdown) {
+    const dropdowns = document.querySelectorAll('.dropdown-content');
+    dropdowns.forEach(dropdown => {
+      if (dropdown !== exceptDropdown && !dropdown.contains(event.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  }
+
   // Add event listener to close dropdowns when clicking outside
   document.addEventListener('click', function(event) {
     closeAllDropdownsExcept(event, null);

@@ -150,7 +150,7 @@ class HC_claimsAdmin(admin.ModelAdmin):
     list_display = ("hc_claim_pk", "date", "status", "display_id")
 
 class HC_claim_allocationsAdmin(admin.ModelAdmin):
-    list_display = ('hc_claim_pk', 'item', 'committed', 'uncommitted', 'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this', 'sc_invoiced', 'sc_invoiced_previous', 'adjustment', 'hc_claimed', 'hc_claimed_previous', 'qs_claimed', 'qs_claimed_previous')
+    list_display = ('hc_claim_pk', 'item', 'contract_budget', 'working_budget', 'committed', 'uncommitted', 'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this', 'sc_invoiced', 'sc_invoiced_previous', 'adjustment', 'hc_claimed', 'hc_claimed_previous', 'qs_claimed', 'qs_claimed_previous')
 
 class HcVariationAdmin(admin.ModelAdmin):
     form = HcVariationForm

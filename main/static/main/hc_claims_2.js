@@ -184,8 +184,23 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
     const totalClaimedList = [];
 
     categoriesList.forEach(categoryName => {
-        const cbEntry = contractBudgetClaim && contractBudgetClaim.categories ? contractBudgetClaim.categories.find(cat => cat.category === categoryName) : null;
-        const cbValue = cbEntry ? Number(cbEntry.total_hc_claimed) : 0;
+        // First try to get claim-specific contract_budget
+        let cbValue = 0;
+        const claimRecord = claim_category_totals.find(ct => ct.hc_claim_pk == claim.hc_claim_pk);
+        if (claimRecord && claimRecord.categories) {
+            const claimCbEntry = claimRecord.categories.find(cat => cat.category === categoryName);
+            if (claimCbEntry && claimCbEntry.total_contract_budget !== undefined) {
+                cbValue = Number(claimCbEntry.total_contract_budget);
+            }
+        }
+        
+        // Fallback to global contract budget if needed
+        if (cbValue === 0) {
+            const cbEntry = contractBudgetClaim && contractBudgetClaim.categories ? 
+                contractBudgetClaim.categories.find(cat => cat.category === categoryName) : null;
+            cbValue = cbEntry ? Number(cbEntry.total_hc_claimed) : 0;
+        }
+        
         contractBudgetList.push(cbValue);
 
         let thisValue = 0;

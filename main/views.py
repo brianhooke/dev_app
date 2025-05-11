@@ -395,12 +395,15 @@ def main(request, division):
         .annotate(
             total_hc_claimed=Sum('hc_claimed'),
             total_qs_claimed=Sum('qs_claimed'),
+            total_contract_budget=Sum('contract_budget'),  # Include contract_budget from HC_claim_allocations
             max_order=Max('category__order_in_list'),  # To determine the latest category
             latest_category=Max('category__category')  # Get the latest category name
         ).order_by('hc_claim_pk', 'max_order'))
 
     # Build the dictionary for the final list
     claim_category_totals_dict = {}
+    
+    # We still keep a global contract budget entry for backward compatibility
     claim_category_totals_dict[0] = {
         "display_id": "Contract Budget",
         "categories": [{
@@ -423,7 +426,8 @@ def main(request, division):
             "categories_pk": None,  # No PK since we're aggregating by invoice_category
             "category": i['category__invoice_category'],  # Use invoice_category as the category value
             "total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0,
-            "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0
+            "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0,
+            "total_contract_budget": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0  # Include claim-specific contract_budget
         })
 
     # Convert to list
