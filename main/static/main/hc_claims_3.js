@@ -407,9 +407,25 @@ document.addEventListener('DOMContentLoaded', function() {
       const marginItemInput = $('#hc-this-claim-input-' + costingId);
       const isMarginItem = marginItemInput.length > 0;
       
-      // For margin items, we don't need to calculate - just use the input value
+      // For margin items, apply the constraint: min(This Claim input field, (contract_budget - hc/qsPrevClaimed))
       if (isMarginItem) {
         const marginValue = parseFloat(marginItemInput.val()) || 0;
+        const contractBudget = parseFloat($('#hc-contract-budget-' + costingId).text().replace(/,/g, '')) || 0;
+        const hcPrevClaimed = parseFloat($('#hc-prev-claimed-' + costingId).text().replace(/,/g, '')) || 0;
+        const qsPrevClaimed = parseFloat($('#qs-claimed-' + costingId).text().replace(/,/g, '')) || 0;
+        
+        // Calculate the maximum allowed values based on remaining budget
+        const maxHcValue = Math.max(0, contractBudget - hcPrevClaimed);
+        const maxQsValue = Math.max(0, contractBudget - qsPrevClaimed);
+        
+        // Apply the constraint: min(marginValue, maxValue)
+        const hcThisClaimValue = Math.min(marginValue, maxHcValue);
+        const qsThisClaimValue = Math.min(marginValue, maxQsValue);
+        
+        // Set values in the display
+        $('#hc-this-claim-' + costingId).text(hcThisClaimValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+        $('#qs-this-claim-' + costingId).text(qsThisClaimValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+        
         // Update any totals that depend on this value
         calculateTotals(marginItemInput.closest('tr').data('group'));
         return;

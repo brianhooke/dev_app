@@ -169,9 +169,33 @@
                             </tr>
                         </thead>                                         
                         <tbody>
+                            <style>
+                                /* Styles for Margin category borders */
+                                .margin-category-header {
+                                    border: 2px solid #ff0000 !important;
+                                }
+                                .margin-category-row {
+                                    border-left: 2px solid #ff0000 !important;
+                                    border-right: 2px solid #ff0000 !important;
+                                }
+                                .margin-category-last-row {
+                                    border-left: 2px solid #ff0000 !important;
+                                    border-right: 2px solid #ff0000 !important;
+                                    border-bottom: 2px solid #ff0000 !important;
+                                }
+                            </style>
                             {% regroup costings by category as costings_by_category %}
                             {% for category in costings_by_category %}
-                            <tr data-toggle="unique-collapse" data-target=".unique-group{{ forloop.counter }}" style="cursor: pointer;">
+                                {% comment %}Check if this is the Margin category{% endcomment %}
+                                {% with has_margin_item=False %}
+                                    {% for costing in category.list %}
+                                        {% if costing.category_order_in_list|floatformat:0 == '-1' %}
+                                            {% with has_margin_item=True %}{% endwith %}
+                                        {% endif %}
+                                    {% endfor %}
+                                
+                                    {% comment %}Apply classes based on margin check{% endcomment %}
+                                    <tr data-toggle="unique-collapse" data-target=".unique-group{{ forloop.counter }}" style="cursor: pointer;" class="{% if category.grouper == 'Margin' or has_margin_item %}margin-category-header{% endif %}">
                                 <td>
                                     <strong>{{ category.grouper }}</strong>
                                     <span class="unique-dropdown-arrow" style="display: inline-block; margin-left: 5px; transition: all 0.3s ease;">&#9654;</span> <!-- Default right arrow -->
@@ -193,7 +217,7 @@
                                 <td></td>
                             </tr>
                                 {% for costing in category.list %}
-                                <tr class="collapse unique-group{{ forloop.parentloop.counter }}">
+                                <tr class="collapse unique-group{{ forloop.parentloop.counter }} {% if category.grouper == 'Margin' or costing.category_order_in_list|floatformat:0 == '-1' %}{% if forloop.last %}margin-category-last-row{% else %}margin-category-row{% endif %}{% endif %}">
                                 <td data-category="{{ category.grouper }}">{{ category.grouper }}</td>
                                 <td data-item-id="{{ costing.costing_pk }}">{{ costing.item }}</td>
                                 <td id="hc-contract-budget-{{costing.costing_pk}}">{% if costing.contract_budget|floatformat:2 == "0.00" %}-{% else %}{{ costing.contract_budget|numberformat }}{% endif %}</td>
@@ -241,32 +265,54 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% with hc_claim_wip_adjustments|get_dict_value:costing.costing_pk as adjustment_value %}
-                                        <input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{ costing.costing_pk }}"
-                                               value="{% if adjustment_value and adjustment_value != 0 %}{{ adjustment_value }}{% else %}{% endif %}">
-                                    {% endwith %}
+                                    {% if costing.category_order_in_list|floatformat:0 == '-1' %}
+                                        <!-- No adjustment field for margin items -->
+                                        <span>-</span>
+                                    {% else %}
+                                        {% with hc_claim_wip_adjustments|get_dict_value:costing.costing_pk as adjustment_value %}
+                                            <input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{ costing.costing_pk }}"
+                                                   value="{% if adjustment_value and adjustment_value != 0 %}{{ adjustment_value }}{% else %}{% endif %}">
+                                        {% endwith %}
+                                    {% endif %}
                                 </td>                                                               
                                 <!-- <td><input type="number" step="0.01" style="width: 100%;" id="hc-adjustment-{{costing.costing_pk}}" /></td> -->
                                 <td id="hc-prev-claimed-{{costing.costing_pk}}">{% if costing.hc_prev_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.hc_prev_claimed|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="hc-this-claim-{{ costing.costing_pk }}">
-                                    {% with result=costing.contract_budget|subtract:costing.committed|subtract:costing.uncommitted|add:costing.hc_prev_invoiced|add:costing.hc_this_claim_invoices|subtract:costing.hc_prev_claimed %}
-                                        {% if result %}
-                                            {{ result|floatformat:2|intcomma }}
+                                    {% if costing.category_order_in_list|floatformat:0 == '-1' %}
+                                        {% if costing.hc_this_claim_invoices and costing.hc_this_claim_invoices != 0 %}
+                                            {{ costing.hc_this_claim_invoices|floatformat:2|intcomma }}
                                         {% else %}
                                             -
                                         {% endif %}
-                                    {% endwith %}
+                                    {% else %}
+                                        {% with result=costing.contract_budget|subtract:costing.committed|subtract:costing.uncommitted|add:costing.hc_prev_invoiced|add:costing.hc_this_claim_invoices|subtract:costing.hc_prev_claimed %}
+                                            {% if result %}
+                                                {{ result|floatformat:2|intcomma }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% endif %}
                                 </td>
                                 <td id="qs-claimed-{{costing.costing_pk}}">{% if costing.qs_claimed|floatformat:2 == "0.00" %}-{% else %}{{ costing.qs_claimed|floatformat:2|intcomma }}{% endif %}</td>
                                 <td id="qs-this-claim-{{ costing.costing_pk }}">
-                                    {% if costing.qs_this_claim != None %}
-                                        {{ costing.qs_this_claim|floatformat:2|intcomma }}
+                                    {% if costing.category_order_in_list|floatformat:0 == '-1' %}
+                                        {% if costing.hc_this_claim_invoices and costing.hc_this_claim_invoices != 0 %}
+                                            {{ costing.hc_this_claim_invoices|floatformat:2|intcomma }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
                                     {% else %}
-                                        -
+                                        {% if costing.qs_this_claim != None %}
+                                            {{ costing.qs_this_claim|floatformat:2|intcomma }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
+                                {% endwith %}
                           {% endfor %}
                           <tr id="hcPrepSheetTotalRow" style="font-weight: bold; background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
                             <td>Total</td>
