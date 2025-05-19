@@ -143,6 +143,12 @@
 
 <script>
     var base_table_dropdowns_json = '{{ base_table_dropdowns_json|safe }}';
+    // Provide a fallback in case parsing fails
+    try {
+        JSON.parse(base_table_dropdowns_json);
+    } catch (e) {
+        base_table_dropdowns_json = '{}';
+    }
 </script>
 <script src="{% static 'main/secret_buttons.js' %}"></script>
 <script src="{% static 'main/base_table.js' %}"></script>

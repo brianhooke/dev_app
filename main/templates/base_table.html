@@ -35,13 +35,15 @@
     display: none;
     position: absolute;
     width: 450px;
-    z-index: 999;
+    z-index: 9999; /* Increased z-index */
     background-color: white;
     border: 2px solid black;
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     max-height: calc(100vh - 150px);
     overflow-y: auto;
     font-size: 12px;
+    top: auto; /* Reset any existing top value */
+    left: auto; /* Reset any existing left value */
   }
   .dropdown-header, .dropdown-row {
     display: grid;
@@ -126,7 +128,7 @@
           <tr class="collapse show group{{ forloop.parentloop.counter }}" style="height: 20px;" data-costing-pk="{{ costing.costing_pk }}">
             <td>{{ costing.category }}</td>
             <td>{{ costing.item }}</td>
-            <td class="contract-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'contract');">
+            <td class="contract-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'contract', event);">
               <span class="contract-budget-value" id="contract-budget-{{ costing.costing_pk }}" data-original-budget="{{ costing.contract_budget }}" style="color: #28a745;">
                 <!-- This will be filled by JavaScript to include variations -->
                 {{ costing.contract_budget|floatformat:2|intcomma }}
@@ -135,7 +137,7 @@
                 <!-- Dropdown content will be populated by JavaScript -->
               </div>
             </td>
-            <td class="working-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'working')">
+            <td class="working-budget-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'working', event)">
               <span class="working-budget-value" style="color: #28a745;">
                 {% with total=costing.committed|add:costing.uncommitted %}
                   {% if total|floatformat:2 == "0.00" %}
@@ -165,7 +167,7 @@
                 {% endif %}
               </div>
             </td>
-            <td class="committed-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'committed')">
+            <td class="committed-cell" style="cursor: pointer; position: relative; overflow: visible;" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'committed', event)">
               <span class="committed-value" style="color: #28a745;">
                 {{ costing.committed|floatformat:2|intcomma }}
               </span>
@@ -187,7 +189,7 @@
                 {% endif %}
               </span>
             </td>
-            <td class="invoiced-cell" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'invoiced')">
+            <td class="invoiced-cell" onclick="toggleDropdown(this, {{ costing.costing_pk }}, 'invoiced', event)">
               <span class="invoiced-value" style="color: #28a745;">
                 {% if costing.sc_invoiced|floatformat:2 == "0.00" %}
                   -

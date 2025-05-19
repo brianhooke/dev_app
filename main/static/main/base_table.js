@@ -44,7 +44,6 @@ function formatDropdownContextDate(dateString) {
   const month = date.toLocaleString('en-US', { month: 'short' });
   const year = date.getFullYear().toString().slice(-2);
   const formatted = `${day}-${month}-${year}`;
-  console.log("Formatted date:", formatted);
   return formatted;
 }
 
@@ -423,16 +422,7 @@ $('[data-toggle="collapse"]').on('click', function () {
     c2cCell.data('original', c2cCell.html());
     fixedOnSiteCell.data('original', fixedOnSiteCell.html());
     invoicedCell.data('original', invoicedCell.html());
-    // Debug info to help identify issues
-    console.log('Category totals:', {
-      contractBudget: sumContractBudget,
-      workingBudget: sumWorkingBudget,
-      uncommitted: sumUncommitted,
-      committed: sumCommitted,
-      c2c: sumC2C,
-      invoiced: sumInvoiced,
-      fixedOnSite: sumFixedOnSite
-    });
+;
     
     contractBudgetCell.html(sumContractBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumContractBudget.toFixed(2)) + '</strong>');
     workingBudgetCell.html(sumWorkingBudget.toFixed(2) == 0.00 ? '-' : '<strong>' + formatNumber(sumWorkingBudget.toFixed(2)) + '</strong>');
@@ -455,7 +445,12 @@ $('[data-toggle="collapse"]').on('click', function () {
 /**
  * Handle dropdown toggling for all dropdown types
  */
-function toggleDropdown(cell, costingPk, type) {
+function toggleDropdown(cell, costingPk, type, event) {
+  // Prevent event propagation to stop the document click handler from immediately closing the dropdown
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
   type = type || 'invoiced';
   var idPrefix;
   
@@ -489,7 +484,11 @@ function toggleDropdown(cell, costingPk, type) {
     dropdown.style.display = 'none';
     return;
   } else {
+    // Force dropdown to be visible
+    dropdown.style.position = 'absolute';
     dropdown.style.display = 'block';
+    dropdown.style.zIndex = '9999';
+    dropdown.style.backgroundColor = 'white';
   }
   
   // Special handling for contract budget dropdown
@@ -573,7 +572,14 @@ function toggleDropdown(cell, costingPk, type) {
   `;
   if (type === 'invoiced' || type === 'committed' || type === 'working') {
     try {
-      var dropdownData = JSON.parse(base_table_dropdowns_json);
+      var dropdownData;
+      try {
+        dropdownData = JSON.parse(base_table_dropdowns_json);
+      } catch (parseError) {
+        // Provide empty object as fallback
+        dropdownData = {};
+      }
+      
       var costingData = dropdownData[costingPk];
       
       if (type === 'committed' || type === 'working') {
