@@ -115,16 +115,18 @@ def main(request, division):
     # Print how the totals are being assigned
     print('\nAssigning totals to costings:')
     for c in costings:
-        if c['category_order_in_list'] == -1:
-            # For margin items, get sc_invoiced from HC_claim_allocations
+        # Use the same logic for all items, including Margin category items (category_order_in_list = -1)
+        # Using Invoice_allocations logic for all items for consistency
+        original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
+        c['sc_invoiced'] = original_value
+        
+        # If sc_invoiced is 0, also check HC_claim_allocations as a fallback
+        if c['sc_invoiced'] == 0:
             hc_alloc = HC_claim_allocations.objects.filter(
                 item=c['costing_pk']
             ).first()
-            c['sc_invoiced'] = hc_alloc.sc_invoiced if hc_alloc else 0
-        else:
-            # For non-margin items, use existing Invoice_allocations logic
-            original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
-            c['sc_invoiced'] = original_value
+            if hc_alloc and hc_alloc.sc_invoiced:
+                c['sc_invoiced'] = hc_alloc.sc_invoiced
         
         # Get paid amount from paid_invoice_allocations_dict (invoices with status 2 or 3)
         c['sc_paid'] = paid_invoice_allocations_dict.get(c['costing_pk'], 0)
@@ -462,8 +464,9 @@ def main(request, division):
         if quote_allocations.exists():
             committed_items = [
                 {
-                    "supplier": "Margin" if is_margin else (qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown'),
-                    "quote_num": "Margin" if is_margin else (qa.quotes_pk.supplier_quote_number if qa.quotes_pk else '-'),
+                    "supplier": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
+                    "supplier_original": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
+                    "quote_num": qa.quotes_pk.supplier_quote_number if qa.quotes_pk else '-',
                     "amount": float(qa.amount)
                 } for qa in quote_allocations
             ]
@@ -473,56 +476,60 @@ def main(request, division):
         # Calculate uncommitted amount (contract_budget - committed)
         base_table_dropdowns[costing_pk]["uncommitted"] = float(costing.contract_budget) - total_committed
         
-        if is_margin:
-            # For margin items, leave invoiced_direct empty
-            base_table_dropdowns[costing_pk]["invoiced_direct"] = []
-            
-            # For invoiced_all, get data from HC_claims and HC_claim_allocations
-            hc_claims_data = HC_claims.objects.filter(
-                status__gt=0,
-                hc_claim_allocations__item=costing_pk
-            ).annotate(
-                total_sc_invoiced=Sum('hc_claim_allocations__sc_invoiced', 
-                                      filter=Q(hc_claim_allocations__item=costing_pk))
-            ).values('display_id', 'date', 'total_sc_invoiced')
-            
-            base_table_dropdowns[costing_pk]["invoiced_all"] = [{
+        # Use the same logic for all categories, including Margin (order_in_list = -1)
+        # Get invoiced_direct data
+        invoice_directs = Invoice_allocations.objects.filter(
+            item_id=costing_pk,
+            invoice_pk__invoice_division=division
+        ).filter(
+            Q(allocation_type=1) | 
+            Q(allocation_type=0, invoice_pk__invoice_type=1)
+        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
+        
+        base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
+            "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "supplier_original": invoice.invoice_pk.contact_pk.contact_name,
+            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
+            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+            "amount": float(invoice.amount)
+        } for invoice in invoice_directs]
+        
+        # Get invoiced_all data
+        invoice_alls = Invoice_allocations.objects.filter(
+            item_id=costing_pk,
+            invoice_pk__invoice_division=division
+        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
+        
+        base_table_dropdowns[costing_pk]["invoiced_all"] = [{
+            "supplier": invoice.invoice_pk.contact_pk.contact_name,
+            "supplier_original": invoice.invoice_pk.contact_pk.contact_name,
+            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
+            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
+            "amount": float(invoice.amount)
+        } for invoice in invoice_alls]
+        
+        # Also collect data from HC_claims if available, and append to invoiced_all
+        # This ensures we don't lose any information that was previously only available for Margin items
+        hc_claims_data = HC_claims.objects.filter(
+            status__gt=0,
+            hc_claim_allocations__item=costing_pk
+        ).annotate(
+            total_sc_invoiced=Sum('hc_claim_allocations__sc_invoiced', 
+                                filter=Q(hc_claim_allocations__item=costing_pk))
+        ).values('display_id', 'date', 'total_sc_invoiced')
+        
+        # Append HC claims data to invoiced_all if there is any
+        if hc_claims_data.exists():
+            hc_claims_items = [{
                 "supplier": f"HC Claim {claim['display_id']}",
+                "supplier_original": f"HC Claim {claim['display_id']}",
                 "date": claim['date'].strftime('%d/%m/%Y'),
                 "invoice_num": str(claim['display_id']),
                 "amount": float(claim['total_sc_invoiced'])
             } for claim in hc_claims_data]
             
-        else:
-            # For non-margin items, use original logic
-            # Get invoiced_direct data
-            invoice_directs = Invoice_allocations.objects.filter(
-                item_id=costing_pk,
-                invoice_pk__invoice_division=division
-            ).filter(
-                Q(allocation_type=1) | 
-                Q(allocation_type=0, invoice_pk__invoice_type=1)
-            ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-            
-            base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
-                "supplier": invoice.invoice_pk.contact_pk.contact_name,
-                "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-                "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-                "amount": float(invoice.amount)
-            } for invoice in invoice_directs]
-            
-            # Get invoiced_all data
-            invoice_alls = Invoice_allocations.objects.filter(
-                item_id=costing_pk,
-                invoice_pk__invoice_division=division
-            ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-            
-            base_table_dropdowns[costing_pk]["invoiced_all"] = [{
-                "supplier": invoice.invoice_pk.contact_pk.contact_name,
-                "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-                "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-                "amount": float(invoice.amount)
-            } for invoice in invoice_alls]
+            # Append to existing invoiced_all list
+            base_table_dropdowns[costing_pk]["invoiced_all"].extend(hc_claims_items)
     
 
 

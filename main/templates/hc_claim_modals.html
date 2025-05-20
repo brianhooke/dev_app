@@ -227,15 +227,9 @@
                                     {% endwith %}
                                 </td>                              
                                 <td id="hc-claim-uncommitted-{{ costing.costing_pk }}">
-                                    {% if costing.category_order_in_list|floatformat:0 != '-1' %}
-                                        <a href="#" data-toggle="modal" data-target="#hc-claim-editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
-                                            {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
-                                        </a>
-                                    {% else %}
-                                        <span>
-                                            {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
-                                        </span>
-                                    {% endif %}
+                                    <a href="#" data-toggle="modal" data-target="#hc-claim-editModal{{ costing.costing_pk }}" data-id="{{ costing.costing_pk }}">
+                                        {% if costing.uncommitted|floatformat:2 == "0.00" %}-{% else %}{{ costing.uncommitted|floatformat:2|intcomma }}{% endif %}
+                                    </a>
                                 </td>
                                 <td id="hc-claim-committed-{{ costing.costing_pk }}">{% if costing.committed|floatformat:2 == "0.00" %}-{% else %}{{ costing.committed|floatformat:2|intcomma }}{% endif %}</td>
                                 <!-- <td id="fixed-on-site-display-{{ costing.costing_pk }}">
@@ -374,7 +368,7 @@
                             <td>{{ costing.uncommitted|floatformat:2|intcomma }}</td>
                             <td>{{ costing.committed|floatformat:2|intcomma }}</td>
                             <td>{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
-                            <!-- <td>{{ costing.notes }}</td> -->
+                            <td>{{ costing.uncommitted_notes }}</td>
                         </tr>
                         <tr>
                             <td>Edited</td>
@@ -383,6 +377,9 @@
                             </td>
                             <td>{{ costing.committed|floatformat:2|intcomma }}</td>
                             <td id="hc-claim-total{{ costing.costing_pk }}">{{ costing.committed|add:costing.uncommitted|floatformat:2|intcomma }}</td>
+                            <td>
+                                <input type="text" class="form-control" id="hc-claim-notesInput{{ costing.costing_pk }}" value="{{ costing.uncommitted_notes }}" placeholder="Add notes here">
+                            </td>
                         </tr>
                     </table>
                 </div>

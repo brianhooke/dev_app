@@ -113,14 +113,9 @@ function addInvoiceLineItem(item, amount, notes = '') {
     select.style.maxWidth = "100%";
     select.innerHTML = '<option value="">Select an item</option>';
     console.log("costings are: " + costings);
-    // Create a map of items to filter out margin items
-    const marginItems = new Set(itemsData.filter(item => item.order_in_list === '-1').map(item => item.item));
-    
+    // Add all items to the dropdown, including margin items with order_in_list = -1
     costings.forEach(function(costing) {
-        // Only add items that are not in the marginItems set
-        if (!marginItems.has(costing.item)) {
-            select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
-        }
+        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
     });
     var firstCell = newRow.insertCell(0);
     firstCell.appendChild(select);
@@ -349,7 +344,7 @@ async function saveDirectCostInvoices() {
   
       allocations.push({
         item_pk: itemPk,
-        new_uncommitted: newUncommittedVal,
+        uncommitted_new: newUncommittedVal, // Changed from new_uncommitted to uncommitted_new to match server expectation
         net: netVal,
         gst: gstVal,
         notes: notesVal,

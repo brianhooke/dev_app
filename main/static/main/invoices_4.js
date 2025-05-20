@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   document.getElementById('addVariationButton').addEventListener('click', function() {
+    console.log('costings before addProgressClaimLine:', costings);
     addProgressClaimLine();
   });
   
@@ -423,6 +424,18 @@ function createOrFindVariationsRow(tableBody, stillRow, colSpan) {
   
 /* Updated addProgressClaimLine to mark newly added rows as "variations" by default */
 function addProgressClaimLine() {
+    // Ensure we have access to all unfiltered costings data directly from the DOM
+    let allCostings = [];
+    const costingsElement = document.getElementById('costings');
+    if (costingsElement) {
+        try {
+            allCostings = JSON.parse(costingsElement.textContent);
+            console.log('Retrieved all costings directly from DOM:', allCostings.length);
+        } catch (e) {
+            console.error('Error parsing costings data:', e);
+        }
+    }
+    
     const table = document.getElementById('progressClaimLineItemsTableInvoices');
     const tableBody = table.tBodies[0];
     if (!tableBody) return;
@@ -443,18 +456,18 @@ function addProgressClaimLine() {
     const select = document.createElement('select');
     select.style.maxWidth = "100%";
     select.innerHTML = '<option value="">Select an item</option>';
-    // Create a map of items to filter out margin items
-    const marginItems = new Set(itemsData.filter(item => item.order_in_list === '-1').map(item => item.item));
-    
-    costings.forEach(costing => {
-      // Only add items that are not in the marginItems set
-      if (!marginItems.has(costing.item)) {
+    // Add all items to the dropdown without filtering based on category_order_in_list
+    // Use the global costings variable which contains all items
+    if (typeof costings !== 'undefined' && Array.isArray(costings)) {
+      costings.forEach(costing => {
         select.innerHTML += `
           <option value="${costing.item}" data-costing-id="${costing.costing_pk}">
             ${costing.item}
           </option>`;
-      }
-    });
+      });
+    } else {
+      console.error('costings variable is not defined or not an array');
+    }
     itemCell.appendChild(select);
   
     for (let i = 0; i < numQuotes; i++) {

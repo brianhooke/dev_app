@@ -32,9 +32,7 @@
                                         <select class="form-control variation-item" required style="font-size: 12px;">
                                             <option value="">Select Item</option>
                                             {% for costing in costings %}
-                                                {% if costing.category_order_in_list != -1 %}
-                                                    <option value="{{ costing.costing_pk }}">{{ costing.item }}</option>
-                                                {% endif %}
+                                                <option value="{{ costing.costing_pk }}">{{ costing.item }}</option>
                                             {% endfor %}
                                         </select>
                                     </td>

@@ -491,6 +491,10 @@ function toggleDropdown(cell, costingPk, type, event) {
     dropdown.style.backgroundColor = 'white';
   }
   
+  // Ensure consistent dropdown content for all categories, including Margin categories (category_order_in_list = -1)
+  // Remove any special handling based on category_order_in_list = -1
+  // The costingPk will be the same regardless of category type
+  
   // Special handling for contract budget dropdown
   if (type === 'contract') {
     // Get the original budget value
@@ -562,11 +566,18 @@ function toggleDropdown(cell, costingPk, type, event) {
   }
   
   // Standard dropdown for other types
+  let headerText = 'Inv #';
+  
+  // For working and committed types, show 'Quo/Inv #'
+  if (type === 'working' || type === 'committed') {
+    headerText = 'Quo/Inv #';
+  }
+  
   dropdown.innerHTML = `
     <div class="dropdown-header">
       <div><strong>Supplier</strong></div>
       <div><strong>Date</strong></div>
-      <div><strong>Inv #</strong></div>
+      <div><strong>${headerText}</strong></div>
       <div><strong>$</strong></div>
     </div>
   `;
@@ -594,10 +605,25 @@ function toggleDropdown(cell, costingPk, type, event) {
           costingData.committed.forEach(function(quote) {
             var quoteRow = document.createElement('div');
             quoteRow.className = 'dropdown-row';
+            
+            // Special handling for Internal_Margin_Quote entries (contract budget)
+            var supplierName = quote.supplier;
+            var quoteNum = quote.quote_num;
+            
+            // If this is the Internal_Margin_Quote entry, display it as 'Contract Budget'
+            if (quoteNum === 'Internal_Margin_Quote' || (supplierName === 'Unknown' && quoteNum === 'Internal_Margin_Quote')) {
+              supplierName = 'Contract Budget';
+              quoteNum = '';
+            }
+            // For all other entries with Margin as supplier name
+            else if (supplierName === 'Margin' && quote.supplier_original) {
+              supplierName = quote.supplier_original;
+            }
+            
             quoteRow.innerHTML = `
-              <div>${quote.supplier || '-'}</div>
+              <div>${supplierName || '-'}</div>
               <div>${formatDropdownContextDate(quote.date) || '-'}</div>
-              <div>${quote.quote_num || '-'}</div>
+              <div>${quoteNum || ''}</div>
               <div>$${parseFloat(quote.amount || 0).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
@@ -618,8 +644,16 @@ function toggleDropdown(cell, costingPk, type, event) {
           costingData.invoiced_direct.forEach(function(invoice) {
             var row = document.createElement('div');
             row.className = 'dropdown-row';
+            
+            // Ensure we show the actual supplier name for all categories, including Margin (category_order_in_list = -1)
+            // If invoice.supplier is 'Margin', try to use supplier_original if it exists
+            var supplierName = invoice.supplier;
+            if (supplierName === 'Margin' && invoice.supplier_original) {
+              supplierName = invoice.supplier_original;
+            }
+            
             row.innerHTML = `
-              <div>${invoice.supplier || '-'}</div>
+              <div>${supplierName || '-'}</div>
               <div>${formatDropdownContextDate(invoice.date)}</div>
               <div>${invoice.invoice_num || '-'}</div>
               <div>$${parseFloat(invoice.amount || 0).toLocaleString('en-US', {
