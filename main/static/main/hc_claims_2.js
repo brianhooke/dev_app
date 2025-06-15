@@ -195,11 +195,11 @@ function generateClaimSheetTable(claim, claimId, claimType = 'hc') {
         }
         
         // Fallback to global contract budget if needed
-        if (cbValue === 0) {
-            const cbEntry = contractBudgetClaim && contractBudgetClaim.categories ? 
-                contractBudgetClaim.categories.find(cat => cat.category === categoryName) : null;
-            cbValue = cbEntry ? Number(cbEntry.total_hc_claimed) : 0;
-        }
+        // if (cbValue === 0) {
+        //     const cbEntry = contractBudgetClaim && contractBudgetClaim.categories ? 
+        //         contractBudgetClaim.categories.find(cat => cat.category === categoryName) : null;
+        //     cbValue = cbEntry ? Number(cbEntry.total_hc_claimed) : 0;
+        // }
         
         contractBudgetList.push(cbValue);
 

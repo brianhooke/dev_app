@@ -591,26 +591,34 @@ document.addEventListener('DOMContentLoaded', function() {
           totalPrevQSClaims = 0,
           totalThisQSClaims = 0;
     
+      // Helper function to parse values correctly (treats '-' as 0, preserves negative numbers)
+      function parseValue(text) {
+        // If it's just a dash character, return 0
+        if (text.trim() === '-') return 0;
+        // Otherwise parse as float normally (this preserves negative numbers)
+        return parseFloat(text.replace(/,/g, '')) || 0;
+      }
+      
       // Sum all 'collapse' rows in <tbody>
       $('tbody tr.collapse').each(function() {
         let cells = $(this).find('td');
         if (cells.length >= 16) {
           // Use the displayed value which already includes variations
           // This avoids double-counting variations
-          totalContractBudget += parseFloat(cells.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalWorkingBudget += parseFloat(cells.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalUncommitted += parseFloat(cells.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalCommitted += parseFloat(cells.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalFOSCurrent += parseFloat(cells.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalFOSPrevious += parseFloat(cells.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalFOSThis += parseFloat(cells.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalPrevSCInvoices += parseFloat(cells.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalThisSCInvoices += parseFloat(cells.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalContractBudget += parseValue(cells.eq(2).text());
+          totalWorkingBudget += parseValue(cells.eq(3).text());
+          totalUncommitted += parseValue(cells.eq(4).text());
+          totalCommitted += parseValue(cells.eq(5).text());
+          totalFOSCurrent += parseValue(cells.eq(6).text());
+          totalFOSPrevious += parseValue(cells.eq(7).text());
+          totalFOSThis += parseValue(cells.eq(8).text());
+          totalPrevSCInvoices += parseValue(cells.eq(9).text());
+          totalThisSCInvoices += parseValue(cells.eq(10).text());
           totalAdjustment += parseFloat(cells.eq(11).find('input').val()) || 0;
-          totalPrevHCClaims += parseFloat(cells.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalThisHCClaims += parseFloat(cells.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalPrevQSClaims += parseFloat(cells.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
-          totalThisQSClaims += parseFloat(cells.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
+          totalPrevHCClaims += parseValue(cells.eq(12).text());
+          totalThisHCClaims += parseValue(cells.eq(13).text());
+          totalPrevQSClaims += parseValue(cells.eq(14).text());
+          totalThisQSClaims += parseValue(cells.eq(15).text());
         }
       });
     
@@ -645,20 +653,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cc.length >= 16) {
           // Use the displayed value which already includes variations
           // This avoids double-counting variations
-          gSumContract += parseFloat(cc.eq(2).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumWorking += parseFloat(cc.eq(3).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumUncom += parseFloat(cc.eq(4).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSumCom += parseFloat(cc.eq(5).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSCur += parseFloat(cc.eq(6).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSPrev += parseFloat(cc.eq(7).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gFOSThis += parseFloat(cc.eq(8).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSCPrev += parseFloat(cc.eq(9).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gSCThis += parseFloat(cc.eq(10).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gSumContract += parseValue(cc.eq(2).text());
+          gSumWorking += parseValue(cc.eq(3).text());
+          gSumUncom += parseValue(cc.eq(4).text());
+          gSumCom += parseValue(cc.eq(5).text());
+          gFOSCur += parseValue(cc.eq(6).text());
+          gFOSPrev += parseValue(cc.eq(7).text());
+          gFOSThis += parseValue(cc.eq(8).text());
+          gSCPrev += parseValue(cc.eq(9).text());
+          gSCThis += parseValue(cc.eq(10).text());
           gAdj += parseFloat(cc.eq(11).find('input').val()) || 0;
-          gHCPrev += parseFloat(cc.eq(12).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gHCThis += parseFloat(cc.eq(13).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gQSPrev += parseFloat(cc.eq(14).text().replace(/,/g, '').replace('-', '0')) || 0;
-          gQSThis += parseFloat(cc.eq(15).text().replace(/,/g, '').replace('-', '0')) || 0;
+          gHCPrev += parseValue(cc.eq(12).text());
+          gHCThis += parseValue(cc.eq(13).text());
+          gQSPrev += parseValue(cc.eq(14).text());
+          gQSThis += parseValue(cc.eq(15).text());
         }
       });
     
