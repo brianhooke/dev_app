@@ -694,6 +694,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
     function gatherAndPostHCClaimData(currentHcClaimId, save_or_final) {
       let data = [];
+      
+      // Helper function to parse values correctly (treats '-' as 0, preserves negative numbers)
+      function parseValue(text) {
+        // If it's just a dash character, return 0
+        if (text && text.trim() === '-') return 0;
+        // Otherwise parse as float normally (this preserves negative numbers)
+        return parseFloat(text ? text.replace(/,/g, '') : '0') || 0;
+      }
+      
       // Loop over table rows
       $('table.myTable tbody tr:not(#hcPrepSheetTotalRow)').each(function() {
         let row = $(this);
@@ -703,27 +712,28 @@ document.addEventListener('DOMContentLoaded', function() {
           return; // skip header or summary rows
         }
   
-        let contractBudget = parseFloat(row.find('td').eq(2).text().replace(/,/g, '')) || 0;
-        let workingBudget = parseFloat(row.find('td').eq(3).text().replace(/,/g, '')) || 0;
-        let uncommitted = parseFloat(row.find('td').eq(4).text().replace(/,/g, '')) || 0;
-        let committed = parseFloat(row.find('td').eq(5).text().replace(/,/g, '')) || 0;
-        let fixedOnSiteCurrent = parseFloat(row.find('td').eq(6).text().replace(/,/g, '')) || 0;
-        let fixedOnSitePrev = parseFloat(row.find('td').eq(7).text().replace(/,/g, '')) || 0;
-        let fixedOnSiteThis = parseFloat(row.find('td').eq(8).text().replace(/,/g, '')) || 0;
-        let scPrev = parseFloat(row.find('td').eq(9).text().replace(/,/g, '')) || 0;
+        // Parse values from the displayed cells to ensure variation-included values are captured
+        let contractBudget = parseValue(row.find('td').eq(2).text());
+        let workingBudget = parseValue(row.find('td').eq(3).text());
+        let uncommitted = parseValue(row.find('td').eq(4).text());
+        let committed = parseValue(row.find('td').eq(5).text());
+        let fixedOnSiteCurrent = parseValue(row.find('td').eq(6).text());
+        let fixedOnSitePrev = parseValue(row.find('td').eq(7).text());
+        let fixedOnSiteThis = parseValue(row.find('td').eq(8).text());
+        let scPrev = parseValue(row.find('td').eq(9).text());
         // For SC This, check if it's a margin item input first
         let scThis;
         const marginItemInput = row.find('td').eq(10).find('input.margin-item-input');
         if (marginItemInput.length > 0) {
-            scThis = parseFloat(marginItemInput.val()) || 0;
+            scThis = parseValue(marginItemInput.val());
         } else {
-            scThis = parseFloat(row.find('td').eq(10).text().replace(/,/g, '')) || 0;
+            scThis = parseValue(row.find('td').eq(10).text());
         }
-        let adjustment = parseFloat(row.find('td').eq(11).find('input').val()) || 0;
-        let hcPrev = parseFloat(row.find('td').eq(12).text().replace(/,/g, '')) || 0;
-        let hcThis = parseFloat(row.find('td').eq(13).text().replace(/,/g, '')) || 0;
-        let qsPrev = parseFloat(row.find('td').eq(14).text().replace(/,/g, '')) || 0;
-        let qsThis = parseFloat(row.find('td').eq(15).text().replace(/,/g, '')) || 0;
+        let adjustment = parseValue(row.find('td').eq(11).find('input').val());
+        let hcPrev = parseValue(row.find('td').eq(12).text());
+        let hcThis = parseValue(row.find('td').eq(13).text());
+        let qsPrev = parseValue(row.find('td').eq(14).text());
+        let qsThis = parseValue(row.find('td').eq(15).text());
   
         data.push({
           category: category,
