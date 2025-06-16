@@ -335,11 +335,25 @@ def main(request, division):
             c['hc_this_claim_invoices'] = 0
     for c in costings:
         c['hc_prev_fixedonsite'] = 0
-        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
-        for al in allocs:
-            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
-            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
-                c['hc_prev_fixedonsite'] += al.fixed_on_site
+    if current_hc_claim:
+        for c in costings:
+            prev_alloc = (
+                HC_claim_allocations.objects
+                .filter(item=c['costing_pk'], hc_claim_pk__lt=current_hc_claim.hc_claim_pk)
+                .order_by('-hc_claim_pk')
+                .first()
+            )
+            c['hc_prev_fixedonsite'] = prev_alloc.fixed_on_site if prev_alloc else 0
+    else:
+        for c in costings:
+            c['hc_prev_fixedonsite'] = 0
+    if current_hc_claim:
+        for c in costings:
+            latest_alloc = HC_claim_allocations.objects.filter(item=c['costing_pk'], hc_claim_pk=current_hc_claim.hc_claim_pk).first()
+            c['fixed_on_site'] = latest_alloc.fixed_on_site if latest_alloc else 0
+    else:
+        for c in costings:
+            c['fixed_on_site'] = 0
     for c in costings:
         c['hc_prev_claimed'] = 0
         allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
