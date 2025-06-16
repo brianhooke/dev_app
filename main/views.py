@@ -347,13 +347,6 @@ def main(request, division):
     else:
         for c in costings:
             c['hc_prev_fixedonsite'] = 0
-    if current_hc_claim:
-        for c in costings:
-            latest_alloc = HC_claim_allocations.objects.filter(item=c['costing_pk'], hc_claim_pk=current_hc_claim.hc_claim_pk).first()
-            c['fixed_on_site'] = latest_alloc.fixed_on_site if latest_alloc else 0
-    else:
-        for c in costings:
-            c['fixed_on_site'] = 0
     for c in costings:
         c['hc_prev_claimed'] = 0
         allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
