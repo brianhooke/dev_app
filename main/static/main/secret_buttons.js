@@ -35,14 +35,25 @@ document.addEventListener('keydown', function(event) {
     if (currentSequence.length === ADMIN_KEY_SEQUENCE.length) {
         const adminButtons = document.getElementById('adminButtons');
         if (adminButtons) {
-            // Show the buttons with a slide down animation
-            adminButtons.style.display = 'block';
-            adminButtons.style.maxHeight = '0';
-            adminButtons.style.overflow = 'hidden';
-            adminButtons.style.transition = 'max-height 0.3s ease-in-out';
-            requestAnimationFrame(() => {
-                adminButtons.style.maxHeight = adminButtons.scrollHeight + 'px';
-            });
+            // Toggle visibility - hide if visible, show if hidden
+            const isVisible = adminButtons.style.display === 'block';
+            
+            if (isVisible) {
+                // Hide the buttons with a slide up animation
+                adminButtons.style.maxHeight = '0';
+                setTimeout(() => {
+                    adminButtons.style.display = 'none';
+                }, 300); // Match the transition duration
+            } else {
+                // Show the buttons with a slide down animation
+                adminButtons.style.display = 'block';
+                adminButtons.style.maxHeight = '0';
+                adminButtons.style.overflow = 'hidden';
+                adminButtons.style.transition = 'max-height 0.3s ease-in-out';
+                requestAnimationFrame(() => {
+                    adminButtons.style.maxHeight = adminButtons.scrollHeight + 'px';
+                });
+            }
         }
         // Reset the sequence
         currentSequence = [];
