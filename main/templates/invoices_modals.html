@@ -352,6 +352,7 @@
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Date</th>
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
                                     <th style="width: 7%; padding: 4px; line-height: 1.2;">View PDF</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">Update</th>
                                     <th style="width: 7%; padding: 4px; line-height: 1.2;">HC Claim</th>
                                     <th style="width: 7%; padding: 4px; line-height: 1.2;">Delete</th>
                                     <th style="width: 7%;padding: 4px; line-height: 1.2;">
@@ -379,6 +380,11 @@
                                             <td style="padding: 4px;">{{ invoice.invoice_date|date:"d-M-y" }}</td>
                                             <td style="padding: 4px;">{{ invoice.invoice_due_date|date:"d-M-y" }}</td>
                                             <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
+                                            <td style="padding: 6px;">
+                                                {% if invoice.associated_hc_claim == 0 or invoice.associated_hc_claim == None %}
+                                                    <a href="#" class="update-invoice" data-invoice-id="{{ invoice.invoice_pk }}" data-invoice-type="{{ invoice.invoice_type }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total-net="{{ invoice.total_net }}" data-total-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-invoice-date="{{ invoice.invoice_date|date:'Y-m-d' }}" data-invoice-due-date="{{ invoice.invoice_due_date|date:'Y-m-d' }}">Update</a>
+                                                {% endif %}
+                                            </td>
                                             <td style="padding: 6px;">
                                                 {% if invoice.associated_hc_claim != 0 and invoice.associated_hc_claim != None %}
                                                     <span>HC {{ invoice.display_id }}</span>

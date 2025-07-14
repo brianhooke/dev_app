@@ -33,22 +33,55 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Remove the row from the table
                         event.target.closest('tr').remove();
                     } else {
-                        console.error('Server response:', data);
-                        window.alert('Failed to delete invoice: ' + (data.message || 'Unknown error'));
+                        console.error('Error deleting invoice:', data.message);
+                        alert('Error deleting invoice: ' + data.message);
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    window.alert('An error occurred while deleting the invoice');
+                    alert('An error occurred while deleting the invoice.');
                 });
             }
+        }
+    });
+
+    // Handle Update link clicks in the allocated invoices modal
+    document.addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('update-invoice') && 
+            event.target.closest('#allocatedInvoicesModal')) {
+            event.preventDefault();
+            
+            const invoiceId = event.target.getAttribute('data-invoice-id');
+            const invoiceType = event.target.getAttribute('data-invoice-type');
+            const pdfUrl = event.target.getAttribute('data-pdf-url');
+            const supplier = event.target.getAttribute('data-supplier');
+            const totalNet = event.target.getAttribute('data-total-net');
+            const totalGst = event.target.getAttribute('data-total-gst');
+            const invoiceNumber = event.target.getAttribute('data-invoice-number');
+            const invoiceDate = event.target.getAttribute('data-invoice-date');
+            const invoiceDueDate = event.target.getAttribute('data-invoice-due-date');
+            
+            console.log('Update clicked for invoice ID:', invoiceId);
+            console.log('Invoice type:', invoiceType, '(1 = Direct Cost, 2 = Progress Claim)');
+            console.log('Invoice details:', {
+                supplier: supplier,
+                totalNet: totalNet,
+                totalGst: totalGst,
+                invoiceNumber: invoiceNumber,
+                invoiceDate: invoiceDate,
+                invoiceDueDate: invoiceDueDate,
+                pdfUrl: pdfUrl
+            });
+            
+            // Stage 1: Just log the data
+            // In stage 2, we will implement the actual update functionality
         }
     });
 
     // Handle "View" link click in the allocated invoices modal
     document.querySelectorAll('.view-pdf-invoices').forEach(link => {
         link.addEventListener('click', function(event) {
-            console.log("View PDF link clicked")
+            console.log("View PDF link clicked");
             event.preventDefault();
             const pdfUrl = this.getAttribute('data-url');
             fetch(pdfUrl, {
@@ -69,6 +102,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 
 function closeModalInvoices() {
     var modal = document.getElementById('combinedModalInvoices');
