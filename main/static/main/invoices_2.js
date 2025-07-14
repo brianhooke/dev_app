@@ -72,4 +72,58 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    // Handle Delete link clicks in the unallocated invoices modal
+    document.addEventListener('click', function(event) {
+        if (event.target && event.target.classList.contains('delete-invoice') && 
+            event.target.closest('#unallocatedInvoicesModal')) {
+            event.preventDefault();
+            const invoiceId = event.target.getAttribute('data-invoice-id');
+            const confirmed = window.confirm('Are you sure you want to delete this invoice?');
+            
+            if (confirmed) {
+                // Send delete request to the server
+                fetch('/delete_invoice/', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        invoice_id: invoiceId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Remove the row from the table
+                        event.target.closest('tr').remove();
+                    } else {
+                        console.error('Server response:', data);
+                        window.alert('Failed to delete invoice: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    window.alert('An error occurred while deleting the invoice');
+                });
+            }
+        }
+    });
 });
+
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}

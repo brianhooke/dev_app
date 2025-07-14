@@ -741,6 +741,24 @@ def delete_quote(request):
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
 
+def delete_invoice(request):
+    if request.method == 'DELETE':
+        # Parse the request body to get the invoice id
+        data = json.loads(request.body)
+        invoice_id = data.get('invoice_id')
+        # Get the invoice from the database
+        try:
+            invoice = Invoices.objects.get(pk=invoice_id)
+        except Invoices.DoesNotExist:
+            return JsonResponse({'status': 'fail', 'message': 'Invoice not found'}, status=404)
+        # Delete the invoice
+        invoice.delete()
+
+        return JsonResponse({'status': 'success', 'message': 'Invoice deleted successfully'})
+
+    else:
+        return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
+
 #function to accept supplier (contact_pk) & retun list of existing quoted line items for Purchase Order creation
 def get_quote_allocations(request, supplier_id):
     quote_allocations = Quote_allocations.objects.filter(

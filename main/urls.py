@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation
+from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -22,6 +22,7 @@ urlpatterns = [
     path('update_quote/', update_quote, name='update_quote'),
     path('create_contacts/', create_contacts, name='create_contacts'),
     path('delete_quote/', delete_quote, name='delete_quote'),
+    path('delete_invoice/', delete_invoice, name='delete_invoice'),
     path('upload_design_pdf/', upload_design_pdf, name='upload_design_pdf'),
     path('upload_report_pdf/', views.upload_report_pdf, name='upload_report_pdf'),
     path('create_plan/', create_plan, name='create_plan'),

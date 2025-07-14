@@ -82,8 +82,9 @@
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Gross Total $</th>
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Date</th>
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
-                                    <th style="width: 10.5%; padding: 4px; line-height: 1.2;">View PDF</th>
-                                    <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Process</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">View PDF</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">Process</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">Delete</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -112,6 +113,9 @@
                                                 data-toggle="modal" 
                                                 data-target="#selectInvoiceTypeModal">Process</a>
                                             <input type="hidden" id="invoiceId{{ invoice.invoice_pk }}" value="{{ invoice.invoice_pk }}">
+                                        </td>
+                                        <td style="padding: 4px;">
+                                            <a href="#" class="delete-invoice" data-invoice-id="{{ invoice.invoice_pk }}">Delete</a>
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -348,6 +352,8 @@
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Date</th>
                                     <th style="width: 10.5%; padding: 4px; line-height: 1.2;">Invoice Due Date</th>
                                     <th style="width: 7%; padding: 4px; line-height: 1.2;">View PDF</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">HC Claim</th>
+                                    <th style="width: 7%; padding: 4px; line-height: 1.2;">Delete</th>
                                     <th style="width: 7%;padding: 4px; line-height: 1.2;">
                                         {% if division == 1 %}
                                             Send to MDG Xero
@@ -373,6 +379,16 @@
                                             <td style="padding: 4px;">{{ invoice.invoice_date|date:"d-M-y" }}</td>
                                             <td style="padding: 4px;">{{ invoice.invoice_due_date|date:"d-M-y" }}</td>
                                             <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
+                                            <td style="padding: 6px;">
+                                                {% if invoice.associated_hc_claim != 0 and invoice.associated_hc_claim != None %}
+                                                    <span>HC {{ invoice.display_id }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td style="padding: 6px;">
+                                                {% if invoice.associated_hc_claim == 0 or invoice.associated_hc_claim == None %}
+                                                    <a href="#" class="delete-invoice" data-invoice-id="{{ invoice.invoice_pk }}">Delete</a>
+                                                {% endif %}
+                                            </td>
                                             <td style="padding: 6px;">
                                                 {% if invoice.invoice_status == 1 %} <!-- 1 is allocated but not sent, 2 is sent to Xero, 3 is paid, 4 is sent to Boutique-->
                                                     <input type="checkbox" id="sendToXero{{ invoice.invoice_pk }}">
