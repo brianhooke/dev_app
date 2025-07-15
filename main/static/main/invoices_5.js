@@ -185,7 +185,7 @@ function addInvoiceLineItem(item, amount, notes = '', gstAmount = 0, item_pk = n
             // Pre-fill values if provided
             if (i === 3 && amount !== undefined) { // Net amount
                 input.value = amount;
-            } else if (i === 4 && gstAmount !== undefined) { // GST amount
+            } else if (i === 4) { // GST amount - Fix: Always set the value, even if 0
                 input.value = gstAmount;
             }
             
@@ -237,6 +237,10 @@ function addInvoiceLineItem(item, amount, notes = '', gstAmount = 0, item_pk = n
     }
     if (amount) {
         newRow.cells[3].children[0].value = amount; // Adjusted cell references
+    }
+    // Fix: Explicitly set GST value again to ensure it's displayed correctly
+    if (gstAmount !== undefined) {
+        newRow.cells[4].children[0].value = gstAmount;
     }
     if (notes) {
         newRow.cells[6].children[0].value = notes; // Adjusted cell references
