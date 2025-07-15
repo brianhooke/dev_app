@@ -106,8 +106,8 @@ function progressClaimModalData(
         id: i.id 
       })));
     }
-      
-      if (updating && allocations && allocations.length > 0) {
+    
+    if (updating && allocations && allocations.length > 0) {
         // In update mode, use the complete allocations parameter instead of currentInvoice.allocations
         console.log('Using passed allocations parameter for update mode:', allocations[0]);
         currentInvoiceData = {
@@ -176,10 +176,11 @@ function progressClaimModalData(
         }))
       }));
     }
-  }
-
+  
+  // Check if we have any data to display
   if ((!quoteData.length) && (!invoiceData.length)) {
     alert('No data available for this contact.');
+    // Return early from the function instead of having a standalone return statement
     return;
   }
 
