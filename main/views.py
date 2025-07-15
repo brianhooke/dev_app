@@ -2273,11 +2273,19 @@ def get_invoice_allocations(request, invoice_id):
                                 print(f"ERROR: Failed to process other allocation: {str(e)}")
                                 continue
                         
-                        other_invoices.append({
+                        # Log detailed information about the other invoice
+                        print(f"DEBUG: Other invoice details - PK: {other_inv.invoice_pk}, Number: {other_inv.supplier_invoice_number}")
+                        print(f"DEBUG: Other invoice has {len(formatted_other_allocations)} allocations")
+                        
+                        # Create the other invoice object with proper structure
+                        other_invoice_obj = {
                             'invoice_pk': other_inv.invoice_pk,
-                            'invoice_number': other_inv.invoice_number,
+                            'invoice_number': other_inv.supplier_invoice_number,
                             'invoice_allocations': formatted_other_allocations
-                        })
+                        }
+                        
+                        print(f"DEBUG: Adding other invoice to response: {other_invoice_obj['invoice_pk']} / {other_invoice_obj['invoice_number']}")
+                        other_invoices.append(other_invoice_obj)
                     except Exception as e:
                         print(f"ERROR: Failed to process other invoice {other_inv.invoice_pk}: {str(e)}")
                         continue

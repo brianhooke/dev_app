@@ -82,88 +82,64 @@ function progressClaimModalData(
   console.log('Invoice Number to edit:', invoiceNumber);
   console.log('Other invoices from API:', progress_claim_invoice_allocations);
   
-  // Create a properly formatted object for the modal
-  const invoiceObj = {
-    contact_pk: parseInt(contactPk),
-    invoices: Array.isArray(progress_claim_invoice_allocations) ? progress_claim_invoice_allocations : []
-  };
+  console.log('DEBUG: Raw progress_claim_invoice_allocations:', JSON.stringify(progress_claim_invoice_allocations));
+  
+  // Get the invoices data structure
+  let invoiceObj = window.progress_claim_invoice_allocations.find(obj => obj.contact_pk == contactPk);
+  
+  console.log('DEBUG: invoiceObj structure:', {
+    contact_pk: invoiceObj ? invoiceObj.contact_pk : 'not found',
+    invoices_length: invoiceObj ? invoiceObj.invoices.length : 0,
+    first_few_invoices: invoiceObj ? invoiceObj.invoices.slice(0, 3) : []
+  });
+  
+  // CRITICAL FIX: Check if we're in update mode with API response data
+  if (updating) {
+    // Store the API response data in a global variable for use in update mode
+    if (!window.api_response_other_invoices) {
+      window.api_response_other_invoices = [];
+    }
+  }
   
   let currentInvoiceData = null; // Store current invoice data for pre-populating inputs
   
   if (invoiceObj) {
     // In update mode, separate current invoice from others
     if (updating) {
-      // Find the current invoice being edited
-      const currentInvoice = invoiceObj.invoices.find(i => 
-        i.invoice_number == invoiceId || i.invoice_pk == invoiceId || i.pk == invoiceId || i.id == invoiceId
-      );
+      console.log('DEBUG: Update mode detected - using API response data');
       
-      console.log('Looking for invoice with ID/Number:', invoiceId);
-      console.log('Available invoices:', invoiceObj.invoices.map(i => ({ 
-        invoice_number: i.invoice_number, 
-        invoice_pk: i.invoice_pk, 
-        pk: i.pk, 
-        id: i.id 
-      })));
-    }
-    
-    if (updating && allocations && allocations.length > 0) {
-        // In update mode, use the complete allocations parameter instead of currentInvoice.allocations
-        console.log('Using passed allocations parameter for update mode:', allocations[0]);
-        currentInvoiceData = {
-          invoice_number: invoiceNumber,
-          invoice_allocations: allocations.map(a => ({
-            item_pk: a.item_pk,
-            item_name: a.item_name,
-            amount: a.net, // formattedAllocations uses 'net'
-            gst_amount: a.gst, // formattedAllocations uses 'gst'
-            allocation_type: a.allocation_type,
-            invoice_allocation_type: a.allocation_type === 0 ? "progress_claim" : "direct_cost" // Convert numeric to string
-          }))
-        };
-      } else if (currentInvoice) {
-        // Store current invoice data for input pre-population (fallback for non-update mode)
-        currentInvoiceData = {
-          invoice_number: currentInvoice.invoice_number,
-          invoice_allocations: currentInvoice.allocations.map(a => ({
-            item_pk: a.item_pk,
-            item_name: a.item_name,
-            amount: a.amount,
-            gst_amount: a.gst_amount,
-            allocation_type: a.allocation_type,
-            invoice_allocation_type: a.invoice_allocation_type // Keep both for compatibility
-          }))
-        };
-        
-        // Only include OTHER invoices for "Previous Claims" display
-        invoiceData = invoiceObj.invoices
-          .filter(i => i.invoice_number != invoiceId && i.invoice_pk != invoiceId && i.pk != invoiceId && i.id != invoiceId)
-          .map(i => ({
-            invoice_number: i.invoice_number,
-            invoice_allocations: i.allocations.map(a => ({
-              item_pk: a.item_pk,
-              item_name: a.item_name,
-              amount: a.amount,
-              invoice_allocation_type: a.invoice_allocation_type
-            }))
-          }));
-          
-        console.log('Found current invoice:', currentInvoice);
-        console.log('Current invoice data stored:', currentInvoiceData);
-        console.log('Filtered invoice data for Previous Claims:', invoiceData);
-        console.log('Number of previous invoices:', invoiceData.length);
+      // CRITICAL FIX: In update mode, use the API response data directly
+      // The current invoice data comes from the allocations parameter
+      // The other invoices data comes from window.api_response_other_invoices
+      
+      console.log('DEBUG: API response other_invoices:', window.api_response_other_invoices);
+      
+      // Create current invoice data structure from the allocations parameter
+      currentInvoiceData = {
+        invoice_number: invoiceNumber,
+        invoice_allocations: allocations.map(a => ({
+          item_pk: a.item_pk,
+          item_name: a.item_name || a.item,
+          amount: a.amount || a.net,
+          gst_amount: a.gst_amount || a.gst,
+          allocation_type: a.allocation_type,
+          invoice_allocation_type: a.invoice_allocation_type
+        }))
+      };
+      
+      console.log('DEBUG: Created currentInvoiceData in update mode:', currentInvoiceData);
+      
+      // Use the API response other_invoices directly for the Previous Claims section
+      if (window.api_response_other_invoices && window.api_response_other_invoices.length > 0) {
+        console.log('DEBUG: Using API response other_invoices for Previous Claims');
+        invoiceData = window.api_response_other_invoices;
       } else {
-        // Fallback: use all invoices if current invoice not found
-        invoiceData = invoiceObj.invoices.map(i => ({
-          invoice_number: i.invoice_number,
-          invoice_allocations: i.allocations.map(a => ({
-            item_pk: a.item_pk,
-            item_name: a.item_name,
-            amount: a.amount,
-            invoice_allocation_type: a.invoice_allocation_type
-          }))
-        }));
+        console.log('DEBUG: No API response other_invoices available');
+        invoiceData = [];
       }
+      
+      console.log('DEBUG: Filtered invoiceData for Previous Claims - count:', invoiceData.length);
+      console.log('Current invoice data stored:', currentInvoiceData);
     } else {
       // Regular mode: use all invoices
       invoiceData = invoiceObj.invoices.map(i => ({
@@ -176,6 +152,7 @@ function progressClaimModalData(
         }))
       }));
     }
+  }
   
   // Check if we have any data to display
   if ((!quoteData.length) && (!invoiceData.length)) {
@@ -648,6 +625,12 @@ function progressClaimModalData(
 
       tableBody.insertBefore(newRow, stillRow);
     });
+    
+    // CRITICAL FIX: Trigger the calculation after pre-populating variation inputs in update mode
+    if (updating) {
+      console.log('Triggering updateStillToAllocateValues() after pre-populating variation inputs');
+      updateStillToAllocateValues();
+    }
   }
 }
 

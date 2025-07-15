@@ -175,6 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     })
                     .then(data => {
                         console.log('API response received:', data);
+                        console.log('DEBUG: Full API response structure:', JSON.stringify(data));
                         
                         // The response has an 'allocations' property containing the array
                         const allocationsArray = data.allocations || [];
@@ -185,6 +186,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Contact PK from API:', contactPkFromApi);
                         console.log('Contact PK from DOM:', event.target.getAttribute('data-contact-pk'));
                         console.log('Other invoices:', otherInvoicesArray);
+                        
+                        // CRITICAL FIX: Store other_invoices in a global variable for use in update mode
+                        window.api_response_other_invoices = otherInvoicesArray;
                         
                         // Create the properly formatted data structure for progressClaimModalData
                         // This matches what the function expects based on memory 5d3bb973-e0b3-445c-8e25-01857e28fdc9
