@@ -382,7 +382,7 @@
                                             <td style="padding: 6px;"><a href="#" class="view-pdf-invoices" data-url="{{ invoice.pdf_url }}">View</a></td>
                                             <td style="padding: 6px;">
                                                 {% if invoice.associated_hc_claim == 0 or invoice.associated_hc_claim == None %}
-                                                    <a href="#" class="update-invoice" data-invoice-id="{{ invoice.invoice_pk }}" data-invoice-type="{{ invoice.invoice_type }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total-net="{{ invoice.total_net }}" data-total-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-invoice-date="{{ invoice.invoice_date|date:'Y-m-d' }}" data-invoice-due-date="{{ invoice.invoice_due_date|date:'Y-m-d' }}">Update</a>
+                                                    <a href="#" class="update-invoice" data-invoice-id="{{ invoice.invoice_pk }}" data-invoice-type="{{ invoice.invoice_type }}" data-pdf-url="{{ invoice.pdf_url }}" data-supplier="{{ invoice.contact_name }}" data-total-net="{{ invoice.total_net }}" data-total-gst="{{ invoice.total_gst }}" data-invoice-number="{{ invoice.supplier_invoice_number }}" data-invoice-date="{{ invoice.invoice_date|date:'Y-m-d' }}" data-invoice-due-date="{{ invoice.invoice_due_date|date:'Y-m-d' }}" data-contact-pk="{{ invoice.contact_pk }}">Update</a>
                                                 {% endif %}
                                             </td>
                                             <td style="padding: 6px;">

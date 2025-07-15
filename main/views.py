@@ -1999,6 +1999,7 @@ def get_invoices_by_supplier(request):
     return JsonResponse(invoices_data, safe=False)
 
 
+
 @csrf_exempt
 def post_progress_claim_data(request):
     if request.method != 'POST':
@@ -2007,42 +2008,70 @@ def post_progress_claim_data(request):
         data = json.loads(request.body.decode('utf-8'))
         invoice_id = data.get("invoice_id")
         allocations = data.get("allocations", [])
+        updating = data.get("updating", False)  # Check if we're updating existing allocations
+        
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
         if not allocations:
             return JsonResponse({"error": "No allocations provided"}, status=400)
+            
         new_allocations = []  # Initialize the list
+        
         # Wrap all database operations in a transaction
         with transaction.atomic():
             invoice = Invoices.objects.get(pk=invoice_id)
+            
+            # Always ensure the invoice is marked as allocated and of type Progress Claim
             invoice.invoice_status = 1  # allocated
             invoice.invoice_type = 2    # progress claim
             invoice.save()
+            
+            # If we're updating, delete existing allocations for this invoice
+            if updating:
+                # Get the count of existing allocations for logging
+                existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
+                
+                # Delete all existing allocations for this invoice
+                Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
+                
+                # Log the deletion for debugging
+                print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
+            
+            # Create new allocations from the submitted data
             for alloc in allocations:
                 item_pk = alloc.get("item_pk")
                 net = alloc.get("net", 0)
                 gst = alloc.get("gst", 0)
                 allocation_type = alloc.get("allocation_type", 0)
+                notes = alloc.get("notes", "")
+                
                 if not item_pk:
                     raise ValueError("Missing item_pk in allocation")
+                    
                 try:
                     costing_obj = Costing.objects.get(pk=item_pk)
                 except Costing.DoesNotExist:
                     raise ValueError(f"Costing object not found for pk: {item_pk}")
+                    
                 new_alloc = Invoice_allocations.objects.create(
                     invoice_pk=invoice,
                     item=costing_obj,
                     amount=net,
                     gst_amount=gst,
-                    notes="",
+                    notes=notes,
                     allocation_type=allocation_type
                 )
                 new_allocations.append(new_alloc.invoice_allocations_pk)
+        
+        # Build an appropriate response message
+        message = "Progress claim allocations updated successfully" if updating else "Progress claim data posted successfully"
+        
         return JsonResponse({
             "success": True,
-            "message": "Progress claim data posted successfully",
+            "message": message,
             "updated_invoice": invoice.invoice_pk,
-            "created_allocations": new_allocations
+            "created_allocations": new_allocations,
+            "was_update": updating
         }, status=200)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -2061,16 +2090,30 @@ def post_direct_cost_data(request):
         data = json.loads(request.body.decode('utf-8'))
         invoice_id = data.get("invoice_id")
         allocations = data.get("allocations", [])
+        updating = data.get("updating", False)  # Check if we're updating existing allocations
 
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
 
         invoice = Invoices.objects.get(pk=invoice_id)
 
-        invoice.invoice_status = 1
-        invoice.invoice_type = 1  # Direct Cost
+        # Always ensure the invoice is marked as allocated and of type Direct Cost
+        invoice.invoice_status = 1  # allocated
+        invoice.invoice_type = 1    # Direct Cost
         invoice.save()
 
+        # If we're updating, delete existing allocations for this invoice
+        if updating:
+            # Get the count of existing allocations for logging
+            existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
+            
+            # Delete all existing allocations for this invoice
+            Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
+            
+            # Log the deletion for debugging
+            print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
+
+        # Create new allocations from the submitted data
         new_allocations = []
         for alloc in allocations:
             item_pk = alloc.get("item_pk")
@@ -2094,19 +2137,175 @@ def post_direct_cost_data(request):
                 amount=net,
                 gst_amount=gst,
                 notes=notes,
-                allocation_type=0  # or 1 if you prefer 'direct cost in progress claim'—depends on your usage
+                allocation_type=0  # Direct cost
             )
             new_allocations.append(new_alloc.invoice_allocations_pk)
 
+        # Build an appropriate response message
+        message = "Direct cost allocations updated successfully" if updating else "Direct cost data posted successfully"
+        
         return JsonResponse({
-            "message": "Direct cost data posted successfully",
+            "message": message,
             "updated_invoice": invoice.invoice_pk,
-            "created_allocations": new_allocations
+            "created_allocations": new_allocations,
+            "was_update": updating
         }, status=200)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Invoices.DoesNotExist:
+        return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
+    except Costing.DoesNotExist as e:
+        return JsonResponse({"error": f"Costing object not found: {str(e)}"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
+def get_invoice_allocations(request, invoice_id):
+    """Fetch existing allocations for an invoice to enable updating them"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+    
+    try:
+        print(f"DEBUG: Starting get_invoice_allocations for invoice_id: {invoice_id}")
+        
+        # Get the invoice
+        try:
+            invoice = Invoices.objects.get(invoice_pk=invoice_id)
+            print(f"DEBUG: Found invoice with pk={invoice_id}, type={invoice.invoice_type}")
+        except Invoices.DoesNotExist:
+            print(f"ERROR: Invoice with pk={invoice_id} does not exist")
+            return JsonResponse({'error': f'Invoice with id {invoice_id} not found'}, status=404)
+        
+        # Get all allocations for this invoice - using invoice_pk field name
+        try:
+            allocations = Invoice_allocations.objects.filter(invoice_pk=invoice)
+            print(f"DEBUG: Found {allocations.count()} allocations for invoice {invoice_id}")
+        except Exception as e:
+            print(f"ERROR: Failed to query allocations: {str(e)}")
+            return JsonResponse({'error': f'Failed to query allocations: {str(e)}'}, status=500)
+        
+        # Format allocations for the response
+        formatted_allocations = []
+        
+        for alloc in allocations:
+            try:
+                # Using costing_pk field for Costing model
+                item = alloc.item  # This should be a direct reference to the Costing object
+                
+                if not item:
+                    print(f"WARNING: Allocation {alloc.invoice_allocations_pk} has no item relationship")
+                    continue
+                
+                print(f"DEBUG: Processing allocation {alloc.invoice_allocations_pk} for item {item.item}")
+                print(f"DEBUG: Allocation {item.item} - allocation_type: {alloc.allocation_type} (type: {type(alloc.allocation_type)})")
+                print(f"DEBUG: Raw DB values - amount: {alloc.amount}, gst_amount: {alloc.gst_amount}")
+                
+                formatted_allocations.append({
+                    'allocation_id': alloc.invoice_allocations_pk,  # Corrected field name
+                    'item_pk': item.costing_pk,  # Use the actual primary key field
+                    'item': item.item,  # Using item instead of line_item
+                    'amount': float(alloc.amount),  # Use amount for consistency
+                    'gst_amount': float(alloc.gst_amount),
+                    'notes': alloc.notes or "",  # Include notes field
+                    'allocation_type': alloc.allocation_type
+                })
+            except Exception as e:
+                print(f"ERROR: Failed to process allocation {alloc.invoice_allocations_pk}: {str(e)}")
+                # Continue processing other allocations instead of failing completely
+                continue
+        
+        # Get the contact_pk for the supplier
+        try:
+            contact_pk = invoice.contact_pk_id if invoice.contact_pk else None
+            print(f"DEBUG: Contact PK for invoice {invoice_id}: {contact_pk}")
+        except Exception as e:
+            print(f"ERROR: Failed to get contact_pk: {str(e)}")
+            contact_pk = None
+        
+        # For progress claim invoices, also get all other invoices for the same contact
+        # This is needed for the "Previous Claims" section in update mode
+        other_invoices = []
+        if invoice.invoice_type == 2 and contact_pk:  # Progress claim invoice
+            try:
+                # Debug all invoices for this contact to help diagnose the issue
+                print(f"DEBUG: Querying ALL invoices for contact_pk={contact_pk}")
+                all_invoices = list(Invoices.objects.filter(contact_pk_id=contact_pk))
+                print(f"DEBUG: ALL invoices for contact {contact_pk}: {[(i.invoice_pk, i.invoice_type) for i in all_invoices]}")
+                
+                # Check if invoice_id is a string and needs conversion
+                invoice_id_for_query = invoice_id
+                if isinstance(invoice_id, str) and invoice_id.isdigit():
+                    invoice_id_for_query = int(invoice_id)
+                print(f"DEBUG: Using invoice_id_for_query={invoice_id_for_query} (type: {type(invoice_id_for_query)}) for exclude")
+                
+                # Detailed query logging
+                print(f"DEBUG: Running query: Invoices.objects.filter(contact_pk_id={contact_pk}, invoice_type=2).exclude(invoice_pk={invoice_id_for_query})")
+                
+                other_invoice_objects = Invoices.objects.filter(
+                    contact_pk_id=contact_pk,
+                    invoice_type=2  # Only progress claim invoices
+                ).exclude(invoice_pk=invoice_id_for_query)
+                
+                print(f"DEBUG: Found {other_invoice_objects.count()} other invoices for contact {contact_pk}: {[i.invoice_pk for i in other_invoice_objects]}")
+                
+                for other_inv in other_invoice_objects:
+                    try:
+                        print(f"DEBUG: Processing other invoice {other_inv.invoice_pk}")
+                        other_allocations = Invoice_allocations.objects.filter(invoice_pk=other_inv)
+                        formatted_other_allocations = []
+                        
+                        for alloc in other_allocations:
+                            try:
+                                item = alloc.item
+                                if not item:
+                                    print(f"WARNING: Other allocation {alloc.invoice_allocations_pk} has no item relationship")
+                                    continue
+                                    
+                                formatted_other_allocations.append({
+                                    'item_pk': item.costing_pk,
+                                    'item_name': item.item,
+                                    'amount': float(alloc.amount),
+                                    'gst_amount': float(alloc.gst_amount),
+                                    'allocation_type': alloc.allocation_type,
+                                    'invoice_allocation_type': 'progress_claim'  # Keep for backward compatibility
+                                })
+                            except Exception as e:
+                                print(f"ERROR: Failed to process other allocation: {str(e)}")
+                                continue
+                        
+                        other_invoices.append({
+                            'invoice_pk': other_inv.invoice_pk,
+                            'invoice_number': other_inv.invoice_number,
+                            'invoice_allocations': formatted_other_allocations
+                        })
+                    except Exception as e:
+                        print(f"ERROR: Failed to process other invoice {other_inv.invoice_pk}: {str(e)}")
+                        continue
+            except Exception as e:
+                print(f"ERROR: Failed to query other invoices: {str(e)}")
+                # Continue with empty other_invoices list
+        
+        # Check if we have any allocations
+        if not formatted_allocations:
+            print(f"WARNING: No valid allocations found for invoice {invoice_id}")
+            # Return empty allocations instead of error to allow frontend to handle it
+        
+        # Prepare the response
+        response_data = {
+            'allocations': formatted_allocations,
+            'contact_pk': contact_pk,
+            'invoice_type': invoice.invoice_type,
+            'other_invoices': other_invoices  # Include other invoices for progress claims
+        }
+        
+        print(f"DEBUG: Successfully prepared response for invoice {invoice_id} with {len(formatted_allocations)} allocations")
+        return JsonResponse(response_data)
+    
+    except Exception as e:
+        import traceback
+        print(f"CRITICAL ERROR in get_invoice_allocations: {str(e)}")
+        print(traceback.format_exc())  # Print full traceback for debugging
+        return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
 
 @csrf_exempt
 def send_hc_claim_to_xero(request):

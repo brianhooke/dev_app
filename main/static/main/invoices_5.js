@@ -30,6 +30,26 @@ function directCostAllocationInvoices(
     invoiceDueDate = "",
     grossAmount = ""
   ) {
+    console.log('directCostAllocationInvoices called with:', {
+      updating,
+      invoiceId,
+      supplier,
+      allocations
+    });
+
+    // Update the modal title and save button text if in update mode
+    if (updating) {
+      // The correct modal ID is directCostModal, not directCostInvoicesModal
+      document.querySelector('#directCostModal .modal-title').textContent = 'Update Direct Cost Invoice Allocation';
+      // The save button doesn't have an ID in HTML, it just has an onclick attribute
+      const saveButton = document.querySelector('#directCostModal button[onclick="saveDirectCostInvoices()"]');
+      if (saveButton) saveButton.textContent = 'Update Allocation';
+    } else {
+      document.querySelector('#directCostModal .modal-title').textContent = 'Direct Cost Invoice Allocation';
+      const saveButton = document.querySelector('#directCostModal button[onclick="saveDirectCostInvoices()"]');
+      if (saveButton) saveButton.textContent = 'Save';
+    }
+
     const pdfViewer = document.getElementById('directCostInvoicesPdfViewer');
     const supplierElement = document.getElementById('directCostSupplierInvoices');
     const totalElement = document.getElementById('directCostTotalInvoices');
@@ -39,6 +59,16 @@ function directCostAllocationInvoices(
     const invoiceDueDateElement = document.getElementById('directCostInvoiceDueDateInvoices');
     const grossAmountElement = document.getElementById('directCostGrossAmountInvoices');
     const hiddenInvoiceIdElement = document.getElementById('hiddenInvoiceIdInvoices');
+    const updatingElement = document.getElementById('hiddenUpdatingInvoices') || document.createElement('input');
+    
+    // Create hidden updating flag if it doesn't exist
+    if (!document.getElementById('hiddenUpdatingInvoices')) {
+      updatingElement.type = 'hidden';
+      updatingElement.id = 'hiddenUpdatingInvoices';
+      // Fix: use the correct modal ID (directCostModal instead of directCostInvoicesModal)
+      document.getElementById('directCostModal').appendChild(updatingElement);
+    }
+    updatingElement.value = updating ? 'true' : 'false';
   
     // The table where we add line items
     const table = document.getElementById('lineItemsTableInvoices');
@@ -69,7 +99,8 @@ function directCostAllocationInvoices(
     if (invoiceDateElement) invoiceDateElement.textContent = invoiceDate;
     if (invoiceDueDateElement) invoiceDueDateElement.textContent = invoiceDueDate;
     if (grossAmountElement) {
-      grossAmountElement.textContent = parseFloat(grossAmount)
+      const calculatedGross = parseFloat(totalNet) + parseFloat(totalGst);
+      grossAmountElement.textContent = calculatedGross
         .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   
@@ -83,12 +114,22 @@ function directCostAllocationInvoices(
       tableBody.deleteRow(0); // remove from top
     }
   
-    // If you want to automatically add rows for existing allocations:
-    if (Array.isArray(allocations)) {
+    // Add rows for existing allocations if provided
+    if (Array.isArray(allocations) && allocations.length > 0) {
+      console.log('Adding existing allocations to modal:', allocations);
       allocations.forEach((allocation) => {
-        // allocation could have item_name, amount, notes, etc.
-        addInvoiceLineItem(allocation.item_name, allocation.amount, allocation.notes);
+        // For each allocation, add a row with item name, net amount, and notes
+        addInvoiceLineItem(
+          allocation.item_name, 
+          allocation.net, 
+          allocation.notes,
+          allocation.gst,
+          allocation.item_pk // Pass item_pk to select the correct option
+        );
       });
+      
+      // Run the update calculation to make sure "Still to Allocate" is correct
+      updateStillToAllocateValueInvoices();
     }
 
     // Hook up the "+" button to add a new line item
@@ -106,19 +147,32 @@ function directCostAllocationInvoices(
     $('#directCostModal').modal('show');
   }
 
-function addInvoiceLineItem(item, amount, notes = '') {
+function addInvoiceLineItem(item, amount, notes = '', gstAmount = 0, item_pk = null) {
     var tableBody = document.getElementById('lineItemsTableInvoices').tBodies[0];
     var newRow = document.createElement('tr');
     var select = document.createElement('select');
     select.style.maxWidth = "100%";
     select.innerHTML = '<option value="">Select an item</option>';
-    console.log("costings are: " + costings);
-    // Add all items to the dropdown, including margin items with order_in_list = -1
+    
+    // Add all items to the dropdown, including margin items with category_order_in_list = -1
     costings.forEach(function(costing) {
-        select.innerHTML += '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '">' + costing.item + '</option>';
+        // Note: Using category_order_in_list to identify margin items as per memory
+        const option = document.createElement('option');
+        option.value = costing.item;
+        option.setAttribute('data-costing-id', costing.costing_pk);
+        option.textContent = costing.item;
+        
+        // If this is a pre-filled item and matches the item_pk, pre-select it
+        if (item_pk && costing.costing_pk == item_pk) {
+            option.selected = true;
+        }
+        
+        select.appendChild(option);
     });
+    
     var firstCell = newRow.insertCell(0);
     firstCell.appendChild(select);
+    
     for (var i = 1; i < 7; i++) { // Adjusted the loop to run one less iteration
         var newCell = newRow.insertCell(i);
         if (i === 2 || i === 3 || i === 4) { // Being uncommitted, net and GST amount for this invoice cells
@@ -127,6 +181,14 @@ function addInvoiceLineItem(item, amount, notes = '') {
             input.step = '0.01';
             input.style.width = '100%';
             newCell.appendChild(input);
+            
+            // Pre-fill values if provided
+            if (i === 3 && amount !== undefined) { // Net amount
+                input.value = amount;
+            } else if (i === 4 && gstAmount !== undefined) { // GST amount
+                input.value = gstAmount;
+            }
+            
             input.addEventListener('input', updateStillToAllocateValueInvoices);
             input.addEventListener('change', updateStillToAllocateValueInvoices);
         } else if (i === 6) { // Notes input
@@ -353,9 +415,14 @@ async function saveDirectCostInvoices() {
     });
   
     // 5) Build Payload
+    // Check if we're in update mode by reading the hidden updating flag
+    const isUpdating = document.getElementById('hiddenUpdatingInvoices') && 
+                       document.getElementById('hiddenUpdatingInvoices').value === 'true';
+    
     const payload = {
       invoice_id: invoiceId,
-      allocations: allocations
+      allocations: allocations,
+      updating: isUpdating
     };
   
     console.log("Sending Direct Cost payload:", payload);
