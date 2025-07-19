@@ -64,16 +64,26 @@ function progressClaimModalData(
 
   let quoteData = [];
   let invoiceData = [];
-  const quoteObj = progress_claim_quote_allocations.find(o => o.contact_pk === parseInt(contactPk));
-  if (quoteObj) {
-    quoteData = quoteObj.quotes.map(q => ({
-      quote_number: q.quote_number,
-      quote_allocations: q.allocations.map(a => ({
-        item_pk: a.item_pk,
-        item_name: a.item_name,
-        amount: a.amount
-      }))
-    }));
+  
+  // Check if progress_claim_quote_allocations exists before using it
+  if (typeof progress_claim_quote_allocations !== 'undefined' && progress_claim_quote_allocations) {
+    console.log('DEBUG: progress_claim_quote_allocations exists');
+    const quoteObj = progress_claim_quote_allocations.find(o => o.contact_pk === parseInt(contactPk));
+    if (quoteObj && quoteObj.quotes) {
+      console.log('DEBUG: Found quote data for contact_pk:', contactPk);
+      quoteData = quoteObj.quotes.map(q => ({
+        quote_number: q.quote_number,
+        quote_allocations: q.allocations.map(a => ({
+          item_pk: a.item_pk,
+          item_name: a.item_name,
+          amount: a.amount
+        }))
+      }));
+    } else {
+      console.log('DEBUG: No quote data found for contact_pk:', contactPk);
+    }
+  } else {
+    console.log('DEBUG: progress_claim_quote_allocations is undefined');
   }
   // Handle the data structure from the API response
   console.log('=== UPDATE MODE DEBUG ===');
@@ -82,16 +92,37 @@ function progressClaimModalData(
   console.log('Invoice Number to edit:', invoiceNumber);
   console.log('Other invoices from API:', progress_claim_invoice_allocations);
   
-  console.log('DEBUG: Raw progress_claim_invoice_allocations:', JSON.stringify(progress_claim_invoice_allocations));
+  // Safely log progress_claim_invoice_allocations if it exists
+  try {
+    console.log('DEBUG: Raw progress_claim_invoice_allocations:', 
+      typeof progress_claim_invoice_allocations !== 'undefined' ? 
+      JSON.stringify(progress_claim_invoice_allocations) : 'undefined');
+  } catch (e) {
+    console.log('DEBUG: Error stringifying progress_claim_invoice_allocations:', e.message);
+  }
   
   // Get the invoices data structure
-  let invoiceObj = window.progress_claim_invoice_allocations.find(obj => obj.contact_pk == contactPk);
+  let invoiceObj = null;
   
-  console.log('DEBUG: invoiceObj structure:', {
-    contact_pk: invoiceObj ? invoiceObj.contact_pk : 'not found',
-    invoices_length: invoiceObj ? invoiceObj.invoices.length : 0,
-    first_few_invoices: invoiceObj ? invoiceObj.invoices.slice(0, 3) : []
-  });
+  // First check if the global variable exists
+  if (typeof progress_claim_invoice_allocations !== 'undefined' && progress_claim_invoice_allocations) {
+    console.log('DEBUG: progress_claim_invoice_allocations exists');
+    // Then try to find the contact data
+    invoiceObj = progress_claim_invoice_allocations.find(obj => obj.contact_pk === parseInt(contactPk));
+    
+    if (invoiceObj) {
+      console.log('DEBUG: Found invoice data for contact_pk:', contactPk);
+      console.log('DEBUG: invoiceObj structure:', {
+        contact_pk: invoiceObj.contact_pk,
+        invoices_length: invoiceObj.invoices ? invoiceObj.invoices.length : 0,
+        first_few_invoices: invoiceObj.invoices ? invoiceObj.invoices.slice(0, 3) : []
+      });
+    } else {
+      console.log('DEBUG: No invoice data found for contact_pk:', contactPk);
+    }
+  } else {
+    console.log('DEBUG: progress_claim_invoice_allocations is undefined or null');
+  }
   
   // CRITICAL FIX: Check if we're in update mode with API response data
   if (updating) {
@@ -141,16 +172,22 @@ function progressClaimModalData(
       console.log('DEBUG: Filtered invoiceData for Previous Claims - count:', invoiceData.length);
       console.log('Current invoice data stored:', currentInvoiceData);
     } else {
-      // Regular mode: use all invoices
-      invoiceData = invoiceObj.invoices.map(i => ({
-        invoice_number: i.invoice_number,
-        invoice_allocations: i.allocations.map(a => ({
-          item_pk: a.item_pk,
-          item_name: a.item_name,
-          amount: a.amount,
-          invoice_allocation_type: a.invoice_allocation_type
-        }))
-      }));
+      // Regular mode: use all invoices if invoiceObj exists
+      if (invoiceObj && invoiceObj.invoices) {
+        console.log('DEBUG: Using invoiceObj.invoices for regular mode');
+        invoiceData = invoiceObj.invoices.map(i => ({
+          invoice_number: i.invoice_number,
+          invoice_allocations: i.allocations.map(a => ({
+            item_pk: a.item_pk,
+            item_name: a.item_name,
+            amount: a.amount,
+            invoice_allocation_type: a.invoice_allocation_type
+          }))
+        }));
+      } else {
+        console.log('DEBUG: No invoiceObj.invoices available for regular mode');
+        invoiceData = [];
+      }
     }
   }
   
@@ -611,17 +648,10 @@ function progressClaimModalData(
       
       gstCell.appendChild(gstInput);
 
+      // Add an empty cell for the 'Still to Claim' column (no calculation for variations)
       const stillCell = newRow.insertCell();
-      const stillVal = sumDC - (parseFloat(netInput.value) || 0);
-      stillCell.textContent = stillVal.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      netInput.addEventListener('input', () => {
-        const newVal = sumDC - (parseFloat(netInput.value) || 0);
-        stillCell.textContent = newVal.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      });
-      gstInput.addEventListener('input', () => {
-        const newVal = sumDC - (parseFloat(netInput.value) || 0);
-        stillCell.textContent = newVal.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      });
+      stillCell.textContent = "";
+      // Remove the event listeners that update the 'Still to Claim' value for variations
 
       tableBody.insertBefore(newRow, stillRow);
     });
@@ -735,9 +765,16 @@ function updateStillToAllocateValues() {
   let allocatedNet = 0;
   let allocatedGst = 0;
 
-  // The last row is for "Still to Allocate", so skip that
+  // Skip the last row ("Still to Allocate") and heading rows
   for (let i = 0; i < tableBody.rows.length - 1; i++) {
     const row = tableBody.rows[i];
+    
+    // Skip special heading rows but include variation rows
+    if (row.id === "variationsHeadingRow" || 
+        row.id === "progressClaimstillToAllocateInvoicesRow") {
+      continue;
+    }
+    
     const netIndex = numQuotes + numInvoices + 3;
     const gstIndex = numQuotes + numInvoices + 4;
     const netInput = row.cells[netIndex]?.querySelector('input');
