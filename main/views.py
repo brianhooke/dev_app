@@ -2367,22 +2367,42 @@ def send_hc_claim_to_xero(request):
             return JsonResponse({'success': False, 'error': 'Sales account not configured'})
         line_items = []
         for cat_data in categories:
-            cat_obj = Categories.objects.get(categories_pk=cat_data['categories_pk'])
-            amount = Decimal(str(cat_data['amount']))
-            line_items.append({
-                "Description": cat_obj.category,
-                "Quantity": "1.0",
-                "UnitAmount": str(amount),
-                "AccountCode": sales_account,
-                "TaxType": "OUTPUT",
-                "TaxAmount": str(amount * Decimal('0.1')),
-                "Tracking": [
-                    {
-                        "Name": "Project",
-                        "Option": project.project
-                    }
-                ]
-            })
+            try:
+                # Log the category PK we're trying to find
+                logger.info(f"Looking for category with PK: {cat_data['categories_pk']}")
+                
+                # If categories_pk is None, use a default description
+                if cat_data['categories_pk'] is None:
+                    logger.info("Using default category description for null categories_pk")
+                    description = "HC Claim"
+                else:
+                    # Try to get the category object
+                    cat_obj = Categories.objects.get(categories_pk=cat_data['categories_pk'])
+                    description = cat_obj.category
+                    logger.info(f"Found category: {description}")
+                
+                amount = Decimal(str(cat_data['amount']))
+                line_items.append({
+                    "Description": description,
+                    "Quantity": "1.0",
+                    "UnitAmount": str(amount),
+                    "AccountCode": sales_account,
+                    "TaxType": "OUTPUT",
+                    "TaxAmount": str(amount * Decimal('0.1')),
+                    "Tracking": [
+                        {
+                            "Name": "Project",
+                            "Option": project.project
+                        }
+                    ]
+                })
+            except Categories.DoesNotExist:
+                # Log that we couldn't find the category
+                logger.error(f"Category not found with PK: {cat_data['categories_pk']}")
+                return JsonResponse({"error": f"Category not found with ID: {cat_data['categories_pk']}"}, status=404)
+            except Exception as e:
+                logger.error(f"Error processing category: {str(e)}")
+                return JsonResponse({"error": f"Error processing category: {str(e)}"}, status=500)
         invoice_data = {
             "Type": "ACCREC",
             "Contact": {"ContactID": xero_contact_id},
