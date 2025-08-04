@@ -424,18 +424,42 @@ $('#sendToXeroButton').on('click', function() {
             }
         });
     }
+    // Log all parameters being sent to Xero
+    const xeroParams = {
+        hc_claim_pk: hc_claim_pk,
+        xero_contact_id: selectedContact.xero_contact_id,
+        contact_name: selectedContact.contact_name,
+        categories: categoryData
+    };
+    
+    // Log to console
+    console.log('Sending to Xero with parameters:');
+    Object.entries(xeroParams).forEach(([key, value]) => {
+        if (key !== 'categories') {
+            console.log(`${key}: ${value}`);
+        } else {
+            console.log(`${key}: ${JSON.stringify(value)}`);
+        }
+    });
+    
+    // Show alert with parameters
+    let alertMessage = 'Sending to Xero with parameters:\n';
+    Object.entries(xeroParams).forEach(([key, value]) => {
+        if (key !== 'categories') {
+            alertMessage += `${key}: ${value}\n`;
+        } else {
+            alertMessage += `${key}: ${JSON.stringify(value)}\n`;
+        }
+    });
+    alert(alertMessage);
+    
     fetch('/send_hc_claim_to_xero/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({
-            hc_claim_pk: hc_claim_pk,
-            xero_contact_id: selectedContact.xero_contact_id,
-            contact_name: selectedContact.contact_name,
-            categories: categoryData
-        })
+        body: JSON.stringify(xeroParams)
     })
     .then(response => response.json())
     .then(data => {

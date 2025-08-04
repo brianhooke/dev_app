@@ -725,12 +725,16 @@ def create_contacts(request):
 @csrf_exempt
 def delete_quote(request):
     if request.method == 'DELETE':
-        # Parse the request body to get the quote id
+        # Parse the request body to get the supplier quote number
         data = json.loads(request.body)
-        quote_id = data.get('id')
+        supplier_quote_number = data.get('supplier_quote_number')
+        
+        if not supplier_quote_number:
+            return JsonResponse({'status': 'fail', 'message': 'Supplier quote number is required'}, status=400)
+            
         # Get the quote from the database
         try:
-            quote = Quotes.objects.get(pk=quote_id)
+            quote = Quotes.objects.get(supplier_quote_number=supplier_quote_number)
         except Quotes.DoesNotExist:
             return JsonResponse({'status': 'fail', 'message': 'Quote not found'}, status=404)
         # Delete the quote
@@ -2325,7 +2329,16 @@ def send_hc_claim_to_xero(request):
         xero_contact_id = data.get('xero_contact_id')
         contact_name = data.get('contact_name')
         categories = data.get('categories', [])
+        
+        # Log all received parameters
+        logger.info("Received Xero API parameters:")
+        logger.info(f"hc_claim_pk: {hc_claim_pk}")
+        logger.info(f"xero_contact_id: {xero_contact_id}")
+        logger.info(f"contact_name: {contact_name}")
+        logger.info(f"categories: {categories}")
+        
         if not all([hc_claim_pk, xero_contact_id, contact_name]):
+            logger.error("Missing required fields for Xero API")
             return JsonResponse({'success': False, 'error': 'Missing required fields'})
         hc_claim = HC_claims.objects.get(pk=hc_claim_pk)
         get_xero_token(request, 2)  # Ignoring the returned JsonResponse
