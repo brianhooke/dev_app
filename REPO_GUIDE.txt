@@ -1,0 +1,97 @@
+DEV_APP Repository Guide
+
+Purpose
+- This guide documents our branch structure, workflow protocol, common commands, and how to roll back to the baseline version.
+
+Branch & Tag Structure
+- main
+  - Stable, production-ready branch.
+  - Only merge via PRs. Avoid force pushes.
+- legacy/monolith (branch)
+  - Pointer to the last known good “all-in-one” version.
+- refactor/domain-split (long-lived branch)
+  - The integration branch for the modularization effort (introducing CORE + PROJECT_TYPE apps and SERVICE extractions).
+  - Open as a Draft PR into main for ongoing visibility.
+- feature branches (short-lived)
+  - Create from refactor/domain-split for focused tasks, e.g.:
+    - refactor/views-package-split
+    - refactor/services-invoicing-extract
+- ALL_IN_ONE_WORKING_VERSION (annotated tag)
+  - Baseline tag at the last known good “all-in-one” state.
+
+Workflow Protocol
+- Commits
+  - Prefer small, focused commits.
+  - For large file reorganizations, do a move-only commit first (renames/splits), followed by logic changes in subsequent commits.
+- Pull Requests
+  - PRs target refactor/domain-split until a coherent unit is ready for main.
+  - Keep the refactor PR open as Draft into main.
+- Merging strategy
+  - main stays stable; merge to main only when changes are safe and (ideally) behind flags.
+  - Within refactor/domain-split, prefer merging feature branches rather than force-pushing. If you must rewrite, use --force-with-lease and communicate.
+- Branch protection
+  - Protect main with required PRs and disallow force-pushes.
+- Feature flags
+  - Gate new modular paths behind a simple setting/env to allow fallback to the existing behavior during migration.
+
+Common Commands
+- Sync & status
+  - git fetch origin
+  - git status
+  - git branch -vv
+  - Ahead/behind counts for main: git rev-list --left-right --count HEAD...origin/main
+- Tag current state (baseline already created, example shown)
+  - git tag -a ALL_IN_ONE_WORKING_VERSION -m "Baseline before modularisation refactor"
+  - git push origin ALL_IN_ONE_WORKING_VERSION
+- Create long-lived refactor branch (already created, example shown)
+  - git checkout -b refactor/domain-split
+  - git push -u origin refactor/domain-split
+- Create a feature branch off refactor
+  - git checkout refactor/domain-split
+  - git pull
+  - git checkout -b refactor/<feature-name>
+  - git push -u origin refactor/<feature-name>
+- Keep refactor/domain-split up to date with main
+  - git checkout refactor/domain-split
+  - git fetch origin
+  - git merge origin/main   # or: git rebase origin/main
+  - git push
+- Compare baseline vs working copy side-by-side with a worktree
+  - git worktree add ../dev_app-monolith ALL_IN_ONE_WORKING_VERSION
+- Show commits not pushed / not pulled
+  - git log --oneline origin/main..HEAD      # local-only commits (ahead)
+  - git log --oneline HEAD..origin/main      # remote-only commits (behind)
+- List tags and branches
+  - git tag --list
+  - git branch -a -vv
+
+Rollback to Baseline (Caution)
+- Safer approach: create a hotfix branch from the baseline tag without rewriting main.
+  - git checkout -b hotfix/from-baseline ALL_IN_ONE_WORKING_VERSION
+  - Make fixes, test, then open PR into main.
+- Hard reset main to the baseline tag (only if necessary and coordinated)
+  - git checkout main
+  - git fetch origin
+  - git reset --hard ALL_IN_ONE_WORKING_VERSION
+  - git push --force-with-lease
+  NOTE: This rewrites main’s history. Only do this if you fully understand the impact and have approvals.
+
+Conventions During Modularization
+- App structure (target)
+  - core/ (PROJECT_TYPE-agnostic)
+  - <project_type_app>/ (e.g., construction/, other/)
+  - SERVICE modules under services/ in each app (e.g., services/invoicing.py, services/quotes.py, services/claims.py)
+- URLs
+  - dev_app/urls.py includes core.urls and conditionally includes PROJECT_TYPE app urls.
+  - Use URL namespaces (app_name) for disambiguation, e.g., core:invoices_list vs construction:invoices_list.
+- Templates/static
+  - Namespaced folders to enable predictable overrides, e.g., core/templates/core/... and construction/templates/construction/...
+- Refactor order
+  1) Convert main/views.py to a package and re-export to keep imports working.
+  2) Extract SERVICE logic to core/services/.
+  3) Introduce PROJECT_TYPE app(s) and move PROJECT_TYPE-specific logic.
+  4) Migrate templates/static with namespacing and conditional includes.
+
+Contact & Notes
+- When in doubt during refactor, prefer non-destructive steps (tags, branches, PRs) over history rewrites.
+- Use move-only commits to preserve blame and aid code review.
