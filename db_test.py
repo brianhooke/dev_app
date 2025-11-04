@@ -8,7 +8,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dev_app.settings.local")
 # Initialize Django
 django.setup()
 
-from main.models import Quotes, Quote_allocations, Invoices, Invoice_allocations
+from core.models import Quotes, Quote_allocations, Invoices, Invoice_allocations
 
 
 def build_data_structures():
