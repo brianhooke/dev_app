@@ -8,6 +8,7 @@ import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
+from ..services import invoices as invoice_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -95,38 +96,22 @@ def main(request, division):
     for alloc in all_allocations:
         print(f"Invoice {alloc.invoice_pk.invoice_pk} - Item {alloc.item.costing_pk}: Amount {alloc.amount}")
     
-    # Get and print the sums
-    invoice_allocations_sums = Invoice_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
-    print('\nRaw invoice_allocations_sums:')
-    for sum_item in invoice_allocations_sums:
-        print(f"Item {sum_item['item']}: Total {sum_item['total_amount']}")
-    
-    invoice_allocations_sums_dict = {i['item']: i['total_amount'] for i in invoice_allocations_sums}
+    # Use invoice service to get allocation sums
+    invoice_allocations_sums_dict = invoice_service.get_invoice_allocations_sums_dict()
     print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
     
-    # Calculate paid invoices (status 2 or 3) for sc_paid
-    paid_invoice_allocations = Invoice_allocations.objects.filter(
-        invoice_pk__invoice_status__in=[2, 3]  # Only include paid or sent to Xero invoices
-    ).values('item').annotate(total_amount=Sum('amount'))
-    
-    paid_invoice_allocations_dict = {i['item']: i['total_amount'] for i in paid_invoice_allocations}
+    # Use invoice service to get paid invoice allocations
+    paid_invoice_allocations_dict = invoice_service.get_paid_invoice_allocations_dict()
     print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
     
     # Print how the totals are being assigned
     print('\nAssigning totals to costings:')
     for c in costings:
-        # Use the same logic for all items, including Margin category items (category_order_in_list = -1)
-        # Using Invoice_allocations logic for all items for consistency
-        original_value = invoice_allocations_sums_dict.get(c['costing_pk'], 0)
-        c['sc_invoiced'] = original_value
-        
-        # If sc_invoiced is 0, also check HC_claim_allocations as a fallback
-        if c['sc_invoiced'] == 0:
-            hc_alloc = HC_claim_allocations.objects.filter(
-                item=c['costing_pk']
-            ).first()
-            if hc_alloc and hc_alloc.sc_invoiced:
-                c['sc_invoiced'] = hc_alloc.sc_invoiced
+        # Use invoice service to calculate sc_invoiced
+        c['sc_invoiced'] = invoice_service.calculate_sc_invoiced_for_costing(
+            c['costing_pk'], 
+            invoice_allocations_sums_dict
+        )
         
         # Get paid amount from paid_invoice_allocations_dict (invoices with status 2 or 3)
         c['sc_paid'] = paid_invoice_allocations_dict.get(c['costing_pk'], 0)
@@ -175,15 +160,10 @@ def main(request, division):
     po_orders_list = []
     for order in po_orders:
         po_orders_list.append({'po_order_pk': order.po_order_pk,'po_supplier': order.po_supplier_id,'supplier_name': order.po_supplier.contact_name,'supplier_email': order.po_supplier.contact_email,'po_note_1': order.po_note_1,'po_note_2': order.po_note_2,'po_note_3': order.po_note_3,'po_sent': order.po_sent})
-    invoices = Invoices.objects.filter(invoice_division=division).select_related('contact_pk','associated_hc_claim').order_by(F('associated_hc_claim__pk').desc(nulls_first=True)).all()
-    invoices_list = [{'invoice_pk': i.invoice_pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date}for i in invoices]
-    invoices_unallocated = Invoices.objects.filter(invoice_status=0,invoice_division=division).select_related('contact_pk','associated_hc_claim')
-    invoices_unallocated_list = []
-    quotes_contact_pks = set(Quotes.objects.values_list('contact_pk',flat=True))
-    for i in invoices_unallocated:
-        invoices_unallocated_list.append({'invoice_pk': i.invoice_pk,'contact_pk': i.contact_pk.pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date,'possible_progress_claim': 1 if i.contact_pk.pk in quotes_contact_pks else 0})
-    invoices_allocated = Invoices.objects.exclude(invoice_status=0).filter(invoice_division=division).select_related('contact_pk','associated_hc_claim')
-    invoices_allocated_list = [{'invoice_pk': i.invoice_pk,'invoice_status': i.invoice_status,'contact_name': i.contact_pk.contact_name,'total_net': i.total_net,'total_gst': i.total_gst,'supplier_invoice_number': i.supplier_invoice_number,'pdf_url': i.pdf.url,'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,'invoice_date': i.invoice_date,'invoice_due_date': i.invoice_due_date,'invoice_type': i.invoice_type}for i in invoices_allocated]
+    # Use invoice service to get invoice lists
+    invoices_list = invoice_service.get_invoices_list(division)
+    invoices_unallocated_list = invoice_service.get_unallocated_invoices(division)
+    invoices_allocated_list = invoice_service.get_allocated_invoices(division)
     # Get HC and QS claim totals from HC_claim_allocations
     hc_qs_totals = HC_claim_allocations.objects.values('hc_claim_pk').annotate(
         hc_total=Sum('hc_claimed'),
@@ -194,11 +174,8 @@ def main(request, division):
         'qs_total': float(item['qs_total'] or 0)
     } for item in hc_qs_totals}
     
-    # Get invoice totals for each HC claim
-    sc_totals = Invoices.objects.filter(associated_hc_claim__isnull=False).values('associated_hc_claim').annotate(
-        sc_total=Sum('total_net')
-    )
-    sc_totals_dict = {item['associated_hc_claim']: float(item['sc_total'] or 0) for item in sc_totals}
+    # Use invoice service to get invoice totals by HC claim
+    sc_totals_dict = invoice_service.get_invoice_totals_by_hc_claim()
     
     # HC Claims data
     # For HC claims in general UI display
@@ -321,14 +298,13 @@ def main(request, division):
                 if hc_alloc:
                     c['hc_this_claim_invoices'] = hc_alloc.sc_invoiced
             else:
-                # For non-margin items, use existing Invoice_allocations logic
-                allocs = Invoice_allocations.objects.filter(item=c['costing_pk'])
-                for al in allocs:
-                    inv = Invoices.objects.get(invoice_pk=al.invoice_pk.pk)
-                    if inv.associated_hc_claim and inv.associated_hc_claim.pk == current_hc_claim.pk:
-                        c['hc_this_claim_invoices'] += al.amount
-                    elif inv.associated_hc_claim and inv.associated_hc_claim.pk < current_hc_claim.pk:
-                        c['hc_prev_invoiced'] += al.amount
+                # For non-margin items, use invoice service
+                hc_this, hc_prev = invoice_service.calculate_hc_claim_invoices(
+                    c['costing_pk'], 
+                    current_hc_claim
+                )
+                c['hc_this_claim_invoices'] = hc_this
+                c['hc_prev_invoiced'] = hc_prev
     else:
         for c in costings:
             c['hc_prev_invoiced'] = 0
@@ -376,19 +352,8 @@ def main(request, division):
                 alloc_list.append({"item_pk": qa.item.pk,"item_name": qa.item.item,"amount": str(qa.amount)})
             c_entry["quotes"].append({"quote_number": q.quotes_pk,"allocations": alloc_list})
         progress_claim_quote_allocations.append(c_entry)
-    distinct_contacts_invoices = Invoices.objects.exclude(invoice_status=0).values_list("contact_pk",flat=True).distinct()
-    progress_claim_invoice_allocations = []
-    for cid in distinct_contacts_invoices:
-        invs_for_c = Invoices.objects.filter(contact_pk=cid).exclude(invoice_status=0).order_by("invoice_date")
-        c_entry = {"contact_pk": cid,"invoices": []}
-        for inv in invs_for_c:
-            i_allocs = Invoice_allocations.objects.filter(invoice_pk=inv)
-            alloc_list = []
-            for ia in i_allocs:
-                allocation_type_str = "progress_claim" if inv.invoice_type == 2 and ia.allocation_type == 0 else "direct_cost"
-                alloc_list.append({"item_pk": ia.item.pk,"item_name": ia.item.item,"amount": str(ia.amount),"invoice_allocation_type": allocation_type_str})
-            c_entry["invoices"].append({"invoice_number": inv.invoice_pk,"allocations": alloc_list})
-        progress_claim_invoice_allocations.append(c_entry)
+    # Use invoice service to get progress claim invoice allocations
+    progress_claim_invoice_allocations = invoice_service.get_progress_claim_invoice_allocations()
     # Generate contract_budget_totals, grouped by invoice_category
     contract_budget_totals = (Costing.objects.filter(category__division=division)
         .values('category__invoice_category')  # Group by invoice_category
