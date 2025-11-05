@@ -9,6 +9,7 @@ from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
 from ..services import invoices as invoice_service
+from ..services import quotes as quote_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -82,10 +83,9 @@ def main(request, division):
     contacts_list = list(contacts)
     contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
     contacts_unfiltered_list = list(contacts_unfiltered)
-    quote_allocations = Quote_allocations.objects.filter(item__category__division=division).select_related('item').all()
-    quote_allocations = [{**model_to_dict(ca),'item_name': ca.item.item}for ca in quote_allocations]
-    quote_allocations_sums = Quote_allocations.objects.values('item').annotate(total_amount=Sum('amount'))
-    quote_allocations_sums_dict = {i['item']: i['total_amount'] for i in quote_allocations_sums}
+    # Use quote service to get quote allocations
+    quote_allocations = quote_service.get_quote_allocations_for_division(division)
+    quote_allocations_sums_dict = quote_service.get_quote_allocations_sums_dict()
     committed_values = {pk: amount for pk, amount in Committed()}
     for c in costings:
         c['committed'] = committed_values.get(c['costing_pk'],0)
@@ -131,22 +131,12 @@ def main(request, division):
     for cat, total in category_totals.items():
         print(f"Category '{cat}': Total {total}")
     items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed'],'order_in_list': c['category_order_in_list']} for c in costings]
-    committed_quotes = Quotes.objects.filter(contact_pk__division=division).values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk','contact_pk__contact_name')
-    committed_quotes_list = list(committed_quotes)
-    for q in committed_quotes_list:
-        if settings.DEBUG: q['pdf'] = settings.MEDIA_URL + q['pdf']
-        else: q['pdf'] = settings.MEDIA_URL + q['pdf']
+    # Use quote service to get committed quotes and contacts
+    committed_quotes_list = quote_service.get_committed_quotes_list(division)
     committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)
     quote_allocations_json = json.dumps(list(quote_allocations), cls=DjangoJSONEncoder)
-    contact_pks_in_quotes = Quotes.objects.filter(contact_pk__division=division).values_list('contact_pk',flat=True).distinct()
-    contacts_in_quotes = Contacts.objects.filter(pk__in=contact_pks_in_quotes,division=division)
-    contacts_in_quotes_list = []
-    for contact in contacts_in_quotes:
-        d = contact.__dict__
-        d['quotes'] = list(contact.quotes_set.values('quotes_pk','supplier_quote_number','total_cost','pdf','contact_pk'))
-        contacts_in_quotes_list.append(d)
-    contacts_not_in_quotes = Contacts.objects.exclude(pk__in=contact_pks_in_quotes,division=division).values()
-    contacts_not_in_quotes_list = list(contacts_not_in_quotes)
+    contacts_in_quotes_list = quote_service.get_contacts_in_quotes(division)
+    contacts_not_in_quotes_list = quote_service.get_contacts_not_in_quotes(division)
     total_contract_budget = sum(c['contract_budget'] for c in costings)
     total_uncommitted = sum(c['uncommitted'] for c in costings)
     total_committed = sum(c['committed'] for c in costings)
@@ -340,18 +330,8 @@ def main(request, division):
     for c in costings:
         c['qs_this_claim'] = min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed'])
     spv_data = SPVData.objects.first()
-    distinct_contacts_quotes = Quotes.objects.values_list("contact_pk", flat=True).distinct()
-    progress_claim_quote_allocations = []
-    for cid in distinct_contacts_quotes:
-        qs_for_c = Quotes.objects.filter(contact_pk=cid)
-        c_entry = {"contact_pk": cid,"quotes": []}
-        for q in qs_for_c:
-            q_allocs = Quote_allocations.objects.filter(quotes_pk=q)
-            alloc_list = []
-            for qa in q_allocs:
-                alloc_list.append({"item_pk": qa.item.pk,"item_name": qa.item.item,"amount": str(qa.amount)})
-            c_entry["quotes"].append({"quote_number": q.quotes_pk,"allocations": alloc_list})
-        progress_claim_quote_allocations.append(c_entry)
+    # Use quote service to get progress claim quote allocations
+    progress_claim_quote_allocations = quote_service.get_progress_claim_quote_allocations()
     # Use invoice service to get progress claim invoice allocations
     progress_claim_invoice_allocations = invoice_service.get_progress_claim_invoice_allocations()
     # Generate contract_budget_totals, grouped by invoice_category
@@ -423,27 +403,14 @@ def main(request, division):
             "uncommitted": 0.0  # Initialize uncommitted value
         }
         
-        # Get committed data (from Quote_allocations)
-        quote_allocations = Quote_allocations.objects.filter(
-            item_id=costing_pk
-        ).select_related('quotes_pk__contact_pk')
-        
+        # Use quote service to get committed data
         costing = Costing.objects.get(costing_pk=costing_pk)
         is_margin = costing.category.order_in_list == -1
 
-        # Calculate total committed amount
-        total_committed = 0.0
-        if quote_allocations.exists():
-            committed_items = [
-                {
-                    "supplier": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
-                    "supplier_original": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
-                    "quote_num": qa.quotes_pk.supplier_quote_number if qa.quotes_pk else '-',
-                    "amount": float(qa.amount)
-                } for qa in quote_allocations
-            ]
+        # Get committed items and total from quote service
+        committed_items, total_committed = quote_service.get_committed_items_for_costing(costing_pk)
+        if committed_items:
             base_table_dropdowns[costing_pk]["committed"] = committed_items
-            total_committed = sum(item["amount"] for item in committed_items)
 
         # Calculate uncommitted amount (contract_budget - committed)
         base_table_dropdowns[costing_pk]["uncommitted"] = float(costing.contract_budget) - total_committed
