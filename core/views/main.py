@@ -11,6 +11,7 @@ from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
 from ..services import invoices as invoice_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
+from ..services import bills as claims_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -153,125 +154,30 @@ def main(request, division):
     invoices_list = invoice_service.get_invoices_list(division)
     invoices_unallocated_list = invoice_service.get_unallocated_invoices(division)
     invoices_allocated_list = invoice_service.get_allocated_invoices(division)
-    # Get HC and QS claim totals from HC_claim_allocations
-    hc_qs_totals = HC_claim_allocations.objects.values('hc_claim_pk').annotate(
-        hc_total=Sum('hc_claimed'),
-        qs_total=Sum('qs_claimed')
-    )
-    hc_qs_totals_dict = {item['hc_claim_pk']: {
-        'hc_total': float(item['hc_total'] or 0), 
-        'qs_total': float(item['qs_total'] or 0)
-    } for item in hc_qs_totals}
-    
     # Use invoice service to get invoice totals by HC claim
     sc_totals_dict = invoice_service.get_invoice_totals_by_hc_claim()
     
-    # HC Claims data
-    # For HC claims in general UI display
-    hc_claims_list = []
-    hc_claims_qs = HC_claims.objects.all().order_by('-display_id')
-    
-    # For variation date validation - only approved claims (status > 0)
-    approved_claims_list = []
-    for claim in hc_claims_qs:
-        claim_totals = hc_qs_totals_dict.get(claim.hc_claim_pk, {'hc_total': 0.0, 'qs_total': 0.0})
-        d = {
-            'hc_claim_pk': claim.hc_claim_pk,
-            'date': claim.date.strftime('%Y-%m-%d') if claim.date else None,
-            'status': claim.status,
-            'display_id': claim.display_id,
-            'invoicee': claim.invoicee if claim.invoicee else None,
-            'hc_total': claim_totals['hc_total'],
-            'qs_total': claim_totals['qs_total'],
-            'sc_total': sc_totals_dict.get(claim.hc_claim_pk, 0.0)
-        }
-        hc_claims_list.append(d)
-        
-        # Only add approved claims to the approved list for validation
-        if claim.status > 0:
-            approved_claims_list.append(d)
+    # Use claims service to get HC claims data
+    hc_claims_list, approved_claims_list = claims_service.get_hc_claims_list(sc_totals_dict)
     hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
     approved_claims_json = json.dumps(approved_claims_list, cls=DjangoJSONEncoder)
     
-    # HC Variations data
-    hc_variations_list = []
-    # Get the maximum date of HC_claims with status not 0 (i.e., approved claims)
-    max_approved_claim_date = HC_claims.objects.filter(status__gt=0).aggregate(Max('date'))['date__max']
-    
-    hc_variations_qs = Hc_variation.objects.all().order_by('date')
-    for variation in hc_variations_qs:
-        # Get the total amount for this variation
-        variation_allocations = Hc_variation_allocations.objects.filter(hc_variation=variation)
-        total_amount = sum(allocation.amount for allocation in variation_allocations)
-        
-        # Get a list of items for this variation
-        items_list = []
-        for allocation in variation_allocations:
-            items_list.append({
-                'item': allocation.costing.item,
-                'amount': float(allocation.amount),
-                'notes': allocation.notes,
-                'category_order_in_list': allocation.costing.category.order_in_list
-            })
-        
-        # Calculate the claimed status
-        # 0 = claimed (part of HC claim), 1 = not claimed
-        claimed = 0  # Default to claimed
-        if max_approved_claim_date and variation.date <= max_approved_claim_date:
-            claimed = 1  # Variation is claimed if its date is <= the max approved claim date
-        
-        # Create the variation dictionary
-        v = {
-            'hc_variation_pk': variation.hc_variation_pk,
-            'date': variation.date.strftime('%Y-%m-%d') if variation.date else None,
-            'claimed': claimed,
-            'total_amount': float(total_amount),
-            'items': items_list
-        }
-        hc_variations_list.append(v)
+    # Use claims service to get HC variations data
+    hc_variations_list = claims_service.get_hc_variations_list()
     hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
     
-    # Create a list of all HC variation allocations with variation details included
-    hc_variation_allocations_list = []
-    for allocation in Hc_variation_allocations.objects.all():
-        # Convert model to dictionary, similar to costings format
-        allocation_dict = model_to_dict(allocation)
-        # Store relationship IDs
-        variation_id = allocation_dict['hc_variation']
-        costing_id = allocation_dict['costing']
-        
-        # Get related objects
-        variation_obj = allocation.hc_variation
-        costing_obj = allocation.costing
-        
-        # Add appropriate fields from related objects
-        allocation_dict['hc_variation_pk'] = variation_id
-        allocation_dict['variation_date'] = variation_obj.date.strftime('%Y-%m-%d')
-        allocation_dict['costing_pk'] = costing_id
-        allocation_dict['item'] = costing_obj.item
-        
-        # Get category details from costing object - following same pattern as costings section
-        cat_obj = costing_obj.category
-        category_id = model_to_dict(costing_obj)['category']  # Get the ID from the foreign key
-        allocation_dict['category'] = cat_obj.category  # Category name
-        allocation_dict['category_id'] = category_id  # Category ID for relationships
-        allocation_dict['category_order_in_list'] = cat_obj.order_in_list
-        
-        # Convert Decimal fields to float for JSON serialization
-        allocation_dict['amount'] = float(allocation.amount)
-        
-        hc_variation_allocations_list.append(allocation_dict)
+    # Use claims service to get HC variation allocations
+    hc_variation_allocations_list = claims_service.get_hc_variation_allocations_list()
     
 
     
     hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
-    current_hc_claim = HC_claims.objects.filter(status=0).first()
+    
+    # Use claims service to get current HC claim and adjustments
+    current_hc_claim = claims_service.get_current_hc_claim()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     current_hc_claim_date = current_hc_claim.date if current_hc_claim else None
-    hc_claim_wip_adjustments = {}
-    if current_hc_claim:
-        hc_claim_allocs = HC_claim_allocations.objects.filter(hc_claim_pk=current_hc_claim.hc_claim_pk)
-        hc_claim_wip_adjustments = {a.item.costing_pk: a.adjustment for a in hc_claim_allocs}
+    hc_claim_wip_adjustments = claims_service.get_hc_claim_wip_adjustments(current_hc_claim)
     if current_hc_claim:
         for c in costings:
             c['hc_prev_invoiced'] = 0
