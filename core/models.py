@@ -4,10 +4,25 @@ import uuid
 
 #Global Models:
 class Projects(models.Model):
+    PROJECT_TYPE_CHOICES = [
+        ('general', 'General'),
+        ('development', 'Development'),
+        ('construction', 'Construction'),
+        ('precast', 'Precast'),
+        ('pods', 'Pods'),
+    ]
+    
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
+    project_type = models.CharField(
+        max_length=20,
+        choices=PROJECT_TYPE_CHOICES,
+        default='general',
+        help_text='Type of project determines which app features are available'
+    )
     xero_project_id = models.CharField(max_length=255, null=True)
     xero_sales_account = models.CharField(max_length=255, null=True)
+    
     def __str__(self):
         return self.project
     
