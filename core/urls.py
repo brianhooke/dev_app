@@ -4,6 +4,8 @@ from .views import commit_data, update_quote, create_contacts, delete_quote, del
 from django.conf import settings
 from django.conf.urls.static import static
 
+app_name = 'core'
+
 urlpatterns = [
     # path('', views.main, name='main'),
     path('', views.homepage_view, name='homepage'),
