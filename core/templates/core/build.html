@@ -1,4 +1,4 @@
-{% extends "master.html" %}
+{% extends "core/master.html" %}
 {% load humanize %}
 {% load static %}
 {% load i18n %}
@@ -28,17 +28,16 @@
             z-index: -1; /* Puts it behind all content */
             pointer-events: none; /* Prevents interference with clicks */
         }
-    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="icon" href="{% static 'core/favicon.ico' %}">
         .client-dropdown option {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 200px; /* Adjust this value as needed */
         }
     </style>
 </head>
 
-<h3 style="text-align: center;">{{ project_name }} Project <img src="{% static 'logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Build Contract</h3>
+<h3 style="text-align: center;">{{ project_name }} Project <img src="{% static 'core/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Build Contract</h3>
 
 <div style="display: flex; justify-content: space-between;">
   <div style="width: 125px; padding: 10px; text-align: center; border-radius: 10px; margin-right: 10px;">
@@ -89,12 +88,12 @@
 <input type="file" id="newClaimPdfInputInvoices" style="opacity: 0; position: absolute; left: -9999px;">
 <input type="hidden" id="division" value="{{ division }}">
 
-{% include 'base_table.html' %}
-{% include 'po_modals.html' %}
-{% include 'invoices_modals.html' %}
-{% include 'hc_claim_modals.html' %}
-{% include 'quotes_modals.html' %}
-{% include 'hc_variation_modals.html' %}
+{% include 'core/base_table.html' %}
+{% include 'core/po_modals.html' %}
+{% include 'core/invoices_modals.html' %}
+{% include 'core/hc_claim_modals.html' %}
+{% include 'core/quotes_modals.html' %}
+{% include 'core/hc_variation_modals.html' %}
 {{ items|json_script:"items-data" }}
 {{ committed_quotes|json_script:"committed-quotes-data" }}
 {{ quote_allocations|json_script:"quote-allocations-data" }}
@@ -150,25 +149,25 @@
         base_table_dropdowns_json = '{}';
     }
 </script>
-<script src="{% static 'main/secret_buttons.js' %}"></script>
-<script src="{% static 'main/base_table.js' %}"></script>
-<script src="{% static 'main/fixed_on_site.js' %}"></script>
-<script src="{% static 'main/quotes_1.js' %}"></script>
-<script src="{% static 'main/quotes_2.js' %}"></script>
-<script src="{% static 'main/contacts.js' %}"></script>
-<script src="{% static 'main/po.js' %}"></script>
-<script src="{% static 'main/view_send_po.js' %}"></script>
-<script src="{% static 'main/invoices_1.js' %}"></script>
-<script src="{% static 'main/invoices_2.js' %}"></script>
-<script src="{% static 'main/invoices_3.js' %}"></script>
-<script src="{% static 'main/invoices_4.js' %}"></script>
-<script src="{% static 'main/invoices_5.js' %}"></script>
-<script src="{% static 'main/invoices_6.js' %}"></script>
-<!-- <script src="{% static 'main/hc_claims.js' %}"></script> -->
-<script src="{% static 'main/hc_claims_1.js' %}"></script>
-<script src="{% static 'main/hc_claims_2.js' %}"></script>
-<script src="{% static 'main/hc_claims_3.js' %}"></script>
-<script src="{% static 'main/hc_variations_1.js' %}"></script>
-<script src="{% static 'main/hc_variations_2.js' %}"></script>
+<script src="{% static 'core/main/secret_buttons.js' %}"></script>
+<script src="{% static 'core/main/base_table.js' %}"></script>
+<script src="{% static 'core/main/fixed_on_site.js' %}"></script>
+<script src="{% static 'core/main/quotes_1.js' %}"></script>
+<script src="{% static 'core/main/quotes_2.js' %}"></script>
+<script src="{% static 'core/main/contacts.js' %}"></script>
+<script src="{% static 'core/main/po.js' %}"></script>
+<script src="{% static 'core/main/view_send_po.js' %}"></script>
+<script src="{% static 'core/main/invoices_1.js' %}"></script>
+<script src="{% static 'core/main/invoices_2.js' %}"></script>
+<script src="{% static 'core/main/invoices_3.js' %}"></script>
+<script src="{% static 'core/main/invoices_4.js' %}"></script>
+<script src="{% static 'core/main/invoices_5.js' %}"></script>
+<script src="{% static 'core/main/invoices_6.js' %}"></script>
+<!-- <script src="{% static 'core/main/hc_claims.js' %}"></script> -->
+<script src="{% static 'core/main/hc_claims_1.js' %}"></script>
+<script src="{% static 'core/main/hc_claims_2.js' %}"></script>
+<script src="{% static 'core/main/hc_claims_3.js' %}"></script>
+<script src="{% static 'core/main/hc_variations_1.js' %}"></script>
+<script src="{% static 'core/main/hc_variations_2.js' %}"></script>
 
 {% endblock %}

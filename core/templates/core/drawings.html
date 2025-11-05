@@ -1,4 +1,4 @@
-{% extends "master.html" %}
+{% extends "core/master.html" %}
 
 {% load humanize %}
 {% load static %}
@@ -11,10 +11,24 @@
 {% block content %}
 <head>
     <script src="https://unpkg.com/pdfjs-dist@2.6.347/build/pdf.js"></script>
-    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="icon" href="{% static 'core/favicon.ico' %}">
     <style>
         .plan:hover, .report:hover {
             cursor: pointer;
+            background-color: #f0f0f0;
+        }
+        .plan.selected, .report.selected {
+            background-color: #A090D0;
+            color: white;
+        }
+        .pdf-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .pdf-page {
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
         }
         .flex-container {
             display: flex;
@@ -33,7 +47,7 @@
     </style>
 </head>
 
-<h3 style="text-align: center;">{{ project_name }} <img src="{% static 'logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Drawings</h3>
+<h3 style="text-align: center;">{{ project_name }} <img src="{% static 'core/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Drawings</h3>
 
 <div class="flex-container">
     <div class="plans">
@@ -239,6 +253,6 @@
         }
     </style>
 
-<script src="{% static 'main/add_plan.js' %}"></script>
+<script src="{% static 'core/main/add_plan.js' %}"></script>
 
 {% endblock %}

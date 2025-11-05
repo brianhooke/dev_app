@@ -1,4 +1,4 @@
-{% extends 'master.html' %}
+{% extends 'core/master.html' %}
 
 {% load humanize %}
 {% load static %}
@@ -11,10 +11,10 @@
 {% block content %}
 <head>
     <!-- Other head elements... -->
-    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="icon" href="{% static 'core/favicon.ico' %}">
 </head>
 
-<h3 style="text-align: center;">{{ project_name }} <img src="{% static 'logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Model Viewer</h3>
+<h3 style="text-align: center;">{{ project_name }} <img src="{% static 'core/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anager - Model Viewer</h3>
 
 <div id="progressContainer" style="width: 100%; height: 20px; background-color: #eee;">
     <div id="progressBar" style="height: 20px; background-color: #A090D0; width: 0;"></div>
