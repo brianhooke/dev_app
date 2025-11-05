@@ -476,6 +476,11 @@ Completed:
 - ✓ TASK 1: Scaffolded all 5 PROJECT_TYPE apps with full directory structure
 - ✓ TASK 2: Created 8 SERVICE module stubs in core/services/
 - ✓ TASK 3: Converted core/views.py to package (core/views/main.py)
+- ✓ TASK 4 Phase 1: Extracted invoice business logic to core/services/invoices.py
+- ✓ Created comprehensive unit tests for invoice service (23 tests)
 - Pushed changes to refactor/domain-split branch
 
-Next: Begin TASK 4 - Extract Business Logic into SERVICE Modules
+Next: TASK 4 Phase 2 - Extract quotes business logic to core/services/quotes.py
+
+Note: Tests require DATABASE_URL to be configured to run. Tests are ready and will
+      validate invoice service functions once database is available.
