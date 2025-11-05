@@ -103,7 +103,7 @@
                   {% for po_order in po_orders %}
                   <tr>
                     <td>
-                      <a href="{% url 'view_po_pdf' po_order.po_order_pk %}" target="po-pdf-iframe">{{ po_order.supplier_name }}</a>
+                      <a href="{% url 'core:view_po_pdf' po_order.po_order_pk %}" target="po-pdf-iframe">{{ po_order.supplier_name }}</a>
                       <input type="hidden" class="po-order-pk" value="{{ po_order.po_order_pk }}">
                     </td>
                     <td>{{ po_order.supplier_email }}</td>
