@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set logging level to INFO
 
 def drawings(request):
-    return render(request, 'drawings.html')
+    return render(request, 'core/drawings.html')
 
 def main(request, division):
     costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list','category__category','item')
@@ -424,7 +424,7 @@ def main(request, division):
         "claim_category_totals": claim_category_totals_json,
         "base_table_dropdowns_json": json.dumps(base_table_dropdowns).replace('"', '\"')
     }
-    return render(request,"homepage.html" if division == 1 else "build.html",context)
+    return render(request,"core/homepage.html" if division == 1 else "core/build.html",context)
 
 
 def homepage_view(request): #if Contacts.division is 1, Developer
@@ -465,7 +465,7 @@ def drawings_view(request):
         'current_page': 'drawings',
         'project_name': settings.PROJECT_NAME,
     }
-    return render(request, 'drawings.html', context)
+    return render(request, 'core/drawings.html', context)
 
 def model_viewer_view(request):
     model_path = '3d/model.dae'
@@ -475,7 +475,7 @@ def model_viewer_view(request):
                'current_page': 'model_viewer',
                'project_name': settings.PROJECT_NAME,
                }  # Relative path
-    return render(request, 'model_viewer.html', context)
+    return render(request, 'core/model_viewer.html', context)
 
 # def model_viewer_view(request):
 #     context = {
@@ -955,7 +955,7 @@ def generate_po_pdf(request, po_order_pk):
 
 @csrf_exempt
 def view_po_pdf(request, po_order_pk):
-    return render(request, 'view_po_pdf.html', {'po_order_pk': po_order_pk})
+    return render(request, 'core/view_po_pdf.html', {'po_order_pk': po_order_pk})
 
 def send_test_email():
     subject = 'Test Email - Developer App'
