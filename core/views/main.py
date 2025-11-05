@@ -10,6 +10,7 @@ from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
 from ..services import invoices as invoice_service
 from ..services import quotes as quote_service
+from ..services import pos as pos_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -145,11 +146,9 @@ def main(request, division):
     total_fixed_on_site = sum(c['fixed_on_site'] for c in costings)
     total_sc_paid = sum(c['sc_paid'] for c in costings)
     total_c2c = sum(c['c2c'] for c in costings)
-    po_globals = Po_globals.objects.first()
-    po_orders = Po_orders.objects.filter(po_supplier__division=division).select_related('po_supplier').all()
-    po_orders_list = []
-    for order in po_orders:
-        po_orders_list.append({'po_order_pk': order.po_order_pk,'po_supplier': order.po_supplier_id,'supplier_name': order.po_supplier.contact_name,'supplier_email': order.po_supplier.contact_email,'po_note_1': order.po_note_1,'po_note_2': order.po_note_2,'po_note_3': order.po_note_3,'po_sent': order.po_sent})
+    # Use POS service to get PO data
+    po_globals = pos_service.get_po_globals()
+    po_orders_list = pos_service.get_po_orders_list(division)
     # Use invoice service to get invoice lists
     invoices_list = invoice_service.get_invoices_list(division)
     invoices_unallocated_list = invoice_service.get_unallocated_invoices(division)
@@ -874,39 +873,13 @@ def get_report_pdf_url(request, report_category, report_reference=None):
 def create_po_order(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        # Extract supplier PK
         supplier_pk = data.get('supplierPk')
-        supplier = Contacts.objects.get(pk=supplier_pk)
-        # Extract notes
         notes = data.get('notes', {})
-        note1 = notes.get('note1', '')
-        note2 = notes.get('note2', '')
-        note3 = notes.get('note3', '')
-        # Create Po_orders entry
-        po_order = Po_orders.objects.create(
-            po_supplier=supplier,
-            po_note_1=note1,
-            po_note_2=note2,
-            po_note_3=note3
-        )
-        # Extract and save rows data
         rows = data.get('rows', [])
-        for row in rows:
-            item_pk = row.get('itemPk')
-            quote_id = row.get('quoteId')
-            amount = row.get('amount')
-            variation_note = row.get('notes', '')  # Get the variation note
-            # Ensure quote is optional
-            quote = Quotes.objects.get(pk=quote_id) if quote_id else None
-            costing = Costing.objects.get(pk=item_pk)  # Fetch the related Costing instance
-            Po_order_detail.objects.create(
-                po_order_pk=po_order,
-                date=date.today(),
-                costing=costing,
-                quote=quote,
-                amount=amount,
-                variation_note=variation_note if variation_note else None  # Save the variation note or None
-            )
+        
+        # Use POS service to create PO order
+        po_order = pos_service.create_po_order(supplier_pk, notes, rows)
+        
         return JsonResponse({'status': 'success', 'message': 'PO Order created successfully.'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})
 
@@ -925,10 +898,10 @@ def wrap_text(text, max_length):
     return lines
 
 def generate_po_pdf(request, po_order_pk):
-    po_globals = Po_globals.objects.first()
-    po_order = Po_orders.objects.get(pk=po_order_pk)
-    po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk).select_related('costing', 'quote')
-    company_details = Po_globals.objects.first()
+    # Use POS service to get PO data
+    po_globals = pos_service.get_po_globals()
+    po_order, po_order_details = pos_service.get_po_order_details(po_order_pk)
+    company_details = po_globals
     letterhead = Letterhead.objects.first()
     if letterhead is not None:
         letterhead_path = letterhead.letterhead_path.name  # Get the file name or path as a string
