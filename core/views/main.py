@@ -42,7 +42,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from io import BytesIO
 from django.core.mail import EmailMessage
 from urllib.parse import urljoin
 import textwrap
@@ -52,12 +51,9 @@ import requests
 from decimal import Decimal
 from ratelimit import limits, sleep_and_retry
 from urllib.request import urlretrieve
-from django.shortcuts import render
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.forms.models import model_to_dict
 from django.db.models import Sum
 from ..models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
-import json
 from django.db.models import Q, Sum
 import ssl
 import urllib.request
@@ -70,60 +66,48 @@ from django.db import transaction
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Set logging level to INFO
-
+logger.setLevel(logging.INFO)
 
 def main(request, division):
-    # Use costing service to get costings with category metadata
     costings = costing_service.get_costings_for_division(division)
     
-    # Use contact service to get contacts
     contacts_list = contact_service.get_checked_contacts(division)
     contacts_unfiltered_list = contact_service.get_all_contacts(division)
-    # Use quote service to get quote allocations
     quote_allocations = quote_service.get_quote_allocations_for_division(division)
     quote_allocations_sums_dict = quote_service.get_quote_allocations_sums_dict()
     
-    # Enrich costings with committed values
     committed_values = {pk: amount for pk, amount in Committed()}
     costings = costing_service.enrich_costings_with_committed(costings, committed_values)
     
-    # Debug logging
     print('\n=== DEBUG: Invoice Allocations ===')    
     all_allocations = Invoice_allocations.objects.all().select_related('invoice_pk', 'item')
     print('\nAll Invoice Allocations:')
     for alloc in all_allocations:
         print(f"Invoice {alloc.invoice_pk.invoice_pk} - Item {alloc.item.costing_pk}: Amount {alloc.amount}")
     
-    # Use bill service to get allocation sums
     invoice_allocations_sums_dict = bill_service.get_invoice_allocations_sums_dict()
     paid_invoice_allocations_dict = bill_service.get_paid_invoice_allocations_dict()
     print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
     print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
     
-    # Enrich costings with bill data (sc_invoiced, sc_paid, c2c)
     costings = costing_service.enrich_costings_with_bill_data(
         costings, 
         invoice_allocations_sums_dict, 
         paid_invoice_allocations_dict
     )
     
-    # Calculate category totals
     category_totals = costing_service.calculate_category_totals(costings, field='sc_invoiced')
     print('\nCategory Totals:')
     for cat, total in category_totals.items():
         print(f"Category '{cat}': Total {total}")
     
-    # Get items list
     items = costing_service.get_items_list(costings)
-    # Use quote service to get committed quotes and contacts
     committed_quotes_list = quote_service.get_committed_quotes_list(division)
     committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)
     quote_allocations_json = json.dumps(list(quote_allocations), cls=DjangoJSONEncoder)
     contacts_in_quotes_list = quote_service.get_contacts_in_quotes(division)
     contacts_not_in_quotes_list = quote_service.get_contacts_not_in_quotes(division)
     
-    # Use aggregation service to calculate dashboard totals
     totals = aggregation_service.calculate_dashboard_totals(costings)
     total_contract_budget = totals['total_contract_budget']
     total_uncommitted = totals['total_uncommitted']
@@ -133,33 +117,24 @@ def main(request, division):
     total_fixed_on_site = totals['total_fixed_on_site']
     total_sc_paid = totals['total_sc_paid']
     total_c2c = totals['total_c2c']
-    # Use POS service to get PO data
     po_globals = pos_service.get_po_globals()
     po_orders_list = pos_service.get_po_orders_list(division)
-    # Use bill service to get invoice lists
     invoices_list = bill_service.get_invoices_list(division)
     invoices_unallocated_list = bill_service.get_unallocated_invoices(division)
     invoices_allocated_list = bill_service.get_allocated_invoices(division)
-    # Use bill service to get invoice totals by HC claim
     sc_totals_dict = bill_service.get_invoice_totals_by_hc_claim()
     
-    # Use invoice service to get HC claims data
     hc_claims_list, approved_claims_list = invoice_service.get_hc_claims_list(sc_totals_dict)
     hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
     approved_claims_json = json.dumps(approved_claims_list, cls=DjangoJSONEncoder)
     
-    # Use invoice service to get HC variations data
     hc_variations_list = invoice_service.get_hc_variations_list()
     hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
     
-    # Use invoice service to get HC variation allocations
     hc_variation_allocations_list = invoice_service.get_hc_variation_allocations_list()
-    
-
     
     hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
     
-    # Use invoice service to get current HC claim and adjustments
     current_hc_claim = invoice_service.get_current_hc_claim()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     current_hc_claim_date = current_hc_claim.date if current_hc_claim else None
@@ -169,9 +144,7 @@ def main(request, division):
             c['hc_prev_invoiced'] = 0
             c['hc_this_claim_invoices'] = 0
             
-            # Handle margin items (category_order_in_list = -1) differently
             if c['category_order_in_list'] == -1 and current_hc_claim:
-                # For margin items, get sc_invoiced from HC_claim_allocations
                 hc_alloc = HC_claim_allocations.objects.filter(
                     hc_claim_pk=current_hc_claim,
                     item=c['costing_pk']
@@ -179,7 +152,6 @@ def main(request, division):
                 if hc_alloc:
                     c['hc_this_claim_invoices'] = hc_alloc.sc_invoiced
             else:
-                # For non-margin items, use bill service
                 hc_this, hc_prev = bill_service.calculate_hc_claim_invoices(
                     c['costing_pk'], 
                     current_hc_claim
@@ -221,39 +193,32 @@ def main(request, division):
     for c in costings:
         c['qs_this_claim'] = min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed'])
     spv_data = SPVData.objects.first()
-    # Use quote service to get progress claim quote allocations
     progress_claim_quote_allocations = quote_service.get_progress_claim_quote_allocations()
-    # Use bill service to get progress claim invoice allocations
     progress_claim_invoice_allocations = bill_service.get_progress_claim_invoice_allocations()
-    # Use costing service to get contract budget totals
     contract_budget_totals = costing_service.get_contract_budget_totals(division)
 
-    # Generate claim_category_totals, grouped by hc_claim_pk and invoice_category
     claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division)
         .values('hc_claim_pk', 'hc_claim_pk__display_id', 'category__invoice_category')
         .annotate(
             total_hc_claimed=Sum('hc_claimed'),
             total_qs_claimed=Sum('qs_claimed'),
-            total_contract_budget=Sum('contract_budget'),  # Include contract_budget from HC_claim_allocations
-            max_order=Max('category__order_in_list'),  # To determine the latest category
-            latest_category=Max('category__category')  # Get the latest category name
+            total_contract_budget=Sum('contract_budget'),
+            max_order=Max('category__order_in_list'),
+            latest_category=Max('category__category')
         ).order_by('hc_claim_pk', 'max_order'))
 
-    # Build the dictionary for the final list
     claim_category_totals_dict = {}
     
-    # We still keep a global contract budget entry for backward compatibility
     claim_category_totals_dict[0] = {
         "display_id": "Contract Budget",
         "categories": [{
-            "categories_pk": None,  # No PK since we're aggregating by invoice_category
-            "category": i['category__invoice_category'],  # Use invoice_category as the category value
+            "categories_pk": None,
+            "category": i['category__invoice_category'],
             "total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0,
             "total_qs_claimed": 0.0
         } for i in contract_budget_totals]
     }
 
-    # Process claim_category_totals
     for i in claim_category_totals:
         pk = i['hc_claim_pk']
         if pk not in claim_category_totals_dict:
@@ -262,22 +227,18 @@ def main(request, division):
                 "categories": []
             }
         claim_category_totals_dict[pk]["categories"].append({
-            "categories_pk": None,  # No PK since we're aggregating by invoice_category
-            "category": i['category__invoice_category'],  # Use invoice_category as the category value
+            "categories_pk": None,
+            "category": i['category__invoice_category'],
             "total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0,
             "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0,
-            "total_contract_budget": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0  # Include claim-specific contract_budget
+            "total_contract_budget": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0
         })
 
-    # Convert to list
     claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
 
-    # Convert to JSON
     claim_category_totals_json = json.dumps(claim_category_totals_list)
-    # Build base_table_dropdowns
     base_table_dropdowns = {}
     
-    # Get all costing PKs, excluding those with Categories.order_in_list = -1
     costing_pks = Costing.objects.filter(category__division=division).values_list('costing_pk', flat=True)
     
     for costing_pk in costing_pks:
@@ -285,23 +246,18 @@ def main(request, division):
             "committed": {},
             "invoiced_direct": {},
             "invoiced_all": {},
-            "uncommitted": 0.0  # Initialize uncommitted value
+            "uncommitted": 0.0
         }
         
-        # Use quote service to get committed data
         costing = Costing.objects.get(costing_pk=costing_pk)
         is_margin = costing.category.order_in_list == -1
 
-        # Get committed items and total from quote service
         committed_items, total_committed = quote_service.get_committed_items_for_costing(costing_pk)
         if committed_items:
             base_table_dropdowns[costing_pk]["committed"] = committed_items
 
-        # Calculate uncommitted amount (contract_budget - committed)
         base_table_dropdowns[costing_pk]["uncommitted"] = float(costing.contract_budget) - total_committed
         
-        # Use the same logic for all categories, including Margin (order_in_list = -1)
-        # Get invoiced_direct data
         invoice_directs = Invoice_allocations.objects.filter(
             item_id=costing_pk,
             invoice_pk__invoice_division=division
@@ -318,7 +274,6 @@ def main(request, division):
             "amount": float(invoice.amount)
         } for invoice in invoice_directs]
         
-        # Get invoiced_all data
         invoice_alls = Invoice_allocations.objects.filter(
             item_id=costing_pk,
             invoice_pk__invoice_division=division
@@ -332,8 +287,6 @@ def main(request, division):
             "amount": float(invoice.amount)
         } for invoice in invoice_alls]
         
-        # Also collect data from HC_claims if available, and append to invoiced_all
-        # This ensures we don't lose any information that was previously only available for Margin items
         hc_claims_data = HC_claims.objects.filter(
             status__gt=0,
             hc_claim_allocations__item=costing_pk
@@ -342,7 +295,6 @@ def main(request, division):
                                 filter=Q(hc_claim_allocations__item=costing_pk))
         ).values('display_id', 'date', 'total_sc_invoiced')
         
-        # Append HC claims data to invoiced_all if there is any
         if hc_claims_data.exists():
             hc_claims_items = [{
                 "supplier": f"HC Claim {claim['display_id']}",
@@ -352,16 +304,11 @@ def main(request, division):
                 "amount": float(claim['total_sc_invoiced'])
             } for claim in hc_claims_data]
             
-            # Append to existing invoiced_all list
             base_table_dropdowns[costing_pk]["invoiced_all"].extend(hc_claims_items)
     
-
-
     for pk in costing_pks:
         costing = Costing.objects.get(costing_pk=pk)
 
-
-    
     context = {
         "division": division,
         "costings": costings,
@@ -406,31 +353,27 @@ def main(request, division):
     }
     return render(request,"core/homepage.html" if division == 1 else "core/build.html",context)
 
-
-def homepage_view(request): #if Contacts.division is 1, Developer
+def homepage_view(request):
     return main(request, 1)
 
-
-def build_view(request):  #if Contacts.division is 2, Builder
+def build_view(request):
     return main(request, 2)
-
 
 @csrf_exempt
 def create_contacts(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        contacts = data.get('contacts')  # Get the contacts list from the data
-        division = data.get('division')  # Get the division from the data
-        if contacts:  # Check if contacts is not None
-            for contact in contacts:  # Iterate over the contacts
-                if contact['name']:  # Only create a contact if a name was provided
+        contacts = data.get('contacts')
+        division = data.get('division')
+        if contacts:
+            for contact in contacts:
+                if contact['name']:
                     Contacts.objects.create(contact_name=contact['name'], contact_email=contact['email'], division=division)
             return JsonResponse({'status': 'success'})
         else:
             return JsonResponse({'status': 'error', 'message': 'No contacts provided'})
     else:
         return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'})
-
 
 def send_test_email():
     subject = 'Test Email - Developer App'
@@ -444,7 +387,6 @@ def send_test_email():
         logger.error(f'Failed to send test email: {e}')
         raise
 
-
 def send_test_email_view(request):
     try:
         send_test_email()
@@ -454,7 +396,6 @@ def send_test_email_view(request):
         return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
 
 from django.core.files.storage import default_storage
-
 
 @csrf_exempt
 def upload_categories(request):
@@ -467,7 +408,7 @@ def upload_categories(request):
             logger.info('CSV file decoded and reader created')
             first_row = next(reader)
             logger.info('First row of CSV: %s', first_row)
-            reader = csv.DictReader(decoded_file)  # Reset the reader after getting the first row
+            reader = csv.DictReader(decoded_file)
             Categories.objects.all().delete()
             logger.info('All existing Categories objects deleted')
             for row in reader:
@@ -485,7 +426,6 @@ def upload_categories(request):
         form = CSVUploadForm()
         logger.info('GET request received, CSVUploadForm created')
 
-
 @csrf_exempt
 def upload_costings(request):
     if request.method == 'POST' and request.FILES.get('csv_file'):
@@ -501,12 +441,12 @@ def upload_costings(request):
                     category=category,
                     item=row['item'],
                     defaults={
-                        'xero_account_code': row.get('xero_account_code', ''),  # Set default to empty string
-                        'contract_budget': Decimal(row.get('contract_budget', '0.00')),  # Set default to 0.00
-                        'uncommitted': Decimal(row.get('uncommitted', '0.00')),  # Set default to 0.00
-                        'sc_invoiced': Decimal(row.get('sc_invoiced', '0.00')),  # Set default to 0.00
-                        'sc_paid': Decimal(row.get('sc_paid', '0.00')),  # Set default to 0.00
-                        'fixed_on_site': Decimal(row.get('fixed_on_site', '0.00')),  # Set default to 0.00
+                        'xero_account_code': row.get('xero_account_code', ''),
+                        'contract_budget': Decimal(row.get('contract_budget', '0.00')),
+                        'uncommitted': Decimal(row.get('uncommitted', '0.00')),
+                        'sc_invoiced': Decimal(row.get('sc_invoiced', '0.00')),
+                        'sc_paid': Decimal(row.get('sc_paid', '0.00')),
+                        'fixed_on_site': Decimal(row.get('fixed_on_site', '0.00')),
                     }
                 )
                 logger.debug(f"Updated or created Costing for item: {row['item']}")
@@ -516,7 +456,6 @@ def upload_costings(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
-
 @csrf_exempt
 def update_contract_budget_amounts(request):
     if request.method == 'POST' and request.FILES.get('csv_file'):
@@ -524,27 +463,22 @@ def update_contract_budget_amounts(request):
         skipped_rows = []
         updated_rows = []
         try:
-            # Read the CSV file
-            decoded_file = csv_file.read().decode('utf-8-sig').splitlines()  # utf-8-sig to handle BOM
+            decoded_file = csv_file.read().decode('utf-8-sig').splitlines()
             csv_reader = csv.DictReader(decoded_file)
             logger.info("Starting to process CSV file for contract budget updates")
             logger.info(f"CSV Headers: {csv_reader.fieldnames}")
 
-            # Process each row in the CSV
             row_count = 0
             for row in csv_reader:
                 row_count += 1
                 try:
-                    # Only strip whitespace from contract_budget, preserve spaces in category and item
                     if row.get('contract_budget'):
                         row['contract_budget'] = row['contract_budget'].strip()
                     logger.info(f"Processing row {row_count}: {row}")
 
-                    # First find the category by its name
                     category = Categories.objects.get(category=row['category'])
                     logger.info(f"Found category: {category.category} (pk={category.categories_pk})")
                     
-                    # Then find the costing entry that matches both category and item
                     try:
                         costing = Costing.objects.get(
                             category=category,
@@ -552,14 +486,11 @@ def update_contract_budget_amounts(request):
                         )
                         logger.info(f"Found costing: {costing.item} (pk={costing.costing_pk})")
                         
-                        # Update the contract_budget
                         old_budget = costing.contract_budget
                         try:
-                            # Remove any currency symbols and commas
                             budget_str = row['contract_budget'].replace('$', '').replace(',', '')
                             new_budget = Decimal(budget_str)
                             
-                            # Only update if the value has changed
                             if new_budget != old_budget:
                                 costing.contract_budget = new_budget
                                 costing.save()
@@ -627,7 +558,6 @@ def update_contract_budget_amounts(request):
                 for row in skipped_rows:
                     logger.info(f"  {row['category']} - {row['item']}: {row['reason']}")
             
-            # If we skipped any rows, return a 206 Partial Content status
             status_code = 206 if skipped_rows else 200
             return JsonResponse(response_data, status=status_code)
             
@@ -641,23 +571,18 @@ def update_contract_budget_amounts(request):
             
     return JsonResponse({'error': 'No file uploaded'}, status=400)
 
-
 @csrf_exempt
 def upload_letterhead(request):
     if request.method == 'POST':
         file = request.FILES['letterhead_path']
-        file.name = 'letterhead.pdf'  # Set the filename
-        # Save the file to S3
+        file.name = 'letterhead.pdf'
         file_path = default_storage.save(file.name, file)
-        # Create a new letterhead with the uploaded file
         letterhead = Letterhead(letterhead_path=file_path)
         letterhead.save()
-        # Delete all existing letterheads except the new one
         Letterhead.objects.exclude(id=letterhead.id).delete()
         return JsonResponse({'message': 'File uploaded successfully'})
     else:
         return JsonResponse({'error': 'Invalid request method'})
-
 
 @csrf_exempt
 def update_contacts(request):
@@ -675,16 +600,11 @@ def update_contacts(request):
     else:
         return JsonResponse({'error': 'Invalid request method'}, status=400)
 
-# Xero Integration
-
-
 def xeroapi(request):
   template = loader.get_template('homepage.html')
   return HttpResponse(template.render())
-# Define rate limits for Xero API calls
-@limits(calls=60, period=60)  # 60 calls per minute
+@limits(calls=60, period=60)
 @sleep_and_retry
-
 
 def make_api_request(url, headers):
     response = requests.get(url, headers=headers)
@@ -695,9 +615,7 @@ client_id = settings.XERO_CLIENT_ID
 client_secret = settings.XERO_CLIENT_SECRET
 client_project = settings.XERO_PROJECT_ID
 
-
 def get_xero_token(request, division):
-    # Convert division to int if it's a string
     division = int(division) if isinstance(division, str) else division
     
     scopes_list = [
@@ -716,8 +634,7 @@ def get_xero_token(request, division):
         "files",
         "files.read"
     ]
-    scopes = ' '.join(scopes_list)  # Convert list to space-separated string
-    # Set the client_id and client_secret based on the division
+    scopes = ' '.join(scopes_list)
     if division == 1:
         client_id = settings.MDG_XERO_CLIENT_ID
         client_secret = settings.MDG_XERO_CLIENT_SECRET
@@ -727,22 +644,18 @@ def get_xero_token(request, division):
     else:
         raise ValueError(f"Invalid division: {division}")
 
-    # Prepare the header
     credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
     headers = {
         'Authorization': f'Basic {credentials}',
         'Content-Type': 'application/x-www-form-urlencoded'
     }
-    # Prepare the body
     data = {
         'grant_type': 'client_credentials',
         'scope': scopes
     }
-    # Make the POST request
     response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data)
     response_data = response.json()
     
-    # Log the response for debugging
     logger.info(f"Xero token response: {response.status_code}")
     logger.info(f"Xero token response data: {response_data}")
     
@@ -752,14 +665,12 @@ def get_xero_token(request, division):
     if 'access_token' not in response_data:
         raise ValueError(f"No access token in response: {response_data}")
     
-    # Store the access token in a session variable
     request.session['access_token'] = response_data['access_token']
     return JsonResponse(response_data)
 
-
 @csrf_exempt
 def get_xero_contacts(request):
-    division = int(request.GET.get('division', 0))  # Default to 0 if division is not provided
+    division = int(request.GET.get('division', 0))
     get_xero_token(request, division)
     access_token = request.session.get('access_token')
     headers = {
@@ -788,7 +699,6 @@ def get_xero_contacts(request):
             new_contact.save()
     return JsonResponse(data)
 
-
 @csrf_exempt
 def mark_sent_to_boutique(request):
     if request.method == 'POST':
@@ -804,7 +714,6 @@ def mark_sent_to_boutique(request):
     else:
         return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
 
-
 @csrf_exempt
 def test_contact_id(request):
     if request.method == 'POST':
@@ -816,7 +725,6 @@ def test_contact_id(request):
             return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
         contact = invoice.contact_pk
         return JsonResponse({'contact_id': contact.xero_contact_id})
-
 
 @csrf_exempt
 def upload_margin_category_and_lines(request):
@@ -830,13 +738,12 @@ def upload_margin_category_and_lines(request):
             logger.info(f'Processing {len(rows)} rows for division {division}')
             
             with transaction.atomic():
-                # 1. Create or replace the Categories entry
                 if not rows:
                     raise ValueError('No data rows found in CSV')
                     
                 try:
                     category_name = rows[0]['category']
-                    invoice_category = rows[0].get('invoice_category', category_name)  # Default to category name if not specified
+                    invoice_category = rows[0].get('invoice_category', category_name)
                     logger.info(f'Processing category: {category_name}, invoice_category: {invoice_category}')
                 except (KeyError, IndexError) as e:
                     raise ValueError(f'Missing required field in CSV: {str(e)}')
@@ -850,10 +757,8 @@ def upload_margin_category_and_lines(request):
                     }
                 )
                 
-                # 2. Calculate total cost from contract_budget values
                 total_cost = sum(Decimal(row['contract_budget']) for row in rows)
                 
-                # 3. Create or replace the Quotes entry
                 quote, created = Quotes.objects.update_or_create(
                     supplier_quote_number='Internal_Margin_Quote',
                     defaults={
@@ -861,10 +766,8 @@ def upload_margin_category_and_lines(request):
                     }
                 )
                 
-                # 4. Delete existing allocations for this quote
                 Quote_allocations.objects.filter(quotes_pk=quote).delete()
                 
-                # 5. Create new allocations
                 category = Categories.objects.get(division=division, order_in_list=-1)
                 for row in rows:
                     costing, created = Costing.objects.update_or_create(
