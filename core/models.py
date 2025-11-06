@@ -2,7 +2,11 @@ from django.db import models
 from django.core.exceptions import ValidationError
 import uuid
 
-#Global Models:
+# ============================================================================
+# GLOBAL MODELS
+# ============================================================================
+
+# SERVICE: projects
 class Projects(models.Model):
     PROJECT_TYPE_CHOICES = [
         ('general', 'General'),
@@ -25,7 +29,8 @@ class Projects(models.Model):
     
     def __str__(self):
         return self.project
-    
+
+# SERVICE: projects
 class SPVData(models.Model):
     address = models.CharField(max_length=255)
     lot_size = models.CharField(max_length=255)
@@ -37,38 +42,45 @@ class SPVData(models.Model):
     director_1 = models.CharField(max_length=255)
     director_2 = models.CharField(max_length=255)
     abn = models.CharField(max_length=255)
-    acn = models.CharField(max_length=255)   
+    acn = models.CharField(max_length=255)
 
+# SERVICE: documents
 class DesignCategories(models.Model):
     design_category_pk = models.AutoField(primary_key=True)
     design_category = models.CharField(max_length=100)
     def __str__(self):
         return self.design_category
 
+# SERVICE: documents
 class PlanPdfs(models.Model):
     file = models.FileField(upload_to='plans/')
     design_category = models.ForeignKey(DesignCategories, on_delete=models.CASCADE)
     plan_number = models.CharField(max_length=255)
     rev_number = models.CharField(max_length=255)
 
+# SERVICE: documents
 class Letterhead(models.Model):
     letterhead_path = models.FileField(upload_to='letterhead/')
 
+# SERVICE: documents
 class ReportCategories(models.Model):
     report_category_pk = models.AutoField(primary_key=True)
     report_category = models.CharField(max_length=100)
     def __str__(self):
         return self.report_category
 
+# SERVICE: documents
 class ReportPdfs(models.Model):
     file = models.FileField(upload_to='reports/')
     report_category = models.ForeignKey(ReportCategories, on_delete=models.CASCADE)
     report_reference = models.CharField(max_length=255)
 
+# SERVICE: documents
 class Models_3d(models.Model):
     file = models.FileField(upload_to='3d/')
     filename = models.CharField(max_length=255)
 
+# SERVICE: pos
 class Po_globals(models.Model):
     reference = models.CharField(max_length=255)
     invoicee = models.CharField(max_length=255)
@@ -81,9 +93,12 @@ class Po_globals(models.Model):
     note3 = models.CharField(max_length=1000)
     def __str__(self):
         return f"Reference: {self.reference}, Invoicee: {self.invoicee}, Address: {self.address}, ABN: {self.ABN}, Email: {self.email}, Note1: {self.note1}, Note2: {self.note2}, Note3: {self.note3}"
-#End Global Models
-    
-#Builder/Developer Model Set 1:
+
+# ============================================================================
+# BUILDER/DEVELOPER MODEL SET 1
+# ============================================================================
+
+# SERVICE: costings
 class Categories(models.Model):
     categories_pk = models.AutoField(primary_key=True)
     division = models.IntegerField()
@@ -93,6 +108,7 @@ class Categories(models.Model):
     def __str__(self):
         return self.category
 
+# SERVICE: costings
 class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
     category = models.ForeignKey(Categories, on_delete=models.CASCADE)
@@ -107,6 +123,7 @@ class Costing(models.Model):
     def __str__(self):
         return f"{self.item} (Category: {self.category})"
 
+# SERVICE: quotes
 class Quotes(models.Model):
     quotes_pk = models.AutoField(primary_key=True)
     supplier_quote_number = models.CharField(max_length=255)
@@ -116,6 +133,7 @@ class Quotes(models.Model):
     def __str__(self):
         return f"Quote #{self.quotes_pk} - Cost: {self.total_cost}"
 
+# SERVICE: quotes
 class Quote_allocations(models.Model):
     quote_allocations_pk = models.AutoField(primary_key=True)
     quotes_pk = models.ForeignKey(Quotes, on_delete=models.CASCADE, related_name='quote_allocations')
@@ -125,6 +143,7 @@ class Quote_allocations(models.Model):
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
 
+# SERVICE: bills
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
     invoice_division = models.IntegerField()
@@ -141,7 +160,8 @@ class Invoices(models.Model):
     invoice_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
     def __str__(self):
         return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
-    
+
+# SERVICE: bills
 class Invoice_allocations(models.Model):
     invoice_allocations_pk = models.AutoField(primary_key=True)
     invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE, related_name='invoice_allocations')
@@ -156,6 +176,7 @@ class Invoice_allocations(models.Model):
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
 
+# SERVICE: invoices (claims)
 class HC_claims(models.Model):
     hc_claim_pk = models.AutoField(primary_key=True)
     date = models.DateField()
@@ -174,6 +195,7 @@ class HC_claims(models.Model):
     def __str__(self):
         return f"HC Claim - PK: {self.hc_claim_pk}, Date: {self.date}, Status: {self.status}, Display ID: {self.display_id}"
 
+# SERVICE: invoices (claims)
 class HC_claim_allocations(models.Model):
     hc_claim_allocations_pk = models.AutoField(primary_key=True)
     hc_claim_pk = models.ForeignKey(HC_claims, on_delete=models.CASCADE)
@@ -195,8 +217,8 @@ class HC_claim_allocations(models.Model):
     qs_claimed = models.DecimalField(max_digits=10, decimal_places=2)
     def __str__(self):
         return f"HC Claim Allocation - PK: {self.hc_claim_allocations_pk}, HC Claim PK: {self.hc_claim_pk.pk}, Item: {self.item}, Committed: {self.committed}, Uncommitted: {self.uncommitted}, Fixed on Site: {self.fixed_on_site}, Fixed on Site Previous: {self.fixed_on_site_previous}, Fixed on Site This: {self.fixed_on_site_this}, SC Invoiced: {self.sc_invoiced}, SC Invoiced Previous: {self.sc_invoiced_previous}, Adjustment: {self.adjustment}, HC Claimed: {self.hc_claimed}, HC Claimed Previous: {self.hc_claimed_previous}, QS Claimed: {self.qs_claimed}, QS Claimed Previous: {self.qs_claimed_previous}"
-#End Builder/Developer Model Set 1:
 
+# SERVICE: invoices (variations)
 class Hc_variation(models.Model):
     hc_variation_pk = models.AutoField(primary_key=True)
     date = models.DateField()
@@ -204,6 +226,7 @@ class Hc_variation(models.Model):
     def __str__(self):
         return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}"
 
+# SERVICE: invoices (variations)
 class Hc_variation_allocations(models.Model):
     hc_variation_allocation_pk = models.AutoField(primary_key=True)
     hc_variation = models.ForeignKey(Hc_variation, on_delete=models.CASCADE)
@@ -214,7 +237,11 @@ class Hc_variation_allocations(models.Model):
     def __str__(self):
         return f"HC Variation Allocation - Variation PK: {self.hc_variation.hc_variation_pk}, Costing: {self.costing.pk}, Amount: {self.amount}"
 
-#Builder/Developer Model Set 2:
+# ============================================================================
+# BUILDER/DEVELOPER MODEL SET 2
+# ============================================================================
+
+# SERVICE: contacts
 class Contacts(models.Model):
     contact_pk = models.AutoField(primary_key=True)
     xero_contact_id = models.CharField(max_length=255)
@@ -224,7 +251,8 @@ class Contacts(models.Model):
     contact_email = models.EmailField(max_length=254)
     def __str__(self):
         return self.contact_name
-    
+
+# SERVICE: pos
 class Po_orders(models.Model):
     po_order_pk = models.AutoField(primary_key=True)
     po_supplier = models.ForeignKey(Contacts, on_delete=models.CASCADE)
@@ -235,6 +263,7 @@ class Po_orders(models.Model):
     def __str__(self):
         return f"PO Order - PK: {self.pk}, PO Note 1: {self.po_note_1}, PO Note 2: {self.po_note_2}, PO Note 3: {self.po_note_3}"
 
+# SERVICE: pos
 class Po_order_detail(models.Model):
     po_order_detail_pk = models.AutoField(primary_key=True)
     po_order_pk= models.ForeignKey(Po_orders, on_delete=models.CASCADE)
@@ -245,4 +274,3 @@ class Po_order_detail(models.Model):
     variation_note = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"PO Order Detail - PK: {self.po_order_detail_pk}, Date: {self.date}, Amount: {self.amount}, Variation_note: {self.variation_note}"
-#End Builder/Developer Model Set 2:

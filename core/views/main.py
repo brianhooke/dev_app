@@ -8,10 +8,10 @@ import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import invoices as invoice_service
+from ..services import bills as bill_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
-from ..services import bills as claims_service
+from ..services import invoices as invoice_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -98,19 +98,19 @@ def main(request, division):
     for alloc in all_allocations:
         print(f"Invoice {alloc.invoice_pk.invoice_pk} - Item {alloc.item.costing_pk}: Amount {alloc.amount}")
     
-    # Use invoice service to get allocation sums
-    invoice_allocations_sums_dict = invoice_service.get_invoice_allocations_sums_dict()
+    # Use bill service to get allocation sums
+    invoice_allocations_sums_dict = bill_service.get_invoice_allocations_sums_dict()
     print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
     
-    # Use invoice service to get paid invoice allocations
-    paid_invoice_allocations_dict = invoice_service.get_paid_invoice_allocations_dict()
+    # Use bill service to get paid invoice allocations
+    paid_invoice_allocations_dict = bill_service.get_paid_invoice_allocations_dict()
     print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
     
     # Print how the totals are being assigned
     print('\nAssigning totals to costings:')
     for c in costings:
-        # Use invoice service to calculate sc_invoiced
-        c['sc_invoiced'] = invoice_service.calculate_sc_invoiced_for_costing(
+        # Use bill service to calculate sc_invoiced
+        c['sc_invoiced'] = bill_service.calculate_sc_invoiced_for_costing(
             c['costing_pk'], 
             invoice_allocations_sums_dict
         )
@@ -150,34 +150,34 @@ def main(request, division):
     # Use POS service to get PO data
     po_globals = pos_service.get_po_globals()
     po_orders_list = pos_service.get_po_orders_list(division)
-    # Use invoice service to get invoice lists
-    invoices_list = invoice_service.get_invoices_list(division)
-    invoices_unallocated_list = invoice_service.get_unallocated_invoices(division)
-    invoices_allocated_list = invoice_service.get_allocated_invoices(division)
-    # Use invoice service to get invoice totals by HC claim
-    sc_totals_dict = invoice_service.get_invoice_totals_by_hc_claim()
+    # Use bill service to get invoice lists
+    invoices_list = bill_service.get_invoices_list(division)
+    invoices_unallocated_list = bill_service.get_unallocated_invoices(division)
+    invoices_allocated_list = bill_service.get_allocated_invoices(division)
+    # Use bill service to get invoice totals by HC claim
+    sc_totals_dict = bill_service.get_invoice_totals_by_hc_claim()
     
-    # Use claims service to get HC claims data
-    hc_claims_list, approved_claims_list = claims_service.get_hc_claims_list(sc_totals_dict)
+    # Use invoice service to get HC claims data
+    hc_claims_list, approved_claims_list = invoice_service.get_hc_claims_list(sc_totals_dict)
     hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
     approved_claims_json = json.dumps(approved_claims_list, cls=DjangoJSONEncoder)
     
-    # Use claims service to get HC variations data
-    hc_variations_list = claims_service.get_hc_variations_list()
+    # Use invoice service to get HC variations data
+    hc_variations_list = invoice_service.get_hc_variations_list()
     hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
     
-    # Use claims service to get HC variation allocations
-    hc_variation_allocations_list = claims_service.get_hc_variation_allocations_list()
+    # Use invoice service to get HC variation allocations
+    hc_variation_allocations_list = invoice_service.get_hc_variation_allocations_list()
     
 
     
     hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
     
-    # Use claims service to get current HC claim and adjustments
-    current_hc_claim = claims_service.get_current_hc_claim()
+    # Use invoice service to get current HC claim and adjustments
+    current_hc_claim = invoice_service.get_current_hc_claim()
     current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
     current_hc_claim_date = current_hc_claim.date if current_hc_claim else None
-    hc_claim_wip_adjustments = claims_service.get_hc_claim_wip_adjustments(current_hc_claim)
+    hc_claim_wip_adjustments = invoice_service.get_hc_claim_wip_adjustments(current_hc_claim)
     if current_hc_claim:
         for c in costings:
             c['hc_prev_invoiced'] = 0
@@ -193,8 +193,8 @@ def main(request, division):
                 if hc_alloc:
                     c['hc_this_claim_invoices'] = hc_alloc.sc_invoiced
             else:
-                # For non-margin items, use invoice service
-                hc_this, hc_prev = invoice_service.calculate_hc_claim_invoices(
+                # For non-margin items, use bill service
+                hc_this, hc_prev = bill_service.calculate_hc_claim_invoices(
                     c['costing_pk'], 
                     current_hc_claim
                 )
@@ -237,8 +237,8 @@ def main(request, division):
     spv_data = SPVData.objects.first()
     # Use quote service to get progress claim quote allocations
     progress_claim_quote_allocations = quote_service.get_progress_claim_quote_allocations()
-    # Use invoice service to get progress claim invoice allocations
-    progress_claim_invoice_allocations = invoice_service.get_progress_claim_invoice_allocations()
+    # Use bill service to get progress claim invoice allocations
+    progress_claim_invoice_allocations = bill_service.get_progress_claim_invoice_allocations()
     # Generate contract_budget_totals, grouped by invoice_category
     contract_budget_totals = (Costing.objects.filter(category__division=division)
         .values('category__invoice_category')  # Group by invoice_category
