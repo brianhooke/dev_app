@@ -37,6 +37,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'general',
+    'development',
+    'construction',
+    'precast',
+    'pods',
     # 'xeroapi',
 ]
 

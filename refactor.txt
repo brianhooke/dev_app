@@ -324,35 +324,29 @@ TASK 8: Migrate PROJECT_TYPE-Specific Logic
 --------------------------------------------
 Goal: Move PROJECT_TYPE-specific code from core to respective apps
 
-Steps:
-8.1. Audit core/ for PROJECT_TYPE-specific logic:
-     - Search for construction-specific terms: "HC claims", "progress claims", 
-       "variations", "precast", etc.
-     - Identify models, views, templates, SERVICEs tied to specific 
-       PROJECT_TYPEs
+**STATUS: DEFERRED - Manual task to be completed by user**
 
-8.2. For each PROJECT_TYPE-specific piece:
-     - Determine target app (construction, precast, etc.)
-     - Move models to <project_type>/models.py
-     - Move views to <project_type>/views.py
-     - Move templates to <project_type>/templates/<project_type>/
-     - Move static assets to <project_type>/static/<project_type>/
-     - Move SERVICE logic to <project_type>/services/
+The infrastructure is in place for PROJECT_TYPE separation:
+- All PROJECT_TYPE apps created with proper structure
+- URL namespaces configured
+- Template/static namespacing in place
+- PROJECT_TYPE resolver mechanism working
 
-8.3. Update imports and references:
-     - Change "from core.models import X" to "from construction.models import X"
-     - Update ForeignKey references if needed
-     - Update URL patterns and namespaces
+Audit completed (see TASK_8_PLAN.md):
+- 4 construction-specific models identified (HC_claims, variations)
+- Construction-specific views identified (claims.py)
+- Construction-specific services identified (HC claim logic)
 
-8.4. Create migrations for model moves:
-     - If moving models between apps, use db_table to preserve table names
-     - Or create data migrations to move data if renaming tables
+User will manually separate PROJECT_TYPE functionality when ready.
 
-8.5. Update admin.py in each app to register PROJECT_TYPE-specific models
+Recommended approach (from TASK_8_PLAN.md):
+- Keep ALL models in core (avoid migration complexity)
+- Move construction views to construction/views/
+- Move construction services to construction/services/
+- Move construction templates/static to construction app
+- Update imports and URL references
 
-8.6. Test each PROJECT_TYPE independently
-
-8.7. Ensure core remains PROJECT_TYPE-agnostic (no imports from PROJECT_TYPE 
+Deliverable: PROJECT_TYPE-specific code separated into respective apps (USER TASK)remains PROJECT_TYPE-agnostic (no imports from PROJECT_TYPE 
      apps)
 
 Deliverable: PROJECT_TYPE-specific logic isolated in respective apps; core is 
