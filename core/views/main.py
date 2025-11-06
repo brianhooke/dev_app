@@ -12,6 +12,9 @@ from ..services import bills as bill_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
 from ..services import invoices as invoice_service
+from ..services import costings as costing_service
+from ..services import contacts as contact_service
+from ..services import aggregations as aggregation_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -66,33 +69,22 @@ def drawings(request):
     return render(request, 'core/drawings.html')
 
 def main(request, division):
-    costings = Costing.objects.filter(category__division=division).order_by('category__order_in_list','category__category','item')
-    costings_data = []
-    for costing in costings:
-        costing_dict = model_to_dict(costing)
-        # Keep original category ID
-        category_id = costing_dict['category']
-        # Add category name and order_in_list
-        cat_obj = costing.category
-        costing_dict['category'] = cat_obj.category  # Keep the name for display
-        costing_dict['category_id'] = category_id    # Keep the ID for relationships
-        costing_dict['category_order_in_list'] = cat_obj.order_in_list  # Add this for quotes modal
-        costings_data.append(costing_dict)
-    costings = costings_data
+    # Use costing service to get costings with category metadata
+    costings = costing_service.get_costings_for_division(division)
     
-
-    contacts = Contacts.objects.filter(division=division,checked=True).order_by('contact_name').values()
-    contacts_list = list(contacts)
-    contacts_unfiltered = Contacts.objects.filter(division=division).order_by('contact_name').values()
-    contacts_unfiltered_list = list(contacts_unfiltered)
+    # Use contact service to get contacts
+    contacts_list = contact_service.get_checked_contacts(division)
+    contacts_unfiltered_list = contact_service.get_all_contacts(division)
     # Use quote service to get quote allocations
     quote_allocations = quote_service.get_quote_allocations_for_division(division)
     quote_allocations_sums_dict = quote_service.get_quote_allocations_sums_dict()
+    
+    # Enrich costings with committed values
     committed_values = {pk: amount for pk, amount in Committed()}
-    for c in costings:
-        c['committed'] = committed_values.get(c['costing_pk'],0)
+    costings = costing_service.enrich_costings_with_committed(costings, committed_values)
+    
+    # Debug logging
     print('\n=== DEBUG: Invoice Allocations ===')    
-    # Get all invoice allocations and print their details
     all_allocations = Invoice_allocations.objects.all().select_related('invoice_pk', 'item')
     print('\nAll Invoice Allocations:')
     for alloc in all_allocations:
@@ -100,53 +92,42 @@ def main(request, division):
     
     # Use bill service to get allocation sums
     invoice_allocations_sums_dict = bill_service.get_invoice_allocations_sums_dict()
-    print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
-    
-    # Use bill service to get paid invoice allocations
     paid_invoice_allocations_dict = bill_service.get_paid_invoice_allocations_dict()
+    print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
     print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
     
-    # Print how the totals are being assigned
-    print('\nAssigning totals to costings:')
-    for c in costings:
-        # Use bill service to calculate sc_invoiced
-        c['sc_invoiced'] = bill_service.calculate_sc_invoiced_for_costing(
-            c['costing_pk'], 
-            invoice_allocations_sums_dict
-        )
-        
-        # Get paid amount from paid_invoice_allocations_dict (invoices with status 2 or 3)
-        c['sc_paid'] = paid_invoice_allocations_dict.get(c['costing_pk'], 0)
-        
-        # Calculate C2C (Cost to Complete) as committed + uncommitted - sc_paid
-        c['c2c'] = c['committed'] + c['uncommitted'] - c['sc_paid']
+    # Enrich costings with bill data (sc_invoiced, sc_paid, c2c)
+    costings = costing_service.enrich_costings_with_bill_data(
+        costings, 
+        invoice_allocations_sums_dict, 
+        paid_invoice_allocations_dict
+    )
     
-    # Print category groupings and their totals
+    # Calculate category totals
+    category_totals = costing_service.calculate_category_totals(costings, field='sc_invoiced')
     print('\nCategory Totals:')
-    category_totals = {}
-    for c in costings:
-        cat = c['category']
-        if cat not in category_totals:
-            category_totals[cat] = 0
-        category_totals[cat] += c['sc_invoiced']
-    
     for cat, total in category_totals.items():
         print(f"Category '{cat}': Total {total}")
-    items = [{'item': c['item'],'uncommitted': c['uncommitted'],'committed': c['committed'],'order_in_list': c['category_order_in_list']} for c in costings]
+    
+    # Get items list
+    items = costing_service.get_items_list(costings)
     # Use quote service to get committed quotes and contacts
     committed_quotes_list = quote_service.get_committed_quotes_list(division)
     committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)
     quote_allocations_json = json.dumps(list(quote_allocations), cls=DjangoJSONEncoder)
     contacts_in_quotes_list = quote_service.get_contacts_in_quotes(division)
     contacts_not_in_quotes_list = quote_service.get_contacts_not_in_quotes(division)
-    total_contract_budget = sum(c['contract_budget'] for c in costings)
-    total_uncommitted = sum(c['uncommitted'] for c in costings)
-    total_committed = sum(c['committed'] for c in costings)
-    total_forecast_budget = total_committed + total_uncommitted
-    total_sc_invoiced = sum(c['sc_invoiced'] for c in costings)
-    total_fixed_on_site = sum(c['fixed_on_site'] for c in costings)
-    total_sc_paid = sum(c['sc_paid'] for c in costings)
-    total_c2c = sum(c['c2c'] for c in costings)
+    
+    # Use aggregation service to calculate dashboard totals
+    totals = aggregation_service.calculate_dashboard_totals(costings)
+    total_contract_budget = totals['total_contract_budget']
+    total_uncommitted = totals['total_uncommitted']
+    total_committed = totals['total_committed']
+    total_forecast_budget = totals['total_forecast_budget']
+    total_sc_invoiced = totals['total_sc_invoiced']
+    total_fixed_on_site = totals['total_fixed_on_site']
+    total_sc_paid = totals['total_sc_paid']
+    total_c2c = totals['total_c2c']
     # Use POS service to get PO data
     po_globals = pos_service.get_po_globals()
     po_orders_list = pos_service.get_po_orders_list(division)
@@ -239,14 +220,8 @@ def main(request, division):
     progress_claim_quote_allocations = quote_service.get_progress_claim_quote_allocations()
     # Use bill service to get progress claim invoice allocations
     progress_claim_invoice_allocations = bill_service.get_progress_claim_invoice_allocations()
-    # Generate contract_budget_totals, grouped by invoice_category
-    contract_budget_totals = (Costing.objects.filter(category__division=division)
-        .values('category__invoice_category')  # Group by invoice_category
-        .annotate(
-            total_contract_budget=Sum('contract_budget'),
-            max_order=Max('category__order_in_list'),  # To determine the latest category
-            latest_category=Max('category__category')  # Get the latest category name
-        ).order_by('max_order'))
+    # Use costing service to get contract budget totals
+    contract_budget_totals = costing_service.get_contract_budget_totals(division)
 
     # Generate claim_category_totals, grouped by hc_claim_pk and invoice_category
     claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division)
