@@ -80,9 +80,9 @@ ARCHITECTURE REFERENCE
 **Current Structure:**
 ```
 dev_app/
-├── core/                           # Shared functionality
-│   ├── models.py                   # ALL models (22 total)
-│   ├── services/                   # 7 service modules, 41 functions
+├── core/                          # Shared functionality
+│   ├── models.py                  # ALL models (22 total)
+│   ├── services/                  # 7 service modules, 41 functions
 │   │   ├── bills.py               # Supplier bills (9 functions)
 │   │   ├── invoices.py            # HC claims/invoices (9 functions)
 │   │   ├── quotes.py              # Quotes (8 functions)
@@ -90,7 +90,7 @@ dev_app/
 │   │   ├── costings.py            # Costing logic (7 functions)
 │   │   ├── contacts.py            # Contacts (2 functions)
 │   │   └── aggregations.py        # Dashboard totals (1 function)
-│   ├── views/                      # 7 view modules
+│   ├── views/                     # 7 view modules
 │   │   ├── main.py                # Dashboard (716 lines)
 │   │   ├── quotes.py              # Quote views (198 lines)
 │   │   ├── bills.py               # Bill views (425 lines)
