@@ -70,7 +70,6 @@ logger.setLevel(logging.INFO)
 
 def drawings(request):
     return render(request, 'core/drawings.html')
-
 def drawings_view(request):
     def sort_key(x):
         try:
@@ -101,7 +100,6 @@ def drawings_view(request):
         'project_name': settings.PROJECT_NAME,
     }
     return render(request, 'core/drawings.html', context)
-
 def model_viewer_view(request):
     model_path = '3d/model.dae'
     full_path = os.path.join(settings.MEDIA_URL, model_path)
@@ -111,7 +109,6 @@ def model_viewer_view(request):
                'project_name': settings.PROJECT_NAME,
                }  
     return render(request, 'core/model_viewer.html', context)
-
 @csrf_exempt
 def create_plan(request):
     if request.method == 'POST':
@@ -131,7 +128,6 @@ def create_plan(request):
             return JsonResponse({'status': 'error', 'error': 'Invalid data'}, status=400)
     else:
         return JsonResponse({'status': 'error', 'error': 'Invalid method'}, status=405)
-
 from django.core.files.storage import default_storage
 
 @csrf_exempt
@@ -181,7 +177,6 @@ def upload_design_pdf(request):
             )
             logger.info(f'Successfully created PlanPdfs object for page {page_number}.')         
     return JsonResponse({'status': 'success'})
-
 @csrf_exempt
 def get_design_pdf_url(request, design_category, plan_number, rev_number=None):
     try:
@@ -196,7 +191,6 @@ def get_design_pdf_url(request, design_category, plan_number, rev_number=None):
         return JsonResponse({'file_url': file_url, 'rev_numbers': list(rev_numbers)})
     except PlanPdfs.DoesNotExist:
         return JsonResponse({'error': 'PlanPdfs not found'}, status=404)
-
 @csrf_exempt
 def upload_report_pdf(request):
     if request.method == 'POST':
@@ -226,7 +220,6 @@ def upload_report_pdf(request):
         )
         logger.info(f'Successfully created ReportPdfs object.')         
     return JsonResponse({'status': 'success'})
-
 @csrf_exempt
 def get_report_pdf_url(request, report_category, report_reference=None):
     try:
@@ -250,6 +243,5 @@ def get_report_pdf_url(request, report_category, report_reference=None):
             return JsonResponse({'data': response_data})
     except ReportPdfs.DoesNotExist:
         return JsonResponse({'error': 'ReportPdfs not found'}, status=404)
-
 def alphanumeric_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split('([0-9]+)', s)]

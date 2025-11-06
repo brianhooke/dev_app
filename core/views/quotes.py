@@ -96,7 +96,6 @@ def commit_data(request):
             item.uncommitted = uncommitted
             item.save()
         return JsonResponse({'status': 'success'})
-
 @csrf_exempt
 def update_quote(request):
     if request.method == 'POST':
@@ -123,27 +122,21 @@ def update_quote(request):
         return JsonResponse({'status': 'success'})
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
-
 @csrf_exempt
 def delete_quote(request):
     if request.method == 'DELETE':
         data = json.loads(request.body)
         supplier_quote_number = data.get('supplier_quote_number')
-        
         if not supplier_quote_number:
             return JsonResponse({'status': 'fail', 'message': 'Supplier quote number is required'}, status=400)
-            
         try:
             quote = Quotes.objects.get(supplier_quote_number=supplier_quote_number)
         except Quotes.DoesNotExist:
             return JsonResponse({'status': 'fail', 'message': 'Quote not found'}, status=404)
         quote.delete()
-
         return JsonResponse({'status': 'success', 'message': 'Quote deleted successfully'})
-
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
-
 def get_quote_allocations(request, supplier_id):
     quote_allocations = Quote_allocations.objects.filter(
         quotes_pk__contact_pk_id=supplier_id
@@ -160,7 +153,6 @@ def get_quote_allocations(request, supplier_id):
         })
     data['costings'] = costings
     return JsonResponse(data, safe=False)
-
 @csrf_exempt
 def update_uncommitted(request):
     if request.method == 'POST':
@@ -177,7 +169,6 @@ def update_uncommitted(request):
         except Costing.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
-
 logger = logging.getLogger(__name__)
 
 def get_quotes_by_supplier(request):
@@ -185,11 +176,9 @@ def get_quotes_by_supplier(request):
     contact = Contacts.objects.filter(contact_name=supplier_name).first()
     if not contact:
         return JsonResponse({"error": "Supplier not found"}, status=404)
-
     quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
         Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  
     )
-
     quotes_data = []
     for quote in quotes:
         quote_info = {

@@ -77,12 +77,9 @@ def delete_invoice(request):
         except Invoices.DoesNotExist:
             return JsonResponse({'status': 'fail', 'message': 'Invoice not found'}, status=404)
         invoice.delete()
-
         return JsonResponse({'status': 'success', 'message': 'Invoice deleted successfully'})
-
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
-
 @csrf_exempt
 def upload_invoice(request):
     if request.method == 'POST':
@@ -115,7 +112,6 @@ def upload_invoice(request):
             return JsonResponse({'success': False, 'error': str(e)})
     else:
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
 @csrf_exempt
 def upload_invoice_allocations(request):
     if request.method == 'POST':
@@ -131,7 +127,6 @@ def upload_invoice_allocations(request):
                     gst_amount = Decimal(str(allocation.get('gst_amount', 0)))  
                     uncommitted = Decimal(str(allocation.get('uncommitted', 0)))  
                     notes = allocation.get('notes', '')
-
                     Invoice_allocations.objects.create(
                         invoice_pk=invoice,
                         item=item,
@@ -139,10 +134,8 @@ def upload_invoice_allocations(request):
                         gst_amount=gst_amount,  
                         notes=notes
                     )
-
                     item.uncommitted = uncommitted  
                     item.save()
-
             invoice.invoice_status = 1
             invoice.save()
             return JsonResponse({'success': True})
@@ -153,7 +146,6 @@ def upload_invoice_allocations(request):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
 @csrf_exempt
 def post_invoice(request):
     logger.info('Starting post_invoice function')
@@ -225,7 +217,6 @@ def post_invoice(request):
     else:
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
-
 @csrf_exempt
 def test_xero_invoice(request):
     logger.info('Starting post_invoice function')
@@ -287,22 +278,16 @@ def test_xero_invoice(request):
     else:
         logger.error('Unexpected response from Xero API: %s', response_data)
         return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
-
 def get_invoices_by_supplier(request):
     supplier_name = request.GET.get('supplier', '')
-
     contact = Contacts.objects.filter(contact_name=supplier_name).first()
-
     if not contact:
         return JsonResponse({"error": "Supplier not found"}, status=404)
-
     invoices = Invoices.objects.filter(contact_pk=contact, invoice_status=2).prefetch_related(
         Prefetch('invoice_allocations_set', queryset=Invoice_allocations.objects.all(), to_attr='fetched_allocations')
     )
-
     if not invoices.exists():  
         return JsonResponse({"message": "No invoices found for this supplier with status=2"}, safe=False)
-
     invoices_data = []
     for invoice in invoices:
         invoice_info = {
@@ -323,46 +308,36 @@ def get_invoices_by_supplier(request):
             ]
         }
         invoices_data.append(invoice_info)
-
     return JsonResponse(invoices_data, safe=False)
-
 @csrf_exempt
 def get_invoice_allocations(request, invoice_id):
     """Fetch existing allocations for an invoice to enable updating them"""
     if request.method != 'GET':
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
-    
     try:
         print(f"DEBUG: Starting get_invoice_allocations for invoice_id: {invoice_id}")
-        
         try:
             invoice = Invoices.objects.get(invoice_pk=invoice_id)
             print(f"DEBUG: Found invoice with pk={invoice_id}, type={invoice.invoice_type}")
         except Invoices.DoesNotExist:
             print(f"ERROR: Invoice with pk={invoice_id} does not exist")
             return JsonResponse({'error': f'Invoice with id {invoice_id} not found'}, status=404)
-        
         try:
             allocations = Invoice_allocations.objects.filter(invoice_pk=invoice)
             print(f"DEBUG: Found {allocations.count()} allocations for invoice {invoice_id}")
         except Exception as e:
             print(f"ERROR: Failed to query allocations: {str(e)}")
             return JsonResponse({'error': f'Failed to query allocations: {str(e)}'}, status=500)
-        
         formatted_allocations = []
-        
         for alloc in allocations:
             try:
                 item = alloc.item  
-                
                 if not item:
                     print(f"WARNING: Allocation {alloc.invoice_allocations_pk} has no item relationship")
                     continue
-                
                 print(f"DEBUG: Processing allocation {alloc.invoice_allocations_pk} for item {item.item}")
                 print(f"DEBUG: Allocation {item.item} - allocation_type: {alloc.allocation_type} (type: {type(alloc.allocation_type)})")
                 print(f"DEBUG: Raw DB values - amount: {alloc.amount}, gst_amount: {alloc.gst_amount}")
-                
                 formatted_allocations.append({
                     'allocation_id': alloc.invoice_allocations_pk,  
                     'item_pk': item.costing_pk,  
@@ -375,48 +350,39 @@ def get_invoice_allocations(request, invoice_id):
             except Exception as e:
                 print(f"ERROR: Failed to process allocation {alloc.invoice_allocations_pk}: {str(e)}")
                 continue
-        
         try:
             contact_pk = invoice.contact_pk_id if invoice.contact_pk else None
             print(f"DEBUG: Contact PK for invoice {invoice_id}: {contact_pk}")
         except Exception as e:
             print(f"ERROR: Failed to get contact_pk: {str(e)}")
             contact_pk = None
-        
         other_invoices = []
         if invoice.invoice_type == 2 and contact_pk:  
             try:
                 print(f"DEBUG: Querying ALL invoices for contact_pk={contact_pk}")
                 all_invoices = list(Invoices.objects.filter(contact_pk_id=contact_pk))
                 print(f"DEBUG: ALL invoices for contact {contact_pk}: {[(i.invoice_pk, i.invoice_type) for i in all_invoices]}")
-                
                 invoice_id_for_query = invoice_id
                 if isinstance(invoice_id, str) and invoice_id.isdigit():
                     invoice_id_for_query = int(invoice_id)
                 print(f"DEBUG: Using invoice_id_for_query={invoice_id_for_query} (type: {type(invoice_id_for_query)}) for exclude")
-                
                 print(f"DEBUG: Running query: Invoices.objects.filter(contact_pk_id={contact_pk}, invoice_type=2).exclude(invoice_pk={invoice_id_for_query})")
-                
                 other_invoice_objects = Invoices.objects.filter(
                     contact_pk_id=contact_pk,
                     invoice_type=2  
                 ).exclude(invoice_pk=invoice_id_for_query)
-                
                 print(f"DEBUG: Found {other_invoice_objects.count()} other invoices for contact {contact_pk}: {[i.invoice_pk for i in other_invoice_objects]}")
-                
                 for other_inv in other_invoice_objects:
                     try:
                         print(f"DEBUG: Processing other invoice {other_inv.invoice_pk}")
                         other_allocations = Invoice_allocations.objects.filter(invoice_pk=other_inv)
                         formatted_other_allocations = []
-                        
                         for alloc in other_allocations:
                             try:
                                 item = alloc.item
                                 if not item:
                                     print(f"WARNING: Other allocation {alloc.invoice_allocations_pk} has no item relationship")
                                     continue
-                                    
                                 formatted_other_allocations.append({
                                     'item_pk': item.costing_pk,
                                     'item_name': item.item,
@@ -428,16 +394,13 @@ def get_invoice_allocations(request, invoice_id):
                             except Exception as e:
                                 print(f"ERROR: Failed to process other allocation: {str(e)}")
                                 continue
-                        
                         print(f"DEBUG: Other invoice details - PK: {other_inv.invoice_pk}, Number: {other_inv.supplier_invoice_number}")
                         print(f"DEBUG: Other invoice has {len(formatted_other_allocations)} allocations")
-                        
                         other_invoice_obj = {
                             'invoice_pk': other_inv.invoice_pk,
                             'invoice_number': other_inv.supplier_invoice_number,
                             'invoice_allocations': formatted_other_allocations
                         }
-                        
                         print(f"DEBUG: Adding other invoice to response: {other_invoice_obj['invoice_pk']} / {other_invoice_obj['invoice_number']}")
                         other_invoices.append(other_invoice_obj)
                     except Exception as e:
@@ -445,20 +408,16 @@ def get_invoice_allocations(request, invoice_id):
                         continue
             except Exception as e:
                 print(f"ERROR: Failed to query other invoices: {str(e)}")
-        
         if not formatted_allocations:
             print(f"WARNING: No valid allocations found for invoice {invoice_id}")
-        
         response_data = {
             'allocations': formatted_allocations,
             'contact_pk': contact_pk,
             'invoice_type': invoice.invoice_type,
             'other_invoices': other_invoices  
         }
-        
         print(f"DEBUG: Successfully prepared response for invoice {invoice_id} with {len(formatted_allocations)} allocations")
         return JsonResponse(response_data)
-    
     except Exception as e:
         import traceback
         print(f"CRITICAL ERROR in get_invoice_allocations: {str(e)}")

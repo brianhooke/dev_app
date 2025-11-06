@@ -73,43 +73,33 @@ def associate_sc_claims_with_hc_claim(request):
     try:
         if request.method != 'POST':
             return JsonResponse({'error': 'Invalid request method'}, status=400)
-
         logger.info('Processing associate_sc_claims_with_hc_claim request')
-        
         data = json.loads(request.body)
         logger.info(f'Request data: {data}')
         selected_invoices = data.get('selectedInvoices', [])
         logger.info(f'Selected invoices: {selected_invoices}')
-
         if not selected_invoices:
             logger.warning('No invoices selected')
             return JsonResponse({'error': 'No invoices selected'}, status=400)
-
         if HC_claims.objects.exists():
             latest_hc_claim = HC_claims.objects.latest('hc_claim_pk')
             logger.info(f'Latest HC claim status: {latest_hc_claim.status}')
-            
             if latest_hc_claim.status == 0:
                 logger.warning('Found existing HC claim in progress')
                 return JsonResponse({
                     'error': 'There is a HC claim in progress. Complete this claim before starting another.'
                 }, status=400)
-
         new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
         logger.info(f'Created new HC claim with pk: {new_hc_claim.hc_claim_pk}')
-
         update_result = Invoices.objects.filter(invoice_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
         logger.info(f'Updated {update_result} invoices with new HC claim')
-
         return JsonResponse({
             'latest_hc_claim_pk': new_hc_claim.hc_claim_pk,
             'invoices_updated': update_result
         })
-
     except Exception as e:
         logger.error(f'Error in associate_sc_claims_with_hc_claim: {str(e)}', exc_info=True)
         return JsonResponse({'error': 'Internal server error occurred'}, status=500)
-
 @csrf_exempt
 def update_fixedonsite(request):
     if request.method == 'POST':
@@ -120,7 +110,6 @@ def update_fixedonsite(request):
         costing.fixed_on_site = fixed_on_site
         costing.save()
         return JsonResponse({'status': 'success'})
-
 @csrf_exempt
 def update_hc_claim_data(request):
     if request.method == 'POST':
@@ -164,12 +153,10 @@ def update_hc_claim_data(request):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': f"Unexpected error: {str(e)}"}, status=400)
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
-
 def get_claim_table(request, claim_id):
     claim_id = request.GET.get('claim_id')  
     if not claim_id:
         return HttpResponseBadRequest("Missing claim_id")
-
 @csrf_exempt
 def send_hc_claim_to_xero(request):
     if request.method != 'POST':
@@ -180,13 +167,11 @@ def send_hc_claim_to_xero(request):
         xero_contact_id = data.get('xero_contact_id')
         contact_name = data.get('contact_name')
         categories = data.get('categories', [])
-        
         logger.info("Received Xero API parameters:")
         logger.info(f"hc_claim_pk: {hc_claim_pk}")
         logger.info(f"xero_contact_id: {xero_contact_id}")
         logger.info(f"contact_name: {contact_name}")
         logger.info(f"categories: {categories}")
-        
         if not all([hc_claim_pk, xero_contact_id, contact_name]):
             logger.error("Missing required fields for Xero API")
             return JsonResponse({'success': False, 'error': 'Missing required fields'})
@@ -219,7 +204,6 @@ def send_hc_claim_to_xero(request):
         for cat_data in categories:
             try:
                 logger.info(f"Looking for category with PK: {cat_data['categories_pk']}")
-                
                 if cat_data['categories_pk'] is None:
                     logger.info("Using default category description for null categories_pk")
                     description = "HC Claim"
@@ -227,7 +211,6 @@ def send_hc_claim_to_xero(request):
                     cat_obj = Categories.objects.get(categories_pk=cat_data['categories_pk'])
                     description = cat_obj.category
                     logger.info(f"Found category: {description}")
-                
                 amount = Decimal(str(cat_data['amount']))
                 line_items.append({
                     "Description": description,
@@ -274,95 +257,75 @@ def send_hc_claim_to_xero(request):
             })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
-
 @csrf_exempt
 def delete_variation(request):
     """Delete a HC variation and its allocations"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Only POST method is allowed'}, status=405)
-    
     try:
         variation_pk = request.POST.get('variation_pk')
         if not variation_pk:
             return JsonResponse({'success': False, 'error': 'Variation PK is required'}, status=400)
-        
         try:
             variation = Hc_variation.objects.get(hc_variation_pk=variation_pk)
         except Hc_variation.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Variation not found'}, status=404)
-        
         max_approved_claim_date = HC_claims.objects.filter(status__gt=0).aggregate(Max('date'))['date__max']
-        
         if max_approved_claim_date and variation.date <= max_approved_claim_date:
             return JsonResponse({
                 'success': False, 
                 'error': 'Cannot delete a variation that is already part of an HC claim'
             }, status=400)
-        
         variation.delete()
-        
         return JsonResponse({'success': True})
-    
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
 @csrf_exempt
 def create_variation(request):
     """Create a new HC variation and its allocation entries"""
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
-    
     try:
         data = json.loads(request.body)
         variation_date = data.get('variation_date')
         items = data.get('items', [])
-        
         if not variation_date:
             return JsonResponse({'status': 'error', 'message': 'Variation date is required'}, status=400)
         if not items or len(items) == 0:
             return JsonResponse({'status': 'error', 'message': 'At least one item is required'}, status=400)
-        
         variation_date_obj = datetime.strptime(variation_date, '%Y-%m-%d').date()
-        
         with transaction.atomic():
             variation = Hc_variation.objects.create(
                 date=variation_date
             )
-            
             for item_data in items:
                 costing_pk = item_data.get('costing_pk')
                 amount = item_data.get('amount')
                 notes = item_data.get('notes', '')
-                
                 if not costing_pk or not amount:
                     transaction.set_rollback(True)
                     return JsonResponse({'status': 'error', 'message': 'Costing and amount are required for each item'}, status=400)
-                
                 try:
                     costing = Costing.objects.get(costing_pk=costing_pk)
                 except Costing.DoesNotExist:
                     transaction.set_rollback(True)
                     return JsonResponse({'status': 'error', 'message': f'Costing item with id {costing_pk} does not exist'}, status=404)
-                
                 Hc_variation_allocations.objects.create(
                     hc_variation=variation,
                     costing=costing,
                     amount=amount,
                     notes=notes
                 )
-        
         return JsonResponse({
             'status': 'success',
             'message': 'Variation created successfully',
             'variation_id': variation.hc_variation_pk
         })
-        
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
     except Exception as e:
         logger.error(f"Error creating HC variation: {str(e)}")
         return JsonResponse({'status': 'error', 'message': f'Error creating variation: {str(e)}'}, status=500)
-
 @csrf_exempt
 def post_progress_claim_data(request):
     if request.method != 'POST':
@@ -372,43 +335,32 @@ def post_progress_claim_data(request):
         invoice_id = data.get("invoice_id")
         allocations = data.get("allocations", [])
         updating = data.get("updating", False)  
-        
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
         if not allocations:
             return JsonResponse({"error": "No allocations provided"}, status=400)
-            
         new_allocations = []  
-        
         with transaction.atomic():
             invoice = Invoices.objects.get(pk=invoice_id)
-            
             invoice.invoice_status = 1  
             invoice.invoice_type = 2    
             invoice.save()
-            
             if updating:
                 existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
-                
                 Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
-                
                 print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
-            
             for alloc in allocations:
                 item_pk = alloc.get("item_pk")
                 net = alloc.get("net", 0)
                 gst = alloc.get("gst", 0)
                 allocation_type = alloc.get("allocation_type", 0)
                 notes = alloc.get("notes", "")
-                
                 if not item_pk:
                     raise ValueError("Missing item_pk in allocation")
-                    
                 try:
                     costing_obj = Costing.objects.get(pk=item_pk)
                 except Costing.DoesNotExist:
                     raise ValueError(f"Costing object not found for pk: {item_pk}")
-                    
                 new_alloc = Invoice_allocations.objects.create(
                     invoice_pk=invoice,
                     item=costing_obj,
@@ -418,9 +370,7 @@ def post_progress_claim_data(request):
                     allocation_type=allocation_type
                 )
                 new_allocations.append(new_alloc.invoice_allocations_pk)
-        
         message = "Progress claim allocations updated successfully" if updating else "Progress claim data posted successfully"
-        
         return JsonResponse({
             "success": True,
             "message": message,
@@ -436,7 +386,6 @@ def post_progress_claim_data(request):
         return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
-
 @csrf_exempt
 def post_direct_cost_data(request):
     if request.method != 'POST':
@@ -446,23 +395,16 @@ def post_direct_cost_data(request):
         invoice_id = data.get("invoice_id")
         allocations = data.get("allocations", [])
         updating = data.get("updating", False)  
-
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
-
         invoice = Invoices.objects.get(pk=invoice_id)
-
         invoice.invoice_status = 1  
         invoice.invoice_type = 1    
         invoice.save()
-
         if updating:
             existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
-            
             Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
-            
             print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
-
         new_allocations = []
         for alloc in allocations:
             item_pk = alloc.get("item_pk")
@@ -470,16 +412,12 @@ def post_direct_cost_data(request):
             gst = alloc.get("gst", 0)
             notes = alloc.get("notes", "")
             uncommitted_new = alloc.get("uncommitted_new")  
-
             if not item_pk:
                 continue
-
             costing_obj = Costing.objects.get(pk=item_pk)
-
             if uncommitted_new is not None:
                 costing_obj.uncommitted = uncommitted_new
                 costing_obj.save()
-
             new_alloc = Invoice_allocations.objects.create(
                 invoice_pk=invoice,
                 item=costing_obj,
@@ -489,9 +427,7 @@ def post_direct_cost_data(request):
                 allocation_type=0  
             )
             new_allocations.append(new_alloc.invoice_allocations_pk)
-
         message = "Direct cost allocations updated successfully" if updating else "Direct cost data posted successfully"
-        
         return JsonResponse({
             "message": message,
             "updated_invoice": invoice.invoice_pk,

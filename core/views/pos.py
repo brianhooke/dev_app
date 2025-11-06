@@ -75,12 +75,9 @@ def create_po_order(request):
         supplier_pk = data.get('supplierPk')
         notes = data.get('notes', {})
         rows = data.get('rows', [])
-        
         po_order = pos_service.create_po_order(supplier_pk, notes, rows)
-        
         return JsonResponse({'status': 'success', 'message': 'PO Order created successfully.'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})
-
 def generate_po_pdf(request, po_order_pk):
     po_globals = pos_service.get_po_globals()
     po_order, po_order_details = pos_service.get_po_order_details(po_order_pk)
@@ -229,11 +226,9 @@ def generate_po_pdf(request, po_order_pk):
     response.write(merged_buffer.getvalue())
     merged_buffer.close()
     return response
-
 @csrf_exempt
 def view_po_pdf(request, po_order_pk):
     return render(request, 'core/view_po_pdf.html', {'po_order_pk': po_order_pk})
-
 def wrap_text(text, max_length):
     words = text.split(' ')
     lines = []
@@ -247,14 +242,12 @@ def wrap_text(text, max_length):
     if current_line:
         lines.append(current_line)
     return lines
-
 @csrf_exempt
 def send_po_email(request, po_order_pk, recipient_list):
     po_order = Po_orders.objects.get(po_order_pk=po_order_pk)
     contact_name = po_order.po_supplier.contact_name  
     subject = 'Purchase Order'
     message = f'''Dear {contact_name},
-
 Please see Purchase Order from Mason attached for the specified works and amount.
 
 Ensure your claim clearly specifies the PO number and the amount being claimed against each claim category as specified in the PO to ensure there are no delays processing your claim.
@@ -298,7 +291,6 @@ import json
 def generate_po_pdf_bytes(request, po_order_pk):
     response = generate_po_pdf(request, po_order_pk)
     return response.content
-
 @csrf_exempt
 def send_po_email_view(request):
     if request.method == 'POST':
