@@ -63,12 +63,10 @@ from ..formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
-
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Set logging level to INFO
-
+logger.setLevel(logging.INFO)  
 
 @csrf_exempt
 def create_po_order(request):
@@ -78,22 +76,19 @@ def create_po_order(request):
         notes = data.get('notes', {})
         rows = data.get('rows', [])
         
-        # Use POS service to create PO order
         po_order = pos_service.create_po_order(supplier_pk, notes, rows)
         
         return JsonResponse({'status': 'success', 'message': 'PO Order created successfully.'})
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})
 
-
 def generate_po_pdf(request, po_order_pk):
-    # Use POS service to get PO data
     po_globals = pos_service.get_po_globals()
     po_order, po_order_details = pos_service.get_po_order_details(po_order_pk)
     company_details = po_globals
     letterhead = Letterhead.objects.first()
     if letterhead is not None:
-        letterhead_path = letterhead.letterhead_path.name  # Get the file name or path as a string
-        if settings.DEBUG:  # Assuming DEBUG=True means local development
+        letterhead_path = letterhead.letterhead_path.name  
+        if settings.DEBUG:  
             letterhead_full_path = default_storage.path(letterhead_path)
             with open(letterhead_full_path, "rb") as f:
                 letterhead_pdf_content = f.read()
@@ -114,8 +109,8 @@ def generate_po_pdf(request, po_order_pk):
             ("Email: ", company_details.email),
             ("Address: ", company_details.address)
         ]
-        y_position = A4[1] - 2.5 * inch  # Starting Y position below the letterhead
-        max_length = 40  # Maximum characters per line
+        y_position = A4[1] - 2.5 * inch  
+        max_length = 40  
         for label, text in details:
             wrapped_lines = wrap_text(f"{label}{text}", max_length)
             for line in wrapped_lines:
@@ -128,96 +123,96 @@ def generate_po_pdf(request, po_order_pk):
                 else:
                     p.setFont("Helvetica", 10)
                     p.drawString(5.5 * inch, y_position, line)
-                y_position -= 12  # Move to the next line
+                y_position -= 12  
         y_position -= 12
         today = date.today().strftime("%d %b %Y")
         p.setFont("Helvetica", 12)
         p.drawString(inch/2, y_position, today)
-        y_position -= 12  # Move to the next line
+        y_position -= 12  
     p.setFont("Helvetica-Bold", 15)
-    supplier_name = po_order.po_supplier.contact_name  # Get the supplier's name
-    project_address = po_globals.project_address  # Get the job address
+    supplier_name = po_order.po_supplier.contact_name  
+    project_address = po_globals.project_address  
     purchase_order_text = f"{project_address} Purchase Order - {supplier_name}"
     wrapped_po_text = wrap_text(purchase_order_text, 80)
     text_widths = [p.stringWidth(line, "Helvetica-Bold", 15) for line in wrapped_po_text]
     max_text_width = max(text_widths)
-    x_position = (A4[0] - max_text_width) / 2  # Center the text
+    x_position = (A4[0] - max_text_width) / 2  
     y_position = A4[1] / 1.6
     for line in wrapped_po_text:
         p.drawString(x_position, y_position, line)
-        y_position -= 22  # Adjust for line height
+        y_position -= 22  
     p.setLineWidth(1)
     p.line(x_position, y_position - 2, x_position + max_text_width, y_position - 2)
     y_position -= 36
     p.setFont("Helvetica-Bold", 12)
     table_headers = ["Claim Category", "Quote # or Variation", "Amount ($)*"]
-    col_widths = [2.5 * inch, 3.5 * inch, 1 * inch]  # Adjusted column widths
+    col_widths = [2.5 * inch, 3.5 * inch, 1 * inch]  
     x_start = inch / 2
     cell_height = 18
     for i, header in enumerate(table_headers):
         header_x_position = x_start + sum(col_widths[:i]) + 2
-        if i == 2:  # Center the 'Amount' column header
+        if i == 2:  
             header_x_position = x_start + sum(col_widths[:i]) + col_widths[i] / 2 - p.stringWidth(header, "Helvetica-Bold", 12) / 2
-        p.drawString(header_x_position, y_position + 2, header)  # Adjust for padding
-        p.line(header_x_position, y_position, header_x_position + p.stringWidth(header, "Helvetica-Bold", 12), y_position)  # Draw underline
+        p.drawString(header_x_position, y_position + 2, header)  
+        p.line(header_x_position, y_position, header_x_position + p.stringWidth(header, "Helvetica-Bold", 12), y_position)  
     y_position -= cell_height
-    total_amount = 0  # Initialize total amount
-    p.setFont("Helvetica", 10)  # Smaller font size for table contents
+    total_amount = 0  
+    p.setFont("Helvetica", 10)  
     for detail in po_order_details:
         row_data = [
-            detail.costing.item,  # Using item of costing
-            f"Variation: {detail.variation_note}" if detail.quote is None else detail.quote.supplier_quote_number,  # Using supplier_quote_number if quote is not None
-            f"{detail.amount:,.2f}"  # Amount with thousand comma separator
+            detail.costing.item,  
+            f"Variation: {detail.variation_note}" if detail.quote is None else detail.quote.supplier_quote_number,  
+            f"{detail.amount:,.2f}"  
         ]
         max_line_lengths = [
-            int(col_widths[0] / 7),  # Claim Category
-            int(col_widths[1] / 5),  # Quote # or Variation
-            int(col_widths[2] / 7)   # Amount
+            int(col_widths[0] / 7),  
+            int(col_widths[1] / 5),  
+            int(col_widths[2] / 7)   
         ]
         total_amount += detail.amount
         row_heights = []
         for i, cell in enumerate(row_data):
             wrapped_lines = wrap_text(str(cell), max_line_lengths[i])
             row_heights.append(len(wrapped_lines) * cell_height)
-            p.setStrokeColor(colors.grey, 0.25)  # Set color to grey with 50% transparency
-            p.line(x_start, y_position, x_start + sum(col_widths), y_position)  # Draw underline
-            p.setStrokeColor(colors.black)  # Set color back to black for subsequent drawing        
+            p.setStrokeColor(colors.grey, 0.25)  
+            p.line(x_start, y_position, x_start + sum(col_widths), y_position)  
+            p.setStrokeColor(colors.black)  
             max_row_height = max(row_heights)
         for i, cell in enumerate(row_data):
             wrapped_lines = wrap_text(str(cell), max_line_lengths[i])
             for line_num, line in enumerate(wrapped_lines):
-                if i == 2:  # Align 'Amount' column to the right
+                if i == 2:  
                     line_width = p.stringWidth(line, "Helvetica", 10)
-                    p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding and right alignment
+                    p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2 - (line_num * cell_height), line)  
                 else:
-                    p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2 - (line_num * cell_height), line)  # Adjust for padding
+                    p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2 - (line_num * cell_height), line)  
         y_position -= max_row_height
     p.setFont("Helvetica-Bold", 12)
     total_row_data = [
         "Total",
-        "",  # Empty cell
-        f"{total_amount:,.2f}"  # Total amount with thousand comma separator
+        "",  
+        f"{total_amount:,.2f}"  
     ]
     for i, cell in enumerate(total_row_data):
-        if i == 2:  # Align 'Amount' column to the right
+        if i == 2:  
             line_width = p.stringWidth(cell, "Helvetica-Bold", 12)
-            p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2, cell)  # Adjust for padding and right alignment
-            p.line(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position, x_start + sum(col_widths[:i+1]) - line_width - 2 + p.stringWidth(cell, "Helvetica-Bold", 12), y_position)  # Draw underline
+            p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2, cell)  
+            p.line(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position, x_start + sum(col_widths[:i+1]) - line_width - 2 + p.stringWidth(cell, "Helvetica-Bold", 12), y_position)  
         else:
-            p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2, cell)  # Adjust for padding
+            p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2, cell)  
     y_position -= (cell_height * 2.5)
     p.setFont("Helvetica", 10)
     fixed_text = "* All amounts are net of GST. Supplier to add GST if applicable."
     for line in wrap_text(fixed_text, 110):
         p.drawString(x_start, y_position, line)
-        y_position -= (cell_height) * 0.75  # Consistent line break
-    y_position -= (cell_height) * 0.75  # Blank row
+        y_position -= (cell_height) * 0.75  
+    y_position -= (cell_height) * 0.75  
     notes = [po_order.po_note_1, po_order.po_note_2, po_order.po_note_3]
     for note in notes:
         for line in wrap_text(note, 115):
             p.drawString(x_start, y_position, line)
-            y_position -= (cell_height) * 0.75  # Consistent line break
-        y_position -= (cell_height) * 0.75  # Blank row
+            y_position -= (cell_height) * 0.75  
+        y_position -= (cell_height) * 0.75  
     p.showPage()
     p.save()
     content_buffer.seek(0)
@@ -235,11 +230,9 @@ def generate_po_pdf(request, po_order_pk):
     merged_buffer.close()
     return response
 
-
 @csrf_exempt
 def view_po_pdf(request, po_order_pk):
     return render(request, 'core/view_po_pdf.html', {'po_order_pk': po_order_pk})
-
 
 def wrap_text(text, max_length):
     words = text.split(' ')
@@ -255,12 +248,10 @@ def wrap_text(text, max_length):
         lines.append(current_line)
     return lines
 
-
 @csrf_exempt
 def send_po_email(request, po_order_pk, recipient_list):
-    # Retrieve the Po_orders instance
     po_order = Po_orders.objects.get(po_order_pk=po_order_pk)
-    contact_name = po_order.po_supplier.contact_name  # Get the contact name
+    contact_name = po_order.po_supplier.contact_name  
     subject = 'Purchase Order'
     message = f'''Dear {contact_name},
 
@@ -273,14 +264,11 @@ Brian Hooke.
     '''
     from_email = settings.DEFAULT_FROM_EMAIL
 
-    # Generate the PO PDF
     pdf_buffer = generate_po_pdf_bytes(request, po_order_pk)
 
-    # Create the email
     email = EmailMessage(subject, message, from_email, recipient_list)
     email.attach(f'PO_{po_order_pk}.pdf', pdf_buffer, 'application/pdf')
 
-    # Attach additional PDFs
     po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk)
     processed_quotes = set()
     for po_order_detail in po_order_details:
@@ -291,14 +279,12 @@ Brian Hooke.
                     email.attach(f'Quote_{po_order_detail.quote.quotes_pk}.pdf', f.read(), 'application/pdf')
                 processed_quotes.add(po_order_detail.quote.quotes_pk)
 
-    # Add CC addresses
     cc_addresses = settings.EMAIL_CC.split(';')
     email.cc = cc_addresses
 
-    # Send the email and update po_sent if successful
     try:
         email.send()
-        po_order.po_sent = True  # Update the po_sent field to 1 (True)
+        po_order.po_sent = True  
         po_order.save()
         return JsonResponse({'status': 'success'})
     except Exception as e:
@@ -308,12 +294,10 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
 
-
 @csrf_exempt
 def generate_po_pdf_bytes(request, po_order_pk):
     response = generate_po_pdf(request, po_order_pk)
     return response.content
-
 
 @csrf_exempt
 def send_po_email_view(request):

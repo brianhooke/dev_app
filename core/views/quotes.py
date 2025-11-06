@@ -63,19 +63,17 @@ from ..formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
-
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Set logging level to INFO
-
+logger.setLevel(logging.INFO)  
 
 @csrf_exempt
 def commit_data(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         total_cost = data['total_cost']
-        supplier_quote_number = data['supplier_quote_number']  # Get the supplier quote number
+        supplier_quote_number = data['supplier_quote_number']  
         pdf_data = data['pdf']
         contact_pk = data['contact_pk']
         allocations = data.get('allocations')
@@ -90,16 +88,14 @@ def commit_data(request):
             amount = allocation['amount']
             item_pk = allocation['item']
             item = Costing.objects.get(pk=item_pk)
-            notes = allocation.get('notes', '')  # Get the notes, default to '' if not present
+            notes = allocation.get('notes', '')  
             if amount == '':
                 amount = '0'
-            Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)  # Assign the Costing instance to item
-            # Update the Costing.uncommitted field
+            Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)  
             uncommitted = allocation['uncommitted']
             item.uncommitted = uncommitted
             item.save()
         return JsonResponse({'status': 'success'})
-
 
 @csrf_exempt
 def update_quote(request):
@@ -107,7 +103,7 @@ def update_quote(request):
         data = json.loads(request.body)
         quote_id = data.get('quote_id')
         total_cost = data.get('total_cost')
-        supplier_quote_number = data.get('supplier_quote_number')  # Get the supplier quote number
+        supplier_quote_number = data.get('supplier_quote_number')  
         allocations = data.get('allocations')
         try:
             quote = Quotes.objects.get(pk=quote_id)
@@ -116,45 +112,37 @@ def update_quote(request):
         quote.total_cost = total_cost
         quote.supplier_quote_number = supplier_quote_number
         quote.save()
-        # Delete the existing allocations for the quote
         Quote_allocations.objects.filter(quotes_pk=quote_id).delete()
-        # Save the new allocations
         for allocation in allocations:
-            notes = allocation.get('notes', '')  # Get the notes, default to '' if not present
+            notes = allocation.get('notes', '')  
             item = Costing.objects.get(pk=allocation['item'])
             alloc = Quote_allocations(quotes_pk=quote, item=item, amount=allocation['amount'], notes=notes)
             alloc.save()
-            # Update the Costing.uncommitted field
             uncommitted = allocation['uncommitted']
             Costing.objects.filter(item=allocation['item']).update(uncommitted=uncommitted)
         return JsonResponse({'status': 'success'})
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
 
-
 @csrf_exempt
 def delete_quote(request):
     if request.method == 'DELETE':
-        # Parse the request body to get the supplier quote number
         data = json.loads(request.body)
         supplier_quote_number = data.get('supplier_quote_number')
         
         if not supplier_quote_number:
             return JsonResponse({'status': 'fail', 'message': 'Supplier quote number is required'}, status=400)
             
-        # Get the quote from the database
         try:
             quote = Quotes.objects.get(supplier_quote_number=supplier_quote_number)
         except Quotes.DoesNotExist:
             return JsonResponse({'status': 'fail', 'message': 'Quote not found'}, status=404)
-        # Delete the quote
         quote.delete()
 
         return JsonResponse({'status': 'success', 'message': 'Quote deleted successfully'})
 
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
-
 
 def get_quote_allocations(request, supplier_id):
     quote_allocations = Quote_allocations.objects.filter(
@@ -173,32 +161,24 @@ def get_quote_allocations(request, supplier_id):
     data['costings'] = costings
     return JsonResponse(data, safe=False)
 
-# create new design or report category
-
-
 @csrf_exempt
 def update_uncommitted(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         costing_pk = data.get('costing_pk')
         uncommitted = data.get('uncommitted')
-        notes = data.get('notes')  # Get the notes data from the request
-        # Get the Costing object and update it
+        notes = data.get('notes')  
         try:
             costing = Costing.objects.get(costing_pk=costing_pk)
             costing.uncommitted = uncommitted
-            costing.uncommitted_notes = notes  # Update the notes field
+            costing.uncommitted_notes = notes  
             costing.save()
-            # Return a JSON response indicating success
             return JsonResponse({'status': 'success'})
         except Costing.DoesNotExist:
-            # If the Costing object is not found, return an error response
             return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
-    # If not a POST request, return a method not allowed response
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
 logger = logging.getLogger(__name__)
-
 
 def get_quotes_by_supplier(request):
     supplier_name = request.GET.get('supplier', '')
@@ -207,7 +187,7 @@ def get_quotes_by_supplier(request):
         return JsonResponse({"error": "Supplier not found"}, status=404)
 
     quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
-        Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  # Changed to_attr to 'fetched_allocations'
+        Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  
     )
 
     quotes_data = []
@@ -215,14 +195,14 @@ def get_quotes_by_supplier(request):
         quote_info = {
             "quotes_pk": quote.quotes_pk,
             "supplier_quote_number": quote.supplier_quote_number,
-            "total_cost": str(quote.total_cost),  # Assuming decimal should be string for JSON
+            "total_cost": str(quote.total_cost),  
             "quote_allocations": [
                 {
                     "quote_allocations_pk": allocation.quote_allocations_pk,
-                    "item": allocation.item.item,  # Assuming 'item' is a ForeignKey to Costing model
+                    "item": allocation.item.item,  
                     "amount": str(allocation.amount),
                     "notes": allocation.notes or ""
-                } for allocation in quote.fetched_allocations  # Use the new attribute name here
+                } for allocation in quote.fetched_allocations  
             ]
         }
         quotes_data.append(quote_info)
