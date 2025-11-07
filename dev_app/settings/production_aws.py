@@ -16,17 +16,13 @@ DEBUG = False
 # Security Settings
 ALLOWED_HOSTS = [
     '.elasticbeanstalk.com',  # AWS Elastic Beanstalk domain
-    # Add your custom domains here:
-    # 'your-custom-domain.com',
-    # 'www.your-custom-domain.com',
+    '*',  # Temporary for initial deployment
 ]
 
-# For initial testing only - remove in production:
-# ALLOWED_HOSTS = ['*']
-
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True
+# Security settings - temporarily relaxed for initial deployment
+CSRF_COOKIE_SECURE = False  # Set to True after HTTPS is configured
+SESSION_COOKIE_SECURE = False  # Set to True after HTTPS is configured
+SECURE_SSL_REDIRECT = False  # Set to True after HTTPS is configured
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
