@@ -13,6 +13,9 @@ from .base import *
 
 DEBUG = False
 
+# Override SECRET_KEY from base.py
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7')
+
 # Security Settings
 ALLOWED_HOSTS = [
     '.elasticbeanstalk.com',  # AWS Elastic Beanstalk domain
