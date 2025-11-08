@@ -29,5 +29,12 @@ RUN python manage.py collectstatic --noinput
 # Expose port
 EXPOSE 8000
 
-# Run gunicorn
-CMD ["gunicorn", "dev_app.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]
+# Create startup script
+RUN echo '#!/bin/bash\n\
+python manage.py migrate --noinput\n\
+python manage.py collectstatic --noinput\n\
+gunicorn dev_app.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Run startup script
+CMD ["/app/start.sh"]
