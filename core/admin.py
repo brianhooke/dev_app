@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    Categories, Projects, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
+    Categories, Projects, XeroInstances, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations
@@ -20,7 +20,7 @@ class ProjectsForm(forms.ModelForm):
         fields = '__all__'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        set_nullable_fields_not_required(self, ['xero_project_id'])
+        set_nullable_fields_not_required(self, ['xero_instance'])
 
 class CostingForm(forms.ModelForm):
     class Meta:
@@ -87,9 +87,12 @@ class HcVariationAllocationsForm(forms.ModelForm):
 class CategoriesAdmin(admin.ModelAdmin):
     list_display = ("categories_pk", "division", "category", "invoice_category", "order_in_list")
 
+class XeroInstancesAdmin(admin.ModelAdmin):
+    list_display = ("xero_instance_pk", "xero_name", "xero_client_id")
+
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
-    list_display = ("projects_pk", "project", "xero_project_id", "xero_sales_account")
+    list_display = ("projects_pk", "project", "xero_instance", "xero_sales_account")
 
 class ContactsAdmin(admin.ModelAdmin):
     list_display = ("contact_pk", "xero_contact_id", "division", "checked", "contact_name", "contact_email")
@@ -162,6 +165,7 @@ class HcVariationAllocationsAdmin(admin.ModelAdmin):
 
 # Register models with custom admin classes
 admin.site.register(Categories, CategoriesAdmin)
+admin.site.register(XeroInstances, XeroInstancesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
 admin.site.register(Contacts, ContactsAdmin)
 admin.site.register(Quotes, QuotesAdmin)

@@ -7,6 +7,15 @@ import uuid
 # ============================================================================
 
 # SERVICE: projects
+class XeroInstances(models.Model):
+    xero_instance_pk = models.AutoField(primary_key=True)
+    xero_name = models.CharField(max_length=255)
+    xero_client_id = models.CharField(max_length=255)
+    
+    def __str__(self):
+        return self.xero_name
+
+# SERVICE: projects
 class Projects(models.Model):
     PROJECT_TYPE_CHOICES = [
         ('general', 'General'),
@@ -24,7 +33,9 @@ class Projects(models.Model):
         default='general',
         help_text='Type of project determines which app features are available'
     )
-    xero_project_id = models.CharField(max_length=255, null=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects'
+    )
     xero_sales_account = models.CharField(max_length=255, null=True)
     
     def __str__(self):
