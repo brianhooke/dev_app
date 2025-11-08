@@ -1,0 +1,19 @@
+{% extends "core/dashboard_master.html" %}
+{% load static %}
+{% block title %}
+  Project Management Dashboard
+{% endblock %}
+{% block content %}
+
+<head>
+    <link rel="icon" href="{% static 'core/images/favicon.ico' %}">
+</head>
+
+<h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
+
+<div style="padding: 20px;">
+    <h4>Welcome to the Project Management Dashboard</h4>
+    <p>This is your central hub for managing all projects.</p>
+</div>
+
+{% endblock %}
