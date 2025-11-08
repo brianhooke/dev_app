@@ -9,5 +9,6 @@
       "ContainerPort": 8000,
       "HostPort": 8000
     }
-  ]
+  ],
+  "Logging": "/var/log/nginx"
 }
