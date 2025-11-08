@@ -65,11 +65,13 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            button.prop('disabled', false).html('Test');
-            
             if (data.status === 'success') {
                 alert(`✓ ${data.message}`);
+                // Change button to green tick after alert is closed
+                button.removeClass('btn-primary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
             } else {
+                button.prop('disabled', false).html('Test');
                 alert(`✗ Test Failed\n\n${data.message}`);
             }
         })
