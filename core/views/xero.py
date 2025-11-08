@@ -118,8 +118,14 @@ def get_xero_token(xero_instance):
         client_id = xero_instance.xero_client_id
         client_secret = xero_instance.get_client_secret()
         
+        logger.info(f"Getting Xero token for instance: {xero_instance.xero_name}")
+        logger.info(f"Client ID: {client_id[:10]}... (truncated)")
+        
         if not client_secret:
-            return False, "Client secret not found"
+            logger.error("Client secret not found or could not be decrypted")
+            return False, "Client secret not found or could not be decrypted"
+        
+        logger.info(f"Client secret retrieved successfully (length: {len(client_secret)})")
         
         scopes_list = [
             "accounting.transactions.read",
@@ -138,24 +144,33 @@ def get_xero_token(xero_instance):
             'scope': scopes
         }
         
+        logger.info("Sending token request to Xero...")
         response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data, timeout=10)
         response_data = response.json()
         
+        logger.info(f"Xero token response status: {response.status_code}")
+        logger.info(f"Xero token response: {response_data}")
+        
         if response.status_code != 200:
             error_msg = response_data.get('error_description', response_data.get('error', 'Unknown error'))
+            logger.error(f"Token request failed: {error_msg}")
             return False, f"Token request failed: {error_msg}"
         
         if 'access_token' not in response_data:
+            logger.error("No access token in response")
             return False, "No access token in response"
         
+        logger.info("Token retrieved successfully")
         return True, response_data['access_token']
         
     except requests.exceptions.Timeout:
+        logger.error("Request timed out")
         return False, "Request timed out - Xero API not responding"
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error: {str(e)}")
         return False, "Connection error - Cannot reach Xero API"
     except Exception as e:
-        logger.error(f"Error getting Xero token: {str(e)}")
+        logger.error(f"Unexpected error getting Xero token: {str(e)}", exc_info=True)
         return False, f"Error: {str(e)}"
 
 
