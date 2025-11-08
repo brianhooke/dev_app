@@ -1,0 +1,133 @@
+{% load static %}
+{% load humanize %}
+
+<style>
+  .reusable-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  
+  .reusable-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .reusable-table thead tr {
+    background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%);
+    color: white;
+  }
+  
+  .reusable-table th {
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+  }
+  
+  .reusable-table thead tr:first-child th:first-child {
+    border-top-left-radius: 8px;
+  }
+  
+  .reusable-table thead tr:first-child th:last-child {
+    border-top-right-radius: 8px;
+  }
+  
+  .reusable-table tbody tr {
+    border-bottom: 1px solid #e0e0e0;
+    transition: background-color 0.2s;
+  }
+  
+  .reusable-table tbody tr:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .reusable-table tbody tr.category-row {
+    cursor: pointer;
+    background-color: #f9f9f9;
+    font-weight: 600;
+  }
+  
+  .reusable-table tbody tr.category-row:hover {
+    background-color: #ececec;
+  }
+  
+  .reusable-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .reusable-table .dropdown-arrow {
+    display: inline-block;
+    margin-left: 5px;
+    transition: transform 0.3s ease;
+  }
+  
+  .reusable-table .dropdown-arrow.rotated {
+    transform: rotate(-90deg);
+  }
+  
+  {% if show_totals %}
+  .reusable-table #totalRow {
+    background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%);
+    color: white;
+    font-weight: bold;
+  }
+  
+  .reusable-table #totalRow td:first-child {
+    border-bottom-left-radius: 8px;
+  }
+  
+  .reusable-table #totalRow td:last-child {
+    border-bottom-right-radius: 8px;
+  }
+  {% endif %}
+</style>
+
+<div style="overflow-x: auto; position: relative;">
+  <table class="reusable-table">
+    <thead>
+      <tr>
+        {% for column in columns %}
+          <th>{{ column }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% if rows %}
+        {% for row in rows %}
+          <tr {% if row.is_category %}class="category-row" data-toggle="collapse" data-target=".group{{ forloop.counter }}"{% endif %}>
+            {% for cell in row.cells %}
+              <td>
+                {% if row.is_category and forloop.first %}
+                  <strong>{{ cell }}</strong>
+                  <span class="dropdown-arrow">▼</span>
+                {% else %}
+                  {{ cell }}
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="{{ columns|length }}" style="text-align: center; padding: 20px; color: #999;">
+            No data available
+          </td>
+        </tr>
+      {% endif %}
+      
+      {% if show_totals and totals %}
+        <tr id="totalRow">
+          {% for total in totals %}
+            <td>{{ total }}</td>
+          {% endfor %}
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
