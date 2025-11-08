@@ -36,7 +36,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${instance.xero_name}</td>
-                <td>${instance.xero_client_id}</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
+                        Test
+                    </button>
+                </td>
                 <td style="text-align: center;">
                     <button class="btn btn-sm btn-danger delete-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
                         <i class="fas fa-times"></i>
@@ -46,6 +50,35 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.appendChild(row);
         });
     }
+    
+    // Test Xero Connection
+    $(document).on('click', '.test-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        const button = $(this);
+        
+        // Disable button and show loading state
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
+        
+        fetch(`/test_xero_connection/${instancePk}/`, {
+            method: 'GET'
+        })
+        .then(response => response.json())
+        .then(data => {
+            button.prop('disabled', false).html('Test');
+            
+            if (data.status === 'success') {
+                alert(`✓ ${data.message}`);
+            } else {
+                alert(`✗ Test Failed\n\n${data.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('Test');
+            console.error('Error testing Xero connection:', error);
+            alert('✗ Test Failed\n\nFailed to connect to server');
+        });
+    });
     
     // Delete Xero Instance
     $(document).on('click', '.delete-xero-btn', function() {
