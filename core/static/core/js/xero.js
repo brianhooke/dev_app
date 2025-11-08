@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load Xero Instances from backend
     function loadXeroInstances() {
-        fetch('/core/get_xero_instances/')
+        fetch('/get_xero_instances/')
             .then(response => response.json())
             .then(data => {
                 displayXeroInstances(data);
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get CSRF token
         const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
-        fetch('/core/create_xero_instance/', {
+        fetch('/create_xero_instance/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
