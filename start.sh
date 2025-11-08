@@ -7,6 +7,9 @@ echo "RDS_HOSTNAME: ${RDS_HOSTNAME:-NOT SET}"
 echo "AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-NOT SET}"
 echo "===================================="
 
+echo "Collecting static files to S3..."
+python manage.py collectstatic --noinput || echo "Collectstatic failed, continuing..."
+
 echo "Running migrations..."
 python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 
