@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear form
         document.getElementById('xeroNameInput').value = '';
         document.getElementById('xeroClientIdInput').value = '';
+        document.getElementById('xeroClientSecretInput').value = '';
         
         // Show second modal
         $('#addXeroInstanceModal').modal('show');
@@ -56,9 +57,10 @@ document.addEventListener('DOMContentLoaded', function() {
     $(document).on('click', '#submitXeroInstanceBtn', function() {
         const xeroName = document.getElementById('xeroNameInput').value.trim();
         const xeroClientId = document.getElementById('xeroClientIdInput').value.trim();
+        const xeroClientSecret = document.getElementById('xeroClientSecretInput').value.trim();
         
-        if (!xeroName || !xeroClientId) {
-            alert('Please fill in both fields');
+        if (!xeroName || !xeroClientId || !xeroClientSecret) {
+            alert('Please fill in all fields');
             return;
         }
         
@@ -73,7 +75,8 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({
                 xero_name: xeroName,
-                xero_client_id: xeroClientId
+                xero_client_id: xeroClientId,
+                xero_client_secret: xeroClientSecret
             })
         })
         .then(response => response.json())
@@ -102,5 +105,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear form when closed
         document.getElementById('xeroNameInput').value = '';
         document.getElementById('xeroClientIdInput').value = '';
+        document.getElementById('xeroClientSecretInput').value = '';
     });
 });

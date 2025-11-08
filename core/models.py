@@ -1,6 +1,9 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from cryptography.fernet import Fernet
 import uuid
+import base64
 
 # ============================================================================
 # GLOBAL MODELS
@@ -11,6 +14,33 @@ class XeroInstances(models.Model):
     xero_instance_pk = models.AutoField(primary_key=True)
     xero_name = models.CharField(max_length=255)
     xero_client_id = models.CharField(max_length=255)
+    xero_client_secret_encrypted = models.BinaryField(null=True, blank=True)
+    
+    def _get_cipher(self):
+        """Get Fernet cipher using encryption key from settings."""
+        key = getattr(settings, 'XERO_ENCRYPTION_KEY', None)
+        if not key:
+            # Generate a key if not set (for development)
+            key = Fernet.generate_key()
+        if isinstance(key, str):
+            key = key.encode()
+        return Fernet(key)
+    
+    def set_client_secret(self, secret):
+        """Encrypt and store the client secret."""
+        if secret:
+            cipher = self._get_cipher()
+            encrypted = cipher.encrypt(secret.encode())
+            self.xero_client_secret_encrypted = encrypted
+    
+    def get_client_secret(self):
+        """Decrypt and return the client secret."""
+        if self.xero_client_secret_encrypted:
+            cipher = self._get_cipher()
+            decrypted = cipher.decrypt(bytes(self.xero_client_secret_encrypted))
+            return decrypted.decode()
+        return None
+    
     def __str__(self):
         return self.xero_name
 
