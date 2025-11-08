@@ -27,8 +27,8 @@ COPY . .
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Expose port
-EXPOSE 8000
+# Expose port 80 for EB compatibility
+EXPOSE 80
 
 # Run startup script
 CMD ["/bin/bash", "/app/start.sh"]
