@@ -30,11 +30,16 @@ RUN python manage.py collectstatic --noinput
 EXPOSE 8000
 
 # Create startup script
-RUN echo '#!/bin/bash\n\
-python manage.py migrate --noinput\n\
-python manage.py collectstatic --noinput\n\
-gunicorn dev_app.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120\n\
-' > /app/start.sh && chmod +x /app/start.sh
+COPY <<EOF /app/start.sh
+#!/bin/bash
+set -e
+echo "Running migrations..."
+python manage.py migrate --noinput || echo "Migrations failed, continuing..."
+echo "Starting gunicorn..."
+exec gunicorn dev_app.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --log-level debug
+EOF
+
+RUN chmod +x /app/start.sh
 
 # Run startup script
-CMD ["/app/start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]
