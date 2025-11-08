@@ -11,7 +11,6 @@ class XeroInstances(models.Model):
     xero_instance_pk = models.AutoField(primary_key=True)
     xero_name = models.CharField(max_length=255)
     xero_client_id = models.CharField(max_length=255)
-    
     def __str__(self):
         return self.xero_name
 
@@ -24,7 +23,6 @@ class Projects(models.Model):
         ('precast', 'Precast'),
         ('pods', 'Pods'),
     ]
-    
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
     project_type = models.CharField(
@@ -37,7 +35,6 @@ class Projects(models.Model):
         XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects'
     )
     xero_sales_account = models.CharField(max_length=255, null=True)
-    
     def __str__(self):
         return self.project
 
