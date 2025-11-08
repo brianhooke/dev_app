@@ -24,6 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7'
 
+# Xero encryption key - keep this secret and consistent across deployments
+XERO_ENCRYPTION_KEY = os.environ.get('XERO_ENCRYPTION_KEY', 'yGUzgEzWkkCsHnb_lof7bmX0m8gBc3917sHYU2SYe8A=')
+
 ALLOWED_HOSTS = ['herokuapp.com','*']
 
 # Application definition
