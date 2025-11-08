@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=dev_app.settings.production_aws
+      - SECRET_KEY=***REMOVED***
+      - RDS_DB_NAME=devappdb
+      - RDS_USERNAME=dbadmin
+      - RDS_PASSWORD
+      - RDS_HOSTNAME
+      - RDS_PORT=5432
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_STORAGE_BUCKET_NAME=dev-app-mason-bucket
+      - AWS_S3_REGION_NAME=ap-southeast-2
+      - PROJECT_NAME=Mason Build Dev App
+      - LETTERHEAD_PATH=media/letterhead/letterhead.pdf
+      - BACKGROUND_IMAGE_PATH=media/backgrounds/bg.jpg
+    command: sh -c "python manage.py migrate && gunicorn dev_app.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
