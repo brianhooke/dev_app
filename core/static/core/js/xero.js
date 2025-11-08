@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const instancePk = $(this).data('instance-pk');
         const instanceName = $(this).data('instance-name');
         const button = $(this);
+        const row = button.closest('tr');
         
         // Disable button and show loading state
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
@@ -66,10 +67,14 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert(`✓ ${data.message}`);
-                // Change button to green tick after alert is closed
+                // Change button to green tick immediately (no alert)
                 button.removeClass('btn-primary').addClass('btn-success');
                 button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                
+                // Update the name in the table if it changed
+                if (data.details && data.details.xero_name) {
+                    row.find('td:first').text(data.details.xero_name);
+                }
             } else {
                 button.prop('disabled', false).html('Test');
                 alert(`✗ Test Failed\n\n${data.message}`);

@@ -204,12 +204,40 @@ def test_xero_connection(request, instance_pk):
             
             if response.status_code == 200:
                 connections = response.json()
+                
+                # Get the organisation name from the first connection if available
+                org_name = None
+                if connections and len(connections) > 0:
+                    tenant_id = connections[0].get('tenantId')
+                    if tenant_id:
+                        # Fetch organisation details
+                        org_response = requests.get(
+                            f'https://api.xero.com/api.xro/2.0/Organisation',
+                            headers={
+                                'Authorization': f'Bearer {access_token}',
+                                'Accept': 'application/json',
+                                'Xero-tenant-id': tenant_id
+                            },
+                            timeout=10
+                        )
+                        if org_response.status_code == 200:
+                            org_data = org_response.json()
+                            if 'Organisations' in org_data and len(org_data['Organisations']) > 0:
+                                org_name = org_data['Organisations'][0].get('Name')
+                                
+                                # Update the instance name if we got a name from Xero
+                                if org_name and org_name != xero_instance.xero_name:
+                                    logger.info(f"Updating instance name from '{xero_instance.xero_name}' to '{org_name}'")
+                                    xero_instance.xero_name = org_name
+                                    xero_instance.save()
+                
                 return JsonResponse({
                     'status': 'success',
                     'message': f'Connection successful! Found {len(connections)} Xero organisation(s)',
                     'details': {
-                        'xero_name': xero_instance.xero_name,
-                        'connections_count': len(connections)
+                        'xero_name': org_name or xero_instance.xero_name,
+                        'connections_count': len(connections),
+                        'name_updated': org_name is not None and org_name != xero_instance.xero_name
                     }
                 })
             else:
