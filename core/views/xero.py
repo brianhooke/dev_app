@@ -69,3 +69,35 @@ def create_xero_instance(request):
         'status': 'error',
         'message': 'Only POST method is allowed'
     }, status=405)
+
+
+@csrf_exempt
+def delete_xero_instance(request, instance_pk):
+    """
+    Delete a Xero instance.
+    """
+    if request.method == 'DELETE':
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
+            xero_name = xero_instance.xero_name
+            xero_instance.delete()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Xero instance "{xero_name}" deleted successfully'
+            })
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Xero instance not found'
+            }, status=404)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only DELETE method is allowed'
+    }, status=405)

@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
         
         if (instances.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2" style="text-align: center;">No Xero instances found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No Xero instances found</td></tr>';
             return;
         }
         
@@ -37,10 +37,49 @@ document.addEventListener('DOMContentLoaded', function() {
             row.innerHTML = `
                 <td>${instance.xero_name}</td>
                 <td>${instance.xero_client_id}</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-danger delete-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
             `;
             tbody.appendChild(row);
         });
     }
+    
+    // Delete Xero Instance
+    $(document).on('click', '.delete-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        
+        if (!confirm(`Are you sure you want to delete "${instanceName}"?`)) {
+            return;
+        }
+        
+        // Get CSRF token
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/delete_xero_instance/${instancePk}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrftoken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                // Reload the table
+                loadXeroInstances();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting Xero instance:', error);
+            alert('Failed to delete Xero instance');
+        });
+    });
     
     // Show Add New Xero Instance Modal
     $(document).on('click', '#addNewXeroBtn', function() {

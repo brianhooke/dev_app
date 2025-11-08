@@ -3,7 +3,7 @@ from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.dashboard import dashboard_view
-from .views.xero import get_xero_instances, create_xero_instance
+from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -79,6 +79,7 @@ urlpatterns = [
     # Xero management endpoints
     path('get_xero_instances/', get_xero_instances, name='get_xero_instances'),
     path('create_xero_instance/', create_xero_instance, name='create_xero_instance'),
+    path('delete_xero_instance/<int:instance_pk>/', delete_xero_instance, name='delete_xero_instance'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
