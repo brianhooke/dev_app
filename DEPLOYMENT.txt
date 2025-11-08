@@ -1,0 +1,205 @@
+===========================================
+AWS ELASTIC BEANSTALK DEPLOYMENT GUIDE
+Docker-based Deployment Method
+===========================================
+
+CURRENT DEPLOYMENT STACK
+------------------------
+Platform: AWS Elastic Beanstalk with Docker (docker-compose)
+Region: ap-southeast-2 (Sydney)
+Environment: dev-app-docker
+URL: http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com
+
+Components:
+- Application: Django 5.0.6 in Docker container
+- Database: AWS RDS PostgreSQL (***REMOVED***)
+- Static/Media: AWS S3 (dev-app-mason-bucket)
+- Load Balancer: Application Load Balancer (auto-created by EB)
+
+DEPLOYMENT PROCESS
+------------------
+1. Make code changes locally
+2. Commit to git:
+   git add .
+   git commit -m "your changes"
+
+3. Deploy to AWS:
+   eb deploy
+
+That's it! Deployment takes 2-3 minutes.
+
+WHAT HAPPENS DURING DEPLOYMENT
+-------------------------------
+1. EB zips your local code and uploads to S3
+2. Docker image is built on AWS using Dockerfile
+3. Container starts using docker-compose.yml
+4. Startup script (start.sh) runs:
+   - Collects static files to S3
+   - Runs database migrations
+   - Starts gunicorn with Django on port 80
+5. Load balancer switches traffic to new container
+6. Old container is terminated
+
+DEPLOYMENT FEATURES
+-------------------
+✓ Zero-downtime deployments (old version runs until new one is healthy)
+✓ Automatic rollback if deployment fails
+✓ Automatic database migrations on startup
+✓ Static files automatically uploaded to S3
+
+IMPORTANT NOTES
+---------------
+- GitHub is NOT involved in deployment (deploys from local code)
+- Environment variables persist across deployments (set once with eb setenv)
+- Migrations run automatically on every deployment
+- Container restarts on every deployment
+
+USEFUL COMMANDS
+---------------
+# Check environment status
+eb status
+
+# View environment health
+eb health
+
+# View logs
+eb logs
+
+# Set environment variables
+eb setenv VARIABLE_NAME=value
+
+# SSH into instance (if configured)
+eb ssh
+
+# Open app in browser
+eb open
+
+# List all environments
+eb list
+
+ENVIRONMENT VARIABLES
+---------------------
+Currently set via: eb setenv
+
+Required variables:
+- DJANGO_SETTINGS_MODULE=dev_app.settings.production_aws
+- SECRET_KEY
+- RDS_DB_NAME, RDS_USERNAME, RDS_PASSWORD, RDS_HOSTNAME, RDS_PORT
+- AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+- AWS_STORAGE_BUCKET_NAME, AWS_S3_REGION_NAME
+- PROJECT_NAME
+
+Optional variables:
+- EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_CC, DEFAULT_FROM_EMAIL
+- LETTERHEAD_PATH, BACKGROUND_IMAGE_PATH
+- XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_PROJECT_ID
+
+KEY FILES FOR DEPLOYMENT
+------------------------
+Dockerfile              - Defines the Docker image (Python 3.11, dependencies)
+docker-compose.yml      - Defines how container runs (port 80, env vars)
+start.sh               - Startup script (collectstatic, migrate, gunicorn)
+requirements.txt       - Python dependencies
+.dockerignore          - Files to exclude from Docker build
+.ebignore              - Files to exclude from EB deployment (if exists)
+
+DOCKER APPROACH BENEFITS
+------------------------
+✓ Full control over system dependencies (PDF libraries, PostgreSQL client, etc.)
+✓ Consistent environment (same container locally and in production)
+✓ Easier debugging (can test exact container before deploying)
+✓ Avoids platform-specific issues (native Python platform kept failing)
+
+DEVELOPMENT WORKFLOW
+--------------------
+During development:
+- Work locally with migrations as normal
+- Test with fake data
+- Deploy to AWS dev environment frequently
+- Migration history can be messy
+
+Before production launch:
+1. Delete all migration files: find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
+2. Create fresh initial migration: python manage.py makemigrations
+3. Create new production database
+4. Deploy with clean migration history
+
+After production launch:
+- Keep ALL migrations (never delete them)
+- Create incremental migrations for schema changes
+- Test migrations on staging before production
+
+COST CONSIDERATIONS
+-------------------
+Current resources:
+- EC2 instance (t3.small): ~$15/month
+- RDS PostgreSQL (db.t3.micro): ~$15/month
+- S3 storage: ~$1-5/month
+- Load Balancer: ~$16/month
+- Data transfer: Variable
+
+Total: ~$50-60/month for this setup
+
+Can be optimized by:
+- Using smaller instance types
+- Stopping environment when not in use (eb terminate)
+- Using reserved instances for production
+
+TROUBLESHOOTING
+---------------
+If deployment fails:
+1. Check eb logs for errors
+2. Verify environment variables are set
+3. Check RDS security group allows EB instances
+4. Verify S3 bucket policy allows public read
+
+If app shows errors:
+1. Check eb logs
+2. Verify database connection (RDS_HOSTNAME, etc.)
+3. Check S3 permissions for static files
+4. Verify all required environment variables are set
+
+If static files don't load:
+1. Check S3 bucket policy allows public read
+2. Verify collectstatic ran successfully in logs
+3. Check STATIC_URL in settings points to S3
+
+FUTURE IMPROVEMENTS (OPTIONAL)
+------------------------------
+- Add HTTPS/SSL certificate
+- Set up CI/CD with GitHub Actions
+- Add CloudWatch monitoring and alerts
+- Create staging environment
+- Optimize collectstatic (move to build time)
+- Add health check endpoint
+- Configure auto-scaling rules
+
+RELATED FILES
+-------------
+AWS_DEPLOYMENT_GUIDE.md - Detailed AWS setup documentation
+production_aws.py       - AWS-specific Django settings
+base.py                 - Base Django settings
+local.py               - Local development settings
+production.py          - Heroku production settings (legacy)
+
+ALTERNATIVE DEPLOYMENTS
+-----------------------
+Heroku (spitfire app): https://spitfire-fa8cd42974f9.herokuapp.com/
+- Simpler setup, less configuration
+- Automatic SSL, easier management
+- More expensive at scale
+- Good for testing/staging
+
+AWS EB Docker (current): http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com
+- More control and flexibility
+- Cheaper at scale
+- Better for production long-term
+- Requires more setup (completed)
+
+SUPPORT & DOCUMENTATION
+-----------------------
+AWS EB Documentation: https://docs.aws.amazon.com/elasticbeanstalk/
+Docker Documentation: https://docs.docker.com/
+Django Deployment: https://docs.djangoproject.com/en/5.0/howto/deployment/
+
+Last Updated: 2025-11-08
