@@ -1,11 +1,14 @@
 #!/bin/bash
+set -e
 
-echo "=== Container Started ==="
+echo "=== Starting Django Application ==="
 echo "DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-NOT SET}"
 echo "RDS_HOSTNAME: ${RDS_HOSTNAME:-NOT SET}"
 echo "AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-NOT SET}"
-echo "========================"
+echo "===================================="
 
-# Start a simple HTTP server on port 80 to test if container networking works
-echo "Starting test HTTP server on port 80..."
-python3 -m http.server 80
+echo "Running migrations..."
+python manage.py migrate --noinput || echo "Migrations failed, continuing..."
+
+echo "Starting gunicorn on port 80..."
+exec gunicorn dev_app.wsgi:application --bind 0.0.0.0:80 --workers 3 --timeout 120 --access-logfile - --error-logfile - --log-level info
