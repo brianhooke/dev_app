@@ -3,6 +3,7 @@
 <head>
     {% load static %}
     <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/css/global_styles.css' %}">
     <link rel="stylesheet" href="{% static 'core/css/styles.css' %}">
     <link rel="shortcut icon" type="image/x-icon" href="{% static 'core/images/favicon.ico' %}">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
@@ -11,26 +12,7 @@
 </head>
 <body>
 
-<div class="custom-navbar" style="background-color: white; border: 3px solid; border-image: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%) 1; padding: 10px;">
-    <ul style="list-style-type: none;">
-        <li>
-            <a href="{% url 'core:dashboard' %}" id="dashboardLink" style="color: black !important; {% if current_page == 'dashboard' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Dashboard</a>
-        </li>
-        <div style="height: 3px; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);"></div>
-        <li>
-            <a href="#" id="billsLink" style="color: black !important; {% if current_page == 'bills' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Bills</a>
-        </li>
-        <li>
-            <a href="#" id="stocktakeLink" style="color: black !important; {% if current_page == 'stocktake' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Stocktake</a>
-        </li>
-        <li>
-            <a href="#" id="staffHoursLink" style="color: black !important; {% if current_page == 'staff_hours' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Staff Hours</a>
-        </li>
-        <li>
-            <a href="#" id="xeroLink" style="color: black !important; {% if current_page == 'xero' %}background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;{% endif %}">Xero</a>
-        </li>
-    </ul>
-</div>
+{% include 'core/components/reusable_navbar.html' with nav_items=nav_items current_page=current_page %}
 
 <div class="main-content">
     {% block content %}
@@ -39,7 +21,7 @@
 
 <div class="modal fade" id="spvDetailsModal" tabindex="-1" role="dialog" aria-labelledby="spvDetailsModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
-      <div class="modal-content" style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+      <div class="modal-content" style="background: var(--gradient-primary-45deg);">
         <div class="modal-header">
           <h5 class="modal-title" id="spvDetailsModalLabel"><strong>SPV Details</strong></h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">

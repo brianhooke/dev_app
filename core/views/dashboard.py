@@ -19,6 +19,16 @@ def dashboard_view(request):
         "Fake 6", "Fake 7", "Fake 8", "Fake 9", "Fake 10"
     ]
     
+    # Navigation items for navbar
+    nav_items = [
+        {'label': 'Dashboard', 'url': '/core/', 'id': 'dashboardLink', 'page_id': 'dashboard'},
+        {'divider': True},
+        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
+        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
+        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
+        {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
+    ]
+    
     context = {
         "current_page": "dashboard",
         "project_name": settings.PROJECT_NAME,
@@ -26,6 +36,7 @@ def dashboard_view(request):
         "table_columns": table_columns,
         "table_rows": [],  # No data for now
         "show_totals": False,  # No totals row for dashboard
+        "nav_items": nav_items,
     }
     
     return render(request, "core/dashboard.html", context)

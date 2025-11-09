@@ -1,0 +1,63 @@
+{% load static %}
+
+<style>
+  .reusable-navbar {
+    background-color: white;
+    border: 3px solid;
+    border-image: var(--gradient-primary-45deg) 1;
+    padding: 10px;
+  }
+  
+  .reusable-navbar ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .reusable-navbar li {
+    margin: 0;
+  }
+  
+  .reusable-navbar a {
+    color: black !important;
+    text-decoration: none;
+    display: block;
+    padding: 8px 0;
+    font-weight: 500;
+  }
+  
+  .reusable-navbar a:hover {
+    opacity: 0.7;
+  }
+  
+  .reusable-navbar a.active {
+    background: var(--gradient-primary-45deg);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .reusable-navbar .divider {
+    height: 3px;
+    background: var(--gradient-primary-45deg);
+    margin: 5px 0;
+  }
+</style>
+
+<div class="reusable-navbar">
+    <ul>
+        {% for item in nav_items %}
+            {% if item.divider %}
+                <div class="divider"></div>
+            {% else %}
+                <li>
+                    <a href="{{ item.url }}" 
+                       id="{{ item.id }}" 
+                       class="{% if current_page == item.page_id %}active{% endif %}">
+                        {{ item.label }}
+                    </a>
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</div>
