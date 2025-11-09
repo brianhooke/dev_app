@@ -1,0 +1,14 @@
+/* Global Color Variables */
+:root {
+  /* Primary gradient colors */
+  --gradient-start: #A090D0;
+  --gradient-end: #B3E1DD;
+  
+  /* Gradient definitions */
+  --gradient-primary: linear-gradient(1deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+  --gradient-primary-45deg: linear-gradient(45deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+  
+  /* Focus/accent color with opacity */
+  --focus-color: var(--gradient-start);
+  --focus-shadow: rgba(160, 144, 208, 0.1);
+}
