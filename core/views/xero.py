@@ -435,3 +435,120 @@ def get_contacts_by_instance(request, instance_pk):
         'status': 'error',
         'message': 'Only GET method is allowed'
     }, status=405)
+
+
+@csrf_exempt
+def update_contact_status(request, instance_pk, contact_pk):
+    """
+    Update a contact's status in Xero (archive/unarchive).
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            archive = data.get('archive', False)  # True to archive, False to unarchive
+            
+            # Get the contact and xero instance
+            contact = Contacts.objects.get(contact_pk=contact_pk, xero_instance_id=instance_pk)
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
+            
+            # Step 1: Get token
+            success, token_or_error = get_xero_token(xero_instance)
+            if not success:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Authentication failed: {token_or_error}'
+                }, status=400)
+            
+            access_token = token_or_error
+            
+            # Step 2: Get tenant ID
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            }
+            
+            connections_response = requests.get('https://api.xero.com/connections', headers=headers, timeout=10)
+            
+            if connections_response.status_code != 200:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Failed to get Xero connections'
+                }, status=400)
+            
+            connections = connections_response.json()
+            if not connections or len(connections) == 0:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No Xero organisations connected'
+                }, status=400)
+            
+            tenant_id = connections[0].get('tenantId')
+            
+            # Step 3: Update contact status in Xero
+            new_status = 'ARCHIVED' if archive else 'ACTIVE'
+            
+            update_data = {
+                'ContactID': contact.xero_contact_id,
+                'ContactStatus': new_status
+            }
+            
+            update_response = requests.post(
+                f'https://api.xero.com/api.xro/2.0/Contacts/{contact.xero_contact_id}',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Xero-tenant-id': tenant_id
+                },
+                json=update_data,
+                timeout=10
+            )
+            
+            if update_response.status_code not in [200, 201]:
+                logger.error(f"Xero API error: {update_response.text}")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to update contact in Xero: {update_response.status_code}'
+                }, status=400)
+            
+            # Step 4: Update local database
+            contact.status = new_status
+            contact.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Contact {"archived" if archive else "unarchived"} successfully',
+                'new_status': new_status
+            })
+            
+        except Contacts.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Contact not found'
+            }, status=404)
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Xero instance not found'
+            }, status=404)
+        except requests.exceptions.Timeout:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Request timed out - Xero API not responding'
+            }, status=408)
+        except requests.exceptions.ConnectionError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection error - Cannot reach Xero API'
+            }, status=503)
+        except Exception as e:
+            logger.error(f"Error updating contact status: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)

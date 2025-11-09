@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v27</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v28</div>
 </div>
 
 <div style="padding: 20px;">
@@ -53,11 +53,14 @@
 
 <script>
     $(document).ready(function() {
+        let showArchiveColumn = false;
+        
         // Function to load contacts for selected instance
         function loadContacts(instancePk) {
             if (!instancePk) {
                 // Clear table if no instance selected
-                $('#contactsModal tbody').html('<tr><td colspan="2" style="text-align: center;">Please select a Xero instance</td></tr>');
+                const colspan = showArchiveColumn ? 3 : 2;
+                $('#contactsModal tbody').html(`<tr><td colspan="${colspan}" style="text-align: center;">Please select a Xero instance</td></tr>`);
                 return;
             }
             
@@ -68,23 +71,51 @@
                     tbody.empty();
                     
                     if (contacts.length === 0) {
-                        tbody.html('<tr><td colspan="2" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>');
+                        const colspan = showArchiveColumn ? 3 : 2;
+                        tbody.html(`<tr><td colspan="${colspan}" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
                     } else {
                         contacts.forEach(contact => {
-                            const row = `
-                                <tr data-contact='${JSON.stringify(contact)}'>
-                                    <td>${contact.name || ''}</td>
-                                    <td>${contact.email || ''}</td>
-                                </tr>
-                            `;
+                            const isArchived = contact.status !== 'ACTIVE';
+                            const greyedStyle = isArchived ? 'color: #999; opacity: 0.6;' : '';
+                            
+                            let row = `<tr data-contact='${JSON.stringify(contact)}' data-contact-pk="${contact.contact_pk}" style="${greyedStyle}">`;
+                            
+                            if (showArchiveColumn) {
+                                row += `<td><input type="checkbox" class="archive-checkbox" ${isArchived ? 'checked' : ''}></td>`;
+                            }
+                            
+                            row += `
+                                <td>${contact.name || ''}</td>
+                                <td>${contact.email || ''}</td>
+                            </tr>`;
+                            
                             tbody.append(row);
                         });
                     }
                 })
                 .catch(error => {
                     console.error('Error loading contacts:', error);
-                    $('#contactsModal tbody').html('<tr><td colspan="2" style="text-align: center; color: red;">Error loading contacts</td></tr>');
+                    const colspan = showArchiveColumn ? 3 : 2;
+                    $('#contactsModal tbody').html(`<tr><td colspan="${colspan}" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
                 });
+        }
+        
+        // Toggle Archive column visibility
+        function toggleArchiveColumn() {
+            showArchiveColumn = !showArchiveColumn;
+            const thead = $('#contactsModal thead tr');
+            
+            if (showArchiveColumn) {
+                // Add Archived column header
+                thead.prepend('<th>Archived</th>');
+            } else {
+                // Remove Archived column header
+                thead.find('th:first').remove();
+            }
+            
+            // Reload contacts to update table
+            const instancePk = $('#xeroInstanceSelect').val();
+            loadContacts(instancePk);
         }
         
         // Open Contacts modal when navbar link is clicked
@@ -103,6 +134,77 @@
         $(document).on('change', '#xeroInstanceSelect', function() {
             const instancePk = $(this).val();
             loadContacts(instancePk);
+        });
+        
+        // Archive button handler - toggle Archive column
+        $(document).on('click', '#archiveContactBtn', function() {
+            toggleArchiveColumn();
+        });
+        
+        // Handle archive checkbox changes
+        $(document).on('change', '.archive-checkbox', function() {
+            const checkbox = $(this);
+            const row = checkbox.closest('tr');
+            const contactPk = row.data('contact-pk');
+            const instancePk = $('#xeroInstanceSelect').val();
+            const archive = checkbox.is(':checked');
+            
+            // Disable checkbox during request
+            checkbox.prop('disabled', true);
+            
+            // Keep current visual state (greyed or not) until success
+            const currentStyle = row.attr('style') || '';
+            
+            // Make AJAX call to update status in Xero
+            fetch(`/update_contact_status/${instancePk}/${contactPk}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ archive: archive })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update visual state after success
+                    if (archive) {
+                        row.attr('style', 'color: #999; opacity: 0.6;');
+                    } else {
+                        row.attr('style', '');
+                    }
+                    
+                    // Update contact data in row
+                    const contact = JSON.parse(row.attr('data-contact'));
+                    contact.status = data.new_status;
+                    row.attr('data-contact', JSON.stringify(contact));
+                    
+                    checkbox.prop('disabled', false);
+                } else {
+                    throw new Error(data.message || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating contact status:', error);
+                
+                // Revert checkbox on error
+                checkbox.prop('checked', !archive);
+                checkbox.prop('disabled', false);
+                
+                // Show timeout/error alert
+                if (error.message.includes('408') || error.message.includes('timeout')) {
+                    alert('Request timed out. The Xero API is not responding. Please try again.');
+                } else if (error.message.includes('503') || error.message.includes('Connection')) {
+                    alert('Connection error. Cannot reach Xero API. Please check your internet connection.');
+                } else {
+                    alert(`Failed to update contact status: ${error.message}`);
+                }
+            });
         });
         
         // Pull Xero Contacts button handler
