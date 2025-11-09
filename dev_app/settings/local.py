@@ -6,14 +6,11 @@ from .base import *
 
 DEBUG = True
 
-# Subdirectory configuration for mason.build/project_management
-FORCE_SCRIPT_NAME = '/project_management'
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATIC_URL = '/project_management/static/'
+STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -21,7 +18,7 @@ STATIC_URL = '/project_management/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/project_management/media/'
+MEDIA_URL = '/media/'
 PROJECT_NAME = '123 Fake Street'
 LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
 BACKGROUND_IMAGE_PATH = os.path.join(MEDIA_ROOT, 'backgrounds', 'my_bg.jpg')
