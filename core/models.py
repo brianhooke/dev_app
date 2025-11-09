@@ -15,6 +15,10 @@ class XeroInstances(models.Model):
     xero_name = models.CharField(max_length=255)
     xero_client_id = models.CharField(max_length=255)
     xero_client_secret_encrypted = models.BinaryField(null=True, blank=True)
+    oauth_access_token_encrypted = models.BinaryField(null=True, blank=True)
+    oauth_refresh_token_encrypted = models.BinaryField(null=True, blank=True)
+    oauth_token_expires_at = models.DateTimeField(null=True, blank=True)
+    oauth_tenant_id = models.CharField(max_length=255, null=True, blank=True)
     
     def _get_cipher(self):
         """Get Fernet cipher using encryption key from settings."""
@@ -38,6 +42,36 @@ class XeroInstances(models.Model):
         if self.xero_client_secret_encrypted:
             cipher = self._get_cipher()
             decrypted = cipher.decrypt(bytes(self.xero_client_secret_encrypted))
+            return decrypted.decode()
+        return None
+    
+    def set_oauth_access_token(self, token):
+        """Encrypt and store OAuth access token."""
+        if token:
+            cipher = self._get_cipher()
+            encrypted = cipher.encrypt(token.encode())
+            self.oauth_access_token_encrypted = encrypted
+    
+    def get_oauth_access_token(self):
+        """Decrypt and return OAuth access token."""
+        if self.oauth_access_token_encrypted:
+            cipher = self._get_cipher()
+            decrypted = cipher.decrypt(bytes(self.oauth_access_token_encrypted))
+            return decrypted.decode()
+        return None
+    
+    def set_oauth_refresh_token(self, token):
+        """Encrypt and store OAuth refresh token."""
+        if token:
+            cipher = self._get_cipher()
+            encrypted = cipher.encrypt(token.encode())
+            self.oauth_refresh_token_encrypted = encrypted
+    
+    def get_oauth_refresh_token(self):
+        """Decrypt and return OAuth refresh token."""
+        if self.oauth_refresh_token_encrypted:
+            cipher = self._get_cipher()
+            decrypted = cipher.decrypt(bytes(self.oauth_refresh_token_encrypted))
             return decrypted.decode()
         return None
     

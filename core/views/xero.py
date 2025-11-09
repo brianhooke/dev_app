@@ -2,7 +2,7 @@
 Xero management views.
 """
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
@@ -11,6 +11,9 @@ import json
 import base64
 import requests
 import logging
+import secrets
+from urllib.parse import urlencode
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -284,13 +287,19 @@ def pull_xero_contacts(request, instance_pk):
         try:
             xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
             
-            # Step 1: Get token
-            success, token_or_error = get_xero_token(xero_instance)
+            # Try OAuth token first, fall back to client credentials
+            from .xero_oauth import get_oauth_token
+            success, token_or_error = get_oauth_token(xero_instance)
+            
             if not success:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Authentication failed: {token_or_error}'
-                }, status=400)
+                # Fall back to client credentials
+                success, token_or_error = get_xero_token(xero_instance)
+                if not success:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Authentication failed: {token_or_error}. Please authorize the app first.',
+                        'needs_auth': True
+                    }, status=401)
             
             access_token = token_or_error
             
@@ -440,7 +449,7 @@ def get_contacts_by_instance(request, instance_pk):
 @csrf_exempt
 def update_contact_status(request, instance_pk, contact_pk):
     """
-    Update a contact's status in Xero (archive/unarchive).
+    Update a contact's status in Xero using OAuth2 tokens.
     """
     if request.method == 'POST':
         try:
@@ -451,58 +460,46 @@ def update_contact_status(request, instance_pk, contact_pk):
             contact = Contacts.objects.get(contact_pk=contact_pk, xero_instance_id=instance_pk)
             xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
             
-            # Step 1: Get token
-            success, token_or_error = get_xero_token(xero_instance)
+            # Import OAuth token function
+            from .xero_oauth import get_oauth_token
+            
+            # Get OAuth access token
+            success, token_or_error = get_oauth_token(xero_instance)
             if not success:
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Authentication failed: {token_or_error}'
-                }, status=400)
+                    'message': token_or_error,
+                    'needs_auth': True
+                }, status=401)
             
             access_token = token_or_error
             
-            # Step 2: Get tenant ID
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json'
-            }
-            
-            connections_response = requests.get('https://api.xero.com/connections', headers=headers, timeout=10)
-            
-            if connections_response.status_code != 200:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Failed to get Xero connections'
-                }, status=400)
-            
-            connections = connections_response.json()
-            if not connections or len(connections) == 0:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No Xero organisations connected'
-                }, status=400)
-            
-            tenant_id = connections[0].get('tenantId')
-            
-            # Step 3: Update contact status in Xero
+            # Update contact status in Xero
             new_status = 'ARCHIVED' if archive else 'ACTIVE'
             
             update_data = {
-                'ContactID': contact.xero_contact_id,
-                'ContactStatus': new_status
+                'Contacts': [{
+                    'ContactID': contact.xero_contact_id,
+                    'ContactStatus': new_status
+                }]
             }
             
+            logger.info(f"Updating contact {contact.xero_contact_id} to status {new_status}")
+            
             update_response = requests.post(
-                f'https://api.xero.com/api.xro/2.0/Contacts/{contact.xero_contact_id}',
+                'https://api.xero.com/api.xro/2.0/Contacts',
                 headers={
                     'Authorization': f'Bearer {access_token}',
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
-                    'Xero-tenant-id': tenant_id
+                    'Xero-tenant-id': xero_instance.oauth_tenant_id
                 },
                 json=update_data,
                 timeout=10
             )
+            
+            logger.info(f"Xero API response status: {update_response.status_code}")
+            logger.info(f"Xero API response: {update_response.text}")
             
             if update_response.status_code not in [200, 201]:
                 logger.error(f"Xero API error: {update_response.text}")
@@ -511,7 +508,7 @@ def update_contact_status(request, instance_pk, contact_pk):
                     'message': f'Failed to update contact in Xero: {update_response.status_code}'
                 }, status=400)
             
-            # Step 4: Update local database
+            # Update local database
             contact.status = new_status
             contact.save()
             

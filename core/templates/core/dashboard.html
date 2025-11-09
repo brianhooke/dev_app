@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v28</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v29</div>
 </div>
 
 <div style="padding: 20px;">
@@ -164,14 +164,27 @@
                 },
                 body: JSON.stringify({ archive: archive })
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            .then(response => response.json().then(data => ({status: response.status, body: data})))
+            .then(({status, body}) => {
+                console.log('Response status:', status);
+                console.log('Response body:', body);
+                
+                // Handle OAuth authorization needed
+                if (status === 401 && body.needs_auth) {
+                    checkbox.prop('checked', !archive);
+                    checkbox.prop('disabled', false);
+                    
+                    if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                        window.location.href = `https://horsiest-danielle-coinable.ngrok-free.dev/xero_oauth_authorize/${instancePk}/`;
+                    }
+                    return;
                 }
-                return response.json();
-            })
-            .then(data => {
-                if (data.status === 'success') {
+                
+                if (status !== 200) {
+                    throw new Error(body.message || `HTTP error! status: ${status}`);
+                }
+                
+                if (body.status === 'success') {
                     // Update visual state after success
                     if (archive) {
                         row.attr('style', 'color: #999; opacity: 0.6;');
@@ -181,12 +194,12 @@
                     
                     // Update contact data in row
                     const contact = JSON.parse(row.attr('data-contact'));
-                    contact.status = data.new_status;
+                    contact.status = body.new_status;
                     row.attr('data-contact', JSON.stringify(contact));
                     
                     checkbox.prop('disabled', false);
                 } else {
-                    throw new Error(data.message || 'Unknown error');
+                    throw new Error(body.message || 'Unknown error');
                 }
             })
             .catch(error => {
@@ -227,15 +240,24 @@
                     'X-CSRFToken': '{{ csrf_token }}'
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert(`Success! ${data.details.new_contacts_added} new contacts added, ${data.details.existing_contacts_skipped} existing contacts skipped.`);
+            .then(response => response.json().then(data => ({status: response.status, body: data})))
+            .then(({status, body}) => {
+                // Handle OAuth authorization needed
+                if (status === 401 && body.needs_auth) {
+                    button.prop('disabled', false).html('Pull Xero Contacts');
+                    if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                        window.location.href = `https://horsiest-danielle-coinable.ngrok-free.dev/xero_oauth_authorize/${xeroInstancePk}/`;
+                    }
+                    return;
+                }
+                
+                if (body.status === 'success') {
+                    alert(`Success! ${body.details.new_contacts_added} new contacts added, ${body.details.existing_contacts_skipped} existing contacts skipped.`);
                     // Reload contacts table instead of page reload
                     loadContacts(xeroInstancePk);
                     button.prop('disabled', false).html('Pull Xero Contacts');
                 } else {
-                    alert(`Error: ${data.message}`);
+                    alert(`Error: ${body.message}`);
                     button.prop('disabled', false).html('Pull Xero Contacts');
                 }
             })

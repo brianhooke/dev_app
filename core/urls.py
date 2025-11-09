@@ -4,6 +4,7 @@ from .views import commit_data, update_quote, create_contacts, delete_quote, del
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.dashboard import dashboard_view
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection, pull_xero_contacts, get_contacts_by_instance, update_contact_status
+from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -84,6 +85,10 @@ urlpatterns = [
     path('pull_xero_contacts/<int:instance_pk>/', pull_xero_contacts, name='pull_xero_contacts'),
     path('get_contacts_by_instance/<int:instance_pk>/', get_contacts_by_instance, name='get_contacts_by_instance'),
     path('update_contact_status/<int:instance_pk>/<int:contact_pk>/', update_contact_status, name='update_contact_status'),
+    
+    # Xero OAuth2 endpoints
+    path('xero_oauth_authorize/<int:instance_pk>/', xero_oauth_authorize, name='xero_oauth_authorize'),
+    path('xero_oauth_callback/', xero_oauth_callback, name='xero_oauth_callback'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
