@@ -3,7 +3,8 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 
-urlpatterns = [
+# Base URL patterns (for root domain access)
+base_patterns = [
     # Core app - main application logic (no prefix, root level)
     path('', include(('core.urls', 'core'), namespace='core')),
     
@@ -17,6 +18,13 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
 ]
+
+# Main urlpatterns - includes both root and subdirectory access
+urlpatterns = [
+    # Subdirectory access for mason.build/project_management
+    path('project_management/', include(base_patterns)),
+    # Root access (for direct EB domain access)
+] + base_patterns
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
