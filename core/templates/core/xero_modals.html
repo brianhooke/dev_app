@@ -1,5 +1,8 @@
 {% load static %}
 
+<!-- Import reusable form styles -->
+<link rel="stylesheet" href="{% static 'core/css/reusable_form.css' %}" />
+
 <!-- Level 1 Modal: Display Xero Instances -->
 <div class="modal fade" id="xeroInstancesModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document" style="max-width: 700px;">
@@ -45,7 +48,7 @@
                 </button>
             </div>
             <div class="modal-body">
-                <form id="addXeroInstanceForm">
+                <form id="addXeroInstanceForm" class="reusable-form">
                     <div class="form-group">
                         <label for="xeroNameInput">Xero Name</label>
                         <input type="text" class="form-control" id="xeroNameInput" placeholder="e.g., Mason Build" required>

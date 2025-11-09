@@ -1,0 +1,70 @@
+{% load static %}
+
+<style>
+  .reusable-form {
+    width: 100%;
+  }
+  
+  .reusable-form .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .reusable-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .reusable-form .form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  
+  .reusable-form .form-control:focus {
+    outline: none;
+    border-color: #A090D0;
+    box-shadow: 0 0 0 3px rgba(160, 144, 208, 0.1);
+  }
+  
+  .reusable-form .form-control::placeholder {
+    color: #999;
+  }
+  
+  .reusable-form .form-text {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 12px;
+    color: #666;
+  }
+  
+  .reusable-form .form-text.text-muted {
+    color: #999;
+  }
+  
+  .reusable-form input[type="password"] {
+    font-family: monospace;
+  }
+</style>
+
+<form id="{{ form_id }}" class="reusable-form">
+  {% for field in fields %}
+    <div class="form-group">
+      <label for="{{ field.id }}">{{ field.label }}</label>
+      <input 
+        type="{{ field.type|default:'text' }}" 
+        class="form-control" 
+        id="{{ field.id }}" 
+        placeholder="{{ field.placeholder|default:'' }}"
+        {% if field.required %}required{% endif %}
+      >
+      {% if field.help_text %}
+        <small class="form-text text-muted">{{ field.help_text }}</small>
+      {% endif %}
+    </div>
+  {% endfor %}
+</form>
