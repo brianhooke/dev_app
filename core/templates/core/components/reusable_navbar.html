@@ -2,10 +2,18 @@
 
 <style>
   .reusable-navbar {
+    height: 100%;
+    width: 160px;
+    position: fixed;
+    z-index: 1;
+    top: 0;
+    left: 0;
     background-color: white;
     border: 3px solid;
     border-image: var(--gradient-primary-45deg) 1;
     padding: 10px;
+    padding-top: 20px;
+    overflow-x: hidden;
   }
   
   .reusable-navbar ul {
@@ -22,7 +30,8 @@
     color: black !important;
     text-decoration: none;
     display: block;
-    padding: 8px 0;
+    padding: 10px 15px;
+    font-size: 18px;
     font-weight: 500;
   }
   
