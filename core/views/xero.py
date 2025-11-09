@@ -403,3 +403,35 @@ def pull_xero_contacts(request, instance_pk):
         'status': 'error',
         'message': 'Only POST method is allowed'
     }, status=405)
+
+
+def get_contacts_by_instance(request, instance_pk):
+    """
+    Get all contacts for a specific Xero instance.
+    """
+    if request.method == 'GET':
+        try:
+            contacts = Contacts.objects.filter(xero_instance_id=instance_pk).values(
+                'contact_pk',
+                'xero_instance_id',
+                'xero_contact_id',
+                'name',
+                'email',
+                'status',
+                'bank_details',
+                'bank_details_verified',
+                'division',
+                'checked'
+            )
+            return JsonResponse(list(contacts), safe=False)
+        except Exception as e:
+            logger.error(f"Error fetching contacts: {str(e)}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only GET method is allowed'
+    }, status=405)

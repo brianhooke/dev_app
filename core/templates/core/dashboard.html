@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v26</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v27</div>
 </div>
 
 <div style="padding: 20px;">
@@ -53,14 +53,60 @@
 
 <script>
     $(document).ready(function() {
+        // Function to load contacts for selected instance
+        function loadContacts(instancePk) {
+            if (!instancePk) {
+                // Clear table if no instance selected
+                $('#contactsModal tbody').html('<tr><td colspan="2" style="text-align: center;">Please select a Xero instance</td></tr>');
+                return;
+            }
+            
+            fetch(`/get_contacts_by_instance/${instancePk}/`)
+                .then(response => response.json())
+                .then(contacts => {
+                    const tbody = $('#contactsModal tbody');
+                    tbody.empty();
+                    
+                    if (contacts.length === 0) {
+                        tbody.html('<tr><td colspan="2" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>');
+                    } else {
+                        contacts.forEach(contact => {
+                            const row = `
+                                <tr data-contact='${JSON.stringify(contact)}'>
+                                    <td>${contact.name || ''}</td>
+                                    <td>${contact.email || ''}</td>
+                                </tr>
+                            `;
+                            tbody.append(row);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading contacts:', error);
+                    $('#contactsModal tbody').html('<tr><td colspan="2" style="text-align: center; color: red;">Error loading contacts</td></tr>');
+                });
+        }
+        
         // Open Contacts modal when navbar link is clicked
         $('#contactsLink').click(function(e) {
             e.preventDefault();
             $('#contactsModal').modal('show');
         });
         
+        // Load contacts when modal is shown
+        $('#contactsModal').on('shown.bs.modal', function() {
+            const instancePk = $('#xeroInstanceSelect').val();
+            loadContacts(instancePk);
+        });
+        
+        // Reload contacts when dropdown changes
+        $(document).on('change', '#xeroInstanceSelect', function() {
+            const instancePk = $(this).val();
+            loadContacts(instancePk);
+        });
+        
         // Pull Xero Contacts button handler
-        $('#pullXeroContactsBtn').click(function() {
+        $(document).on('click', '#pullXeroContactsBtn', function() {
             const xeroInstancePk = $('#xeroInstanceSelect').val();
             
             if (!xeroInstancePk) {
@@ -72,7 +118,7 @@
             const button = $(this);
             button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
             
-            fetch(`/core/pull_xero_contacts/${xeroInstancePk}/`, {
+            fetch(`/pull_xero_contacts/${xeroInstancePk}/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -83,7 +129,9 @@
             .then(data => {
                 if (data.status === 'success') {
                     alert(`Success! ${data.details.new_contacts_added} new contacts added, ${data.details.existing_contacts_skipped} existing contacts skipped.`);
-                    location.reload();
+                    // Reload contacts table instead of page reload
+                    loadContacts(xeroInstancePk);
+                    button.prop('disabled', false).html('Pull Xero Contacts');
                 } else {
                     alert(`Error: ${data.message}`);
                     button.prop('disabled', false).html('Pull Xero Contacts');
