@@ -19,6 +19,7 @@ AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
 # AWS_S3_CUSTOM_DOMAIN = f'tinnulabucket.s3.amazonaws.com'
 
 STATIC_URL = os.getenv('STATIC_URL')
+FORCE_SCRIPT_NAME = '/project_management'
 # STATIC_URL = f'https://devappbucket2.s3.amazonaws.com/static/'
 # STATIC_URL = f'https://41accoladedevbucket.s3.amazonaws.com/static/'
 # STATIC_URL = f'https://spitfirebucket.s3.amazonaws.com/static/'
