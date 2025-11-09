@@ -19,46 +19,9 @@
     {% endblock %}
 </div>
 
-<div class="modal fade" id="spvDetailsModal" tabindex="-1" role="dialog" aria-labelledby="spvDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content" style="background: var(--gradient-primary-45deg);">
-        <div class="modal-header">
-          <h5 class="modal-title" id="spvDetailsModalLabel"><strong>SPV Details</strong></h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body" style="background: transparent;">
-          <strong>Address: </strong>{{ spv_data.address }}<br>
-          <strong>Lot Size: </strong>{{ spv_data.lot_size }}<br>
-          <strong>Legal Owner: </strong>{{ spv_data.legal_owner }}<br>
-          <strong>Folio Identifier: </strong>{{ spv_data.folio_identifier }}<br>
-          <strong>Bill to: </strong>{{ spv_data.bill_to }}<br>
-          <strong>Email: </strong>{{ spv_data.email }}<br>
-          <strong>Owner Address: </strong>{{ spv_data.owner_address }}<br>
-          <strong>Director 1: </strong>{{ spv_data.director_1 }}<br>
-          <strong>Director 2: </strong>{{ spv_data.director_2 }}<br>
-          <strong>ABN: </strong>{{ spv_data.abn }}<br>
-          <strong>ACN: </strong>{{ spv_data.acn }}<br>
-        </div>
-        <div class="modal-footer" style="background: transparent;">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- JavaScript -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
-  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
-
-  <script>
-    $(document).ready(function(){
-        $("#showSPVDetailsLink").click(function(){
-            $("#spvDetailsModal").modal('show');
-        });
-    });
-  </script>
+<!-- JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
 </body>
 </html>

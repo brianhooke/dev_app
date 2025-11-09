@@ -3,7 +3,7 @@ Dashboard view for the main application homepage.
 """
 
 from django.shortcuts import render
-from ..models import SPVData
+from ..models import SPVData, XeroInstances
 from django.conf import settings
 
 
@@ -34,6 +34,9 @@ def dashboard_view(request):
     contacts_columns = ["Name", "Email Address"]
     contacts_rows = []  # No data for now
     
+    # Get XeroInstances for dropdown
+    xero_instances = XeroInstances.objects.all()
+    
     context = {
         "current_page": "dashboard",
         "project_name": settings.PROJECT_NAME,
@@ -44,6 +47,7 @@ def dashboard_view(request):
         "nav_items": nav_items,
         "contacts_columns": contacts_columns,
         "contacts_rows": contacts_rows,
+        "xero_instances": xero_instances,
     }
     
     return render(request, "core/dashboard.html", context)
