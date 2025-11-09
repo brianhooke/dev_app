@@ -26,8 +26,13 @@ def dashboard_view(request):
         {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
+        {'label': 'Suppliers', 'url': '#', 'id': 'suppliersLink', 'page_id': 'suppliers'},
         {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
     ]
+    
+    # Contacts table configuration
+    contacts_columns = ["Name", "Email Address"]
+    contacts_rows = []  # No data for now
     
     context = {
         "current_page": "dashboard",
@@ -37,6 +42,8 @@ def dashboard_view(request):
         "table_rows": [],  # No data for now
         "show_totals": False,  # No totals row for dashboard
         "nav_items": nav_items,
+        "contacts_columns": contacts_columns,
+        "contacts_rows": contacts_rows,
     }
     
     return render(request, "core/dashboard.html", context)

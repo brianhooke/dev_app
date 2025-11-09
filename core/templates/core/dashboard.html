@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v22</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v23</div>
 </div>
 
 <div style="padding: 20px;">
@@ -47,7 +47,18 @@
 {% include 'core/components/reusable_table.html' with columns=table_columns rows=table_rows show_totals=show_totals %}
 
 {% include 'core/xero_modals.html' %}
+{% include 'core/components/reusable_contacts_modal.html' %}
 
 <script src="{% static 'core/js/xero.js' %}"></script>
+
+<script>
+    $(document).ready(function() {
+        // Open Suppliers modal when navbar link is clicked
+        $('#suppliersLink').click(function(e) {
+            e.preventDefault();
+            $('#contactsModal').modal('show');
+        });
+    });
+</script>
 
 {% endblock %}
