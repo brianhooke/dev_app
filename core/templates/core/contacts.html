@@ -1,5 +1,7 @@
 {% load static %}
 
+<!-- Extended Contacts Modal with XeroInstances dropdown and Delete button -->
+
 <!-- Base Contacts Modal -->
 <div class="modal fade" id="contactsModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document" style="max-width: 800px;">
@@ -11,20 +13,32 @@
                 </button>
             </div>
             <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto;">
-                {% block contacts_modal_body %}
+                <!-- XeroInstances Dropdown (Dashboard-specific) -->
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="xeroInstanceSelect">Xero Instance:</label>
+                    <select class="form-control" id="xeroInstanceSelect">
+                        {% for instance in xero_instances %}
+                            <option value="{{ instance.xero_instance_pk }}" {% if forloop.first %}selected{% endif %}>
+                                {{ instance.xero_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Contacts Table -->
                 <div style="overflow-x: auto; position: relative;">
                     {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
                 </div>
-                {% endblock %}
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
-                {% block contacts_modal_footer %}
-                <button type="button" class="btn btn-secondary" id="archiveContactBtn">Archive</button>
+                <div>
+                    <button type="button" class="btn btn-secondary" id="archiveContactBtn">Archive</button>
+                    <button type="button" class="btn btn-danger" id="deleteContactBtn">Delete</button>
+                </div>
                 <div>
                     <button type="button" class="btn btn-primary" id="addContactBtn">Add Contact</button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                 </div>
-                {% endblock %}
             </div>
         </div>
     </div>
