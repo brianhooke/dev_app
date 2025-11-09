@@ -1,8 +1,10 @@
 /* Global Color Variables */
 :root {
   /* Primary gradient colors */
-  --gradient-start: #A090D0;
-  --gradient-end: #B3E1DD;
+  /* --gradient-start: #A090D0;
+  --gradient-end: #36dacc; */
+  --gradient-start: #d2f02b;
+  --gradient-end: #e1bdb3;
   
   /* Gradient definitions */
   --gradient-primary: linear-gradient(1deg, var(--gradient-start) 0%, var(--gradient-end) 100%);

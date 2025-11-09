@@ -24,7 +24,7 @@ table {
   }
   
   th {
-    background-image: linear-gradient(45deg, #A090D0, #B3E1DD);
+    background-image: var(--gradient-primary-45deg);
     color: white;
   }
   
@@ -154,7 +154,7 @@ table {
   .delete-btn {
     padding: 5px !important;  /* Adjust as needed to change the size of the button */
     font-size: 0.8rem;  /* Adjust as needed to change the size of the text */
-    background-image: linear-gradient(45deg, #A090D0, #B3E1DD);
+    background-image: var(--gradient-primary-45deg);
     border: none !important;  /* Remove default button border */
   }
   
@@ -207,7 +207,7 @@ table {
   }
   
   .gradient-button {
-    background-image: linear-gradient(45deg, #B3E1DD, #A090D0);
+    background-image: var(--gradient-primary-45deg);
     border: 1px solid black;
     color: white;
     padding: 10px 20px;

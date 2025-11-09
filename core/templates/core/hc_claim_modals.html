@@ -5,7 +5,7 @@
 <div class="modal fade" id="hcSelectInvoicesModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 90%; height: 90vh;">
         <div class="modal-content" style="border: 3px solid black; height: 100%;">
-            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
                 <h5 class="modal-title">Create HC Claim - Select associated Invoices</h5>
             </div>
             <div class="modal-body row" style="height: calc(100% - 56px);"> <!-- Adjust height to account for header -->
@@ -67,13 +67,13 @@
 <div class="modal fade" id="existingClaimsModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 90%; height: 90vh;">
         <div class="modal-content" style="border: 3px solid black; height: 100%;">
-            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
                 <h5 class="modal-title">Existing Claims</h5>
             </div>
             <div class="modal-body row">
                 <div class="col-md-5" style="height: 100%;">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-                        <button id="downloadClaimSummary" class="btn btn-sm btn-primary" style="background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%); border: none;">
+                        <button id="downloadClaimSummary" class="btn btn-sm btn-primary" style="background: var(--gradient-primary-45deg); border: none;">
                             <i class="fas fa-download"></i> Download PDF
                         </button>
                     </div>
@@ -308,7 +308,7 @@
                             {% endfor %}
                                 {% endwith %}
                           {% endfor %}
-                          <tr id="hcPrepSheetTotalRow" style="font-weight: bold; background: linear-gradient(1deg, #A090D0 0%, #B3E1DD 100%); color: white;">
+                          <tr id="hcPrepSheetTotalRow" style="font-weight: bold; background: var(--gradient-primary); color: white;">
                             <td>Total</td>
                             <td></td>
                             <td></td>
@@ -351,7 +351,7 @@
 <div class="modal fade" id="hc-claim-editModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="hc-claim-editModalLabel{{ costing.costing_pk }}" aria-hidden="true">
         <div class="modal-dialog" role="document" style="max-width: 600px;">
             <div class="modal-content" style="border: 3px solid black;">
-                <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+                <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
                     <h5 class="modal-title" id="hc-claim-editModalLabel{{ costing.costing_pk }}">Edit Uncommitted</h5>
                 </div>
                 <div class="modal-body">
@@ -397,7 +397,7 @@
 <div class="modal fade" id="hc-claim-fixedOnSiteModal{{ costing.costing_pk }}" tabindex="-1" role="dialog" aria-labelledby="hc-claim-fixedOnSiteModalLabel{{ costing.costing_pk }}" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 600px;">
         <div class="modal-content" style="border: 3px solid black;">
-            <div class="modal-header" style="text-align: center; background: linear-gradient(45deg, #A090D0 0%, #B3E1DD 100%);">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
                 <h5 class="modal-title" id="hc-claim-fixedOnSiteModalLabel{{ costing.costing_pk }}">Fixed On Site</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
