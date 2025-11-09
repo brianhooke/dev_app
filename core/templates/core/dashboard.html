@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v29</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v30</div>
 </div>
 
 <div style="padding: 20px;">
@@ -175,7 +175,7 @@
                     checkbox.prop('disabled', false);
                     
                     if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
-                        window.location.href = `https://horsiest-danielle-coinable.ngrok-free.dev/xero_oauth_authorize/${instancePk}/`;
+                        window.location.href = `/xero_oauth_authorize/${instancePk}/`;
                     }
                     return;
                 }
@@ -246,7 +246,7 @@
                 if (status === 401 && body.needs_auth) {
                     button.prop('disabled', false).html('Pull Xero Contacts');
                     if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
-                        window.location.href = `https://horsiest-danielle-coinable.ngrok-free.dev/xero_oauth_authorize/${xeroInstancePk}/`;
+                        window.location.href = `/xero_oauth_authorize/${xeroInstancePk}/`;
                     }
                     return;
                 }
