@@ -19,7 +19,10 @@
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
                 {% block contacts_modal_footer %}
-                <button type="button" class="btn btn-secondary" id="archiveContactBtn">Archive</button>
+                <div>
+                    <button type="button" class="btn btn-secondary" id="archiveContactBtn">Archive</button>
+                    <button type="button" class="btn btn-info" id="pullXeroContactsBtn">Pull Xero Contacts</button>
+                </div>
                 <div>
                     <button type="button" class="btn btn-primary" id="addContactBtn">Add Contact</button>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>

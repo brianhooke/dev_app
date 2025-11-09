@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v25</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v26</div>
 </div>
 
 <div style="padding: 20px;">
@@ -53,10 +53,47 @@
 
 <script>
     $(document).ready(function() {
-        // Open Suppliers modal when navbar link is clicked
-        $('#suppliersLink').click(function(e) {
+        // Open Contacts modal when navbar link is clicked
+        $('#contactsLink').click(function(e) {
             e.preventDefault();
             $('#contactsModal').modal('show');
+        });
+        
+        // Pull Xero Contacts button handler
+        $('#pullXeroContactsBtn').click(function() {
+            const xeroInstancePk = $('#xeroInstanceSelect').val();
+            
+            if (!xeroInstancePk) {
+                alert('Please select a Xero instance');
+                return;
+            }
+            
+            // Disable button and show loading state
+            const button = $(this);
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
+            
+            fetch(`/core/pull_xero_contacts/${xeroInstancePk}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`Success! ${data.details.new_contacts_added} new contacts added, ${data.details.existing_contacts_skipped} existing contacts skipped.`);
+                    location.reload();
+                } else {
+                    alert(`Error: ${data.message}`);
+                    button.prop('disabled', false).html('Pull Xero Contacts');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to pull contacts. Please try again.');
+                button.prop('disabled', false).html('Pull Xero Contacts');
+            });
         });
     });
 </script>

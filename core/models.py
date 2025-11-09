@@ -282,13 +282,18 @@ class Hc_variation_allocations(models.Model):
 # SERVICE: contacts
 class Contacts(models.Model):
     contact_pk = models.AutoField(primary_key=True)
+    xero_instance = models.ForeignKey(XeroInstances, on_delete=models.CASCADE)
     xero_contact_id = models.CharField(max_length=255)
-    division = models.IntegerField() #can delete this after "checked" is integrated
+    name = models.CharField(max_length=200)
+    email = models.EmailField(max_length=254)
+    status = models.CharField(max_length=200)
+    bank_details = models.TextField(blank=True, null=True)
+    bank_details_verified = models.IntegerField(default=0)  # 0 for no, 1 for yes
+    division = models.IntegerField(null=True, blank=True) #can delete this after "checked" is integrated
     checked = models.IntegerField(default=0)  # 0 for none, 1 for supplier, 2 for client
-    contact_name = models.CharField(max_length=200)
-    contact_email = models.EmailField(max_length=254)
+    
     def __str__(self):
-        return self.contact_name
+        return self.name
 
 # SERVICE: pos
 class Po_orders(models.Model):

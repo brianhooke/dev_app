@@ -26,7 +26,7 @@ def dashboard_view(request):
         {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
-        {'label': 'Suppliers', 'url': '#', 'id': 'suppliersLink', 'page_id': 'suppliers'},
+        {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
         {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
     ]
     

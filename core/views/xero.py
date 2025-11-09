@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from ..models import XeroInstances
+from ..models import XeroInstances, Contacts
 import json
 import base64
 import requests
@@ -271,4 +271,135 @@ def test_xero_connection(request, instance_pk):
     return JsonResponse({
         'status': 'error',
         'message': 'Only GET method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
+def pull_xero_contacts(request, instance_pk):
+    """
+    Pull contacts from Xero API for a specific instance.
+    Only inserts new contacts, does not update existing ones.
+    """
+    if request.method == 'POST':
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
+            
+            # Step 1: Get token
+            success, token_or_error = get_xero_token(xero_instance)
+            if not success:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Authentication failed: {token_or_error}'
+                }, status=400)
+            
+            access_token = token_or_error
+            
+            # Step 2: Get tenant ID from connections
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            }
+            
+            connections_response = requests.get('https://api.xero.com/connections', headers=headers, timeout=10)
+            
+            if connections_response.status_code != 200:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Failed to get Xero connections'
+                }, status=400)
+            
+            connections = connections_response.json()
+            if not connections or len(connections) == 0:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No Xero organisations connected'
+                }, status=400)
+            
+            tenant_id = connections[0].get('tenantId')
+            
+            # Step 3: Fetch contacts from Xero API
+            contacts_response = requests.get(
+                'https://api.xero.com/api.xro/2.0/Contacts',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json',
+                    'Xero-tenant-id': tenant_id
+                },
+                timeout=30
+            )
+            
+            if contacts_response.status_code != 200:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
+                }, status=400)
+            
+            contacts_data = contacts_response.json()
+            xero_contacts = contacts_data.get('Contacts', [])
+            
+            # Step 4: Process contacts - only insert new ones
+            new_contacts_count = 0
+            skipped_contacts_count = 0
+            
+            for xero_contact in xero_contacts:
+                contact_id = xero_contact.get('ContactID')
+                
+                # Check if contact already exists
+                if Contacts.objects.filter(xero_contact_id=contact_id).exists():
+                    skipped_contacts_count += 1
+                    continue
+                
+                # Extract contact data
+                name = xero_contact.get('Name', '')
+                email = xero_contact.get('EmailAddress', '')
+                status = xero_contact.get('ContactStatus', '')
+                bank_details = xero_contact.get('BankAccountDetails', '')
+                
+                # Create new contact
+                Contacts.objects.create(
+                    xero_instance=xero_instance,
+                    xero_contact_id=contact_id,
+                    name=name,
+                    email=email,
+                    status=status,
+                    bank_details=bank_details,
+                    bank_details_verified=0
+                )
+                new_contacts_count += 1
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Successfully pulled contacts from Xero',
+                'details': {
+                    'total_xero_contacts': len(xero_contacts),
+                    'new_contacts_added': new_contacts_count,
+                    'existing_contacts_skipped': skipped_contacts_count
+                }
+            })
+            
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Xero instance not found'
+            }, status=404)
+        except requests.exceptions.Timeout:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Request timed out - Xero API not responding'
+            }, status=408)
+        except requests.exceptions.ConnectionError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection error - Cannot reach Xero API'
+            }, status=503)
+        except Exception as e:
+            logger.error(f"Error pulling Xero contacts: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
     }, status=405)
