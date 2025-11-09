@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
         
         if (instances.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No Xero instances found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
             return;
         }
         
