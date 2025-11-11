@@ -53,6 +53,6 @@ from .main import (
     create_contacts, send_test_email, send_test_email_view,
     upload_categories, upload_costings, update_contract_budget_amounts,
     upload_letterhead, update_contacts, xeroapi, make_api_request,
-    get_xero_token, get_xero_contacts, mark_sent_to_boutique,
-    test_contact_id, upload_margin_category_and_lines
+    mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines
 )
+# DEPRECATED: get_xero_token, get_xero_contacts - use OAuth2 in xero_oauth.py instead

@@ -112,69 +112,71 @@ def delete_xero_instance(request, instance_pk):
     }, status=405)
 
 
-def get_xero_token(xero_instance):
-    """
-    Get Xero access token using client credentials from XeroInstance.
-    Returns tuple: (success: bool, token_or_error: str)
-    """
-    try:
-        client_id = xero_instance.xero_client_id
-        client_secret = xero_instance.get_client_secret()
-        
-        logger.info(f"Getting Xero token for instance: {xero_instance.xero_name}")
-        logger.info(f"Client ID: {client_id[:10]}... (truncated)")
-        
-        if not client_secret:
-            logger.error("Client secret not found or could not be decrypted")
-            return False, "Client secret not found or could not be decrypted"
-        
-        logger.info(f"Client secret retrieved successfully (length: {len(client_secret)})")
-        
-        scopes_list = [
-            "accounting.transactions.read",
-            "accounting.contacts.read",
-            "accounting.settings.read"
-        ]
-        scopes = ' '.join(scopes_list)
-        
-        credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
-        headers = {
-            'Authorization': f'Basic {credentials}',
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        data = {
-            'grant_type': 'client_credentials',
-            'scope': scopes
-        }
-        
-        logger.info("Sending token request to Xero...")
-        response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data, timeout=10)
-        response_data = response.json()
-        
-        logger.info(f"Xero token response status: {response.status_code}")
-        logger.info(f"Xero token response: {response_data}")
-        
-        if response.status_code != 200:
-            error_msg = response_data.get('error_description', response_data.get('error', 'Unknown error'))
-            logger.error(f"Token request failed: {error_msg}")
-            return False, f"Token request failed: {error_msg}"
-        
-        if 'access_token' not in response_data:
-            logger.error("No access token in response")
-            return False, "No access token in response"
-        
-        logger.info("Token retrieved successfully")
-        return True, response_data['access_token']
-        
-    except requests.exceptions.Timeout:
-        logger.error("Request timed out")
-        return False, "Request timed out - Xero API not responding"
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"Connection error: {str(e)}")
-        return False, "Connection error - Cannot reach Xero API"
-    except Exception as e:
-        logger.error(f"Unexpected error getting Xero token: {str(e)}", exc_info=True)
-        return False, f"Error: {str(e)}"
+# ============================================================================
+# DEPRECATED: Custom Connection (Client Credentials) - DO NOT USE
+# Use OAuth2 via xero_oauth.py instead
+# ============================================================================
+
+# def get_xero_token(xero_instance):
+#     """DEPRECATED: Use get_oauth_token from xero_oauth.py instead"""
+#     try:
+#         client_id = xero_instance.xero_client_id
+#         client_secret = xero_instance.get_client_secret()
+#         
+#         logger.info(f"Getting Xero token for instance: {xero_instance.xero_name}")
+#         logger.info(f"Client ID: {client_id[:10]}... (truncated)")
+#         
+#         if not client_secret:
+#             logger.error("Client secret not found or could not be decrypted")
+#             return False, "Client secret not found or could not be decrypted"
+#         
+#         logger.info(f"Client secret retrieved successfully (length: {len(client_secret)})")
+#         
+#         scopes_list = [
+#             "accounting.transactions.read",
+#             "accounting.contacts.read",
+#             "accounting.settings.read"
+#         ]
+#         scopes = ' '.join(scopes_list)
+#         
+#         credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
+#         headers = {
+#             'Authorization': f'Basic {credentials}',
+#             'Content-Type': 'application/x-www-form-urlencoded'
+#         }
+#         data = {
+#             'grant_type': 'client_credentials',
+#             'scope': scopes
+#         }
+#         
+#         logger.info("Sending token request to Xero...")
+#         response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data, timeout=10)
+#         response_data = response.json()
+#         
+#         logger.info(f"Xero token response status: {response.status_code}")
+#         logger.info(f"Xero token response: {response_data}")
+#         
+#         if response.status_code != 200:
+#             error_msg = response_data.get('error_description', response_data.get('error', 'Unknown error'))
+#             logger.error(f"Token request failed: {error_msg}")
+#             return False, f"Token request failed: {error_msg}"
+#         
+#         if 'access_token' not in response_data:
+#             logger.error("No access token in response")
+#             return False, "No access token in response"
+#         
+#         logger.info("Token retrieved successfully")
+#         return True, response_data['access_token']
+#         
+#     except requests.exceptions.Timeout:
+#         logger.error("Request timed out")
+#         return False, "Request timed out - Xero API not responding"
+#     except requests.exceptions.ConnectionError as e:
+#         logger.error(f"Connection error: {str(e)}")
+#         return False, "Connection error - Cannot reach Xero API"
+#     except Exception as e:
+#         logger.error(f"Unexpected error getting Xero token: {str(e)}", exc_info=True)
+#         return False, f"Error: {str(e)}"
 
 
 @csrf_exempt
@@ -187,8 +189,9 @@ def test_xero_connection(request, instance_pk):
         try:
             xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
             
-            # Step 1: Get token
-            success, token_or_error = get_xero_token(xero_instance)
+            # Step 1: Get OAuth token
+            from .xero_oauth import get_oauth_token
+            success, token_or_error = get_oauth_token(xero_instance)
             if not success:
                 return JsonResponse({
                     'status': 'error',
@@ -287,19 +290,16 @@ def pull_xero_contacts(request, instance_pk):
         try:
             xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
             
-            # Try OAuth token first, fall back to client credentials
+            # Get OAuth token (OAuth2 only - no fallback to custom connection)
             from .xero_oauth import get_oauth_token
             success, token_or_error = get_oauth_token(xero_instance)
             
             if not success:
-                # Fall back to client credentials
-                success, token_or_error = get_xero_token(xero_instance)
-                if not success:
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': f'Authentication failed: {token_or_error}. Please authorize the app first.',
-                        'needs_auth': True
-                    }, status=401)
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'OAuth authentication failed: {token_or_error}. Please authorize the app first.',
+                    'needs_auth': True
+                }, status=401)
             
             access_token = token_or_error
             

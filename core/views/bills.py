@@ -169,9 +169,14 @@ def post_invoice(request):
             "TaxAmount": str(invoice_allocation.gst_amount),
         }
         line_items.append(line_item)
-    get_xero_token(request, division)
-    access_token = request.session.get('access_token')
-    logger.info(f'Access Token: {access_token}')
+    
+    # DEPRECATED: Old custom connection - needs OAuth2 implementation
+    # TODO: Replace with OAuth2 flow using XeroInstances
+    raise NotImplementedError("This endpoint needs to be updated to use OAuth2. Use contacts.html and xero.py endpoints instead.")
+    
+    # get_xero_token(request, division)
+    # access_token = request.session.get('access_token')
+    # logger.info(f'Access Token: {access_token}')
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Accept': 'application/json',
@@ -238,8 +243,13 @@ def test_xero_invoice(request):
             "TaxAmount": str(invoice_allocation.gst_amount),
         }
         line_items.append(line_item)
-    get_xero_token(request)
-    access_token = request.session.get('access_token')
+    
+    # DEPRECATED: Old custom connection - needs OAuth2 implementation
+    # TODO: Replace with OAuth2 flow using XeroInstances
+    raise NotImplementedError("This endpoint needs to be updated to use OAuth2. Use contacts.html and xero.py endpoints instead.")
+    
+    # get_xero_token(request)
+    # access_token = request.session.get('access_token')
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Accept': 'application/json',

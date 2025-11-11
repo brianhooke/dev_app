@@ -176,10 +176,15 @@ def send_hc_claim_to_xero(request):
             logger.error("Missing required fields for Xero API")
             return JsonResponse({'success': False, 'error': 'Missing required fields'})
         hc_claim = HC_claims.objects.get(pk=hc_claim_pk)
-        get_xero_token(request, 2)  
-        access_token = request.session.get('access_token')
-        if not access_token:
-            return JsonResponse({'success': False, 'error': 'No access token found in session'})
+        
+        # DEPRECATED: Old custom connection - needs OAuth2 implementation
+        # TODO: Replace with OAuth2 flow using XeroInstances
+        raise NotImplementedError("This endpoint needs to be updated to use OAuth2. Use contacts.html and xero.py endpoints instead.")
+        
+        # get_xero_token(request, 2)  
+        # access_token = request.session.get('access_token')
+        # if not access_token:
+        #     return JsonResponse({'success': False, 'error': 'No access token found in session'})
         url = 'https://api.xero.com/api.xro/2.0/Invoices'
         headers = {
             'Authorization': f'Bearer {access_token}',

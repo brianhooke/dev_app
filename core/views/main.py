@@ -549,87 +549,95 @@ def xeroapi(request):
 def make_api_request(url, headers):
     response = requests.get(url, headers=headers)
     return response
-client_id = settings.XERO_CLIENT_ID
-client_id = settings.XERO_CLIENT_ID
-client_secret = settings.XERO_CLIENT_SECRET
-client_project = settings.XERO_PROJECT_ID
+# ============================================================================
+# DEPRECATED: Old Custom Connection (Client Credentials) - DO NOT USE
+# Use OAuth2 flow in xero_oauth.py instead
+# ============================================================================
 
-def get_xero_token(request, division):
-    division = int(division) if isinstance(division, str) else division
-    scopes_list = [
-        "accounting.transactions",
-        "accounting.transactions.read",
-        "accounting.reports.read",
-        "accounting.reports.tenninetynine.read",
-        "accounting.budgets.read",
-        "accounting.journals.read",
-        "accounting.settings",
-        "accounting.settings.read",
-        "accounting.contacts",
-        "accounting.contacts.read",
-        "accounting.attachments",
-        "accounting.attachments.read",
-        "files",
-        "files.read"
-    ]
-    scopes = ' '.join(scopes_list)
-    if division == 1:
-        client_id = settings.MDG_XERO_CLIENT_ID
-        client_secret = settings.MDG_XERO_CLIENT_SECRET
-    elif division == 2:
-        client_id = settings.MB_XERO_CLIENT_ID
-        client_secret = settings.MB_XERO_CLIENT_SECRET
-    else:
-        raise ValueError(f"Invalid division: {division}")
-    credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
-    headers = {
-        'Authorization': f'Basic {credentials}',
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
-    data = {
-        'grant_type': 'client_credentials',
-        'scope': scopes
-    }
-    response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data)
-    response_data = response.json()
-    logger.info(f"Xero token response: {response.status_code}")
-    logger.info(f"Xero token response data: {response_data}")
-    if response.status_code != 200:
-        raise ValueError(f"Failed to get Xero token: {response_data}")
-    if 'access_token' not in response_data:
-        raise ValueError(f"No access token in response: {response_data}")
-    request.session['access_token'] = response_data['access_token']
-    return JsonResponse(response_data)
-@csrf_exempt
-def get_xero_contacts(request):
-    division = int(request.GET.get('division', 0))
-    get_xero_token(request, division)
-    access_token = request.session.get('access_token')
-    headers = {
-        'Authorization': 'Bearer ' + access_token,
-        'Accept': 'application/json'
-    }
-    response = requests.get('https://api.xero.com/api.xro/2.0/Contacts', headers=headers)
-    data = response.json()
-    contacts = data['Contacts']
-    for contact in contacts:
-        xero_contact_id = contact['ContactID']
-        contact_name = contact.get('Name', 'Not Set')
-        contact_email = 'Not Set'
-        existing_contact = Contacts.objects.filter(xero_contact_id=xero_contact_id).first()
-        if existing_contact:
-            if existing_contact.division != division:
-                existing_contact.division = division
-                existing_contact.save()
-        else:
-            new_contact = Contacts(
-                xero_contact_id=xero_contact_id,
-                division=division,
-                contact_name=contact_name,
-                contact_email=contact_email
-            )
-            new_contact.save()
-    return JsonResponse(data)
+# client_id = settings.XERO_CLIENT_ID
+# client_id = settings.XERO_CLIENT_ID
+# client_secret = settings.XERO_CLIENT_SECRET
+# client_project = settings.XERO_PROJECT_ID
+
+# def get_xero_token(request, division):
+#     """DEPRECATED: Use OAuth2 via xero_oauth.py instead"""
+#     division = int(division) if isinstance(division, str) else division
+#     scopes_list = [
+#         "accounting.transactions",
+#         "accounting.transactions.read",
+#         "accounting.reports.read",
+#         "accounting.reports.tenninetynine.read",
+#         "accounting.budgets.read",
+#         "accounting.journals.read",
+#         "accounting.settings",
+#         "accounting.settings.read",
+#         "accounting.contacts",
+#         "accounting.contacts.read",
+#         "accounting.attachments",
+#         "accounting.attachments.read",
+#         "files",
+#         "files.read"
+#     ]
+#     scopes = ' '.join(scopes_list)
+#     if division == 1:
+#         client_id = settings.MDG_XERO_CLIENT_ID
+#         client_secret = settings.MDG_XERO_CLIENT_SECRET
+#     elif division == 2:
+#         client_id = settings.MB_XERO_CLIENT_ID
+#         client_secret = settings.MB_XERO_CLIENT_SECRET
+#     else:
+#         raise ValueError(f"Invalid division: {division}")
+#     credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode('utf-8')).decode('utf-8')
+#     headers = {
+#         'Authorization': f'Basic {credentials}',
+#         'Content-Type': 'application/x-www-form-urlencoded'
+#     }
+#     data = {
+#         'grant_type': 'client_credentials',
+#         'scope': scopes
+#     }
+#     response = requests.post('https://identity.xero.com/connect/token', headers=headers, data=data)
+#     response_data = response.json()
+#     logger.info(f"Xero token response: {response.status_code}")
+#     logger.info(f"Xero token response data: {response_data}")
+#     if response.status_code != 200:
+#         raise ValueError(f"Failed to get Xero token: {response_data}")
+#     if 'access_token' not in response_data:
+#         raise ValueError(f"No access token in response: {response_data}")
+#     request.session['access_token'] = response_data['access_token']
+#     return JsonResponse(response_data)
+
+# @csrf_exempt
+# def get_xero_contacts(request):
+#     """DEPRECATED: Use pull_xero_contacts in xero.py instead"""
+#     division = int(request.GET.get('division', 0))
+#     get_xero_token(request, division)
+#     access_token = request.session.get('access_token')
+#     headers = {
+#         'Authorization': 'Bearer ' + access_token,
+#         'Accept': 'application/json'
+#     }
+#     response = requests.get('https://api.xero.com/api.xro/2.0/Contacts', headers=headers)
+#     data = response.json()
+#     contacts = data['Contacts']
+#     for contact in contacts:
+#         xero_contact_id = contact['ContactID']
+#         contact_name = contact.get('Name', 'Not Set')
+#         contact_email = 'Not Set'
+#         existing_contact = Contacts.objects.filter(xero_contact_id=xero_contact_id).first()
+#         if existing_contact:
+#             if existing_contact.division != division:
+#                 existing_contact.division = division
+#                 existing_contact.save()
+#         else:
+#             new_contact = Contacts(
+#                 xero_contact_id=xero_contact_id,
+#                 division=division,
+#                 contact_name=contact_name,
+#                 contact_email=contact_email
+#             )
+#             new_contact.save()
+#     return JsonResponse(data)
 @csrf_exempt
 def mark_sent_to_boutique(request):
     if request.method == 'POST':
