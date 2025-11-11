@@ -55,8 +55,9 @@ urlpatterns = [
     path('upload_invoice_allocations/', views.upload_invoice_allocations, name='upload_invoice_allocations'),
     path('send_hc_claim_to_xero/', views.send_hc_claim_to_xero, name='send_hc_claim_to_xero'),
     path('xeroapi/', views.xeroapi, name='xeroapi'),
-    path('get_xero_token/', views.get_xero_token, name='get_xero_token'),
-    path('get_xero_contacts/', views.get_xero_contacts, name='get_xero_contacts'),
+    # DEPRECATED: get_xero_token and get_xero_contacts - use OAuth2 endpoints instead
+    # path('get_xero_token/', views.get_xero_token, name='get_xero_token'),
+    # path('get_xero_contacts/', views.get_xero_contacts, name='get_xero_contacts'),
     path('update_contacts', views.update_contacts, name='update_contacts'),
     path('post_invoice/', views.post_invoice, name='post_invoice'),
     path('test_xero_invoice/', views.test_xero_invoice, name='test_xero_invoice'),
