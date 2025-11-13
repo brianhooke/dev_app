@@ -20,8 +20,7 @@
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
                 {% block contacts_modal_footer %}
                 <div>
-                    <button type="button" class="btn btn-secondary" id="archiveContactBtn">Archive</button>
-                    <button type="button" class="btn btn-info" id="pullXeroContactsBtn">Pull Xero Contacts</button>
+                    <button type="button" class="btn btn-info" id="pullXeroContactsBtn">Pull/Update Xero Contacts</button>
                 </div>
                 <div>
                     <button type="button" class="btn btn-primary" id="addContactBtn">Add Contact</button>
@@ -32,3 +31,345 @@
         </div>
     </div>
 </div>
+
+<script>
+$(document).ready(function() {
+    // Load contacts function
+    function loadContacts(instancePk) {
+        if (!instancePk) {
+            $('#contactsModal tbody').html(`<tr><td colspan="6" style="text-align: center;">Please select a Xero instance</td></tr>`);
+            return;
+        }
+        
+        fetch(`/get_contacts_by_instance/${instancePk}/`)
+            .then(response => response.json())
+            .then(contacts => {
+                const tbody = $('#contactsModal tbody');
+                tbody.empty();
+                
+                if (contacts.length === 0) {
+                    tbody.html(`<tr><td colspan="6" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
+                } else {
+                    contacts.forEach(contact => {
+                        // Create row element and attach data using jQuery
+                        let row = $(`<tr data-contact-pk="${contact.contact_pk}"></tr>`);
+                        row.data('contact', contact);
+                        
+                        // Format BSB as XXX-XXX
+                        let formattedBsb = '';
+                        if (contact.bank_bsb && contact.bank_bsb.length === 6) {
+                            formattedBsb = contact.bank_bsb.substring(0, 3) + '-' + contact.bank_bsb.substring(3);
+                        } else {
+                            formattedBsb = contact.bank_bsb || '';
+                        }
+                        
+                        // Format ABN as XX XXX XXX XXX
+                        let formattedAbn = '';
+                        if (contact.tax_number) {
+                            const abn = contact.tax_number.replace(/\s/g, '');
+                            if (abn.length === 11) {
+                                formattedAbn = abn.substring(0, 2) + ' ' + abn.substring(2, 5) + ' ' + abn.substring(5, 8) + ' ' + abn.substring(8);
+                            } else {
+                                formattedAbn = contact.tax_number;
+                            }
+                        }
+                        
+                        row.append(`
+                            <td class="contact-name">${contact.name || ''}</td>
+                            <td class="contact-email">${contact.email || ''}</td>
+                            <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
+                            <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
+                            <td class="contact-abn" style="white-space: nowrap;" data-abn="${contact.tax_number || ''}">${formattedAbn}</td>
+                            <td><button class="btn btn-sm btn-primary update-contact-btn">Update</button></td>
+                        `);
+                        
+                        tbody.append(row);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading contacts:', error);
+                $('#contactsModal tbody').html(`<tr><td colspan="6" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
+            });
+    }
+    
+    // Load contacts when modal is shown
+    $('#contactsModal').on('shown.bs.modal', function() {
+        const instancePk = $('#xeroInstanceSelect').val();
+        loadContacts(instancePk);
+    });
+    
+    // Reload contacts when dropdown changes
+    $(document).on('change', '#xeroInstanceSelect', function() {
+        const instancePk = $(this).val();
+        loadContacts(instancePk);
+    });
+    
+    // Update contact button handler - convert row to editable inputs
+    $(document).on('click', '.update-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        
+        // Get current values
+        const emailCell = row.find('.contact-email');
+        const bsbCell = row.find('.contact-bsb');
+        const accountCell = row.find('.contact-account');
+        const abnCell = row.find('.contact-abn');
+        
+        const email = emailCell.text().trim();
+        const bsb = String(bsbCell.data('bsb') || '');
+        const account = String(accountCell.data('account') || '');
+        const abn = String(abnCell.data('abn') || '');
+        
+        // Format BSB for input (XXX-XXX)
+        let bsbFormatted = '';
+        if (bsb.length === 6) {
+            bsbFormatted = bsb.substring(0, 3) + '-' + bsb.substring(3);
+        } else {
+            bsbFormatted = bsb;
+        }
+        
+        // Format ABN for input (XX XXX XXX XXX)
+        let abnFormatted = '';
+        if (abn) {
+            const abnClean = abn.replace(/\s/g, '');
+            if (abnClean.length === 11) {
+                abnFormatted = abnClean.substring(0, 2) + ' ' + abnClean.substring(2, 5) + ' ' + abnClean.substring(5, 8) + ' ' + abnClean.substring(8);
+            } else {
+                abnFormatted = abn;
+            }
+        }
+        
+        // Replace cells with input fields
+        emailCell.html(`<input type="text" class="form-control form-control-sm email-input" value="${email}" style="width: 180px;">`);
+        bsbCell.html(`<input type="text" class="form-control form-control-sm bsb-input" value="${bsbFormatted}" maxlength="7" style="width: 80px;">`);
+        accountCell.html(`<input type="text" class="form-control form-control-sm account-input" value="${account}" style="width: 120px;">`);
+        abnCell.html(`<input type="text" class="form-control form-control-sm abn-input" value="${abnFormatted}" maxlength="14" style="width: 130px;">`);
+        
+        // Change button to Save/Cancel
+        button.replaceWith(`
+            <button class="btn btn-sm btn-success save-contact-btn">Save</button>
+            <button class="btn btn-sm btn-secondary cancel-contact-btn">Cancel</button>
+        `);
+    });
+    
+    // BSB input handler - maintain fixed dash
+    $(document).on('input', '.bsb-input', function() {
+        let value = $(this).val().replace(/[^0-9]/g, ''); // Remove non-digits
+        
+        if (value.length > 6) {
+            value = value.substring(0, 6);
+        }
+        
+        // Format as XXX-XXX
+        if (value.length > 3) {
+            $(this).val(value.substring(0, 3) + '-' + value.substring(3));
+        } else {
+            $(this).val(value);
+        }
+    });
+    
+    // Account number input handler - numbers only
+    $(document).on('input', '.account-input', function() {
+        let value = $(this).val().replace(/[^0-9]/g, '');
+        $(this).val(value);
+    });
+    
+    // ABN input handler - maintain fixed spaces
+    $(document).on('input', '.abn-input', function() {
+        let value = $(this).val().replace(/[^0-9]/g, ''); // Remove non-digits
+        
+        if (value.length > 11) {
+            value = value.substring(0, 11);
+        }
+        
+        // Format as XX XXX XXX XXX
+        let formatted = '';
+        if (value.length > 0) {
+            formatted = value.substring(0, 2);
+            if (value.length > 2) {
+                formatted += ' ' + value.substring(2, 5);
+            }
+            if (value.length > 5) {
+                formatted += ' ' + value.substring(5, 8);
+            }
+            if (value.length > 8) {
+                formatted += ' ' + value.substring(8);
+            }
+        }
+        
+        $(this).val(formatted);
+    });
+    
+    // Save button handler - validate and update contact in Xero
+    $(document).on('click', '.save-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        const contactPk = row.data('contact-pk');
+        const instancePk = $('#xeroInstanceSelect').val();
+        
+        // Get input values
+        const emailInput = row.find('.email-input').val();
+        const bsbInput = row.find('.bsb-input').val();
+        const accountInput = row.find('.account-input').val();
+        const abnInput = row.find('.abn-input').val();
+        
+        // Extract digits only for validation
+        const bsbDigits = bsbInput.replace(/[^0-9]/g, '');
+        const accountDigits = accountInput.replace(/[^0-9]/g, '');
+        const abnDigits = abnInput.replace(/[^0-9]/g, '');
+        
+        // Validation checks
+        // Basic email validation
+        if (emailInput && emailInput.trim() !== '') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailInput)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+        }
+        
+        // If either BSB or Account has digits, both must be filled
+        if ((bsbDigits || accountDigits) && !(bsbDigits && accountDigits)) {
+            alert('Both BSB and Account Number must be filled in together');
+            return;
+        }
+        
+        if (bsbDigits && bsbDigits.length !== 6) {
+            alert('BSB must have exactly 6 digits');
+            return;
+        }
+        
+        if (accountDigits && accountDigits.length < 6) {
+            alert('Account number must have at least 6 digits');
+            return;
+        }
+        
+        if (abnDigits && abnDigits.length !== 11) {
+            alert('ABN must have exactly 11 digits');
+            return;
+        }
+        
+        // Show processing state
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        row.find('.cancel-contact-btn').prop('disabled', true);
+        
+        // Make AJAX call to update contact
+        fetch(`/update_contact_details/${instancePk}/${contactPk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify({
+                email: emailInput,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Save');
+                row.find('.cancel-contact-btn').prop('disabled', false);
+                
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                // Success - reload contacts to show updated values in display mode
+                loadContacts(instancePk);
+                alert('Contact updated successfully!');
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating contact:', error);
+            
+            // Revert to editable state on error
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Save');
+            row.find('.cancel-contact-btn').prop('disabled', false);
+            
+            // Show specific error message
+            if (error.message.includes('408') || error.message.includes('timeout')) {
+                alert('Request timed out. The Xero API is not responding. Please try again.');
+            } else if (error.message.includes('503') || error.message.includes('Connection')) {
+                alert('Connection error. Cannot reach Xero API. Please check your internet connection.');
+            } else {
+                alert(`Failed to update contact: ${error.message}`);
+            }
+        });
+    });
+    
+    // Cancel button handler - revert to display mode
+    $(document).on('click', '.cancel-contact-btn', function() {
+        const instancePk = $('#xeroInstanceSelect').val();
+        
+        // Reload contacts to reset the row
+        if (instancePk) {
+            loadContacts(instancePk);
+        }
+    });
+    
+    // Pull Xero Contacts button handler
+    $(document).on('click', '#pullXeroContactsBtn', function() {
+        const xeroInstancePk = $('#xeroInstanceSelect').val();
+        
+        if (!xeroInstancePk) {
+            alert('Please select a Xero instance');
+            return;
+        }
+        
+        // Disable button and show loading state
+        const button = $(this);
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
+        
+        fetch(`/pull_xero_contacts/${xeroInstancePk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            }
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/xero_oauth_authorize/${xeroInstancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                alert(`Success! ${body.details.new_contacts_added} new contacts added, ${body.details.contacts_updated} contacts updated, ${body.details.contacts_unchanged} contacts unchanged.`);
+                // Reload contacts table
+                loadContacts(xeroInstancePk);
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+            } else {
+                alert(`Error: ${body.message}`);
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to pull contacts. Please try again.');
+            button.prop('disabled', false).html('Pull/Update Xero Contacts');
+        });
+    });
+    
+    // Expose loadContacts globally for dashboard controller
+    window.loadContacts = loadContacts;
+});
+</script>

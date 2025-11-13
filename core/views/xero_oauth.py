@@ -143,7 +143,15 @@ def xero_oauth_callback(request):
         if connections_response.status_code == 200:
             connections = connections_response.json()
             if connections:
-                tenant_id = connections[0].get('tenantId')
+                # Sort by createdDateUtc to get the most recently authorized connection
+                # This ensures we get the organization the user just selected
+                sorted_connections = sorted(connections, key=lambda x: x.get('createdDateUtc', ''), reverse=True)
+                tenant_id = sorted_connections[0].get('tenantId')
+                tenant_name = sorted_connections[0].get('tenantName', 'Unknown')
+                
+                logger.info(f"Storing tenant_id: {tenant_id} ({tenant_name}) for instance {instance_pk}")
+                logger.info(f"All connections: {[(c.get('tenantName'), c.get('tenantId')) for c in connections]}")
+                
                 xero_instance.oauth_tenant_id = tenant_id
         
         # Store tokens

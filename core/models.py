@@ -321,8 +321,11 @@ class Contacts(models.Model):
     name = models.CharField(max_length=200)
     email = models.EmailField(max_length=254)
     status = models.CharField(max_length=200)
-    bank_details = models.TextField(blank=True, null=True)
+    bank_details = models.TextField(blank=True, null=True)  # Legacy field - keeping for reference
+    bank_bsb = models.CharField(max_length=20, blank=True, null=True)
+    bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     bank_details_verified = models.IntegerField(default=0)  # 0 for no, 1 for yes
+    tax_number = models.CharField(max_length=100, blank=True, null=True)
     division = models.IntegerField(null=True, blank=True) #can delete this after "checked" is integrated
     checked = models.IntegerField(default=0)  # 0 for none, 1 for supplier, 2 for client
     

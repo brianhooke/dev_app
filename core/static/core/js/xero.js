@@ -64,20 +64,35 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/test_xero_connection/${instancePk}/`, {
             method: 'GET'
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Change button to green tick immediately (no alert)
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (body.status === 'success') {
+                // Show alert with organization details for debugging
+                const orgName = body.details.xero_org_name || 'Unknown';
+                const instanceName = body.details.xero_instance_name || instanceName;
+                const tenantId = body.details.tenant_id || 'Unknown';
+                
+                alert(`✓ Connection Successful!\n\nXero Organization: ${orgName}\nInstance Name: ${instanceName}\nTenant ID: ${tenantId}`);
+                
+                // Change button to green tick
                 button.removeClass('btn-primary').addClass('btn-success');
                 button.prop('disabled', false).html('<i class="fas fa-check"></i>');
                 
                 // Update the name in the table if it changed
-                if (data.details && data.details.xero_name) {
-                    row.find('td:first').text(data.details.xero_name);
+                if (body.details && body.details.xero_org_name) {
+                    row.find('td:first').text(body.details.xero_org_name);
                 }
             } else {
                 button.prop('disabled', false).html('Test');
-                alert(`✗ Test Failed\n\n${data.message}`);
+                
+                // Check if authorization is needed
+                if (status === 401 && body.needs_auth) {
+                    if (confirm(`${body.message}\n\nWould you like to authorize this instance now?`)) {
+                        window.location.href = `/xero_oauth_authorize/${instancePk}/`;
+                    }
+                } else {
+                    alert(`✗ Test Failed\n\n${body.message}`);
+                }
             }
         })
         .catch(error => {

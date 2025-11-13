@@ -31,7 +31,7 @@ def dashboard_view(request):
     ]
     
     # Contacts table configuration
-    contacts_columns = ["Name", "Email Address"]
+    contacts_columns = ["Name", "Email Address", "BSB", "Account Number", "ABN", "Update"]
     contacts_rows = []  # No data for now
     
     # Get XeroInstances for dropdown
