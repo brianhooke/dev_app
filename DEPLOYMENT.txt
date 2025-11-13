@@ -1,98 +1,107 @@
 ===========================================
 AWS ELASTIC BEANSTALK DEPLOYMENT GUIDE
-Docker-based Deployment Method
+Docker-based Deployment via AWS CLI
 ===========================================
 
 CURRENT DEPLOYMENT STACK
 ------------------------
 Platform: AWS Elastic Beanstalk with Docker (docker-compose)
-Region: ap-southeast-2 (Sydney)
-Environment: dev-app-docker
-URL: http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com
+Region: us-east-1 (N. Virginia)
+Environment: dev-app-prod
+URL: https://app.mason.build
 
 Components:
 - Application: Django 5.0.6 in Docker container
-- Database: AWS RDS PostgreSQL (***REMOVED***)
-- Static/Media: AWS S3 (dev-app-mason-bucket)
-- Load Balancer: Application Load Balancer (auto-created by EB)
+- Database: SQLite (local to container)
+- Static/Media: Local filesystem
+- Load Balancer: Application Load Balancer with HTTPS
+- DNS: Route 53 with app.mason.build CNAME
 
 DEPLOYMENT PROCESS
 ------------------
 1. Make code changes locally
+
 2. Commit to git:
    git add .
    git commit -m "your changes"
 
-3. Deploy to AWS:
-   eb deploy
+3. Deploy to AWS using AWS CLI:
+   zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.pyc" ".venv/*" "*.sqlite3" ".DS_Store" "*.log" "csv/*" "pdfs/*" ".elasticbeanstalk/*" "venv/*" "media/*" && \
+   aws s3 cp deploy.zip s3://elasticbeanstalk-us-east-1-629256540295/dev-app/deploy-vXX-description.zip && \
+   aws elasticbeanstalk create-application-version \
+     --application-name dev-app \
+     --version-label vXX-description \
+     --source-bundle S3Bucket="elasticbeanstalk-us-east-1-629256540295",S3Key="dev-app/deploy-vXX-description.zip" && \
+   aws elasticbeanstalk update-environment \
+     --environment-name dev-app-prod \
+     --version-label vXX-description
 
-That's it! Deployment takes 2-3 minutes.
+   Note: Replace XX with next version number and description with brief change summary
+
+That's it! Deployment takes 5-10 minutes.
 
 WHAT HAPPENS DURING DEPLOYMENT
 -------------------------------
-1. EB zips your local code and uploads to S3
-2. Docker image is built on AWS using Dockerfile
-3. Container starts using docker-compose.yml
-4. Startup script (start.sh) runs:
-   - Collects static files to S3
-   - Runs database migrations
+1. Local code is zipped (excluding .git, __pycache__, venv, etc.)
+2. Zip file is uploaded to S3 bucket
+3. EB creates new application version from S3 zip
+4. EB updates environment to use new version
+5. Docker image is built on AWS using Dockerfile
+6. Container starts using docker-compose.yml
+7. Startup script (start.sh) runs:
+   - Runs database migrations automatically
+   - Collects static files
    - Starts gunicorn with Django on port 80
-5. Load balancer switches traffic to new container
-6. Old container is terminated
+8. Load balancer switches traffic to new container
+9. Old container is terminated
 
 DEPLOYMENT FEATURES
 -------------------
 ✓ Zero-downtime deployments (old version runs until new one is healthy)
 ✓ Automatic rollback if deployment fails
 ✓ Automatic database migrations on startup
-✓ Static files automatically uploaded to S3
+✓ Version control via numbered releases (v39, v40, etc.)
+✓ Direct AWS CLI control without eb CLI dependency
 
 IMPORTANT NOTES
 ---------------
 - GitHub is NOT involved in deployment (deploys from local code)
-- Environment variables persist across deployments (set once with eb setenv)
+- Always commit changes to git before deploying
+- Increment version number for each deployment (v39, v40, v41, etc.)
+- Use descriptive version labels (e.g., v39-contacts-update)
 - Migrations run automatically on every deployment
 - Container restarts on every deployment
+- SQLite database is local to container (data persists via volume mount)
 
-USEFUL COMMANDS
----------------
+USEFUL AWS CLI COMMANDS
+-----------------------
 # Check environment status
-eb status
+aws elasticbeanstalk describe-environments --environment-names dev-app-prod
+
+# View recent events
+aws elasticbeanstalk describe-events --environment-name dev-app-prod --max-items 20
+
+# List application versions
+aws elasticbeanstalk describe-application-versions --application-name dev-app
 
 # View environment health
-eb health
-
-# View logs
-eb logs
-
-# Set environment variables
-eb setenv VARIABLE_NAME=value
-
-# SSH into instance (if configured)
-eb ssh
-
-# Open app in browser
-eb open
-
-# List all environments
-eb list
+aws elasticbeanstalk describe-environment-health --environment-name dev-app-prod --attribute-names All
 
 ENVIRONMENT VARIABLES
 ---------------------
-Currently set via: eb setenv
+Currently set via AWS EB Console or AWS CLI
+
+Settings Module:
+- DJANGO_SETTINGS_MODULE=dev_app.settings.local (uses SQLite)
 
 Required variables:
-- DJANGO_SETTINGS_MODULE=dev_app.settings.production_aws
 - SECRET_KEY
-- RDS_DB_NAME, RDS_USERNAME, RDS_PASSWORD, RDS_HOSTNAME, RDS_PORT
-- AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-- AWS_STORAGE_BUCKET_NAME, AWS_S3_REGION_NAME
 - PROJECT_NAME
 
 Optional variables:
 - EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_CC, DEFAULT_FROM_EMAIL
 - LETTERHEAD_PATH, BACKGROUND_IMAGE_PATH
-- XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_PROJECT_ID
+- XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_ENCRYPTION_KEY
 
 KEY FILES FOR DEPLOYMENT
 ------------------------
@@ -132,74 +141,103 @@ After production launch:
 COST CONSIDERATIONS
 -------------------
 Current resources:
-- EC2 instance (t3.small): ~$15/month
-- RDS PostgreSQL (db.t3.micro): ~$15/month
-- S3 storage: ~$1-5/month
+- EC2 instance (t3.small or similar): ~$15/month
+- S3 storage (for deployment zips): ~$1/month
 - Load Balancer: ~$16/month
 - Data transfer: Variable
 
-Total: ~$50-60/month for this setup
+Total: ~$30-40/month for this setup
 
 Can be optimized by:
 - Using smaller instance types
-- Stopping environment when not in use (eb terminate)
+- Terminating environment when not in use
 - Using reserved instances for production
 
 TROUBLESHOOTING
 ---------------
 If deployment fails:
-1. Check eb logs for errors
-2. Verify environment variables are set
-3. Check RDS security group allows EB instances
-4. Verify S3 bucket policy allows public read
+1. Check AWS EB console for deployment errors
+2. View recent events: aws elasticbeanstalk describe-events --environment-name dev-app-prod
+3. Verify environment variables are set in EB console
+4. Check that S3 bucket exists and is accessible
+5. Verify Docker build completes successfully
 
 If app shows errors:
-1. Check eb logs
-2. Verify database connection (RDS_HOSTNAME, etc.)
-3. Check S3 permissions for static files
+1. Check logs via AWS EB console or CloudWatch
+2. Verify DJANGO_SETTINGS_MODULE is set to dev_app.settings.local
+3. Check that migrations ran successfully in startup logs
 4. Verify all required environment variables are set
 
 If static files don't load:
-1. Check S3 bucket policy allows public read
-2. Verify collectstatic ran successfully in logs
-3. Check STATIC_URL in settings points to S3
+1. Check that collectstatic ran successfully in startup logs
+2. Verify STATIC_ROOT and STATIC_URL in settings
+3. Check file permissions in container
 
 FUTURE IMPROVEMENTS (OPTIONAL)
 ------------------------------
-- Add HTTPS/SSL certificate
-- Set up CI/CD with GitHub Actions
+- Set up CI/CD with GitHub Actions for automated deployments
 - Add CloudWatch monitoring and alerts
 - Create staging environment
-- Optimize collectstatic (move to build time)
+- Migrate to RDS PostgreSQL for production data persistence
 - Add health check endpoint
 - Configure auto-scaling rules
+- Implement blue-green deployments
 
 RELATED FILES
 -------------
 AWS_DEPLOYMENT_GUIDE.md - Detailed AWS setup documentation
-production_aws.py       - AWS-specific Django settings
-base.py                 - Base Django settings
-local.py               - Local development settings
-production.py          - Heroku production settings (legacy)
+local.py               - Settings file used in production (SQLite)
+base.py                - Base Django settings
+production_aws.py      - AWS-specific settings (RDS PostgreSQL - not currently used)
 
-ALTERNATIVE DEPLOYMENTS
------------------------
-Heroku (spitfire app): https://spitfire-fa8cd42974f9.herokuapp.com/
-- Simpler setup, less configuration
-- Automatic SSL, easier management
-- More expensive at scale
-- Good for testing/staging
+TRANSFERRING DATA TO AWS
+------------------------
+Since AWS uses SQLite (local to container), you can transfer data using management commands:
 
-AWS EB Docker (current): http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com
-- More control and flexibility
-- Cheaper at scale
-- Better for production long-term
-- Requires more setup (completed)
+Export data locally:
+   python manage.py export_xero_instances --output xero_instances_export.json
+
+Deploy to AWS (includes the export file):
+   [Use the standard deployment command above]
+
+Import data on AWS (via SSH or AWS Systems Manager):
+   # SSH into EC2 instance
+   ssh -i your-key.pem ec2-user@[instance-ip]
+   
+   # Navigate to app directory
+   cd /var/app/current
+   
+   # Activate virtual environment
+   source /var/app/venv/*/bin/activate
+   
+   # Run import command
+   python manage.py import_xero_instances --input xero_instances_export.json
+   
+   # Or use --update flag to overwrite existing records
+   python manage.py import_xero_instances --input xero_instances_export.json --update
+
+Alternative: Use AWS Systems Manager Session Manager (no SSH key needed)
+   1. Go to AWS Systems Manager Console
+   2. Click "Session Manager" → "Start session"
+   3. Select your EC2 instance
+   4. Run the same commands as above
+
+Note: Xero credentials are encrypted using XERO_ENCRYPTION_KEY from settings.
+Ensure the same encryption key is set on both local and AWS environments.
+
+DEPLOYMENT HISTORY
+------------------
+Recent deployments:
+- v40-xero-import: Added Xero instances export/import management commands
+- v39-contacts-update: Added Xero contacts update functionality (BSB, Account, ABN, Email)
+- v38-sqlite: Switched to SQLite database
+- v37-subdomain: Simplified URLs for app.mason.build subdomain
 
 SUPPORT & DOCUMENTATION
 -----------------------
 AWS EB Documentation: https://docs.aws.amazon.com/elasticbeanstalk/
+AWS CLI EB Reference: https://docs.aws.amazon.com/cli/latest/reference/elasticbeanstalk/
 Docker Documentation: https://docs.docker.com/
 Django Deployment: https://docs.djangoproject.com/en/5.0/howto/deployment/
 
-Last Updated: 2025-11-08
+Last Updated: 2025-11-14

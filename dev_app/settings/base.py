@@ -29,6 +29,13 @@ XERO_ENCRYPTION_KEY = os.environ.get('XERO_ENCRYPTION_KEY', 'yGUzgEzWkkCsHnb_lof
 
 ALLOWED_HOSTS = ['herokuapp.com', 'mason.build', 'app.mason.build', '*.elasticbeanstalk.com', '*']
 
+# CSRF trusted origins for HTTPS
+CSRF_TRUSTED_ORIGINS = [
+    'https://app.mason.build',
+    'https://mason.build',
+    'https://*.elasticbeanstalk.com',
+]
+
 # Application definition
 
 INSTALLED_APPS = [
