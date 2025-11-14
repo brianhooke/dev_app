@@ -21,11 +21,15 @@ DEPLOYMENT PROCESS
 ------------------
 1. Make code changes locally
 
-2. Commit to git:
+2. Increment version number in dashboard:
+   Update the version number in core/templates/core/dashboard.html
+   (e.g., v31 → v32)
+
+3. Commit to git:
    git add .
    git commit -m "your changes"
 
-3. Deploy to AWS using AWS CLI:
+4. Deploy to AWS using AWS CLI:
    zip -r deploy.zip . -x "*.git*" "*__pycache__*" "*.pyc" ".venv/*" "*.sqlite3" ".DS_Store" "*.log" "csv/*" "pdfs/*" ".elasticbeanstalk/*" "venv/*" "media/*" && \
    aws s3 cp deploy.zip s3://elasticbeanstalk-us-east-1-629256540295/dev-app/deploy-vXX-description.zip && \
    aws elasticbeanstalk create-application-version \
