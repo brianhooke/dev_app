@@ -67,14 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json().then(data => ({status: response.status, body: data})))
         .then(({status, body}) => {
             if (body.status === 'success') {
-                // Show alert with organization details for debugging
-                const orgName = body.details.xero_org_name || 'Unknown';
-                const instanceName = body.details.xero_instance_name || instanceName;
-                const tenantId = body.details.tenant_id || 'Unknown';
-                
-                alert(`✓ Connection Successful!\n\nXero Organization: ${orgName}\nInstance Name: ${instanceName}\nTenant ID: ${tenantId}`);
-                
-                // Change button to green tick
+                // Change button to green tick (no alert needed)
                 button.removeClass('btn-primary').addClass('btn-success');
                 button.prop('disabled', false).html('<i class="fas fa-check"></i>');
                 
@@ -85,14 +78,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 button.prop('disabled', false).html('Test');
                 
-                // Check if authorization is needed
-                if (status === 401 && body.needs_auth) {
-                    if (confirm(`${body.message}\n\nWould you like to authorize this instance now?`)) {
-                        window.location.href = `/xero_oauth_authorize/${instancePk}/`;
-                    }
-                } else {
-                    alert(`✗ Test Failed\n\n${body.message}`);
-                }
+                // Only show error alerts, not success
+                alert(`✗ Test Failed\n\n${body.message}`);
             }
         })
         .catch(error => {

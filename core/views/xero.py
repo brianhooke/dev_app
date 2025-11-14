@@ -193,6 +193,7 @@ def test_xero_connection(request, instance_pk):
             from .xero_oauth import get_oauth_token
             success, token_or_error = get_oauth_token(xero_instance)
             if not success:
+                logger.error(f"get_oauth_token failed for instance {instance_pk}: {token_or_error}")
                 return JsonResponse({
                     'status': 'error',
                     'message': f'Authentication failed: {token_or_error}',
@@ -201,27 +202,58 @@ def test_xero_connection(request, instance_pk):
             
             access_token = token_or_error
             
-            # Step 2: Test API with a simple call to get connections
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json'
-            }
+            # Step 2: First, get the list of authorized tenants for this token
+            connections_response = requests.get(
+                'https://api.xero.com/connections',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json'
+                },
+                timeout=10
+            )
             
-            # Use the stored tenant_id for this instance
-            tenant_id = xero_instance.oauth_tenant_id
-            
-            if not tenant_id:
+            if connections_response.status_code != 200:
+                logger.error(f"Failed to get connections for instance {instance_pk}: {connections_response.text}")
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'No tenant ID found. Please authorize this instance first.',
+                    'message': f'Failed to verify authorized tenants: {connections_response.status_code}',
                     'needs_auth': True
                 }, status=401)
             
+            connections = connections_response.json()
+            logger.info(f"Authorized connections for instance {instance_pk}: {connections}")
+            
+            # Get the stored tenant_id
+            stored_tenant_id = xero_instance.oauth_tenant_id
+            
+            if not connections:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No Xero organizations are authorized for this token. Please re-authorize.',
+                    'needs_auth': True
+                }, status=401)
+            
+            # Use the first authorized tenant (or match stored one if it exists)
+            tenant_id = None
+            for conn in connections:
+                if stored_tenant_id and conn.get('tenantId') == stored_tenant_id:
+                    tenant_id = stored_tenant_id
+                    break
+            
+            # If stored tenant not found in authorized list, use the first one
+            if not tenant_id:
+                tenant_id = connections[0].get('tenantId')
+                logger.warning(f"Stored tenant_id {stored_tenant_id} not in authorized list. Using {tenant_id} instead.")
+                # Update the stored tenant_id
+                xero_instance.oauth_tenant_id = tenant_id
+                xero_instance.save()
+            
             logger.info(f"Testing connection for instance {instance_pk} with tenant_id: {tenant_id}")
             
-            # Fetch organisation details using the stored tenant_id
-            org_response = requests.get(
-                'https://api.xero.com/api.xro/2.0/Organisation',
+            # Step 3: Test API with a simple contacts call (we have accounting.contacts scope)
+            # Using contacts instead of Organisation because Organisation requires accounting.settings scope
+            test_response = requests.get(
+                'https://api.xero.com/api.xro/2.0/Contacts?page=1&pageSize=1',
                 headers={
                     'Authorization': f'Bearer {access_token}',
                     'Accept': 'application/json',
@@ -230,34 +262,38 @@ def test_xero_connection(request, instance_pk):
                 timeout=10
             )
             
-            if org_response.status_code == 200:
-                org_data = org_response.json()
+            if test_response.status_code == 200:
+                # API is working! Get the org name from the connection info
                 org_name = None
+                for conn in connections:
+                    if conn.get('tenantId') == tenant_id:
+                        org_name = conn.get('tenantName')
+                        break
                 
-                if 'Organisations' in org_data and len(org_data['Organisations']) > 0:
-                    org_name = org_data['Organisations'][0].get('Name')
-                    logger.info(f"Retrieved org name: {org_name} for tenant_id: {tenant_id}")
+                logger.info(f"API test successful for instance {instance_pk}, org: {org_name}")
                 
                 return JsonResponse({
                     'status': 'success',
-                    'message': f'Connection successful!',
+                    'message': f'✓ API Connection Working',
                     'details': {
                         'xero_org_name': org_name,
                         'xero_instance_name': xero_instance.xero_name,
                         'tenant_id': tenant_id
                     }
                 })
-            elif org_response.status_code == 401:
+            elif test_response.status_code == 401:
                 # Token is invalid or expired
+                logger.error(f"Xero API returned 401 for instance {instance_pk}. Response: {test_response.text}")
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'OAuth token is invalid or expired. Please re-authorize this instance.',
-                    'needs_auth': True
+                    'message': 'OAuth token is invalid or expired. Token refresh may have failed.',
+                    'needs_auth': False  # Don't prompt for re-auth since token exists
                 }, status=401)
             else:
+                logger.error(f"Xero API returned {test_response.status_code} for instance {instance_pk}. Response: {test_response.text}")
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'API call failed with status {org_response.status_code}'
+                    'message': f'API call failed with status {test_response.status_code}: {test_response.text[:100]}'
                 }, status=400)
                 
         except XeroInstances.DoesNotExist:
