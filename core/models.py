@@ -329,6 +329,14 @@ class Contacts(models.Model):
     division = models.IntegerField(null=True, blank=True) #can delete this after "checked" is integrated
     checked = models.IntegerField(default=0)  # 0 for none, 1 for supplier, 2 for client
     
+    # Verified fields - independently stored verified contact details
+    verified_name = models.CharField(max_length=200, blank=True, null=True)
+    verified_email = models.EmailField(max_length=254, blank=True, null=True)
+    verified_bank_bsb = models.CharField(max_length=20, blank=True, null=True)
+    verified_bank_account_number = models.CharField(max_length=50, blank=True, null=True)
+    verified_tax_number = models.CharField(max_length=100, blank=True, null=True)
+    verified_notes = models.CharField(max_length=500, blank=True, null=True)
+    
     def __str__(self):
         return self.name
 

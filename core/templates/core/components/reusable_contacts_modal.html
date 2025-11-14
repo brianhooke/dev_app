@@ -34,6 +34,108 @@
 
 <script>
 $(document).ready(function() {
+    // Validation function for contact fields
+    function validateContactFields(row, options = {}) {
+        const requireName = options.requireName || false;
+        const requireEmail = options.requireEmail || false;
+        
+        // Get input values
+        const nameInput = row.find('.name-input');
+        const emailInput = row.find('.email-input');
+        const bsbInput = row.find('.bsb-input');
+        const accountInput = row.find('.account-input');
+        const abnInput = row.find('.abn-input');
+        
+        const name = nameInput.val() ? nameInput.val().trim() : '';
+        const email = emailInput.val() ? emailInput.val().trim() : '';
+        const bsb = bsbInput.val() || '';
+        const account = accountInput.val() || '';
+        const abn = abnInput.val() || '';
+        
+        // Extract digits only
+        const bsbDigits = bsb.replace(/[^0-9]/g, '');
+        const accountDigits = account.replace(/[^0-9]/g, '');
+        const abnDigits = abn.replace(/[^0-9]/g, '');
+        
+        // Name validation (for add only)
+        if (requireName && !name) {
+            return {
+                valid: false,
+                message: 'Name is required',
+                focusElement: nameInput
+            };
+        }
+        
+        // Email required validation (for add only)
+        if (requireEmail && !email) {
+            return {
+                valid: false,
+                message: 'Email is required',
+                focusElement: emailInput
+            };
+        }
+        
+        // Email format validation (if email is provided)
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return {
+                    valid: false,
+                    message: 'Please enter a valid email address',
+                    focusElement: emailInput
+                };
+            }
+        }
+        
+        // BSB and Account validation - both must be filled together
+        if ((bsbDigits || accountDigits) && !(bsbDigits && accountDigits)) {
+            return {
+                valid: false,
+                message: 'Both BSB and Account Number must be filled in together',
+                focusElement: null
+            };
+        }
+        
+        // BSB length validation
+        if (bsbDigits && bsbDigits.length !== 6) {
+            return {
+                valid: false,
+                message: 'BSB must have exactly 6 digits',
+                focusElement: bsbInput
+            };
+        }
+        
+        // Account number length validation
+        if (accountDigits && accountDigits.length < 6) {
+            return {
+                valid: false,
+                message: 'Account number must have at least 6 digits',
+                focusElement: accountInput
+            };
+        }
+        
+        // ABN length validation
+        if (abnDigits && abnDigits.length !== 11) {
+            return {
+                valid: false,
+                message: 'ABN must have exactly 11 digits',
+                focusElement: abnInput
+            };
+        }
+        
+        // All validations passed
+        return {
+            valid: true,
+            values: {
+                name: name,
+                email: email,
+                bsbDigits: bsbDigits,
+                accountDigits: accountDigits,
+                abnDigits: abnDigits
+            }
+        };
+    }
+    
     // Load contacts function
     function loadContacts(instancePk) {
         if (!instancePk) {
@@ -74,8 +176,16 @@ $(document).ready(function() {
                             }
                         }
                         
+                        // Add verified badge based on status
+                        let verifiedBadge = '';
+                        if (contact.verified === 1) {
+                            verifiedBadge = ' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>';
+                        } else if (contact.verified === 2) {
+                            verifiedBadge = ' <span class="badge badge-danger verified-badge" style="font-size: 0.7em;">✗ Details Changed</span>';
+                        }
+                        
                         row.append(`
-                            <td class="contact-name">${contact.name || ''}</td>
+                            <td class="contact-name">${contact.name || ''}${verifiedBadge}</td>
                             <td class="contact-email">${contact.email || ''}</td>
                             <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
                             <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
@@ -208,47 +318,21 @@ $(document).ready(function() {
         const contactPk = row.data('contact-pk');
         const instancePk = $('#xeroInstanceSelect').val();
         
-        // Get input values
-        const emailInput = row.find('.email-input').val();
-        const bsbInput = row.find('.bsb-input').val();
-        const accountInput = row.find('.account-input').val();
-        const abnInput = row.find('.abn-input').val();
+        // Validate using common function (no required fields for update)
+        const validation = validateContactFields(row, {
+            requireName: false,
+            requireEmail: false
+        });
         
-        // Extract digits only for validation
-        const bsbDigits = bsbInput.replace(/[^0-9]/g, '');
-        const accountDigits = accountInput.replace(/[^0-9]/g, '');
-        const abnDigits = abnInput.replace(/[^0-9]/g, '');
-        
-        // Validation checks
-        // Basic email validation
-        if (emailInput && emailInput.trim() !== '') {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(emailInput)) {
-                alert('Please enter a valid email address');
-                return;
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) {
+                validation.focusElement.focus();
             }
-        }
-        
-        // If either BSB or Account has digits, both must be filled
-        if ((bsbDigits || accountDigits) && !(bsbDigits && accountDigits)) {
-            alert('Both BSB and Account Number must be filled in together');
             return;
         }
         
-        if (bsbDigits && bsbDigits.length !== 6) {
-            alert('BSB must have exactly 6 digits');
-            return;
-        }
-        
-        if (accountDigits && accountDigits.length < 6) {
-            alert('Account number must have at least 6 digits');
-            return;
-        }
-        
-        if (abnDigits && abnDigits.length !== 11) {
-            alert('ABN must have exactly 11 digits');
-            return;
-        }
+        const { email, bsbDigits, accountDigits, abnDigits } = validation.values;
         
         // Show processing state
         const inputs = row.find('input');
@@ -264,7 +348,7 @@ $(document).ready(function() {
                 'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
             },
             body: JSON.stringify({
-                email: emailInput,
+                email: email,
                 bsb: bsbDigits,
                 account_number: accountDigits,
                 tax_number: abnDigits
@@ -367,6 +451,173 @@ $(document).ready(function() {
             alert('Failed to pull contacts. Please try again.');
             button.prop('disabled', false).html('Pull/Update Xero Contacts');
         });
+    });
+    
+    // Add Contact button handler - insert blank row at top
+    $(document).on('click', '#addContactBtn', function() {
+        const instancePk = $('#xeroInstanceSelect').val();
+        
+        if (!instancePk) {
+            alert('Please select a Xero instance');
+            return;
+        }
+        
+        // Check if add row already exists
+        if ($('#contactsModal tbody .add-contact-row').length > 0) {
+            alert('Please complete or cancel the current add operation');
+            return;
+        }
+        
+        // Create blank input row
+        const addRow = $(`<tr class="add-contact-row" style="background-color: #f8f9fa;"></tr>`);
+        addRow.append(`
+            <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 150px;"></td>
+            <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 180px;"></td>
+            <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
+            <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 120px;"></td>
+            <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 130px;"></td>
+            <td>
+                <button class="btn btn-sm btn-success add-new-contact-btn">Add</button>
+                <button class="btn btn-sm btn-secondary cancel-add-contact-btn">Cancel</button>
+            </td>
+        `);
+        
+        // Insert at the top of tbody
+        $('#contactsModal tbody').prepend(addRow);
+        
+        // Focus on name input
+        addRow.find('.name-input').focus();
+    });
+    
+    // Add new contact save button handler
+    $(document).on('click', '.add-new-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        const instancePk = $('#xeroInstanceSelect').val();
+        
+        // Validate using common function (name and email required for add)
+        const validation = validateContactFields(row, {
+            requireName: true,
+            requireEmail: true
+        });
+        
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) {
+                validation.focusElement.focus();
+            }
+            return;
+        }
+        
+        const { name, email, bsbDigits, accountDigits, abnDigits } = validation.values;
+        
+        // Show processing state
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        row.find('.cancel-add-contact-btn').prop('disabled', true);
+        
+        // Make AJAX call to create contact
+        fetch(`/create_contact/${instancePk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify({
+                name: name,
+                email: email,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Add');
+                row.find('.cancel-add-contact-btn').prop('disabled', false);
+                
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                // Success - replace the add row with a display row
+                const contact = body.contact;
+                
+                // Format BSB as XXX-XXX
+                let formattedBsb = '';
+                if (contact.bank_bsb && contact.bank_bsb.length === 6) {
+                    formattedBsb = contact.bank_bsb.substring(0, 3) + '-' + contact.bank_bsb.substring(3);
+                } else {
+                    formattedBsb = contact.bank_bsb || '';
+                }
+                
+                // Format ABN as XX XXX XXX XXX
+                let formattedAbn = '';
+                if (contact.tax_number) {
+                    const abn = contact.tax_number.replace(/\s/g, '');
+                    if (abn.length === 11) {
+                        formattedAbn = abn.substring(0, 2) + ' ' + abn.substring(2, 5) + ' ' + abn.substring(5, 8) + ' ' + abn.substring(8);
+                    } else {
+                        formattedAbn = contact.tax_number;
+                    }
+                }
+                
+                // Create new display row
+                let newRow = $(`<tr data-contact-pk="${contact.contact_pk}" style="background-color: #d4edda;"></tr>`);
+                newRow.data('contact', contact);
+                
+                newRow.append(`
+                    <td class="contact-name">${contact.name || ''}</td>
+                    <td class="contact-email">${contact.email || ''}</td>
+                    <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
+                    <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
+                    <td class="contact-abn" style="white-space: nowrap;" data-abn="${contact.tax_number || ''}">${formattedAbn}</td>
+                    <td><button class="btn btn-sm btn-primary update-contact-btn">Update</button></td>
+                `);
+                
+                // Replace add row with new row
+                row.replaceWith(newRow);
+                
+                alert('Contact created successfully!');
+                
+                // Remove highlight after 3 seconds
+                setTimeout(() => {
+                    newRow.css('background-color', '');
+                }, 3000);
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating contact:', error);
+            
+            // Revert to editable state on error
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Add');
+            row.find('.cancel-add-contact-btn').prop('disabled', false);
+            
+            // Show specific error message
+            if (error.message.includes('408') || error.message.includes('timeout')) {
+                alert('Request timed out. The Xero API is not responding. Please try again.');
+            } else if (error.message.includes('503') || error.message.includes('Connection')) {
+                alert('Connection error. Cannot reach Xero API. Please check your internet connection.');
+            } else {
+                alert(`Failed to create contact: ${error.message}`);
+            }
+        });
+    });
+    
+    // Cancel add contact button handler
+    $(document).on('click', '.cancel-add-contact-btn', function() {
+        const row = $(this).closest('tr');
+        row.remove();
     });
     
     // Expose loadContacts globally for dashboard controller
