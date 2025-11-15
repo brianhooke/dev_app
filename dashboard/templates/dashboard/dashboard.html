@@ -71,14 +71,12 @@
         });
         
         // Function to populate bills table with filtering
-        function populateBillsTable(billsData, filterStatus) {
+        function populateBillsTable(billsData, filterFn) {
             // Clear existing table
             $('#billsTableBody').empty();
             
-            // Filter bills by status
-            var filteredBills = billsData.bills.filter(function(bill) {
-                return bill.invoice_status === filterStatus;
-            });
+            // Filter bills using provided filter function
+            var filteredBills = billsData.bills.filter(filterFn);
             
             if (filteredBills.length === 0) {
                 $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
@@ -268,8 +266,10 @@
                     // Store data globally for later use
                     window.billsData = response;
                     
-                    // Populate table with status = -2 (Inbox)
-                    populateBillsTable(response, -2);
+                    // Populate table with status = -2 (Inbox: unprocessed email bills)
+                    populateBillsTable(response, function(bill) {
+                        return bill.invoice_status === -2;
+                    });
                     
                     // Show modal
                     $('#billsModal').modal('show');
@@ -295,8 +295,12 @@
                     // Store data globally for later use
                     window.billsData = response;
                     
-                    // Populate table with status = -1 (Direct/Archived)
-                    populateBillsTable(response, -1);
+                    // Populate table with Direct bills: status=0, xero_instance non-null, project null
+                    populateBillsTable(response, function(bill) {
+                        return bill.invoice_status === 0 && 
+                               bill.xero_instance_id !== null && 
+                               bill.project_pk === null;
+                    });
                     
                     // Show modal
                     $('#billsModal').modal('show');
