@@ -94,19 +94,7 @@
                         });
                         row.append($('<td>').append(xeroSelect));
                         
-                        // 2. Supplier dropdown
-                        var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
-                        supplierSelect.append($('<option>').val('').text('Select...'));
-                        response.suppliers.forEach(function(supplier) {
-                            var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
-                            if (bill.contact_pk === supplier.contact_pk) {
-                                option.prop('selected', true);
-                            }
-                            supplierSelect.append(option);
-                        });
-                        row.append($('<td>').append(supplierSelect));
-                        
-                        // 3. Project dropdown
+                        // 2. Project dropdown
                         var projectSelect = $('<select>').addClass('form-control form-control-sm project-select');
                         projectSelect.append($('<option>').val('').text('Select...'));
                         response.projects.forEach(function(project) {
@@ -118,7 +106,26 @@
                         });
                         row.append($('<td>').append(projectSelect));
                         
-                        // 4. $ Net input
+                        // 3. Supplier dropdown
+                        var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
+                        supplierSelect.append($('<option>').val('').text('Select...'));
+                        response.suppliers.forEach(function(supplier) {
+                            var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
+                            if (bill.contact_pk === supplier.contact_pk) {
+                                option.prop('selected', true);
+                            }
+                            supplierSelect.append(option);
+                        });
+                        row.append($('<td>').append(supplierSelect));
+                        
+                        // 4. Invoice # input
+                        var invoiceNumberInput = $('<input>')
+                            .attr('type', 'text')
+                            .addClass('form-control form-control-sm invoice-number-input')
+                            .val(bill.supplier_invoice_number || '');
+                        row.append($('<td>').append(invoiceNumberInput));
+                        
+                        // 5. $ Net input
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
@@ -126,7 +133,7 @@
                             .val(bill.total_net || '');
                         row.append($('<td>').append(netInput));
                         
-                        // 5. $ GST input
+                        // 6. $ GST input
                         var gstInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')

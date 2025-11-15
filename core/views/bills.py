@@ -104,6 +104,7 @@ def get_bills_list(request):
             'xero_instance_id': invoice.project.xero_instance_id if invoice.project and invoice.project.xero_instance else None,
             'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
             'project_pk': invoice.project.projects_pk if invoice.project else None,
+            'supplier_invoice_number': invoice.supplier_invoice_number or '',
             'total_net': float(invoice.total_net) if invoice.total_net else None,
             'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
             'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
