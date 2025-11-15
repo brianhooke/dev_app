@@ -79,9 +79,15 @@
             if (modalType === 'inbox') {
                 $('#billsModalTitle').text('Bills - Inbox');
                 $('#lastColumnHeader').text('Archive');
+                // Hide allocations section for Inbox
+                $('#allocationsSection').hide();
+                $('#viewerSection').css('flex', '1');
             } else if (modalType === 'direct') {
                 $('#billsModalTitle').text('Bills - Direct');
                 $('#lastColumnHeader').text('Return to Inbox');
+                // Show allocations section for Direct
+                $('#allocationsSection').css('display', 'flex');
+                $('#viewerSection').css('flex', '0 0 66%');
             }
             
             // Filter bills using provided filter function
@@ -647,6 +653,113 @@
                                 }
                             });
                         }
+                    });
+                    
+                    // Global variable to store current invoice data for allocations
+                    var currentInvoiceData = null;
+                    
+                    // Function to create an allocation row
+                    function createAllocationRow(netAmount, gstAmount) {
+                        var row = $('<tr>');
+                        
+                        // 1. Xero Account dropdown
+                        var accountSelect = $('<select>').addClass('form-control form-control-sm');
+                        accountSelect.append($('<option>').val('').text('Select Account...'));
+                        // TODO: Populate with Xero accounts from backend
+                        // For now, add placeholder options
+                        accountSelect.append($('<option>').val('account1').text('Account 1'));
+                        accountSelect.append($('<option>').val('account2').text('Account 2'));
+                        row.append($('<td>').append(accountSelect));
+                        
+                        // 2. Division dropdown (Projects)
+                        var divisionSelect = $('<select>').addClass('form-control form-control-sm');
+                        divisionSelect.append($('<option>').val('').text('Select Division...'));
+                        // Populate with projects from global billsData
+                        if (window.billsData && window.billsData.projects) {
+                            window.billsData.projects.forEach(function(project) {
+                                divisionSelect.append($('<option>')
+                                    .val(project.projects_pk)
+                                    .text(project.project));
+                            });
+                        }
+                        row.append($('<td>').append(divisionSelect));
+                        
+                        // 3. $ Net input (with 2dp validation)
+                        var netInput = $('<input>')
+                            .attr('type', 'number')
+                            .attr('step', '0.01')
+                            .addClass('form-control form-control-sm allocation-net-input')
+                            .val(netAmount || '')
+                            .on('input', function() {
+                                var value = $(this).val();
+                                if (value.includes('.')) {
+                                    var parts = value.split('.');
+                                    if (parts[1] && parts[1].length > 2) {
+                                        $(this).val(parseFloat(value).toFixed(2));
+                                    }
+                                }
+                            });
+                        row.append($('<td>').append(netInput));
+                        
+                        // 4. $ GST input (with 2dp validation)
+                        var gstInput = $('<input>')
+                            .attr('type', 'number')
+                            .attr('step', '0.01')
+                            .addClass('form-control form-control-sm allocation-gst-input')
+                            .val(gstAmount || '')
+                            .on('input', function() {
+                                var value = $(this).val();
+                                if (value.includes('.')) {
+                                    var parts = value.split('.');
+                                    if (parts[1] && parts[1].length > 2) {
+                                        $(this).val(parseFloat(value).toFixed(2));
+                                    }
+                                }
+                            });
+                        row.append($('<td>').append(gstInput));
+                        
+                        // 5. Notes input (text)
+                        var notesInput = $('<input>')
+                            .attr('type', 'text')
+                            .addClass('form-control form-control-sm allocation-notes-input')
+                            .attr('placeholder', 'Notes...');
+                        row.append($('<td>').append(notesInput));
+                        
+                        return row;
+                    }
+                    
+                    // Add click handler for LHS table rows to populate allocations
+                    $(document).on('click', '#billsTableBody tr', function(e) {
+                        // Don't trigger if clicking a button or input
+                        if ($(e.target).is('button, input, select, a, i')) {
+                            return;
+                        }
+                        
+                        var invoicePk = $(this).attr('data-invoice-pk');
+                        
+                        // Find the invoice in the bills data
+                        if (window.billsData && window.billsData.bills) {
+                            var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
+                            if (invoice) {
+                                currentInvoiceData = invoice;
+                                
+                                // Clear and populate allocations table
+                                $('#allocationsTableBody').empty();
+                                
+                                // Add one row with net and gst pre-populated
+                                var row = createAllocationRow(invoice.total_net, invoice.total_gst);
+                                $('#allocationsTableBody').append(row);
+                            }
+                        }
+                    });
+                    
+                    // Add click handler for '+' button to add new allocation rows
+                    $(document).on('click', '#addAllocationBtn', function(e) {
+                        e.preventDefault();
+                        
+                        // Add empty row
+                        var row = createAllocationRow(null, null);
+                        $('#allocationsTableBody').append(row);
                     });
     });
 </script>

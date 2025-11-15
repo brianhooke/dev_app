@@ -34,21 +34,52 @@
                         </table>
                     </div>
                     
-                    <!-- Right side: iViewer (40%) -->
+                    <!-- Right side: Allocations table (1/3) and iViewer (2/3) (40%) -->
                     <div style="width: 40%; padding: 15px; display: flex; flex-direction: column;">
-                        <div style="text-align: center; margin-bottom: 10px;">
-                            <h6 id="viewerTitle">Select a bill to preview</h6>
+                        <!-- Allocations table (top 1/3) - only visible in Direct modal -->
+                        <div id="allocationsSection" style="height: 33%; display: none; flex-direction: column; margin-bottom: 15px;">
+                            <div style="text-align: center; margin-bottom: 10px;">
+                                <h6 id="allocationsTitle">Invoice Allocations</h6>
+                            </div>
+                            <div style="flex: 1; overflow-y: auto; border: 2px solid #ddd;">
+                                <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0;">
+                                    <thead>
+                                        <tr>
+                                            <th>Xero Account</th>
+                                            <th>Division</th>
+                                            <th>$ Net</th>
+                                            <th>$ GST</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="allocationsTableBody">
+                                        <!-- Allocations will be populated here via JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div style="margin-top: 5px; text-align: center;">
+                                <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
+                                    <i class="fas fa-plus"></i> Add Row
+                                </button>
+                            </div>
                         </div>
-                        <div style="flex: 1; border: 2px solid #ddd; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
-                            <iframe 
-                                id="billViewer" 
-                                style="width: 100%; height: 100%; border: none; display: none;"
-                                allow="fullscreen"
-                                src="">
-                            </iframe>
-                            <div id="viewerPlaceholder" style="text-align: center; color: #6c757d;">
-                                <i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px;"></i>
-                                <p>Click on a bill to view the attachment</p>
+                        
+                        <!-- iViewer (bottom 2/3) -->
+                        <div id="viewerSection" style="flex: 1; display: flex; flex-direction: column;">
+                            <div style="text-align: center; margin-bottom: 10px;">
+                                <h6 id="viewerTitle">Select a bill to preview</h6>
+                            </div>
+                            <div style="flex: 1; border: 2px solid #ddd; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                                <iframe 
+                                    id="billViewer" 
+                                    style="width: 100%; height: 100%; border: none; display: none;"
+                                    allow="fullscreen"
+                                    src="">
+                                </iframe>
+                                <div id="viewerPlaceholder" style="text-align: center; color: #6c757d;">
+                                    <i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px;"></i>
+                                    <p>Click on a bill to view the attachment</p>
+                                </div>
                             </div>
                         </div>
                     </div>
