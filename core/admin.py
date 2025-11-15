@@ -4,7 +4,7 @@ from .models import (
     Categories, Projects, XeroInstances, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
-    Hc_variation, Hc_variation_allocations
+    Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment
 )
 
 # Helper function to set nullable fields as not required
@@ -187,3 +187,45 @@ admin.site.register(HC_claims, HC_claimsAdmin)
 admin.site.register(HC_claim_allocations, HC_claim_allocationsAdmin)
 admin.site.register(Hc_variation, HcVariationAdmin)
 admin.site.register(Hc_variation_allocations, HcVariationAllocationsAdmin)
+
+# Email receiving models
+class EmailAttachmentInline(admin.TabularInline):
+    model = EmailAttachment
+    extra = 0
+    readonly_fields = ('filename', 'content_type', 'size_bytes', 's3_bucket', 's3_key', 'uploaded_at')
+    can_delete = False
+
+class ReceivedEmailAdmin(admin.ModelAdmin):
+    list_display = ('id', 'from_address', 'to_address', 'subject', 'received_at', 'attachment_count', 'is_processed', 'email_type')
+    list_filter = ('is_processed', 'email_type', 'to_address', 'received_at')
+    search_fields = ('from_address', 'to_address', 'subject', 'body_text', 'message_id')
+    readonly_fields = ('from_address', 'to_address', 'cc_address', 'subject', 'message_id', 
+                       'body_text', 'body_html', 'received_at', 'processed_at', 
+                       's3_bucket', 's3_key', 'attachment_count')
+    fieldsets = (
+        ('Email Info', {
+            'fields': ('from_address', 'to_address', 'cc_address', 'subject', 'message_id')
+        }),
+        ('Content', {
+            'fields': ('body_text', 'body_html'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('received_at', 'processed_at', 'is_processed', 'email_type', 'processing_notes')
+        }),
+        ('Storage', {
+            'fields': ('s3_bucket', 's3_key'),
+            'classes': ('collapse',)
+        }),
+    )
+    inlines = [EmailAttachmentInline]
+    date_hierarchy = 'received_at'
+
+class EmailAttachmentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'email', 'filename', 'content_type', 'size_bytes', 'uploaded_at')
+    list_filter = ('content_type', 'uploaded_at')
+    search_fields = ('filename', 'email__subject', 'email__from_address')
+    readonly_fields = ('email', 'filename', 'content_type', 'size_bytes', 's3_bucket', 's3_key', 'uploaded_at')
+
+admin.site.register(ReceivedEmail, ReceivedEmailAdmin)
+admin.site.register(EmailAttachment, EmailAttachmentAdmin)

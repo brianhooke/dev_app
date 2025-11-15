@@ -27,6 +27,9 @@ SECRET_KEY = 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7
 # Xero encryption key - keep this secret and consistent across deployments
 XERO_ENCRYPTION_KEY = os.environ.get('XERO_ENCRYPTION_KEY', 'yGUzgEzWkkCsHnb_lof7bmX0m8gBc3917sHYU2SYe8A=')
 
+# Email API secret key for Lambda authentication
+EMAIL_API_SECRET_KEY = os.environ.get('EMAIL_API_SECRET_KEY', 'change-me-in-production-use-strong-random-key')
+
 ALLOWED_HOSTS = ['herokuapp.com', 'mason.build', 'app.mason.build', '*.elasticbeanstalk.com', '*']
 
 # CSRF trusted origins for HTTPS

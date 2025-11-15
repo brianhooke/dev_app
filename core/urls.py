@@ -6,6 +6,7 @@ from .views.xero import get_xero_instances, create_xero_instance, delete_xero_in
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
 from .views.database_diagnostics import database_diagnostics
+from .views.email_receiver import receive_email, email_list
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -90,6 +91,10 @@ urlpatterns = [
     
     # Database diagnostics
     path('database_diagnostics/', database_diagnostics, name='database_diagnostics'),
+    
+    # Email receiving API
+    path('api/receive_email/', receive_email, name='receive_email'),
+    path('api/emails/', email_list, name='email_list'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

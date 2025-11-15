@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.utils import timezone
 from cryptography.fernet import Fernet
 import uuid
 import base64
@@ -362,3 +363,120 @@ class Po_order_detail(models.Model):
     variation_note = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"PO Order Detail - PK: {self.po_order_detail_pk}, Date: {self.date}, Amount: {self.amount}, Variation_note: {self.variation_note}"
+
+
+# ============================================================================
+# EMAIL RECEIVING MODELS
+# ============================================================================
+
+class ReceivedEmail(models.Model):
+    """
+    Stores emails received via SES → Lambda → API
+    """
+    # Email metadata
+    from_address = models.EmailField(max_length=255)
+    to_address = models.EmailField(max_length=255)
+    cc_address = models.TextField(blank=True, default='')
+    subject = models.CharField(max_length=500)
+    message_id = models.CharField(max_length=255, unique=True)
+    
+    # Email content
+    body_text = models.TextField(blank=True, default='')
+    body_html = models.TextField(blank=True, default='')
+    
+    # Timestamps
+    received_at = models.DateTimeField()
+    processed_at = models.DateTimeField(default=timezone.now)
+    
+    # S3 storage locations
+    s3_bucket = models.CharField(max_length=100)
+    s3_key = models.CharField(max_length=500)  # Location of raw email
+    
+    # Processing status
+    is_processed = models.BooleanField(default=False)
+    processing_notes = models.TextField(blank=True, default='')
+    
+    # Email type/category (for future filtering)
+    email_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('bill', 'Bill/Invoice'),
+            ('quote', 'Quote'),
+            ('receipt', 'Receipt'),
+            ('other', 'Other'),
+        ],
+        default='other'
+    )
+    
+    class Meta:
+        ordering = ['-received_at']
+        indexes = [
+            models.Index(fields=['-received_at']),
+            models.Index(fields=['from_address']),
+            models.Index(fields=['message_id']),
+        ]
+    
+    def __str__(self):
+        return f"{self.from_address} - {self.subject[:50]}"
+    
+    def get_s3_url(self):
+        """Get S3 URL for raw email"""
+        return f"s3://{self.s3_bucket}/{self.s3_key}"
+    
+    @property
+    def attachment_count(self):
+        """Count of attachments"""
+        return self.attachments.count()
+
+
+class EmailAttachment(models.Model):
+    """
+    Stores email attachments uploaded to S3
+    """
+    email = models.ForeignKey(
+        ReceivedEmail,
+        on_delete=models.CASCADE,
+        related_name='attachments'
+    )
+    
+    # File metadata
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size_bytes = models.IntegerField()
+    
+    # S3 storage location
+    s3_bucket = models.CharField(max_length=100)
+    s3_key = models.CharField(max_length=500)
+    
+    # Timestamps
+    uploaded_at = models.DateTimeField(default=timezone.now)
+    
+    class Meta:
+        ordering = ['filename']
+    
+    def __str__(self):
+        return f"{self.filename} ({self.size_bytes} bytes)"
+    
+    def get_s3_url(self):
+        """Get S3 URL for attachment"""
+        return f"s3://{self.s3_bucket}/{self.s3_key}"
+    
+    def get_download_url(self):
+        """Generate presigned URL for downloading attachment"""
+        import boto3
+        from botocore.exceptions import ClientError
+        
+        try:
+            s3_client = boto3.client('s3')
+            url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.s3_bucket,
+                    'Key': self.s3_key
+                },
+                ExpiresIn=3600  # URL valid for 1 hour
+            )
+            return url
+        except ClientError as e:
+            print(f"Error generating presigned URL: {e}")
+            return None
