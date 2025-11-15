@@ -5,6 +5,7 @@ from .views.project_type import switch_project_type, switch_project, get_current
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
+from .views.database_diagnostics import database_diagnostics
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -86,6 +87,9 @@ urlpatterns = [
     path('xero_oauth_authorize/<int:instance_pk>/', xero_oauth_authorize, name='xero_oauth_authorize'),
     path('xero_oauth_callback/', xero_oauth_callback, name='xero_oauth_callback'),
     path('xero_oauth_diagnostics/<int:instance_pk>/', xero_oauth_diagnostics, name='xero_oauth_diagnostics'),
+    
+    # Database diagnostics
+    path('database_diagnostics/', database_diagnostics, name='database_diagnostics'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
