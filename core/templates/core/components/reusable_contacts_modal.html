@@ -624,3 +624,191 @@ $(document).ready(function() {
     window.loadContacts = loadContacts;
 });
 </script>
+
+<!-- Add Supplier Modal (Smaller version for quick add) -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 700px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Add Supplier</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email Address</th>
+                            <th>BSB</th>
+                            <th>Account Number</th>
+                            <th>ABN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="addSupplierRow">
+                            <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 120px;"></td>
+                            <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 150px;"></td>
+                            <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
+                            <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 100px;"></td>
+                            <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 120px;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="addSupplierBtn">Add</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Store the Xero Instance ID for the add supplier modal
+    let addSupplierXeroInstanceId = null;
+    let addSupplierBillRow = null;
+    
+    // Function to open Add Supplier modal with Xero Instance context
+    window.openAddSupplierModal = function(xeroInstanceId, billRow) {
+        addSupplierXeroInstanceId = xeroInstanceId;
+        addSupplierBillRow = billRow;
+        
+        // Clear inputs
+        $('#addSupplierRow input').val('');
+        
+        // Show modal
+        $('#addSupplierModal').modal('show');
+        
+        // Focus on name input
+        setTimeout(() => {
+            $('#addSupplierRow .name-input').focus();
+        }, 500);
+    };
+    
+    // Add Supplier button handler
+    $('#addSupplierBtn').click(function() {
+        const button = $(this);
+        const row = $('#addSupplierRow');
+        
+        if (!addSupplierXeroInstanceId) {
+            alert('No Xero Instance selected');
+            return;
+        }
+        
+        // Validate using the same validation function
+        const validation = validateContactFields(row, {
+            requireName: true,
+            requireEmail: true
+        });
+        
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) {
+                validation.focusElement.focus();
+            }
+            return;
+        }
+        
+        const { name, email, bsbDigits, accountDigits, abnDigits } = validation.values;
+        
+        // Show processing state
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Adding...');
+        
+        // Make AJAX call to create contact
+        fetch(`/create_contact/${addSupplierXeroInstanceId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify({
+                name: name,
+                email: email,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Add');
+                
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${addSupplierXeroInstanceId}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                const contact = body.contact;
+                
+                // Add to global suppliers list
+                if (window.billsData && window.billsData.suppliers) {
+                    window.billsData.suppliers.push({
+                        contact_pk: contact.contact_pk,
+                        name: contact.name,
+                        xero_instance_id: addSupplierXeroInstanceId
+                    });
+                }
+                
+                // Update the supplier dropdown in the bill row if provided
+                if (addSupplierBillRow) {
+                    const supplierSelect = addSupplierBillRow.find('.supplier-select');
+                    
+                    // Add new option to dropdown
+                    const newOption = $('<option>')
+                        .val(contact.contact_pk)
+                        .text(contact.name)
+                        .attr('data-xero-instance', addSupplierXeroInstanceId);
+                    
+                    // Find the separator and insert after it
+                    const separator = supplierSelect.find('option[disabled][value="separator"]');
+                    if (separator.length > 0) {
+                        separator.after(newOption);
+                    } else {
+                        supplierSelect.append(newOption);
+                    }
+                    
+                    // Select the new supplier
+                    supplierSelect.val(contact.contact_pk);
+                }
+                
+                // Reset form
+                inputs.prop('disabled', false).css('background-color', '').val('');
+                button.prop('disabled', false).html('Add');
+                
+                // Close modal
+                $('#addSupplierModal').modal('hide');
+                
+                alert('Supplier added successfully!');
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating supplier:', error);
+            
+            // Revert to editable state on error
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Add');
+            
+            // Show specific error message
+            if (error.message.includes('408') || error.message.includes('timeout')) {
+                alert('Request timed out. The Xero API is not responding. Please try again.');
+            } else if (error.message.includes('503') || error.message.includes('Connection')) {
+                alert('Connection error. Cannot reach Xero API. Please check your internet connection.');
+            } else {
+                alert(`Failed to create supplier: ${error.message}`);
+            }
+        });
+    });
+});
+</script>

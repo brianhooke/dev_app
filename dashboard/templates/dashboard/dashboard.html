@@ -148,7 +148,11 @@
                         
                         // Only populate suppliers if a Xero Instance is selected
                         if (selectedXeroInstanceId) {
-                            supplierSelect.append($('<option>').val('').text('Select...'));
+                            // Add "Add Supplier" option
+                            supplierSelect.append($('<option>').val('add_supplier').text('+ Add Supplier'));
+                            
+                            // Add separator
+                            supplierSelect.append($('<option>').val('separator').text('─────────').prop('disabled', true));
                             
                             // Populate suppliers filtered by xero_instance_id
                             response.suppliers.forEach(function(supplier) {
@@ -312,7 +316,12 @@
                         if (xeroInstanceId) {
                             // Enable and populate suppliers
                             supplierSelect.prop('disabled', false);
-                            supplierSelect.append($('<option>').val('').text('Select...'));
+                            
+                            // Add "Add Supplier" option
+                            supplierSelect.append($('<option>').val('add_supplier').text('+ Add Supplier'));
+                            
+                            // Add separator
+                            supplierSelect.append($('<option>').val('separator').text('─────────').prop('disabled', true));
                             
                             window.billsData.suppliers.forEach(function(supplier) {
                                 if (supplier.xero_instance_id === xeroInstanceId) {
@@ -332,6 +341,37 @@
                             // Disable and show placeholder
                             supplierSelect.append($('<option>').val('').text('Select Xero Instance first...'));
                             supplierSelect.prop('disabled', true);
+                        }
+                    });
+                    
+                    // Handle supplier dropdown change - open Add Supplier modal if selected
+                    $(document).on('change', '.supplier-select', function() {
+                        var selectedValue = $(this).val();
+                        var row = $(this).closest('tr');
+                        
+                        if (selectedValue === 'add_supplier') {
+                            // Get the Xero Instance ID from the combined dropdown
+                            var combinedSelect = row.find('.xero-project-select');
+                            var combinedValue = combinedSelect.val();
+                            var xeroInstanceId = null;
+                            
+                            if (combinedValue.startsWith('xero_')) {
+                                xeroInstanceId = parseInt(combinedValue.replace('xero_', ''));
+                            } else if (combinedValue.startsWith('project_')) {
+                                var projectPk = parseInt(combinedValue.replace('project_', ''));
+                                var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
+                                if (project) {
+                                    xeroInstanceId = project.xero_instance_id;
+                                }
+                            }
+                            
+                            if (xeroInstanceId) {
+                                // Reset dropdown to empty
+                                $(this).val('');
+                                
+                                // Open Add Supplier modal
+                                window.openAddSupplierModal(xeroInstanceId, row);
+                            }
                         }
                     });
                     
