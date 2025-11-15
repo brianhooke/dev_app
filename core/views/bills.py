@@ -124,13 +124,14 @@ def archive_bill(request):
 
 def get_bills_list(request):
     """
-    Get list of invoices with invoice_status = -2 for the Bills modal
+    Get list of all invoices for Bills modals (Inbox and Direct)
+    Frontend will filter by invoice_status as needed
     Also provides dropdown data for Xero instances, suppliers, and projects
     """
     from core.models import XeroInstances, Projects
     
-    # Get all invoices with status -2 (bills to be processed)
-    invoices = Invoices.objects.filter(invoice_status=-2).select_related(
+    # Get all invoices (frontend will filter by status)
+    invoices = Invoices.objects.select_related(
         'contact_pk', 'project', 'xero_instance', 'received_email', 'email_attachment'
     ).order_by('-created_at')
     
@@ -162,6 +163,7 @@ def get_bills_list(request):
         
         bill = {
             'invoice_pk': invoice.invoice_pk,
+            'invoice_status': invoice.invoice_status,
             'xero_instance_id': xero_instance_id,
             'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
             'project_pk': invoice.project.projects_pk if invoice.project else None,

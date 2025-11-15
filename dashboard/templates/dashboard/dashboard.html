@@ -70,25 +70,23 @@
             $('#contactsModal').modal('show');
         });
         
-        // Handle Bills Inbox link click
-        $('#billsInboxLink').click(function(e) {
-            e.preventDefault();
+        // Function to populate bills table with filtering
+        function populateBillsTable(billsData, filterStatus) {
+            // Clear existing table
+            $('#billsTableBody').empty();
             
-            // Fetch bills data and populate modal
-            $.ajax({
-                url: '{% url "core:get_bills_list" %}',
-                type: 'GET',
-                success: function(response) {
-                    console.log('Bills loaded:', response);
-                    
-                    // Store data globally for later use
-                    window.billsData = response;
-                    
-                    // Clear existing table
-                    $('#billsTableBody').empty();
-                    
-                    // Populate table with bills
-                    response.bills.forEach(function(bill) {
+            // Filter bills by status
+            var filteredBills = billsData.bills.filter(function(bill) {
+                return bill.invoice_status === filterStatus;
+            });
+            
+            if (filteredBills.length === 0) {
+                $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
+                return;
+            }
+            
+            // Populate table with filtered bills
+            filteredBills.forEach(function(bill) {
                         var row = $('<tr>').attr('data-invoice-pk', bill.invoice_pk);
                         
                         // 1. Combined Xero Instance / Project dropdown
@@ -96,12 +94,12 @@
                         combinedSelect.append($('<option>').val('').text('Select...'));
                         
                         // Add Xero Instances section
-                        if (response.xero_instances.length > 0) {
+                        if (billsData.xero_instances.length > 0) {
                             var xeroHeader = $('<option>').val('').text('─── Xero Instances ───').prop('disabled', true);
                             xeroHeader.css({'font-weight': 'bold', 'background-color': '#f0f0f0'});
                             combinedSelect.append(xeroHeader);
                             
-                            response.xero_instances.forEach(function(instance) {
+                            billsData.xero_instances.forEach(function(instance) {
                                 var option = $('<option>')
                                     .val('xero_' + instance.xero_instance_pk)
                                     .text('  ' + instance.xero_name);
@@ -113,12 +111,12 @@
                         }
                         
                         // Add Projects section
-                        if (response.projects.length > 0) {
+                        if (billsData.projects.length > 0) {
                             var projectHeader = $('<option>').val('').text('─── Projects ───').prop('disabled', true);
                             projectHeader.css({'font-weight': 'bold', 'background-color': '#f0f0f0'});
                             combinedSelect.append(projectHeader);
                             
-                            response.projects.forEach(function(project) {
+                            billsData.projects.forEach(function(project) {
                                 var option = $('<option>')
                                     .val('project_' + project.projects_pk)
                                     .text('  ' + project.project);
@@ -161,7 +159,7 @@
                             supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
                             
                             // Populate suppliers filtered by xero_instance_id
-                            response.suppliers.forEach(function(supplier) {
+                            billsData.suppliers.forEach(function(supplier) {
                                 if (supplier.xero_instance_id === selectedXeroInstanceId) {
                                     var option = $('<option>')
                                         .val(supplier.contact_pk)
@@ -254,6 +252,61 @@
                         // Add row to table
                         $('#billsTableBody').append(row);
                     });
+        }
+        
+        // Handle Bills Inbox link click
+        $('#billsInboxLink').click(function(e) {
+            e.preventDefault();
+            
+            // Fetch bills data and populate modal
+            $.ajax({
+                url: '{% url "core:get_bills_list" %}',
+                type: 'GET',
+                success: function(response) {
+                    console.log('Bills loaded:', response);
+                    
+                    // Store data globally for later use
+                    window.billsData = response;
+                    
+                    // Populate table with status = -2 (Inbox)
+                    populateBillsTable(response, -2);
+                    
+                    // Show modal
+                    $('#billsModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load bills:', error);
+                    alert('Failed to load bills. Please try again.');
+                }
+            });
+        });
+        
+        // Handle Bills Direct link click
+        $('#billsDirectLink').click(function(e) {
+            e.preventDefault();
+            
+            // Fetch bills data and populate modal
+            $.ajax({
+                url: '{% url "core:get_bills_list" %}',
+                type: 'GET',
+                success: function(response) {
+                    console.log('Bills loaded:', response);
+                    
+                    // Store data globally for later use
+                    window.billsData = response;
+                    
+                    // Populate table with status = -1 (Direct/Archived)
+                    populateBillsTable(response, -1);
+                    
+                    // Show modal
+                    $('#billsModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load bills:', error);
+                    alert('Failed to load bills. Please try again.');
+                }
+            });
+        });
                     
                     // Add click handler for email links
                     $(document).on('click', '.email-link', function(e) {
@@ -515,16 +568,6 @@
                             });
                         }
                     });
-                    
-                    // Show modal
-                    $('#billsModal').modal('show');
-                },
-                error: function(xhr, status, error) {
-                    console.error('Failed to load bills:', error);
-                    alert('Failed to load bills. Please try again.');
-                }
-            });
-        });
     });
 </script>
 
