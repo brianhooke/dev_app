@@ -219,20 +219,32 @@ class Quote_allocations(models.Model):
 # SERVICE: bills
 class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
-    invoice_division = models.IntegerField()
+    # Replaced invoice_division with FK to Projects
+    project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     invoice_status = models.IntegerField(default=0)  # 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
-    invoice_xero_id = models.CharField(max_length=255, null=True)
-    supplier_invoice_number = models.CharField(max_length=255)
-    invoice_date = models.DateField()
-    invoice_due_date = models.DateField()
-    total_net = models.DecimalField(max_digits=10, decimal_places=2)
-    total_gst = models.DecimalField(max_digits=10, decimal_places=2)
-    pdf = models.FileField(upload_to='invoices/')
-    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE)
-    associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True)
+    invoice_xero_id = models.CharField(max_length=255, null=True, blank=True)
+    supplier_invoice_number = models.CharField(max_length=255, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    invoice_due_date = models.DateField(null=True, blank=True)
+    total_net = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    total_gst = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    pdf = models.FileField(upload_to='invoices/', null=True, blank=True)
+    contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True, blank=True)
+    associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True, blank=True)
     invoice_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
+    
+    # Email linking fields
+    received_email = models.ForeignKey('ReceivedEmail', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    email_attachment = models.ForeignKey('EmailAttachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    
+    # Auto-creation tracking
+    auto_created = models.BooleanField(default=False)  # Track if created automatically from email
+    created_at = models.DateTimeField(auto_now_add=True)
+    
     def __str__(self):
-        return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
+        if self.total_net:
+            return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
+        return f"Invoices #{self.invoice_pk} - Email: {self.received_email_id if self.received_email else 'N/A'}"
 
 # SERVICE: bills
 class Invoice_allocations(models.Model):

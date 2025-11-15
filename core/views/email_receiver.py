@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
-from core.models import ReceivedEmail, EmailAttachment
+from core.models import ReceivedEmail, EmailAttachment, Invoices
 from datetime import datetime
 import json
 import logging
@@ -102,12 +102,40 @@ def receive_email(request):
             f"with {len(attachments_created)} attachments"
         )
         
-        # TODO: Add custom processing logic here
-        # For example:
-        # - Auto-categorize based on sender/subject
-        # - Extract invoice numbers
-        # - Notify users
-        # - Trigger workflows
+        # Auto-create Invoice entries for each attachment
+        invoices_created = []
+        for att_data in attachments_data:
+            # Get the attachment object we just created
+            attachment = EmailAttachment.objects.filter(
+                email=email,
+                filename=att_data.get('filename', 'unknown')
+            ).first()
+            
+            if attachment:
+                # Check if invoice already exists for this attachment (prevent duplicates)
+                existing_invoice = Invoices.objects.filter(
+                    email_attachment=attachment
+                ).first()
+                
+                if not existing_invoice:
+                    # Create new invoice entry
+                    invoice = Invoices.objects.create(
+                        received_email=email,
+                        email_attachment=attachment,
+                        auto_created=True,
+                        invoice_status=0,  # Default: newly created
+                        invoice_type=0,    # Default type
+                    )
+                    invoices_created.append(invoice.invoice_pk)
+                    logger.info(f"Auto-created Invoice #{invoice.invoice_pk} for attachment {attachment.filename}")
+                else:
+                    logger.info(f"Invoice already exists for attachment {attachment.filename}, skipping")
+        
+        # Mark email as processed if we created invoices
+        if invoices_created:
+            email.is_processed = True
+            email.processing_notes = f"Auto-created {len(invoices_created)} invoice(s)"
+            email.save()
         
         return JsonResponse({
             'status': 'success',
@@ -115,6 +143,8 @@ def receive_email(request):
             'email_id': email.id,
             'attachment_count': len(attachments_created),
             'attachments': attachments_created,
+            'invoices_created': invoices_created,
+            'invoices_count': len(invoices_created),
         })
         
     except json.JSONDecodeError as e:
