@@ -187,20 +187,38 @@
                             .val(bill.supplier_invoice_number || '');
                         row.append($('<td>').append(invoiceNumberInput));
                         
-                        // 4. $ Net input
+                        // 4. $ Net input (limit to 2 decimal places)
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
                             .addClass('form-control form-control-sm net-input')
-                            .val(bill.total_net || '');
+                            .val(bill.total_net || '')
+                            .on('input', function() {
+                                var value = $(this).val();
+                                if (value.includes('.')) {
+                                    var parts = value.split('.');
+                                    if (parts[1] && parts[1].length > 2) {
+                                        $(this).val(parseFloat(value).toFixed(2));
+                                    }
+                                }
+                            });
                         row.append($('<td>').append(netInput));
                         
-                        // 5. $ GST input
+                        // 5. $ GST input (limit to 2 decimal places)
                         var gstInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
                             .addClass('form-control form-control-sm gst-input')
-                            .val(bill.total_gst || '');
+                            .val(bill.total_gst || '')
+                            .on('input', function() {
+                                var value = $(this).val();
+                                if (value.includes('.')) {
+                                    var parts = value.split('.');
+                                    if (parts[1] && parts[1].length > 2) {
+                                        $(this).val(parseFloat(value).toFixed(2));
+                                    }
+                                }
+                            });
                         row.append($('<td>').append(gstInput));
                         
                         // 6. Email link
@@ -422,7 +440,7 @@
                         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
                         
                         // Send AJAX request
-                        fetch('/dashboard/send_bill/', {
+                        fetch('/send_bill/', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
