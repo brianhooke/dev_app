@@ -383,7 +383,83 @@
                     // Add click handler for send buttons
                     $(document).on('click', '.send-bill-btn', function(e) {
                         e.preventDefault();
-                        alert('Placeholder only for now');
+                        
+                        var button = $(this);
+                        var row = button.closest('tr');
+                        var invoicePk = button.attr('data-invoice-pk');
+                        
+                        // Get values from row
+                        var xeroInstanceOrProject = row.find('.xero-project-select').val();
+                        var supplierPk = row.find('.supplier-select').val();
+                        var invoiceNumber = row.find('.invoice-number-input').val();
+                        var totalNet = row.find('.net-input').val();
+                        var totalGst = row.find('.gst-input').val();
+                        
+                        // Validate all required fields
+                        var errors = [];
+                        if (!xeroInstanceOrProject) {
+                            errors.push('Please select a Xero Instance or Project');
+                        }
+                        if (!supplierPk || supplierPk === 'add_supplier') {
+                            errors.push('Please select a Supplier');
+                        }
+                        if (!invoiceNumber || invoiceNumber.trim() === '') {
+                            errors.push('Please enter an Invoice Number');
+                        }
+                        if (!totalNet || totalNet === '') {
+                            errors.push('Please enter a Net amount');
+                        }
+                        if (!totalGst || totalGst === '') {
+                            errors.push('Please enter a GST amount');
+                        }
+                        
+                        if (errors.length > 0) {
+                            alert('Please fix the following errors:\n\n' + errors.join('\n'));
+                            return;
+                        }
+                        
+                        // Disable button and show processing state
+                        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                        
+                        // Send AJAX request
+                        fetch('/dashboard/send_bill/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                            },
+                            body: JSON.stringify({
+                                invoice_pk: invoicePk,
+                                xero_instance_or_project: xeroInstanceOrProject,
+                                supplier_pk: supplierPk,
+                                invoice_number: invoiceNumber,
+                                total_net: totalNet,
+                                total_gst: totalGst
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                // Remove row from table with fade effect
+                                row.fadeOut(400, function() {
+                                    $(this).remove();
+                                    
+                                    // Check if table is empty
+                                    if ($('#billsTableBody tr').length === 0) {
+                                        $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
+                                    }
+                                });
+                            } else {
+                                // Re-enable button on error
+                                button.prop('disabled', false).html('Send');
+                                alert('Error: ' + data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error sending bill:', error);
+                            button.prop('disabled', false).html('Send');
+                            alert('Failed to send bill. Please try again.');
+                        });
                     });
                     
                     // Add click handler for archive buttons

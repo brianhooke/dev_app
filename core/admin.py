@@ -60,7 +60,7 @@ class InvoicesForm(forms.ModelForm):
         fields = '__all__'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        set_nullable_fields_not_required(self, ['invoice_xero_id', 'associated_hc_claim'])
+        set_nullable_fields_not_required(self, ['invoice_xero_id', 'associated_hc_claim', 'xero_instance', 'project'])
 
 class InvoiceAllocationsForm(forms.ModelForm):
     class Meta:

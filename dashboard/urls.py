@@ -3,7 +3,7 @@ URL configuration for Dashboard app.
 """
 
 from django.urls import path
-from . import views
+from . import views, bills
 
 app_name = 'dashboard'
 
@@ -18,4 +18,7 @@ urlpatterns = [
     path('update_contact_details/<int:instance_pk>/<int:contact_pk>/', views.update_contact_details, name='update_contact_details'),
     path('update_contact_status/<int:instance_pk>/<int:contact_pk>/', views.update_contact_status, name='update_contact_status'),
     path('verify_contact_details/<int:contact_pk>/', views.verify_contact_details, name='verify_contact_details'),
+    
+    # Bills management endpoints
+    path('send_bill/', bills.send_bill, name='send_bill'),
 ]
