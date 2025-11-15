@@ -2,15 +2,15 @@
 
 <!-- Bills Modal -->
 <div class="modal fade" id="billsModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document" style="max-width: 95%;">
-        <div class="modal-content" style="border: 3px solid black;">
-            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 95%; max-height: 95vh; margin: 2.5vh auto;">
+        <div class="modal-content" style="border: 3px solid black; height: 95vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg); flex-shrink: 0;">
                 <h5 class="modal-title">Bills</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto; padding: 0;">
+            <div class="modal-body" style="flex: 1; overflow: hidden; padding: 0; display: flex; flex-direction: column;">
                 {% block bills_modal_body %}
                 <div style="display: flex; height: 100%;">
                     <!-- Left side: Table (50%) -->
@@ -55,7 +55,7 @@
                 </div>
                 {% endblock %}
             </div>
-            <div class="modal-footer" style="display: flex; justify-content: space-between;">
+            <div class="modal-footer" style="display: flex; justify-content: space-between; flex-shrink: 0;">
                 {% block bills_modal_footer %}
                 <div>
                     <button type="button" class="btn btn-primary" id="saveBillsBtn">Save Changes</button>
