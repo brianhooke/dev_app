@@ -763,9 +763,9 @@ $(document).ready(function() {
             if (body.status === 'success') {
                 const contact = body.contact;
                 
-                // Add to global suppliers list
+                // Add to global suppliers list at the beginning
                 if (window.billsData && window.billsData.suppliers) {
-                    window.billsData.suppliers.push({
+                    window.billsData.suppliers.unshift({
                         contact_pk: contact.contact_pk,
                         name: contact.name,
                         xero_instance_id: addSupplierXeroInstanceId
@@ -776,16 +776,16 @@ $(document).ready(function() {
                 if (addSupplierBillRow) {
                     const supplierSelect = addSupplierBillRow.find('.supplier-select');
                     
-                    // Add new option to dropdown
+                    // Add new option to dropdown - insert after the second separator (separator2)
                     const newOption = $('<option>')
                         .val(contact.contact_pk)
                         .text(contact.name)
                         .attr('data-xero-instance', addSupplierXeroInstanceId);
                     
-                    // Find the separator and insert after it
-                    const separator = supplierSelect.find('option[disabled][value="separator"]');
-                    if (separator.length > 0) {
-                        separator.after(newOption);
+                    // Find separator2 and insert after it (top of supplier list)
+                    const separator2 = supplierSelect.find('option[disabled][value="separator2"]');
+                    if (separator2.length > 0) {
+                        separator2.after(newOption);
                     } else {
                         supplierSelect.append(newOption);
                     }
