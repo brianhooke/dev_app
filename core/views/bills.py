@@ -70,13 +70,13 @@ logger.setLevel(logging.INFO)
 
 def get_bills_list(request):
     """
-    Get list of invoices with invoice_status = -1 for the Bills modal
+    Get list of invoices with invoice_status = -2 for the Bills modal
     Also provides dropdown data for Xero instances, suppliers, and projects
     """
     from core.models import XeroInstances, Projects
     
-    # Get all invoices with status -1 (unprocessed bills from emails)
-    invoices = Invoices.objects.filter(invoice_status=-1).select_related(
+    # Get all invoices with status -2 (bills to be processed)
+    invoices = Invoices.objects.filter(invoice_status=-2).select_related(
         'contact_pk', 'project', 'received_email', 'email_attachment'
     ).order_by('-created_at')
     
