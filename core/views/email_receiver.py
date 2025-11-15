@@ -13,7 +13,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # API secret key for Lambda authentication
+# Temporary hardcoded for testing
+HARDCODED_KEY = '05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e'
 API_SECRET_KEY = getattr(settings, 'EMAIL_API_SECRET_KEY', 'change-me-in-production')
+# Use hardcoded key temporarily
+API_SECRET_KEY = HARDCODED_KEY
 
 
 @csrf_exempt
