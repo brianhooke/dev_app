@@ -131,7 +131,7 @@ def get_bills_list(request):
     
     # Get all invoices with status -2 (bills to be processed)
     invoices = Invoices.objects.filter(invoice_status=-2).select_related(
-        'contact_pk', 'project', 'received_email', 'email_attachment'
+        'contact_pk', 'project', 'xero_instance', 'received_email', 'email_attachment'
     ).order_by('-created_at')
     
     # Get dropdown options
@@ -153,9 +153,16 @@ def get_bills_list(request):
         if invoice.received_email:
             email_url = f"/admin/core/receivedemail/{invoice.received_email.id}/change/"
         
+        # Determine xero_instance_id from either direct xero_instance or project
+        xero_instance_id = None
+        if invoice.xero_instance_id:
+            xero_instance_id = invoice.xero_instance_id
+        elif invoice.project and invoice.project.xero_instance_id:
+            xero_instance_id = invoice.project.xero_instance_id
+        
         bill = {
             'invoice_pk': invoice.invoice_pk,
-            'xero_instance_id': invoice.project.xero_instance_id if invoice.project and invoice.project.xero_instance else None,
+            'xero_instance_id': xero_instance_id,
             'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
             'project_pk': invoice.project.projects_pk if invoice.project else None,
             'supplier_invoice_number': invoice.supplier_invoice_number or '',
