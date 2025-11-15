@@ -58,6 +58,19 @@
   
   .reusable-navbar .dropdown-toggle {
     cursor: pointer;
+    position: relative;
+  }
+  
+  .reusable-navbar .dropdown-toggle::after {
+    content: '▼';
+    font-size: 12px;
+    margin-left: 5px;
+    transition: transform 0.3s ease;
+    display: inline-block;
+  }
+  
+  .reusable-navbar .dropdown.open .dropdown-toggle::after {
+    transform: rotate(180deg);
   }
   
   .reusable-navbar .dropdown-menu {
@@ -69,6 +82,8 @@
     padding-left: 15px;
     transition: max-height 0.3s ease-out;
     position: static;  /* Ensure it stays in document flow */
+    border: none;  /* Remove box/outline */
+    box-shadow: none;  /* Remove any shadow */
   }
   
   .reusable-navbar .dropdown-menu.show {

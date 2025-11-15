@@ -58,11 +58,10 @@
         // Handle navbar dropdown toggle
         $('.dropdown-toggle').click(function(e) {
             e.preventDefault();
-            console.log('Bills clicked');
             var menu = $(this).siblings('.dropdown-menu');
-            console.log('Menu found:', menu.length);
+            var dropdown = $(this).closest('.dropdown');
             menu.toggleClass('show');
-            console.log('Menu has show class:', menu.hasClass('show'));
+            dropdown.toggleClass('open');
         });
         
         // Dashboard controller - opens contacts modal
