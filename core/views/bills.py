@@ -66,7 +66,53 @@ from django.db import transaction
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  
+logger.setLevel(logging.INFO)
+
+def get_bills_list(request):
+    """
+    Get list of invoices with invoice_status = -1 for the Bills modal
+    """
+    # Get all invoices with status -1 (unprocessed bills from emails)
+    invoices = Invoices.objects.filter(invoice_status=-1).select_related(
+        'contact_pk', 'project', 'received_email', 'email_attachment'
+    ).order_by('-created_at')
+    
+    # Prepare columns for the table
+    bills_columns = [
+        {'key': 'invoice_pk', 'label': 'ID'},
+        {'key': 'email_attachment', 'label': 'Attachment'},
+        {'key': 'from_email', 'label': 'From'},
+        {'key': 'subject', 'label': 'Subject'},
+        {'key': 'received_at', 'label': 'Received'},
+        {'key': 'contact_name', 'label': 'Contact'},
+        {'key': 'project_name', 'label': 'Project'},
+        {'key': 'supplier_invoice_number', 'label': 'Invoice #'},
+        {'key': 'total_net', 'label': 'Net'},
+        {'key': 'total_gst', 'label': 'GST'},
+    ]
+    
+    # Prepare rows for the table
+    bills_rows = []
+    for invoice in invoices:
+        row = {
+            'invoice_pk': invoice.invoice_pk,
+            'email_attachment': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
+            'from_email': invoice.received_email.from_address if invoice.received_email else 'N/A',
+            'subject': invoice.received_email.subject if invoice.received_email else 'N/A',
+            'received_at': invoice.received_email.received_at.strftime('%Y-%m-%d %H:%M') if invoice.received_email else 'N/A',
+            'contact_name': invoice.contact_pk.contact_name if invoice.contact_pk else '',
+            'project_name': invoice.project.project_name if invoice.project else '',
+            'supplier_invoice_number': invoice.supplier_invoice_number or '',
+            'total_net': f"${invoice.total_net:,.2f}" if invoice.total_net else '',
+            'total_gst': f"${invoice.total_gst:,.2f}" if invoice.total_gst else '',
+        }
+        bills_rows.append(row)
+    
+    return JsonResponse({
+        'bills_columns': bills_columns,
+        'bills_rows': bills_rows,
+        'count': len(bills_rows)
+    })  
 
 def delete_invoice(request):
     if request.method == 'DELETE':

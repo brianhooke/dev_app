@@ -123,8 +123,8 @@ def receive_email(request):
                         received_email=email,
                         email_attachment=attachment,
                         auto_created=True,
-                        invoice_status=0,  # Default: newly created
-                        invoice_type=0,    # Default type
+                        invoice_status=-1,  # -1 = unprocessed email bill (shows in Bills modal)
+                        invoice_type=0,     # Default type
                     )
                     invoices_created.append(invoice.invoice_pk)
                     logger.info(f"Auto-created Invoice #{invoice.invoice_pk} for attachment {attachment.filename}")

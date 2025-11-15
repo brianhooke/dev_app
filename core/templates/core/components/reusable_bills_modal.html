@@ -1,0 +1,39 @@
+{% load static %}
+
+<!-- Bills Modal -->
+<div class="modal fade" id="billsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 95%;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Bills</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto;">
+                {% block bills_modal_body %}
+                <div style="overflow-x: auto; position: relative;">
+                    {% include 'core/components/reusable_table.html' with columns=bills_columns rows=bills_rows show_totals=False %}
+                </div>
+                {% endblock %}
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between;">
+                {% block bills_modal_footer %}
+                <div>
+                    <!-- Future: Add buttons for bulk actions -->
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+                {% endblock %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Future: Add any bills-specific JavaScript here
+    // e.g., row click handlers, filtering, etc.
+});
+</script>

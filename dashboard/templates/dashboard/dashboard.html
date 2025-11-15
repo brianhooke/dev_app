@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v46</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v47</div>
 </div>
 
 <div style="padding: 20px;">
@@ -49,6 +49,7 @@
 {{ ... }}
 {% include 'dashboard/xero_modals.html' %}
 {% include 'dashboard/contacts.html' %}
+{% include 'core/components/reusable_bills_modal.html' %}
 
 <script src="{% static 'core/js/xero.js' %}"></script>
 
@@ -58,6 +59,52 @@
         $('#contactsLink').click(function(e) {
             e.preventDefault();
             $('#contactsModal').modal('show');
+        });
+        
+        // Bills modal controller
+        $('#billsLink').click(function(e) {
+            e.preventDefault();
+            
+            // Fetch bills data and populate modal
+            $.ajax({
+                url: '{% url "core:get_bills_list" %}',
+                type: 'GET',
+                success: function(response) {
+                    // Update modal content with bills data
+                    console.log('Bills loaded:', response);
+                    
+                    // Replace the table in the modal with new data
+                    var tableHtml = '<table class="table table-bordered table-hover">';
+                    
+                    // Header row
+                    tableHtml += '<thead><tr>';
+                    response.bills_columns.forEach(function(col) {
+                        tableHtml += '<th>' + col.label + '</th>';
+                    });
+                    tableHtml += '</tr></thead>';
+                    
+                    // Body rows
+                    tableHtml += '<tbody>';
+                    response.bills_rows.forEach(function(row) {
+                        tableHtml += '<tr>';
+                        response.bills_columns.forEach(function(col) {
+                            tableHtml += '<td>' + (row[col.key] || '') + '</td>';
+                        });
+                        tableHtml += '</tr>';
+                    });
+                    tableHtml += '</tbody></table>';
+                    
+                    // Replace table in modal
+                    $('#billsModal .modal-body').html(tableHtml);
+                    
+                    // Show modal
+                    $('#billsModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load bills:', error);
+                    alert('Failed to load bills. Please try again.');
+                }
+            });
         });
     });
 </script>
