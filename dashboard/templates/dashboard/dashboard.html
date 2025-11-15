@@ -142,17 +142,35 @@
                             .attr('title', bill.email_subject + ' from ' + bill.email_from);
                         row.append($('<td>').append(emailLink));
                         
-                        // 7. Bill link (attachment)
-                        var billLink = $('<a>')
+                        // 7. View link (attachment)
+                        var viewLink = $('<a>')
                             .attr('href', '#')
-                            .text('bill')
-                            .addClass('bill-link')
+                            .text('view')
+                            .addClass('view-link')
                             .attr('data-attachment-url', bill.attachment_url)
                             .attr('data-filename', bill.attachment_filename);
-                        row.append($('<td>').append(billLink));
+                        row.append($('<td>').append(viewLink));
                         
                         // Add row to table
                         $('#billsTableBody').append(row);
+                    });
+                    
+                    // Add click handler for view links
+                    $(document).on('click', '.view-link', function(e) {
+                        e.preventDefault();
+                        var attachmentUrl = $(this).attr('data-attachment-url');
+                        var filename = $(this).attr('data-filename');
+                        
+                        if (attachmentUrl) {
+                            // Update viewer title
+                            $('#viewerTitle').text(filename);
+                            
+                            // Load PDF in iframe
+                            $('#billViewer').attr('src', attachmentUrl).show();
+                            $('#viewerPlaceholder').hide();
+                        } else {
+                            alert('No attachment available for this bill');
+                        }
                     });
                     
                     // Show modal
