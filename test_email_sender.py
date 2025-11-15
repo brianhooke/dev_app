@@ -12,6 +12,7 @@ import random
 
 # Configuration
 API_URL = "http://localhost:8000/core/api/receive_email/"
+API_SECRET_KEY = "05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e"
 
 # Sample supplier email addresses and names
 suppliers = [
@@ -104,6 +105,9 @@ def send_test_email(email_index):
     supplier = suppliers[email_index]
     base_date = datetime.now() - timedelta(days=random.randint(1, 10))
     
+    # Generate a unique message ID
+    message_id = f"test-email-{email_index + 1}-{int(base_date.timestamp())}@mason.build"
+    
     # Create 3 attachments for this email
     attachments = []
     for i, inv_data in enumerate(invoice_data):
@@ -157,6 +161,7 @@ def send_test_email(email_index):
     
     # Prepare the email data
     email_data = {
+        'message_id': message_id,
         'from_address': supplier['email'],
         'to_address': 'test@mail.mason.build',
         'subject': f'Invoice Batch {base_date.strftime("%Y-%m-%d")} - {supplier["company"]}',
@@ -167,8 +172,13 @@ def send_test_email(email_index):
     }
     
     # Send to API
+    headers = {
+        'X-API-Secret': API_SECRET_KEY,
+        'Content-Type': 'application/json'
+    }
+    
     try:
-        response = requests.post(API_URL, json=email_data)
+        response = requests.post(API_URL, json=email_data, headers=headers)
         if response.status_code == 200:
             result = response.json()
             print(f"✅ Email {email_index + 1} sent successfully!")
