@@ -108,6 +108,8 @@ def get_bills_list(request):
             'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
             'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
             'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
+            'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
+            'email_body_text': invoice.received_email.body_text if invoice.received_email else '',
             'attachment_filename': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
             'attachment_url': attachment_url,
             'email_url': email_url,

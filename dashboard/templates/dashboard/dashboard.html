@@ -136,9 +136,13 @@
                         
                         // 6. Email link
                         var emailLink = $('<a>')
-                            .attr('href', bill.email_url)
-                            .attr('target', '_blank')
+                            .attr('href', '#')
                             .text('email')
+                            .addClass('email-link')
+                            .attr('data-email-html', bill.email_body_html)
+                            .attr('data-email-text', bill.email_body_text)
+                            .attr('data-email-subject', bill.email_subject)
+                            .attr('data-email-from', bill.email_from)
                             .attr('title', bill.email_subject + ' from ' + bill.email_from);
                         row.append($('<td>').append(emailLink));
                         
@@ -155,7 +159,44 @@
                         $('#billsTableBody').append(row);
                     });
                     
-                    // Add click handler for view links
+                    // Add click handler for email links
+                    $(document).on('click', '.email-link', function(e) {
+                        e.preventDefault();
+                        var emailHtml = $(this).attr('data-email-html');
+                        var emailText = $(this).attr('data-email-text');
+                        var emailSubject = $(this).attr('data-email-subject');
+                        var emailFrom = $(this).attr('data-email-from');
+                        
+                        // Update viewer title
+                        $('#viewerTitle').text('Email: ' + emailSubject);
+                        
+                        // Create HTML content with email header
+                        var emailContent = '<div style="padding: 20px; font-family: Arial, sans-serif;">';
+                        emailContent += '<div style="border-bottom: 2px solid #ddd; margin-bottom: 20px; padding-bottom: 10px;">';
+                        emailContent += '<p style="margin: 5px 0;"><strong>From:</strong> ' + emailFrom + '</p>';
+                        emailContent += '<p style="margin: 5px 0;"><strong>Subject:</strong> ' + emailSubject + '</p>';
+                        emailContent += '</div>';
+                        
+                        // Add email body (HTML or text)
+                        if (emailHtml) {
+                            emailContent += emailHtml;
+                        } else if (emailText) {
+                            emailContent += '<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">' + emailText + '</pre>';
+                        } else {
+                            emailContent += '<p><em>No email content available</em></p>';
+                        }
+                        emailContent += '</div>';
+                        
+                        // Create a blob URL for the HTML content
+                        var blob = new Blob([emailContent], { type: 'text/html' });
+                        var blobUrl = URL.createObjectURL(blob);
+                        
+                        // Load HTML in iframe
+                        $('#billViewer').attr('src', blobUrl).show();
+                        $('#viewerPlaceholder').hide();
+                    });
+                    
+                    // Add click handler for view links (PDFs)
                     $(document).on('click', '.view-link', function(e) {
                         e.preventDefault();
                         var attachmentUrl = $(this).attr('data-attachment-url');
