@@ -9,6 +9,7 @@ staticfiles/
 *.sqlite3
 db.sqlite3
 deploy.zip
+xero_instances_export.json
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml

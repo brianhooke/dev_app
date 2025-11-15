@@ -16,12 +16,5 @@ python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 echo "Creating admin superuser..."
 python manage.py create_admin || echo "Admin creation failed, continuing..."
 
-echo "Importing Xero instances..."
-if [ -f "xero_instances_export.json" ]; then
-    python manage.py import_xero_instances --input xero_instances_export.json --update || echo "Xero import failed, continuing..."
-else
-    echo "No xero_instances_export.json found, skipping import"
-fi
-
 echo "Starting gunicorn on port 80..."
 exec gunicorn dev_app.wsgi:application --bind 0.0.0.0:80 --workers 3 --timeout 120 --access-logfile - --error-logfile - --log-level info
