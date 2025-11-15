@@ -37,7 +37,7 @@ def xero_oauth_authorize(request, instance_pk):
         }
         
         # Build authorization URL - dynamically detect domain
-        redirect_uri = request.build_absolute_uri('/xero_oauth_callback/')
+        redirect_uri = request.build_absolute_uri('/core/xero_oauth_callback/')
         
         params = {
             'response_type': 'code',
@@ -98,7 +98,7 @@ def xero_oauth_callback(request):
         xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
         
         # Exchange code for tokens - dynamically detect domain
-        redirect_uri = request.build_absolute_uri('/xero_oauth_callback/')
+        redirect_uri = request.build_absolute_uri('/core/xero_oauth_callback/')
         
         token_data = {
             'grant_type': 'authorization_code',
