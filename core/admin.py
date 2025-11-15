@@ -196,9 +196,16 @@ class EmailAttachmentInline(admin.TabularInline):
     can_delete = False
 
 class ReceivedEmailAdmin(admin.ModelAdmin):
-    list_display = ('id', 'from_address', 'to_address', 'subject', 'received_at', 'attachment_count', 'is_processed', 'email_type')
+    list_display = ('id', 'from_address', 'to_address', 'subject', 'body_preview', 'received_at', 'attachment_count', 'is_processed', 'email_type')
     list_filter = ('is_processed', 'email_type', 'to_address', 'received_at')
     search_fields = ('from_address', 'to_address', 'subject', 'body_text', 'message_id')
+    
+    def body_preview(self, obj):
+        """Show first 100 characters of body text"""
+        if obj.body_text:
+            return obj.body_text[:100] + '...' if len(obj.body_text) > 100 else obj.body_text
+        return '(no text body)'
+    body_preview.short_description = 'Body Preview'
     readonly_fields = ('from_address', 'to_address', 'cc_address', 'subject', 'message_id', 
                        'body_text', 'body_html', 'received_at', 'processed_at', 
                        's3_bucket', 's3_key', 'attachment_count')
@@ -208,7 +215,6 @@ class ReceivedEmailAdmin(admin.ModelAdmin):
         }),
         ('Content', {
             'fields': ('body_text', 'body_html'),
-            'classes': ('collapse',)
         }),
         ('Metadata', {
             'fields': ('received_at', 'processed_at', 'is_processed', 'email_type', 'processing_notes')
