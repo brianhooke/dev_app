@@ -53,7 +53,7 @@
   }
   
   .reusable-navbar .dropdown {
-    position: relative;
+    /* No position needed - let it flow naturally */
   }
   
   .reusable-navbar .dropdown-toggle {
@@ -61,15 +61,18 @@
   }
   
   .reusable-navbar .dropdown-menu {
-    display: none;
+    max-height: 0;
+    overflow: hidden;
     list-style-type: none;
     margin: 0;
     padding: 0;
     padding-left: 15px;
+    transition: max-height 0.3s ease-out;
   }
   
   .reusable-navbar .dropdown-menu.show {
-    display: block;
+    max-height: 500px;
+    transition: max-height 0.3s ease-in;
   }
   
   .reusable-navbar .dropdown-menu a {
