@@ -3,8 +3,8 @@
   /* Primary gradient colors */
   /* --gradient-start: #A090D0;
   --gradient-end: #36dacc; */
-  --gradient-start: #f0f40b;
-  --gradient-end: #1def0a;
+  --gradient-start: #cf66ff;
+  --gradient-end: #0a88ef;
   
   /* Gradient definitions */
   --gradient-primary: linear-gradient(1deg, var(--gradient-start) 0%, var(--gradient-end) 100%);

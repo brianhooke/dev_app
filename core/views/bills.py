@@ -71,47 +71,55 @@ logger.setLevel(logging.INFO)
 def get_bills_list(request):
     """
     Get list of invoices with invoice_status = -1 for the Bills modal
+    Also provides dropdown data for Xero instances, suppliers, and projects
     """
+    from core.models import XeroInstances, Projects
+    
     # Get all invoices with status -1 (unprocessed bills from emails)
     invoices = Invoices.objects.filter(invoice_status=-1).select_related(
         'contact_pk', 'project', 'received_email', 'email_attachment'
     ).order_by('-created_at')
     
-    # Prepare columns for the table
-    bills_columns = [
-        {'key': 'invoice_pk', 'label': 'ID'},
-        {'key': 'email_attachment', 'label': 'Attachment'},
-        {'key': 'from_email', 'label': 'From'},
-        {'key': 'subject', 'label': 'Subject'},
-        {'key': 'received_at', 'label': 'Received'},
-        {'key': 'contact_name', 'label': 'Contact'},
-        {'key': 'project_name', 'label': 'Project'},
-        {'key': 'supplier_invoice_number', 'label': 'Invoice #'},
-        {'key': 'total_net', 'label': 'Net'},
-        {'key': 'total_gst', 'label': 'GST'},
-    ]
+    # Get dropdown options
+    xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name')
+    suppliers = Contacts.objects.filter(status='ACTIVE').order_by('name').values('contact_pk', 'name')
+    projects = Projects.objects.all().order_by('project_name').values('projects_pk', 'project_name')
     
-    # Prepare rows for the table
-    bills_rows = []
+    # Prepare bills data
+    bills_data = []
     for invoice in invoices:
-        row = {
+        # Get S3 URL for attachment if it exists
+        attachment_url = ''
+        if invoice.email_attachment:
+            # Construct S3 URL for the attachment
+            attachment_url = f"https://{invoice.email_attachment.s3_bucket}.s3.amazonaws.com/{invoice.email_attachment.s3_key}"
+        
+        # Get email URL (link to received email in admin)
+        email_url = ''
+        if invoice.received_email:
+            email_url = f"/admin/core/receivedemail/{invoice.received_email.id}/change/"
+        
+        bill = {
             'invoice_pk': invoice.invoice_pk,
-            'email_attachment': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
-            'from_email': invoice.received_email.from_address if invoice.received_email else 'N/A',
-            'subject': invoice.received_email.subject if invoice.received_email else 'N/A',
-            'received_at': invoice.received_email.received_at.strftime('%Y-%m-%d %H:%M') if invoice.received_email else 'N/A',
-            'contact_name': invoice.contact_pk.contact_name if invoice.contact_pk else '',
-            'project_name': invoice.project.project_name if invoice.project else '',
-            'supplier_invoice_number': invoice.supplier_invoice_number or '',
-            'total_net': f"${invoice.total_net:,.2f}" if invoice.total_net else '',
-            'total_gst': f"${invoice.total_gst:,.2f}" if invoice.total_gst else '',
+            'xero_instance_id': invoice.project.xero_instance_id if invoice.project and invoice.project.xero_instance else None,
+            'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
+            'project_pk': invoice.project.projects_pk if invoice.project else None,
+            'total_net': float(invoice.total_net) if invoice.total_net else None,
+            'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
+            'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
+            'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
+            'attachment_filename': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
+            'attachment_url': attachment_url,
+            'email_url': email_url,
         }
-        bills_rows.append(row)
+        bills_data.append(bill)
     
     return JsonResponse({
-        'bills_columns': bills_columns,
-        'bills_rows': bills_rows,
-        'count': len(bills_rows)
+        'bills': bills_data,
+        'xero_instances': list(xero_instances),
+        'suppliers': list(suppliers),
+        'projects': list(projects),
+        'count': len(bills_data)
     })  
 
 def delete_invoice(request):

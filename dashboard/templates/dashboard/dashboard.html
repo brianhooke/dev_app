@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v47</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v48</div>
 </div>
 
 <div style="padding: 20px;">
@@ -70,32 +70,90 @@
                 url: '{% url "core:get_bills_list" %}',
                 type: 'GET',
                 success: function(response) {
-                    // Update modal content with bills data
                     console.log('Bills loaded:', response);
                     
-                    // Replace the table in the modal with new data
-                    var tableHtml = '<table class="table table-bordered table-hover">';
+                    // Store data globally for later use
+                    window.billsData = response;
                     
-                    // Header row
-                    tableHtml += '<thead><tr>';
-                    response.bills_columns.forEach(function(col) {
-                        tableHtml += '<th>' + col.label + '</th>';
-                    });
-                    tableHtml += '</tr></thead>';
+                    // Clear existing table
+                    $('#billsTableBody').empty();
                     
-                    // Body rows
-                    tableHtml += '<tbody>';
-                    response.bills_rows.forEach(function(row) {
-                        tableHtml += '<tr>';
-                        response.bills_columns.forEach(function(col) {
-                            tableHtml += '<td>' + (row[col.key] || '') + '</td>';
+                    // Populate table with bills
+                    response.bills.forEach(function(bill) {
+                        var row = $('<tr>').attr('data-invoice-pk', bill.invoice_pk);
+                        
+                        // 1. Xero Instance dropdown
+                        var xeroSelect = $('<select>').addClass('form-control form-control-sm xero-instance-select');
+                        xeroSelect.append($('<option>').val('').text('Select...'));
+                        response.xero_instances.forEach(function(instance) {
+                            var option = $('<option>').val(instance.xero_instance_pk).text(instance.xero_name);
+                            if (bill.xero_instance_id === instance.xero_instance_pk) {
+                                option.prop('selected', true);
+                            }
+                            xeroSelect.append(option);
                         });
-                        tableHtml += '</tr>';
+                        row.append($('<td>').append(xeroSelect));
+                        
+                        // 2. Supplier dropdown
+                        var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
+                        supplierSelect.append($('<option>').val('').text('Select...'));
+                        response.suppliers.forEach(function(supplier) {
+                            var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
+                            if (bill.contact_pk === supplier.contact_pk) {
+                                option.prop('selected', true);
+                            }
+                            supplierSelect.append(option);
+                        });
+                        row.append($('<td>').append(supplierSelect));
+                        
+                        // 3. Project dropdown
+                        var projectSelect = $('<select>').addClass('form-control form-control-sm project-select');
+                        projectSelect.append($('<option>').val('').text('Select...'));
+                        response.projects.forEach(function(project) {
+                            var option = $('<option>').val(project.projects_pk).text(project.project_name);
+                            if (bill.project_pk === project.projects_pk) {
+                                option.prop('selected', true);
+                            }
+                            projectSelect.append(option);
+                        });
+                        row.append($('<td>').append(projectSelect));
+                        
+                        // 4. $ Net input
+                        var netInput = $('<input>')
+                            .attr('type', 'number')
+                            .attr('step', '0.01')
+                            .addClass('form-control form-control-sm net-input')
+                            .val(bill.total_net || '');
+                        row.append($('<td>').append(netInput));
+                        
+                        // 5. $ GST input
+                        var gstInput = $('<input>')
+                            .attr('type', 'number')
+                            .attr('step', '0.01')
+                            .addClass('form-control form-control-sm gst-input')
+                            .val(bill.total_gst || '');
+                        row.append($('<td>').append(gstInput));
+                        
+                        // 6. Email link
+                        var emailLink = $('<a>')
+                            .attr('href', bill.email_url)
+                            .attr('target', '_blank')
+                            .text('email')
+                            .attr('title', bill.email_subject + ' from ' + bill.email_from);
+                        row.append($('<td>').append(emailLink));
+                        
+                        // 7. Bill link (attachment)
+                        var billLink = $('<a>')
+                            .attr('href', '#')
+                            .text('bill')
+                            .addClass('bill-link')
+                            .attr('data-attachment-url', bill.attachment_url)
+                            .attr('data-filename', bill.attachment_filename);
+                        row.append($('<td>').append(billLink));
+                        
+                        // Add row to table
+                        $('#billsTableBody').append(row);
                     });
-                    tableHtml += '</tbody></table>';
-                    
-                    // Replace table in modal
-                    $('#billsModal .modal-body').html(tableHtml);
                     
                     // Show modal
                     $('#billsModal').modal('show');
