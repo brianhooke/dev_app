@@ -6,6 +6,9 @@ __pycache__/
 env/
 staticfiles/
 *.pyc
+*.sqlite3
+db.sqlite3
+deploy.zip
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml

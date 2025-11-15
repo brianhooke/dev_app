@@ -12,7 +12,7 @@ echo "RDS Endpoint: $RDS_ENDPOINT"
 eb setenv \
   RDS_DB_NAME=devappdb \
   RDS_USERNAME=dbadmin \
-  RDS_PASSWORD=***REMOVED*** \
+  RDS_PASSWORD=DevApp2024SecurePass! \
   RDS_HOSTNAME=$RDS_ENDPOINT \
   RDS_PORT=5432 \
   AWS_STORAGE_BUCKET_NAME=dev-app-mason-bucket \
