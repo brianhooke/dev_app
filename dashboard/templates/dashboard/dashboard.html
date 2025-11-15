@@ -82,31 +82,47 @@
                     response.bills.forEach(function(bill) {
                         var row = $('<tr>').attr('data-invoice-pk', bill.invoice_pk);
                         
-                        // 1. Xero Instance dropdown
-                        var xeroSelect = $('<select>').addClass('form-control form-control-sm xero-instance-select');
-                        xeroSelect.append($('<option>').val('').text('Select...'));
-                        response.xero_instances.forEach(function(instance) {
-                            var option = $('<option>').val(instance.xero_instance_pk).text(instance.xero_name);
-                            if (bill.xero_instance_id === instance.xero_instance_pk) {
-                                option.prop('selected', true);
-                            }
-                            xeroSelect.append(option);
-                        });
-                        row.append($('<td>').append(xeroSelect));
+                        // 1. Combined Xero Instance / Project dropdown
+                        var combinedSelect = $('<select>').addClass('form-control form-control-sm xero-project-select');
+                        combinedSelect.append($('<option>').val('').text('Select...'));
                         
-                        // 2. Project dropdown
-                        var projectSelect = $('<select>').addClass('form-control form-control-sm project-select');
-                        projectSelect.append($('<option>').val('').text('Select...'));
-                        response.projects.forEach(function(project) {
-                            var option = $('<option>').val(project.projects_pk).text(project.project);
-                            if (bill.project_pk === project.projects_pk) {
-                                option.prop('selected', true);
-                            }
-                            projectSelect.append(option);
-                        });
-                        row.append($('<td>').append(projectSelect));
+                        // Add Xero Instances section
+                        if (response.xero_instances.length > 0) {
+                            var xeroHeader = $('<option>').val('').text('─── Xero Instances ───').prop('disabled', true);
+                            xeroHeader.css({'font-weight': 'bold', 'background-color': '#f0f0f0'});
+                            combinedSelect.append(xeroHeader);
+                            
+                            response.xero_instances.forEach(function(instance) {
+                                var option = $('<option>')
+                                    .val('xero_' + instance.xero_instance_pk)
+                                    .text('  ' + instance.xero_name);
+                                if (bill.xero_instance_id === instance.xero_instance_pk && !bill.project_pk) {
+                                    option.prop('selected', true);
+                                }
+                                combinedSelect.append(option);
+                            });
+                        }
                         
-                        // 3. Supplier dropdown
+                        // Add Projects section
+                        if (response.projects.length > 0) {
+                            var projectHeader = $('<option>').val('').text('─── Projects ───').prop('disabled', true);
+                            projectHeader.css({'font-weight': 'bold', 'background-color': '#f0f0f0'});
+                            combinedSelect.append(projectHeader);
+                            
+                            response.projects.forEach(function(project) {
+                                var option = $('<option>')
+                                    .val('project_' + project.projects_pk)
+                                    .text('  ' + project.project);
+                                if (bill.project_pk === project.projects_pk) {
+                                    option.prop('selected', true);
+                                }
+                                combinedSelect.append(option);
+                            });
+                        }
+                        
+                        row.append($('<td>').append(combinedSelect));
+                        
+                        // 2. Supplier dropdown
                         var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
                         supplierSelect.append($('<option>').val('').text('Select...'));
                         response.suppliers.forEach(function(supplier) {
@@ -118,14 +134,14 @@
                         });
                         row.append($('<td>').append(supplierSelect));
                         
-                        // 4. Invoice # input
+                        // 3. Invoice # input
                         var invoiceNumberInput = $('<input>')
                             .attr('type', 'text')
                             .addClass('form-control form-control-sm invoice-number-input')
                             .val(bill.supplier_invoice_number || '');
                         row.append($('<td>').append(invoiceNumberInput));
                         
-                        // 5. $ Net input
+                        // 4. $ Net input
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
@@ -133,7 +149,7 @@
                             .val(bill.total_net || '');
                         row.append($('<td>').append(netInput));
                         
-                        // 6. $ GST input
+                        // 5. $ GST input
                         var gstInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
