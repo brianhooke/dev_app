@@ -55,6 +55,13 @@
 
 <script>
     $(document).ready(function() {
+        // Handle navbar dropdown toggle
+        $('.dropdown-toggle').click(function(e) {
+            e.preventDefault();
+            var menu = $(this).siblings('.dropdown-menu');
+            menu.toggleClass('show');
+        });
+        
         // Dashboard controller - opens contacts modal
         $('#contactsLink').click(function(e) {
             e.preventDefault();
