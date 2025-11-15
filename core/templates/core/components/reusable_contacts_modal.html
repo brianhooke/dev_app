@@ -646,26 +646,28 @@ $(document).ready(function() {
                 </button>
             </div>
             <div class="modal-body">
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email Address</th>
-                            <th>BSB</th>
-                            <th>Account Number</th>
-                            <th>ABN</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr id="addSupplierRow">
-                            <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 120px;"></td>
-                            <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 150px;"></td>
-                            <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
-                            <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 100px;"></td>
-                            <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 120px;"></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div style="overflow-x: auto;">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 100px;">Name</th>
+                                <th style="min-width: 130px;">Email Address</th>
+                                <th style="min-width: 70px;">BSB</th>
+                                <th style="min-width: 90px;">Account Number</th>
+                                <th style="min-width: 110px;">ABN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="addSupplierRow">
+                                <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 100%;"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-success" id="addSupplierBtn">Add</button>
