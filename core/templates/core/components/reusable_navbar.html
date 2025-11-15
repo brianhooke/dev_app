@@ -51,6 +51,31 @@
     background: var(--gradient-primary-45deg);
     margin: 5px 0;
   }
+  
+  .reusable-navbar .dropdown {
+    position: relative;
+  }
+  
+  .reusable-navbar .dropdown-toggle {
+    cursor: pointer;
+  }
+  
+  .reusable-navbar .dropdown-menu {
+    display: none;
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    padding-left: 15px;
+  }
+  
+  .reusable-navbar .dropdown-menu.show {
+    display: block;
+  }
+  
+  .reusable-navbar .dropdown-menu a {
+    font-size: 16px;
+    padding: 8px 15px;
+  }
 </style>
 
 <div class="reusable-navbar">
@@ -58,6 +83,25 @@
         {% for item in nav_items %}
             {% if item.divider %}
                 <div class="divider"></div>
+            {% elif item.submenu %}
+                <li class="dropdown">
+                    <a href="#" 
+                       id="{{ item.id }}" 
+                       class="dropdown-toggle {% if current_page == item.page_id %}active{% endif %}">
+                        {{ item.label }}
+                    </a>
+                    <ul class="dropdown-menu" id="{{ item.id }}-menu">
+                        {% for subitem in item.submenu %}
+                            <li>
+                                <a href="#" 
+                                   id="{{ subitem.id }}" 
+                                   class="{% if current_page == subitem.page_id %}active{% endif %}">
+                                    {{ subitem.label }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </li>
             {% else %}
                 <li>
                     <a href="{{ item.url }}" 
@@ -70,3 +114,14 @@
         {% endfor %}
     </ul>
 </div>
+
+<script>
+$(document).ready(function() {
+    // Handle dropdown toggle
+    $('.dropdown-toggle').click(function(e) {
+        e.preventDefault();
+        var menu = $(this).siblings('.dropdown-menu');
+        menu.toggleClass('show');
+    });
+});
+</script>

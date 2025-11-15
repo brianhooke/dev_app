@@ -23,7 +23,10 @@ def dashboard_view(request):
     nav_items = [
         {'label': 'Dashboard', 'url': '/core/', 'id': 'dashboardLink', 'page_id': 'dashboard'},
         {'divider': True},
-        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
+        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'submenu': [
+            {'label': 'Inbox', 'id': 'billsInboxLink', 'page_id': 'bills_inbox'},
+            {'label': 'Direct', 'id': 'billsDirectLink', 'page_id': 'bills_direct'},
+        ]},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
         {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
