@@ -52,16 +52,16 @@
     margin: 5px 0;
   }
   
-  .reusable-navbar .dropdown {
+  .reusable-navbar .nav-dropdown {
     /* No position needed - let it flow naturally */
   }
   
-  .reusable-navbar .dropdown-toggle {
+  .reusable-navbar .nav-dropdown-toggle {
     cursor: pointer;
     position: relative;
   }
   
-  .reusable-navbar .dropdown-toggle::after {
+  .reusable-navbar .nav-dropdown-toggle::after {
     content: '▶';
     font-size: 10px;
     margin-left: 5px;
@@ -69,11 +69,11 @@
     display: inline-block;
   }
   
-  .reusable-navbar .dropdown.open .dropdown-toggle::after {
+  .reusable-navbar .nav-dropdown.open .nav-dropdown-toggle::after {
     transform: rotate(90deg);
   }
   
-  .reusable-navbar .dropdown-menu {
+  .reusable-navbar .nav-dropdown-menu {
     max-height: 0;
     overflow: hidden;
     list-style-type: none;
@@ -86,12 +86,12 @@
     box-shadow: none;  /* Remove any shadow */
   }
   
-  .reusable-navbar .dropdown-menu.show {
+  .reusable-navbar .nav-dropdown-menu.show {
     max-height: 500px;
     transition: max-height 0.3s ease-in;
   }
   
-  .reusable-navbar .dropdown-menu a {
+  .reusable-navbar .nav-dropdown-menu a {
     font-size: 16px;
     padding: 8px 15px;
   }
@@ -103,13 +103,13 @@
             {% if item.divider %}
                 <div class="divider"></div>
             {% elif item.submenu %}
-                <li class="dropdown">
+                <li class="nav-dropdown">
                     <a href="#" 
                        id="{{ item.id }}" 
-                       class="dropdown-toggle {% if current_page == item.page_id %}active{% endif %}">
+                       class="nav-dropdown-toggle {% if current_page == item.page_id %}active{% endif %}">
                         {{ item.label }}
                     </a>
-                    <ul class="dropdown-menu" id="{{ item.id }}-menu">
+                    <ul class="nav-dropdown-menu" id="{{ item.id }}-menu">
                         {% for subitem in item.submenu %}
                             <li>
                                 <a href="#" 

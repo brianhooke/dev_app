@@ -56,10 +56,10 @@
 <script>
     $(document).ready(function() {
         // Handle navbar dropdown toggle
-        $('.dropdown-toggle').click(function(e) {
+        $('.nav-dropdown-toggle').click(function(e) {
             e.preventDefault();
-            var menu = $(this).siblings('.dropdown-menu');
-            var dropdown = $(this).closest('.dropdown');
+            var menu = $(this).siblings('.nav-dropdown-menu');
+            var dropdown = $(this).closest('.nav-dropdown');
             menu.toggleClass('show');
             dropdown.toggleClass('open');
         });
