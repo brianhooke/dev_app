@@ -155,7 +155,7 @@
                             supplierSelect.append($('<option>').val('separator1').text('─────────').prop('disabled', true));
                             
                             // Add "Add..." option
-                            supplierSelect.append($('<option>').val('add_supplier').text('Add...'));
+                            supplierSelect.append($('<option>').val('add_supplier').text('Add +'));
                             
                             // Add separator
                             supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
@@ -215,23 +215,18 @@
                             .attr('title', bill.email_subject + ' from ' + bill.email_from);
                         row.append($('<td>').append(emailLink));
                         
-                        // 7. View link (attachment)
-                        var viewLink = $('<a>')
-                            .attr('href', '#')
-                            .text('view')
-                            .addClass('view-link')
-                            .attr('data-attachment-url', bill.attachment_url)
-                            .attr('data-filename', bill.attachment_filename);
-                        row.append($('<td>').append(viewLink));
+                        // Store attachment data on the row for auto-loading
+                        row.attr('data-attachment-url', bill.attachment_url);
+                        row.attr('data-filename', bill.attachment_filename);
                         
-                        // 8. Send button
+                        // 7. Send button
                         var sendBtn = $('<button>')
                             .addClass('btn btn-sm btn-success send-bill-btn')
                             .text('Send')
                             .attr('data-invoice-pk', bill.invoice_pk);
                         row.append($('<td>').append(sendBtn));
                         
-                        // 9. Archive button
+                        // 8. Archive button
                         var archiveBtn = $('<button>')
                             .addClass('btn btn-sm btn-danger archive-bill-btn')
                             .text('Archive')
@@ -279,11 +274,11 @@
                         $('#viewerPlaceholder').hide();
                     });
                     
-                    // Add click handler for view links (PDFs)
-                    $(document).on('click', '.view-link', function(e) {
-                        e.preventDefault();
-                        var attachmentUrl = $(this).attr('data-attachment-url');
-                        var filename = $(this).attr('data-filename');
+                    // Auto-load PDF when user interacts with any cell in a row
+                    $(document).on('click focus change', '#billsTableBody tr select, #billsTableBody tr input', function(e) {
+                        var row = $(this).closest('tr');
+                        var attachmentUrl = row.attr('data-attachment-url');
+                        var filename = row.attr('data-filename');
                         
                         if (attachmentUrl) {
                             // Update viewer title
@@ -292,8 +287,6 @@
                             // Load PDF in iframe
                             $('#billViewer').attr('src', attachmentUrl).show();
                             $('#viewerPlaceholder').hide();
-                        } else {
-                            alert('No attachment available for this bill');
                         }
                     });
                     
