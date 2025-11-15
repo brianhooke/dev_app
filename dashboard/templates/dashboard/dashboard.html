@@ -75,11 +75,13 @@
             // Clear existing table
             $('#billsTableBody').empty();
             
-            // Update modal title based on type
+            // Update modal title and last column header based on type
             if (modalType === 'inbox') {
                 $('#billsModalTitle').text('Bills - Inbox');
+                $('#lastColumnHeader').text('Archive');
             } else if (modalType === 'direct') {
                 $('#billsModalTitle').text('Bills - Direct');
+                $('#lastColumnHeader').text('Return to Inbox');
             }
             
             // Filter bills using provided filter function
@@ -257,11 +259,12 @@
                                 .attr('title', 'Return to Inbox');
                             row.append($('<td>').append(returnBtn));
                         } else {
-                            // Archive button
+                            // Archive button with icon
                             var archiveBtn = $('<button>')
                                 .addClass('btn btn-sm btn-danger archive-bill-btn')
-                                .text('Archive')
-                                .attr('data-invoice-pk', bill.invoice_pk);
+                                .html('<i class="fas fa-archive"></i>')
+                                .attr('data-invoice-pk', bill.invoice_pk)
+                                .attr('title', 'Archive');
                             row.append($('<td>').append(archiveBtn));
                         }
                         
