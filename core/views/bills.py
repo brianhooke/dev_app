@@ -122,6 +122,64 @@ def archive_bill(request):
         'message': 'Only POST method is allowed'
     }, status=405)
 
+@csrf_exempt
+def return_to_inbox(request):
+    """
+    Return a bill to inbox by clearing fields and setting status to -2
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            invoice_pk = data.get('invoice_pk')
+            
+            if not invoice_pk:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice PK is required'
+                }, status=400)
+            
+            # Get the invoice
+            try:
+                invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+            except Invoices.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice not found'
+                }, status=404)
+            
+            # Clear fields and set status to -2
+            invoice.xero_instance = None
+            invoice.project = None
+            invoice.total_net = None
+            invoice.total_gst = None
+            invoice.supplier_invoice_number = None
+            invoice.contact_pk = None
+            invoice.invoice_status = -2
+            
+            invoice.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Bill returned to inbox successfully',
+                'invoice_pk': invoice.invoice_pk
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Server error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
 def get_bills_list(request):
     """
     Get list of all invoices for Bills modals (Inbox and Direct)

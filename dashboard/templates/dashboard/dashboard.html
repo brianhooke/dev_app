@@ -71,9 +71,16 @@
         });
         
         // Function to populate bills table with filtering
-        function populateBillsTable(billsData, filterFn) {
+        function populateBillsTable(billsData, filterFn, modalType) {
             // Clear existing table
             $('#billsTableBody').empty();
+            
+            // Update modal title based on type
+            if (modalType === 'inbox') {
+                $('#billsModalTitle').text('Bills - Inbox');
+            } else if (modalType === 'direct') {
+                $('#billsModalTitle').text('Bills - Direct');
+            }
             
             // Filter bills using provided filter function
             var filteredBills = billsData.bills.filter(filterFn);
@@ -240,12 +247,23 @@
                             .attr('data-invoice-pk', bill.invoice_pk);
                         row.append($('<td>').append(sendBtn));
                         
-                        // 8. Archive button
-                        var archiveBtn = $('<button>')
-                            .addClass('btn btn-sm btn-danger archive-bill-btn')
-                            .text('Archive')
-                            .attr('data-invoice-pk', bill.invoice_pk);
-                        row.append($('<td>').append(archiveBtn));
+                        // 8. Archive or Return to Inbox button (depending on modal type)
+                        if (modalType === 'direct') {
+                            // Return to Inbox button with email icon
+                            var returnBtn = $('<button>')
+                                .addClass('btn btn-sm btn-primary return-to-inbox-btn')
+                                .html('<i class="fas fa-envelope"></i>')
+                                .attr('data-invoice-pk', bill.invoice_pk)
+                                .attr('title', 'Return to Inbox');
+                            row.append($('<td>').append(returnBtn));
+                        } else {
+                            // Archive button
+                            var archiveBtn = $('<button>')
+                                .addClass('btn btn-sm btn-danger archive-bill-btn')
+                                .text('Archive')
+                                .attr('data-invoice-pk', bill.invoice_pk);
+                            row.append($('<td>').append(archiveBtn));
+                        }
                         
                         // Add row to table
                         $('#billsTableBody').append(row);
@@ -269,7 +287,7 @@
                     // Populate table with status = -2 (Inbox: unprocessed email bills)
                     populateBillsTable(response, function(bill) {
                         return bill.invoice_status === -2;
-                    });
+                    }, 'inbox');
                     
                     // Show modal
                     $('#billsModal').modal('show');
@@ -300,7 +318,7 @@
                         return bill.invoice_status === 0 && 
                                bill.xero_instance_id !== null && 
                                bill.project_pk === null;
-                    });
+                    }, 'direct');
                     
                     // Show modal
                     $('#billsModal').modal('show');
@@ -568,6 +586,61 @@
                                 error: function(xhr, status, error) {
                                     console.error('Archive error:', error);
                                     alert('Failed to archive bill. Please try again.');
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Add click handler for return to inbox buttons
+                    $(document).on('click', '.return-to-inbox-btn', function(e) {
+                        e.preventDefault();
+                        var invoicePk = $(this).attr('data-invoice-pk');
+                        var row = $(this).closest('tr');
+                        
+                        if (confirm('Are you sure you want to return this bill to the inbox?')) {
+                            // Send AJAX request to return to inbox
+                            $.ajax({
+                                url: '{% url "core:return_to_inbox" %}',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    invoice_pk: invoicePk
+                                }),
+                                headers: {
+                                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                                },
+                                success: function(response) {
+                                    if (response.status === 'success') {
+                                        // Update the invoice in the global bills data
+                                        if (window.billsData && window.billsData.bills) {
+                                            var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
+                                            if (invoice) {
+                                                invoice.invoice_status = -2;
+                                                invoice.xero_instance_id = null;
+                                                invoice.project_pk = null;
+                                                invoice.total_net = null;
+                                                invoice.total_gst = null;
+                                                invoice.supplier_invoice_number = null;
+                                                invoice.contact_pk = null;
+                                            }
+                                        }
+                                        
+                                        // Remove row from table with fade effect
+                                        row.fadeOut(400, function() {
+                                            $(this).remove();
+                                            
+                                            // Check if table is empty
+                                            if ($('#billsTableBody tr').length === 0) {
+                                                $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
+                                            }
+                                        });
+                                    } else {
+                                        alert('Failed to return bill to inbox: ' + response.message);
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Return to inbox error:', error);
+                                    alert('Failed to return bill to inbox. Please try again.');
                                 }
                             });
                         }
