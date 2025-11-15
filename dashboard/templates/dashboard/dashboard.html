@@ -122,15 +122,35 @@
                         
                         row.append($('<td>').append(combinedSelect));
                         
-                        // 2. Supplier dropdown
+                        // 2. Supplier dropdown (will be populated based on Xero Instance)
                         var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
                         supplierSelect.append($('<option>').val('').text('Select...'));
-                        response.suppliers.forEach(function(supplier) {
-                            var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
-                            if (bill.contact_pk === supplier.contact_pk) {
-                                option.prop('selected', true);
+                        
+                        // Determine the xero_instance_id for filtering
+                        var selectedXeroInstanceId = null;
+                        if (bill.project_pk) {
+                            // Find the project's xero_instance_id
+                            var project = response.projects.find(p => p.projects_pk === bill.project_pk);
+                            if (project) {
+                                selectedXeroInstanceId = project.xero_instance_id;
                             }
-                            supplierSelect.append(option);
+                        } else if (bill.xero_instance_id) {
+                            selectedXeroInstanceId = bill.xero_instance_id;
+                        }
+                        
+                        // Populate suppliers filtered by xero_instance_id
+                        response.suppliers.forEach(function(supplier) {
+                            // Only show suppliers for the selected Xero Instance
+                            if (!selectedXeroInstanceId || supplier.xero_instance_id === selectedXeroInstanceId) {
+                                var option = $('<option>')
+                                    .val(supplier.contact_pk)
+                                    .text(supplier.name)
+                                    .attr('data-xero-instance', supplier.xero_instance_id);
+                                if (bill.contact_pk === supplier.contact_pk) {
+                                    option.prop('selected', true);
+                                }
+                                supplierSelect.append(option);
+                            }
                         });
                         row.append($('<td>').append(supplierSelect));
                         
@@ -248,6 +268,45 @@
                             $('#viewerPlaceholder').hide();
                         } else {
                             alert('No attachment available for this bill');
+                        }
+                    });
+                    
+                    // Add change handler for Xero Instance / Project dropdown
+                    $(document).on('change', '.xero-project-select', function() {
+                        var selectedValue = $(this).val();
+                        var row = $(this).closest('tr');
+                        var supplierSelect = row.find('.supplier-select');
+                        var selectedSupplier = supplierSelect.val(); // Remember current selection
+                        
+                        // Determine the xero_instance_id
+                        var xeroInstanceId = null;
+                        if (selectedValue.startsWith('xero_')) {
+                            xeroInstanceId = parseInt(selectedValue.replace('xero_', ''));
+                        } else if (selectedValue.startsWith('project_')) {
+                            var projectPk = parseInt(selectedValue.replace('project_', ''));
+                            var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
+                            if (project) {
+                                xeroInstanceId = project.xero_instance_id;
+                            }
+                        }
+                        
+                        // Rebuild supplier dropdown
+                        supplierSelect.empty();
+                        supplierSelect.append($('<option>').val('').text('Select...'));
+                        
+                        window.billsData.suppliers.forEach(function(supplier) {
+                            if (!xeroInstanceId || supplier.xero_instance_id === xeroInstanceId) {
+                                var option = $('<option>')
+                                    .val(supplier.contact_pk)
+                                    .text(supplier.name)
+                                    .attr('data-xero-instance', supplier.xero_instance_id);
+                                supplierSelect.append(option);
+                            }
+                        });
+                        
+                        // Restore selection if still valid
+                        if (selectedSupplier && supplierSelect.find('option[value="' + selectedSupplier + '"]').length > 0) {
+                            supplierSelect.val(selectedSupplier);
                         }
                     });
                     
