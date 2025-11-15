@@ -148,11 +148,17 @@
                         
                         // Only populate suppliers if a Xero Instance is selected
                         if (selectedXeroInstanceId) {
-                            // Add "Add Supplier" option
-                            supplierSelect.append($('<option>').val('add_supplier').text('+ Add Supplier'));
+                            // Add "Select Supplier..." option
+                            supplierSelect.append($('<option>').val('').text('Select Supplier...'));
                             
                             // Add separator
-                            supplierSelect.append($('<option>').val('separator').text('─────────').prop('disabled', true));
+                            supplierSelect.append($('<option>').val('separator1').text('─────────').prop('disabled', true));
+                            
+                            // Add "Add..." option
+                            supplierSelect.append($('<option>').val('add_supplier').text('Add...'));
+                            
+                            // Add separator
+                            supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
                             
                             // Populate suppliers filtered by xero_instance_id
                             response.suppliers.forEach(function(supplier) {
@@ -317,11 +323,17 @@
                             // Enable and populate suppliers
                             supplierSelect.prop('disabled', false);
                             
-                            // Add "Add Supplier" option
-                            supplierSelect.append($('<option>').val('add_supplier').text('+ Add Supplier'));
+                            // Add "Select Supplier..." option
+                            supplierSelect.append($('<option>').val('').text('Select Supplier...'));
                             
                             // Add separator
-                            supplierSelect.append($('<option>').val('separator').text('─────────').prop('disabled', true));
+                            supplierSelect.append($('<option>').val('separator1').text('─────────').prop('disabled', true));
+                            
+                            // Add "Add..." option
+                            supplierSelect.append($('<option>').val('add_supplier').text('Add...'));
+                            
+                            // Add separator
+                            supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
                             
                             window.billsData.suppliers.forEach(function(supplier) {
                                 if (supplier.xero_instance_id === xeroInstanceId) {

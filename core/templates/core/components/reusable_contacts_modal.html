@@ -625,6 +625,16 @@ $(document).ready(function() {
 });
 </script>
 
+<style>
+/* Ensure Add Supplier modal appears above Bills modal */
+#addSupplierModal {
+    z-index: 1060 !important;
+}
+#addSupplierModal ~ .modal-backdrop {
+    z-index: 1055 !important;
+}
+</style>
+
 <!-- Add Supplier Modal (Smaller version for quick add) -->
 <div class="modal fade" id="addSupplierModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document" style="max-width: 700px;">
@@ -682,10 +692,11 @@ $(document).ready(function() {
         // Show modal
         $('#addSupplierModal').modal('show');
         
-        // Focus on name input
+        // Ensure backdrop is properly layered
         setTimeout(() => {
+            $('.modal-backdrop').last().css('z-index', 1055);
             $('#addSupplierRow .name-input').focus();
-        }, 500);
+        }, 100);
     };
     
     // Add Supplier button handler
