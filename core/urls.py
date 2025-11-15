@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations
-from .views.bills import get_bills_list
+from .views.bills import get_bills_list, archive_bill
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
@@ -96,6 +96,7 @@ urlpatterns = [
     
     # Bills management
     path('get_bills_list/', get_bills_list, name='get_bills_list'),
+    path('archive_bill/', archive_bill, name='archive_bill'),
     
     # Email receiving API
     path('api/receive_email/', receive_email, name='receive_email'),

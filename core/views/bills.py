@@ -68,6 +68,60 @@ ssl._create_default_https_context = ssl._create_unverified_context
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+@csrf_exempt
+def archive_bill(request):
+    """
+    Archive a bill by setting invoice_status to 4
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            invoice_pk = data.get('invoice_pk')
+            
+            if not invoice_pk:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice PK is required'
+                }, status=400)
+            
+            # Get the invoice
+            try:
+                invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+            except Invoices.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice not found'
+                }, status=404)
+            
+            # Update status to 4 (archived)
+            invoice.invoice_status = 4
+            invoice.save()
+            
+            logger.info(f"Archived invoice #{invoice_pk}")
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Bill archived successfully',
+                'invoice_pk': invoice_pk
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON data'
+            }, status=400)
+        except Exception as e:
+            logger.error(f"Error archiving bill: {str(e)}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Server error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
 def get_bills_list(request):
     """
     Get list of invoices with invoice_status = -2 for the Bills modal

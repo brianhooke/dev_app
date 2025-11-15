@@ -162,6 +162,13 @@
                             .attr('data-filename', bill.attachment_filename);
                         row.append($('<td>').append(viewLink));
                         
+                        // 8. Archive button
+                        var archiveBtn = $('<button>')
+                            .addClass('btn btn-sm btn-danger archive-bill-btn')
+                            .text('Archive')
+                            .attr('data-invoice-pk', bill.invoice_pk);
+                        row.append($('<td>').append(archiveBtn));
+                        
                         // Add row to table
                         $('#billsTableBody').append(row);
                     });
@@ -218,6 +225,42 @@
                             $('#viewerPlaceholder').hide();
                         } else {
                             alert('No attachment available for this bill');
+                        }
+                    });
+                    
+                    // Add click handler for archive buttons
+                    $(document).on('click', '.archive-bill-btn', function(e) {
+                        e.preventDefault();
+                        var invoicePk = $(this).attr('data-invoice-pk');
+                        var row = $(this).closest('tr');
+                        
+                        if (confirm('Are you sure you want to archive this Bill?')) {
+                            // Send AJAX request to archive the invoice
+                            $.ajax({
+                                url: '{% url "core:archive_bill" %}',
+                                type: 'POST',
+                                headers: {
+                                    'X-CSRFToken': '{{ csrf_token }}'
+                                },
+                                data: JSON.stringify({
+                                    invoice_pk: invoicePk
+                                }),
+                                contentType: 'application/json',
+                                success: function(response) {
+                                    if (response.status === 'success') {
+                                        // Remove row from table with fade effect
+                                        row.fadeOut(300, function() {
+                                            $(this).remove();
+                                        });
+                                    } else {
+                                        alert('Failed to archive bill: ' + response.message);
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Archive error:', error);
+                                    alert('Failed to archive bill. Please try again.');
+                                }
+                            });
                         }
                     });
                     
