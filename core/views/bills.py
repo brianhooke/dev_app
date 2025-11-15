@@ -88,11 +88,11 @@ def get_bills_list(request):
     # Prepare bills data
     bills_data = []
     for invoice in invoices:
-        # Get S3 URL for attachment if it exists
+        # Get presigned S3 URL for attachment if it exists
         attachment_url = ''
         if invoice.email_attachment:
-            # Construct S3 URL for the attachment
-            attachment_url = f"https://{invoice.email_attachment.s3_bucket}.s3.amazonaws.com/{invoice.email_attachment.s3_key}"
+            # Generate presigned URL (valid for 1 hour)
+            attachment_url = invoice.email_attachment.get_download_url()
         
         # Get email URL (link to received email in admin)
         email_url = ''
