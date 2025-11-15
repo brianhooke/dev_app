@@ -66,6 +66,15 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json().then(data => ({status: response.status, body: data})))
         .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Test');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
             if (body.status === 'success') {
                 // Change button to green tick (no alert needed)
                 button.removeClass('btn-primary').addClass('btn-success');

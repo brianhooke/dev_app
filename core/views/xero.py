@@ -391,8 +391,8 @@ def test_xero_connection(request, instance_pk):
             logger.error(f"Xero API returned 401 for instance {instance_pk}. Response: {test_response.text}")
             return JsonResponse({
                 'status': 'error',
-                'message': 'OAuth token is invalid or expired. Token refresh may have failed.',
-                'needs_auth': False  # Don't prompt for re-auth since token exists
+                'message': 'OAuth token is invalid or expired. Please re-authorize.',
+                'needs_auth': True  # Prompt for re-auth
             }, status=401)
         else:
             logger.error(f"Xero API returned {test_response.status_code} for instance {instance_pk}. Response: {test_response.text}")
