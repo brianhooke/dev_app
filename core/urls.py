@@ -2,19 +2,15 @@ from django.urls import path
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
-from .views.dashboard import dashboard_view
-from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection, pull_xero_contacts, get_contacts_by_instance, update_contact_status, update_contact_details, create_contact
+from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
-from .views.contacts import verify_contact_details
 from django.conf import settings
 from django.conf.urls.static import static
 
 app_name = 'core'
 
 urlpatterns = [
-    # Dashboard is now the homepage
-    path('', dashboard_view, name='dashboard'),
-    # Old homepage moved to /developer/
+    # Old homepage at /core/developer/
     path('developer/', views.homepage_view, name='homepage'),
     path('drawings/', views.drawings_view, name='drawings'),
     path('build/', views.build_view, name='build'),
@@ -79,17 +75,11 @@ urlpatterns = [
     path('get_current_project_info/', get_current_project_info, name='get_current_project_info'),
     path('project_selector/', project_selector_view, name='project_selector'),
     
-    # Xero management endpoints
+    # Xero management endpoints (contact endpoints moved to dashboard app)
     path('get_xero_instances/', get_xero_instances, name='get_xero_instances'),
     path('create_xero_instance/', create_xero_instance, name='create_xero_instance'),
     path('delete_xero_instance/<int:instance_pk>/', delete_xero_instance, name='delete_xero_instance'),
     path('test_xero_connection/<int:instance_pk>/', test_xero_connection, name='test_xero_connection'),
-    path('pull_xero_contacts/<int:instance_pk>/', pull_xero_contacts, name='pull_xero_contacts'),
-    path('get_contacts_by_instance/<int:instance_pk>/', get_contacts_by_instance, name='get_contacts_by_instance'),
-    path('update_contact_status/<int:instance_pk>/<int:contact_pk>/', update_contact_status, name='update_contact_status'),
-    path('update_contact_details/<int:instance_pk>/<int:contact_pk>/', update_contact_details, name='update_contact_details'),
-    path('create_contact/<int:instance_pk>/', create_contact, name='create_contact'),
-    path('verify_contact_details/<int:contact_pk>/', verify_contact_details, name='verify_contact_details'),
     
     # Xero OAuth2 endpoints
     path('xero_oauth_authorize/<int:instance_pk>/', xero_oauth_authorize, name='xero_oauth_authorize'),

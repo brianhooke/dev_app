@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load Xero Instances from backend
     function loadXeroInstances() {
-        fetch('/get_xero_instances/')
+        fetch('/core/get_xero_instances/')
             .then(response => response.json())
             .then(data => {
                 displayXeroInstances(data);
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Disable button and show loading state
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
         
-        fetch(`/test_xero_connection/${instancePk}/`, {
+        fetch(`/core/test_xero_connection/${instancePk}/`, {
             method: 'GET'
         })
         .then(response => response.json().then(data => ({status: response.status, body: data})))
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get CSRF token
         const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
-        fetch(`/delete_xero_instance/${instancePk}/`, {
+        fetch(`/core/delete_xero_instance/${instancePk}/`, {
             method: 'DELETE',
             headers: {
                 'X-CSRFToken': csrftoken
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get CSRF token
         const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
-        fetch('/create_xero_instance/', {
+        fetch('/core/create_xero_instance/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

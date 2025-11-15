@@ -4,8 +4,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    # Core app - main application logic (no prefix, root level)
-    path('', include(('core.urls', 'core'), namespace='core')),
+    # Dashboard app - main homepage and contact management (root level)
+    path('', include(('dashboard.urls', 'dashboard'), namespace='dashboard')),
+    
+    # Core app - main application logic (with prefix)
+    path('core/', include(('core.urls', 'core'), namespace='core')),
     
     # PROJECT_TYPE apps with namespaces
     path('development/', include(('development.urls', 'development'), namespace='development')),

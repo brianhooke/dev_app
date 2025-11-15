@@ -1,15 +1,18 @@
 """
-Contacts management views.
+Dashboard app views.
 
-Functions:
-1. verify_contact_details - Save verified contact details to separate verified fields
-2. pull_xero_contacts - Pull contacts from Xero API, insert/update locally
-3. get_contacts_by_instance - Get ACTIVE contacts with verified status (0/1/2)
-4. create_contact - Create contact in Xero + local DB
-5. update_contact_details - Update bank details, email, ABN in Xero
-6. update_contact_status - Archive/unarchive contact in Xero
+Dashboard View:
+1. dashboard_view - Main dashboard homepage
 
-Note: Functions 2-6 use helper functions from xero.py:
+Contacts Views:
+2. verify_contact_details - Save verified contact details to separate verified fields
+3. pull_xero_contacts - Pull contacts from Xero API, insert/update locally
+4. get_contacts_by_instance - Get ACTIVE contacts with verified status (0/1/2)
+5. create_contact - Create contact in Xero + local DB
+6. update_contact_details - Update bank details, email, ABN in Xero
+7. update_contact_status - Archive/unarchive contact in Xero
+
+Note: Contact functions 3-7 use helper functions from core.views.xero:
 - get_xero_auth() - OAuth authentication
 - format_bank_details() - BSB + account formatting
 - parse_xero_validation_errors() - Error parsing
@@ -19,13 +22,61 @@ Note: Functions 2-6 use helper functions from xero.py:
 import json
 import logging
 import requests
+from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from core.models import Contacts
-# Import helpers from xero.py
-from .xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
+from django.conf import settings
+from core.models import Contacts, SPVData, XeroInstances
+# Import helpers from core.views.xero
+from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
 
 logger = logging.getLogger(__name__)
+
+
+def dashboard_view(request):
+    """
+    Main dashboard view - serves as the application homepage.
+    """
+    spv_data = SPVData.objects.first()
+    
+    # Table configuration for dashboard
+    table_columns = [
+        "Fake 1", "Fake 2", "Fake 3", "Fake 4", "Fake 5",
+        "Fake 6", "Fake 7", "Fake 8", "Fake 9", "Fake 10"
+    ]
+    
+    # Navigation items for navbar
+    nav_items = [
+        {'label': 'Dashboard', 'url': '/dashboard/', 'id': 'dashboardLink', 'page_id': 'dashboard'},
+        {'divider': True},
+        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
+        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
+        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
+        {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
+        {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
+    ]
+    
+    # Contacts table configuration
+    contacts_columns = ["Name", "Email Address", "BSB", "Account Number", "ABN", "Update"]
+    contacts_rows = []  # No data for now
+    
+    # Get XeroInstances for dropdown
+    xero_instances = XeroInstances.objects.all()
+    
+    context = {
+        "current_page": "dashboard",
+        "project_name": settings.PROJECT_NAME,
+        "spv_data": spv_data,
+        "table_columns": table_columns,
+        "table_rows": [],  # No data for now
+        "show_totals": False,  # No totals row for dashboard
+        "nav_items": nav_items,
+        "contacts_columns": contacts_columns,
+        "contacts_rows": contacts_rows,
+        "xero_instances": xero_instances,
+    }
+    
+    return render(request, "dashboard/dashboard.html", context)
 
 
 @csrf_exempt

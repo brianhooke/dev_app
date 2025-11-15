@@ -1,5 +1,21 @@
 """
 Xero management views.
+
+Helper Functions (exported to contacts.py):
+1. get_xero_auth - Centralized OAuth authentication + tenant ID retrieval
+2. format_bank_details - Combines BSB + account number for Xero format
+3. parse_xero_validation_errors - Extracts validation errors from Xero API responses
+4. @handle_xero_request_errors - Decorator handling timeout/connection/generic errors
+
+Xero Instance Management:
+5. get_xero_instances - Fetch all Xero instances (PK, name, client ID)
+6. create_xero_instance - Create new Xero instance with encrypted credentials
+7. delete_xero_instance - Delete a Xero instance by PK
+8. test_xero_connection - Test Xero API connection via Contacts endpoint
+
+Note: Contact-related functions (pull_xero_contacts, get_contacts_by_instance, 
+create_contact, update_contact_details, update_contact_status) have been moved 
+to contacts.py but still use the helper functions from this module.
 """
 
 from django.shortcuts import render, redirect
@@ -16,6 +32,103 @@ from urllib.parse import urlencode
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def get_xero_auth(instance_pk):
+    """
+    Helper function to get Xero authentication credentials.
+    Returns (xero_instance, access_token, tenant_id) or (None, error_response, None).
+    
+    Usage:
+        xero_instance, result, tenant_id = get_xero_auth(instance_pk)
+        if not xero_instance:
+            return result  # This is the error JsonResponse
+    """
+    try:
+        xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
+    except XeroInstances.DoesNotExist:
+        return None, JsonResponse({
+            'status': 'error',
+            'message': 'Xero instance not found'
+        }, status=404), None
+    
+    # Get OAuth token
+    from .xero_oauth import get_oauth_token
+    success, token_or_error = get_oauth_token(xero_instance)
+    
+    if not success:
+        logger.error(f"OAuth token failed for instance {instance_pk}: {token_or_error}")
+        return None, JsonResponse({
+            'status': 'error',
+            'message': f'OAuth authentication failed: {token_or_error}',
+            'needs_auth': True
+        }, status=401), None
+    
+    access_token = token_or_error
+    tenant_id = xero_instance.oauth_tenant_id
+    
+    if not tenant_id:
+        return None, JsonResponse({
+            'status': 'error',
+            'message': 'No tenant ID found. Please re-authorize this Xero instance.',
+            'needs_auth': True
+        }, status=401), None
+    
+    return xero_instance, access_token, tenant_id
+
+
+def format_bank_details(bsb, account_number):
+    """
+    Combine BSB and account number for Xero BankAccountDetails field.
+    Returns empty string if either field is missing.
+    """
+    if bsb and account_number:
+        return bsb.replace('-', '') + account_number
+    return ''
+
+
+def parse_xero_validation_errors(response):
+    """
+    Extract validation error messages from Xero API error response.
+    Returns formatted error message or None.
+    """
+    try:
+        error_data = response.json()
+        if 'Elements' in error_data and len(error_data['Elements']) > 0:
+            element = error_data['Elements'][0]
+            if 'ValidationErrors' in element and len(element['ValidationErrors']) > 0:
+                validation_errors = [err['Message'] for err in element['ValidationErrors']]
+                return 'Xero validation error: ' + '; '.join(validation_errors)
+    except:
+        pass
+    return None
+
+
+def handle_xero_request_errors(func):
+    """
+    Decorator to handle common Xero API request exceptions.
+    Wraps timeout, connection, and generic errors with appropriate JSON responses.
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except requests.exceptions.Timeout:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Request timed out - Xero API not responding'
+            }, status=408)
+        except requests.exceptions.ConnectionError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection error - Cannot reach Xero API'
+            }, status=503)
+        except Exception as e:
+            logger.error(f"Unexpected error in {func.__name__}: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}'
+            }, status=500)
+    return wrapper
 
 
 def get_xero_instances(request):
@@ -180,810 +293,115 @@ def delete_xero_instance(request, instance_pk):
 
 
 @csrf_exempt
+@handle_xero_request_errors
 def test_xero_connection(request, instance_pk):
     """
     Test Xero API connection for a specific instance.
     Performs a health check by getting a token and fetching organisation info.
     """
     if request.method == 'GET':
-        try:
-            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
-            
-            # Step 1: Get OAuth token
-            from .xero_oauth import get_oauth_token
-            success, token_or_error = get_oauth_token(xero_instance)
-            if not success:
-                logger.error(f"get_oauth_token failed for instance {instance_pk}: {token_or_error}")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Authentication failed: {token_or_error}',
-                    'needs_auth': True
-                }, status=401)
-            
-            access_token = token_or_error
-            
-            # Step 2: First, get the list of authorized tenants for this token
-            connections_response = requests.get(
-                'https://api.xero.com/connections',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json'
-                },
-                timeout=10
-            )
-            
-            if connections_response.status_code != 200:
-                logger.error(f"Failed to get connections for instance {instance_pk}: {connections_response.text}")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Failed to verify authorized tenants: {connections_response.status_code}',
-                    'needs_auth': True
-                }, status=401)
-            
-            connections = connections_response.json()
-            logger.info(f"Authorized connections for instance {instance_pk}: {connections}")
-            
-            # Get the stored tenant_id
-            stored_tenant_id = xero_instance.oauth_tenant_id
-            
-            if not connections:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No Xero organizations are authorized for this token. Please re-authorize.',
-                    'needs_auth': True
-                }, status=401)
-            
-            # Use the first authorized tenant (or match stored one if it exists)
-            tenant_id = None
+        # Get Xero authentication
+        xero_instance, result, tenant_id = get_xero_auth(instance_pk)
+        if not xero_instance:
+            return result
+        
+        access_token = result
+        
+        # Step 2: First, get the list of authorized tenants for this token
+        connections_response = requests.get(
+            'https://api.xero.com/connections',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            },
+            timeout=10
+        )
+        
+        if connections_response.status_code != 200:
+            logger.error(f"Failed to get connections for instance {instance_pk}: {connections_response.text}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to verify authorized tenants: {connections_response.status_code}',
+                'needs_auth': True
+            }, status=401)
+        
+        connections = connections_response.json()
+        logger.info(f"Authorized connections for instance {instance_pk}: {connections}")
+        
+        # tenant_id already retrieved from get_xero_auth helper
+        stored_tenant_id = tenant_id
+        
+        if not connections:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No Xero organizations are authorized for this token. Please re-authorize.',
+                'needs_auth': True
+            }, status=401)
+        
+        # Use the first authorized tenant (or match stored one if it exists)
+        tenant_id = None
+        for conn in connections:
+            if stored_tenant_id and conn.get('tenantId') == stored_tenant_id:
+                tenant_id = stored_tenant_id
+                break
+        
+        # If stored tenant not found in authorized list, use the first one
+        if not tenant_id:
+            tenant_id = connections[0].get('tenantId')
+            logger.warning(f"Stored tenant_id {stored_tenant_id} not in authorized list. Using {tenant_id} instead.")
+            # Update the stored tenant_id
+            xero_instance.oauth_tenant_id = tenant_id
+            xero_instance.save()
+        
+        logger.info(f"Testing connection for instance {instance_pk} with tenant_id: {tenant_id}")
+        
+        # Step 3: Test API with a simple contacts call (we have accounting.contacts scope)
+        # Using contacts instead of Organisation because Organisation requires accounting.settings scope
+        test_response = requests.get(
+            'https://api.xero.com/api.xro/2.0/Contacts?page=1&pageSize=1',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json',
+                'Xero-tenant-id': tenant_id
+            },
+            timeout=10
+        )
+        
+        if test_response.status_code == 200:
+            # API is working! Get the org name from the connection info
+            org_name = None
             for conn in connections:
-                if stored_tenant_id and conn.get('tenantId') == stored_tenant_id:
-                    tenant_id = stored_tenant_id
+                if conn.get('tenantId') == tenant_id:
+                    org_name = conn.get('tenantName')
                     break
             
-            # If stored tenant not found in authorized list, use the first one
-            if not tenant_id:
-                tenant_id = connections[0].get('tenantId')
-                logger.warning(f"Stored tenant_id {stored_tenant_id} not in authorized list. Using {tenant_id} instead.")
-                # Update the stored tenant_id
-                xero_instance.oauth_tenant_id = tenant_id
-                xero_instance.save()
-            
-            logger.info(f"Testing connection for instance {instance_pk} with tenant_id: {tenant_id}")
-            
-            # Step 3: Test API with a simple contacts call (we have accounting.contacts scope)
-            # Using contacts instead of Organisation because Organisation requires accounting.settings scope
-            test_response = requests.get(
-                'https://api.xero.com/api.xro/2.0/Contacts?page=1&pageSize=1',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json',
-                    'Xero-tenant-id': tenant_id
-                },
-                timeout=10
-            )
-            
-            if test_response.status_code == 200:
-                # API is working! Get the org name from the connection info
-                org_name = None
-                for conn in connections:
-                    if conn.get('tenantId') == tenant_id:
-                        org_name = conn.get('tenantName')
-                        break
-                
-                logger.info(f"API test successful for instance {instance_pk}, org: {org_name}")
-                
-                return JsonResponse({
-                    'status': 'success',
-                    'message': f'✓ API Connection Working',
-                    'details': {
-                        'xero_org_name': org_name,
-                        'xero_instance_name': xero_instance.xero_name,
-                        'tenant_id': tenant_id
-                    }
-                })
-            elif test_response.status_code == 401:
-                # Token is invalid or expired
-                logger.error(f"Xero API returned 401 for instance {instance_pk}. Response: {test_response.text}")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'OAuth token is invalid or expired. Token refresh may have failed.',
-                    'needs_auth': False  # Don't prompt for re-auth since token exists
-                }, status=401)
-            else:
-                logger.error(f"Xero API returned {test_response.status_code} for instance {instance_pk}. Response: {test_response.text}")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'API call failed with status {test_response.status_code}: {test_response.text[:100]}'
-                }, status=400)
-                
-        except XeroInstances.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Xero instance not found'
-            }, status=404)
-        except requests.exceptions.Timeout:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Request timed out - Xero API not responding'
-            }, status=408)
-        except requests.exceptions.ConnectionError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection error - Cannot reach Xero API. Check your internet connection.'
-            }, status=503)
-        except Exception as e:
-            logger.error(f"Error testing Xero connection: {str(e)}")
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only GET method is allowed'
-    }, status=405)
-
-
-@csrf_exempt
-def pull_xero_contacts(request, instance_pk):
-    """
-    Pull contacts from Xero API for a specific instance.
-    Only inserts new contacts, does not update existing ones.
-    """
-    if request.method == 'POST':
-        try:
-            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
-            
-            # Get OAuth token (OAuth2 only - no fallback to custom connection)
-            from .xero_oauth import get_oauth_token
-            success, token_or_error = get_oauth_token(xero_instance)
-            
-            if not success:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'OAuth authentication failed: {token_or_error}. Please authorize the app first.',
-                    'needs_auth': True
-                }, status=401)
-            
-            access_token = token_or_error
-            
-            # Step 2: Get tenant ID from stored XeroInstance
-            tenant_id = xero_instance.oauth_tenant_id
-            
-            if not tenant_id:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No tenant ID found. Please re-authorize this Xero instance.',
-                    'needs_auth': True
-                }, status=401)
-            
-            logger.info(f"Using tenant_id: {tenant_id} for instance: {xero_instance.xero_name}")
-            
-            # Step 3: Fetch contacts from Xero API (includes archived contacts)
-            contacts_response = requests.get(
-                'https://api.xero.com/api.xro/2.0/Contacts?includeArchived=true',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json',
-                    'Xero-tenant-id': tenant_id
-                },
-                timeout=30
-            )
-            
-            if contacts_response.status_code != 200:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
-                }, status=400)
-            
-            contacts_data = contacts_response.json()
-            xero_contacts = contacts_data.get('Contacts', [])
-            
-            # Step 4: Process contacts - insert new ones and update existing ones
-            new_contacts_count = 0
-            updated_contacts_count = 0
-            unchanged_contacts_count = 0
-            
-            for xero_contact in xero_contacts:
-                contact_id = xero_contact.get('ContactID')
-                
-                # Extract contact data from Xero
-                name = xero_contact.get('Name', '')
-                email = xero_contact.get('EmailAddress', '')
-                status = xero_contact.get('ContactStatus', '')
-                
-                # Parse bank account details
-                bank_account_details = xero_contact.get('BankAccountDetails', '')
-                bank_bsb = ''
-                bank_account_number = ''
-                
-                if bank_account_details:
-                    # Remove spaces and dashes for parsing
-                    cleaned = bank_account_details.replace(' ', '').replace('-', '')
-                    
-                    # BSB is first 6 digits, rest is account number
-                    if len(cleaned) >= 6:
-                        bank_bsb = cleaned[:6]
-                        bank_account_number = cleaned[6:]
-                    else:
-                        # If less than 6 digits, store as-is in account number
-                        bank_account_number = cleaned
-                
-                # Keep original for reference
-                bank_details = bank_account_details
-                tax_number = xero_contact.get('TaxNumber', '')
-                
-                # Check if contact already exists
-                try:
-                    existing_contact = Contacts.objects.get(xero_contact_id=contact_id)
-                    
-                    # Compare and update if any field has changed
-                    updated = False
-                    if existing_contact.name != name:
-                        existing_contact.name = name
-                        updated = True
-                    if existing_contact.email != email:
-                        existing_contact.email = email
-                        updated = True
-                    if existing_contact.status != status:
-                        existing_contact.status = status
-                        updated = True
-                    if existing_contact.bank_details != bank_details:
-                        existing_contact.bank_details = bank_details
-                        updated = True
-                    if existing_contact.bank_bsb != bank_bsb:
-                        existing_contact.bank_bsb = bank_bsb
-                        updated = True
-                    if existing_contact.bank_account_number != bank_account_number:
-                        existing_contact.bank_account_number = bank_account_number
-                        updated = True
-                    if existing_contact.tax_number != tax_number:
-                        existing_contact.tax_number = tax_number
-                        updated = True
-                    
-                    if updated:
-                        existing_contact.save()
-                        updated_contacts_count += 1
-                        logger.info(f"Updated contact: {name} (ID: {contact_id})")
-                    else:
-                        unchanged_contacts_count += 1
-                        
-                except Contacts.DoesNotExist:
-                    # Create new contact
-                    Contacts.objects.create(
-                        xero_instance=xero_instance,
-                        xero_contact_id=contact_id,
-                        name=name,
-                        email=email,
-                        status=status,
-                        bank_details=bank_details,
-                        bank_bsb=bank_bsb,
-                        bank_account_number=bank_account_number,
-                        bank_details_verified=0,
-                        tax_number=tax_number
-                    )
-                    new_contacts_count += 1
-                    logger.info(f"Created new contact: {name} (ID: {contact_id})")
+            logger.info(f"API test successful for instance {instance_pk}, org: {org_name}")
             
             return JsonResponse({
                 'status': 'success',
-                'message': f'Successfully pulled contacts from Xero',
+                'message': f'✓ API Connection Working',
                 'details': {
-                    'total_xero_contacts': len(xero_contacts),
-                    'new_contacts_added': new_contacts_count,
-                    'contacts_updated': updated_contacts_count,
-                    'contacts_unchanged': unchanged_contacts_count
+                    'xero_org_name': org_name,
+                    'xero_instance_name': xero_instance.xero_name,
+                    'tenant_id': tenant_id
                 }
             })
-            
-        except XeroInstances.DoesNotExist:
+        elif test_response.status_code == 401:
+            # Token is invalid or expired
+            logger.error(f"Xero API returned 401 for instance {instance_pk}. Response: {test_response.text}")
             return JsonResponse({
                 'status': 'error',
-                'message': 'Xero instance not found'
-            }, status=404)
-        except requests.exceptions.Timeout:
+                'message': 'OAuth token is invalid or expired. Token refresh may have failed.',
+                'needs_auth': False  # Don't prompt for re-auth since token exists
+            }, status=401)
+        else:
+            logger.error(f"Xero API returned {test_response.status_code} for instance {instance_pk}. Response: {test_response.text}")
             return JsonResponse({
                 'status': 'error',
-                'message': 'Request timed out - Xero API not responding'
-            }, status=408)
-        except requests.exceptions.ConnectionError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection error - Cannot reach Xero API'
-            }, status=503)
-        except Exception as e:
-            logger.error(f"Error pulling Xero contacts: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
-    }, status=405)
-
-
-def get_contacts_by_instance(request, instance_pk):
-    """
-    Get all ACTIVE contacts for a specific Xero instance, sorted alphabetically by name.
-    Archived contacts are stored in the database but not displayed in the UI.
-    Includes verified status: 0=not verified, 1=verified and matches, 2=verified but changed
-    """
-    if request.method == 'GET':
-        try:
-            contacts = Contacts.objects.filter(
-                xero_instance_id=instance_pk,
-                status='ACTIVE'
-            ).order_by('name')
-            
-            # Build contact list with verified status
-            contacts_list = []
-            for contact in contacts:
-                # Calculate verified status
-                verified_status = 0  # Default: not verified
-                
-                # Check if any verified fields have data
-                has_verified_data = any([
-                    contact.verified_name,
-                    contact.verified_email,
-                    contact.verified_bank_bsb,
-                    contact.verified_bank_account_number
-                ])
-                
-                if has_verified_data:
-                    # Check if verified fields match current fields
-                    name_matches = contact.verified_name == contact.name
-                    email_matches = contact.verified_email == contact.email
-                    bsb_matches = contact.verified_bank_bsb == contact.bank_bsb
-                    account_matches = contact.verified_bank_account_number == contact.bank_account_number
-                    
-                    if name_matches and email_matches and bsb_matches and account_matches:
-                        verified_status = 1  # Verified and matches
-                    else:
-                        verified_status = 2  # Verified but data has changed
-                
-                contacts_list.append({
-                    'contact_pk': contact.contact_pk,
-                    'xero_instance_id': contact.xero_instance_id,
-                    'xero_contact_id': contact.xero_contact_id,
-                    'name': contact.name,
-                    'email': contact.email,
-                    'status': contact.status,
-                    'bank_bsb': contact.bank_bsb,
-                    'bank_account_number': contact.bank_account_number,
-                    'tax_number': contact.tax_number,
-                    'verified': verified_status,
-                    'verified_name': contact.verified_name or '',
-                    'verified_email': contact.verified_email or '',
-                    'verified_bank_bsb': contact.verified_bank_bsb or '',
-                    'verified_bank_account_number': contact.verified_bank_account_number or '',
-                    'verified_tax_number': contact.verified_tax_number or '',
-                    'verified_notes': contact.verified_notes or ''
-                })
-            
-            return JsonResponse(contacts_list, safe=False)
-        except Exception as e:
-            return JsonResponse({
-                'status': 'error',
-                'message': str(e)
+                'message': f'API call failed with status {test_response.status_code}: {test_response.text[:100]}'
             }, status=400)
     
     return JsonResponse({
         'status': 'error',
         'message': 'Only GET method is allowed'
-    }, status=405)
-
-
-@csrf_exempt
-def create_contact(request, instance_pk):
-    """
-    Create a new contact in Xero and local database using OAuth2 tokens.
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            name = data.get('name', '').strip()
-            email = data.get('email', '').strip()
-            bsb = data.get('bsb', '')
-            account_number = data.get('account_number', '')
-            tax_number = data.get('tax_number', '')
-            
-            # Validation: Name and Email are required
-            if not name:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Name is required'
-                }, status=400)
-            
-            if not email:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Email is required'
-                }, status=400)
-            
-            # Get the xero instance
-            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
-            
-            # Import OAuth token function
-            from .xero_oauth import get_oauth_token
-            
-            # Get OAuth access token
-            success, token_or_error = get_oauth_token(xero_instance)
-            if not success:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': token_or_error,
-                    'needs_auth': True
-                }, status=401)
-            
-            access_token = token_or_error
-            tenant_id = xero_instance.oauth_tenant_id
-            
-            if not tenant_id:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No tenant ID found. Please re-authorize this Xero instance.',
-                    'needs_auth': True
-                }, status=401)
-            
-            # Prepare contact data for Xero
-            # Combine BSB and account number for BankAccountDetails
-            bank_account_details = ''
-            if bsb and account_number:
-                bank_account_details = bsb.replace('-', '') + account_number
-            
-            contact_data = {
-                'Contacts': [{
-                    'Name': name,
-                    'EmailAddress': email,
-                    'BankAccountDetails': bank_account_details,
-                    'TaxNumber': tax_number.replace(' ', '') if tax_number else ''
-                }]
-            }
-            
-            logger.info(f"Creating contact - Name: {name}, Email: {email}, BSB: {bsb}, Account: {account_number}, Tax: {tax_number}")
-            
-            create_response = requests.post(
-                'https://api.xero.com/api.xro/2.0/Contacts',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Xero-tenant-id': tenant_id
-                },
-                json=contact_data,
-                timeout=30
-            )
-            
-            logger.info(f"Xero API response status: {create_response.status_code}")
-            logger.info(f"Xero API response: {create_response.text}")
-            
-            if create_response.status_code != 200:
-                # Try to parse Xero validation errors
-                error_message = f'Failed to create contact in Xero: {create_response.status_code}'
-                try:
-                    error_data = create_response.json()
-                    if 'Elements' in error_data and len(error_data['Elements']) > 0:
-                        element = error_data['Elements'][0]
-                        if 'ValidationErrors' in element and len(element['ValidationErrors']) > 0:
-                            validation_errors = [err['Message'] for err in element['ValidationErrors']]
-                            error_message = 'Xero validation error: ' + '; '.join(validation_errors)
-                except:
-                    pass
-                
-                return JsonResponse({
-                    'status': 'error',
-                    'message': error_message
-                }, status=400)
-            
-            # Extract the created contact from Xero response
-            response_data = create_response.json()
-            xero_contact = response_data['Contacts'][0]
-            xero_contact_id = xero_contact['ContactID']
-            contact_status = xero_contact.get('ContactStatus', 'ACTIVE')
-            
-            # Save to local database
-            new_contact = Contacts(
-                xero_instance=xero_instance,
-                xero_contact_id=xero_contact_id,
-                name=name,
-                email=email,
-                status=contact_status,
-                bank_bsb=bsb.replace('-', '') if bsb else '',
-                bank_account_number=account_number,
-                tax_number=tax_number.replace(' ', '') if tax_number else '',
-                bank_details=bank_account_details,
-                checked=0  # Default unchecked
-            )
-            new_contact.save()
-            
-            logger.info(f"Successfully created contact {name} in database with ID {new_contact.contact_pk}")
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Contact created successfully',
-                'contact': {
-                    'contact_pk': new_contact.contact_pk,
-                    'name': new_contact.name,
-                    'email': new_contact.email,
-                    'bank_bsb': new_contact.bank_bsb,
-                    'bank_account_number': new_contact.bank_account_number,
-                    'tax_number': new_contact.tax_number
-                }
-            })
-            
-        except XeroInstances.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Xero instance not found'
-            }, status=404)
-        except requests.exceptions.Timeout:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Request timed out - Xero API not responding'
-            }, status=408)
-        except requests.exceptions.ConnectionError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection error - Cannot reach Xero API'
-            }, status=503)
-        except Exception as e:
-            logger.error(f"Error creating contact: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
-    }, status=405)
-
-
-@csrf_exempt
-def update_contact_details(request, instance_pk, contact_pk):
-    """
-    Update a contact's bank details and tax number in Xero using OAuth2 tokens.
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            email = data.get('email', '')
-            bsb = data.get('bsb', '')
-            account_number = data.get('account_number', '')
-            tax_number = data.get('tax_number', '')
-            
-            # Get the contact and xero instance
-            contact = Contacts.objects.get(contact_pk=contact_pk, xero_instance_id=instance_pk)
-            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
-            
-            # Import OAuth token function
-            from .xero_oauth import get_oauth_token
-            
-            # Get OAuth access token
-            success, token_or_error = get_oauth_token(xero_instance)
-            if not success:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': token_or_error,
-                    'needs_auth': True
-                }, status=401)
-            
-            access_token = token_or_error
-            tenant_id = xero_instance.oauth_tenant_id
-            
-            if not tenant_id:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No tenant ID found. Please re-authorize this Xero instance.',
-                    'needs_auth': True
-                }, status=401)
-            
-            # Prepare update data for Xero
-            # Combine BSB and account number for BankAccountDetails
-            bank_account_details = ''
-            if bsb and account_number:
-                bank_account_details = bsb.replace('-', '') + account_number
-            
-            update_data = {
-                'Contacts': [{
-                    'ContactID': contact.xero_contact_id,
-                    'EmailAddress': email,
-                    'BankAccountDetails': bank_account_details,
-                    'TaxNumber': tax_number.replace(' ', '') if tax_number else ''
-                }]
-            }
-            
-            logger.info(f"Updating contact {contact.xero_contact_id} - Email: {email}, BSB: {bsb}, Account: {account_number}, Tax: {tax_number}")
-            
-            update_response = requests.post(
-                'https://api.xero.com/api.xro/2.0/Contacts',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Xero-tenant-id': tenant_id
-                },
-                json=update_data,
-                timeout=30
-            )
-            
-            logger.info(f"Xero API response status: {update_response.status_code}")
-            logger.info(f"Xero API response: {update_response.text}")
-            
-            if update_response.status_code != 200:
-                # Try to parse Xero validation errors
-                error_message = f'Failed to update contact in Xero: {update_response.status_code}'
-                try:
-                    error_data = update_response.json()
-                    if 'Elements' in error_data and len(error_data['Elements']) > 0:
-                        element = error_data['Elements'][0]
-                        if 'ValidationErrors' in element and len(element['ValidationErrors']) > 0:
-                            validation_errors = [err['Message'] for err in element['ValidationErrors']]
-                            error_message = 'Xero validation error: ' + '; '.join(validation_errors)
-                except:
-                    pass
-                
-                return JsonResponse({
-                    'status': 'error',
-                    'message': error_message
-                }, status=400)
-            
-            # Update local database
-            contact.email = email
-            contact.bank_bsb = bsb.replace('-', '')
-            contact.bank_account_number = account_number
-            contact.tax_number = tax_number.replace(' ', '')
-            contact.bank_details = bank_account_details
-            contact.save()
-            
-            logger.info(f"Successfully updated contact {contact.name} in database")
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Contact updated successfully',
-                'contact': {
-                    'email': contact.email,
-                    'bank_bsb': contact.bank_bsb,
-                    'bank_account_number': contact.bank_account_number,
-                    'tax_number': contact.tax_number
-                }
-            })
-            
-        except Contacts.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Contact not found'
-            }, status=404)
-        except XeroInstances.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Xero instance not found'
-            }, status=404)
-        except requests.exceptions.Timeout:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Request timed out - Xero API not responding'
-            }, status=408)
-        except requests.exceptions.ConnectionError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection error - Cannot reach Xero API'
-            }, status=503)
-        except Exception as e:
-            logger.error(f"Error updating contact: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
-    }, status=405)
-
-
-@csrf_exempt
-def update_contact_status(request, instance_pk, contact_pk):
-    """
-    Update a contact's status in Xero using OAuth2 tokens.
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            archive = data.get('archive', False)  # True to archive, False to unarchive
-            
-            # Get the contact and xero instance
-            contact = Contacts.objects.get(contact_pk=contact_pk, xero_instance_id=instance_pk)
-            xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
-            
-            # Import OAuth token function
-            from .xero_oauth import get_oauth_token
-            
-            # Get OAuth access token
-            success, token_or_error = get_oauth_token(xero_instance)
-            if not success:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': token_or_error,
-                    'needs_auth': True
-                }, status=401)
-            
-            access_token = token_or_error
-            
-            # Update contact status in Xero
-            new_status = 'ARCHIVED' if archive else 'ACTIVE'
-            
-            update_data = {
-                'Contacts': [{
-                    'ContactID': contact.xero_contact_id,
-                    'ContactStatus': new_status
-                }]
-            }
-            
-            logger.info(f"Updating contact {contact.xero_contact_id} to status {new_status}")
-            
-            update_response = requests.post(
-                'https://api.xero.com/api.xro/2.0/Contacts',
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Xero-tenant-id': xero_instance.oauth_tenant_id
-                },
-                json=update_data,
-                timeout=10
-            )
-            
-            logger.info(f"Xero API response status: {update_response.status_code}")
-            logger.info(f"Xero API response: {update_response.text}")
-            
-            if update_response.status_code not in [200, 201]:
-                logger.error(f"Xero API error: {update_response.text}")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Failed to update contact in Xero: {update_response.status_code}'
-                }, status=400)
-            
-            # Update local database
-            contact.status = new_status
-            contact.save()
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': f'Contact {"archived" if archive else "unarchived"} successfully',
-                'new_status': new_status
-            })
-            
-        except Contacts.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Contact not found'
-            }, status=404)
-        except XeroInstances.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Xero instance not found'
-            }, status=404)
-        except requests.exceptions.Timeout:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Request timed out - Xero API not responding'
-            }, status=408)
-        except requests.exceptions.ConnectionError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Connection error - Cannot reach Xero API'
-            }, status=503)
-        except Exception as e:
-            logger.error(f"Error updating contact status: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
     }, status=405)

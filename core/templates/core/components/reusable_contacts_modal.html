@@ -363,7 +363,7 @@ $(document).ready(function() {
                 row.find('.cancel-contact-btn').prop('disabled', false);
                 
                 if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
-                    window.location.href = `/xero_oauth_authorize/${instancePk}/`;
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
                 }
                 return;
             }
@@ -431,7 +431,7 @@ $(document).ready(function() {
             if (status === 401 && body.needs_auth) {
                 button.prop('disabled', false).html('Pull/Update Xero Contacts');
                 if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
-                    window.location.href = `/xero_oauth_authorize/${xeroInstancePk}/`;
+                    window.location.href = `/core/xero_oauth_authorize/${xeroInstancePk}/`;
                 }
                 return;
             }
@@ -541,7 +541,7 @@ $(document).ready(function() {
                 row.find('.cancel-add-contact-btn').prop('disabled', false);
                 
                 if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
-                    window.location.href = `/xero_oauth_authorize/${instancePk}/`;
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
                 }
                 return;
             }
