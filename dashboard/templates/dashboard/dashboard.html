@@ -162,7 +162,14 @@
                             .attr('data-filename', bill.attachment_filename);
                         row.append($('<td>').append(viewLink));
                         
-                        // 8. Archive button
+                        // 8. Send button
+                        var sendBtn = $('<button>')
+                            .addClass('btn btn-sm btn-success send-bill-btn')
+                            .text('Send')
+                            .attr('data-invoice-pk', bill.invoice_pk);
+                        row.append($('<td>').append(sendBtn));
+                        
+                        // 9. Archive button
                         var archiveBtn = $('<button>')
                             .addClass('btn btn-sm btn-danger archive-bill-btn')
                             .text('Archive')
@@ -226,6 +233,12 @@
                         } else {
                             alert('No attachment available for this bill');
                         }
+                    });
+                    
+                    // Add click handler for send buttons
+                    $(document).on('click', '.send-bill-btn', function(e) {
+                        e.preventDefault();
+                        alert('Placeholder only for now');
                     });
                     
                     // Add click handler for archive buttons
