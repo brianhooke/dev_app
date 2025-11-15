@@ -93,8 +93,8 @@ def archive_bill(request):
                     'message': 'Invoice not found'
                 }, status=404)
             
-            # Update status to 4 (archived)
-            invoice.invoice_status = 4
+            # Update status to -1 (archived)
+            invoice.invoice_status = -1
             invoice.save()
             
             logger.info(f"Archived invoice #{invoice_pk}")

@@ -221,7 +221,7 @@ class Invoices(models.Model):
     invoice_pk = models.AutoField(primary_key=True)
     # Replaced invoice_division with FK to Projects
     project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    invoice_status = models.IntegerField(default=0)  # 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
+    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
     invoice_xero_id = models.CharField(max_length=255, null=True, blank=True)
     supplier_invoice_number = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
