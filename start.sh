@@ -13,6 +13,9 @@ python manage.py collectstatic --noinput || echo "Collectstatic failed, continui
 echo "Running migrations..."
 python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 
+echo "Creating admin superuser..."
+python manage.py create_admin || echo "Admin creation failed, continuing..."
+
 echo "Importing Xero instances..."
 if [ -f "xero_instances_export.json" ]; then
     python manage.py import_xero_instances --input xero_instances_export.json --update || echo "Xero import failed, continuing..."
