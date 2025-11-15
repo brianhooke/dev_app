@@ -201,42 +201,52 @@ def get_bills_list(request):
     # Prepare bills data
     bills_data = []
     for invoice in invoices:
-        # Get presigned S3 URL for attachment if it exists
-        attachment_url = ''
-        if invoice.email_attachment:
-            # Generate presigned URL (valid for 1 hour)
-            attachment_url = invoice.email_attachment.get_download_url()
-        
-        # Get email URL (link to received email in admin)
-        email_url = ''
-        if invoice.received_email:
-            email_url = f"/admin/core/receivedemail/{invoice.received_email.id}/change/"
-        
-        # Determine xero_instance_id from either direct xero_instance or project
-        xero_instance_id = None
-        if invoice.xero_instance_id:
-            xero_instance_id = invoice.xero_instance_id
-        elif invoice.project and invoice.project.xero_instance_id:
-            xero_instance_id = invoice.project.xero_instance_id
-        
-        bill = {
-            'invoice_pk': invoice.invoice_pk,
-            'invoice_status': invoice.invoice_status,
-            'xero_instance_id': xero_instance_id,
-            'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
-            'project_pk': invoice.project.projects_pk if invoice.project else None,
-            'supplier_invoice_number': invoice.supplier_invoice_number or '',
-            'total_net': float(invoice.total_net) if invoice.total_net else None,
-            'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
-            'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
-            'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
-            'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
-            'email_body_text': invoice.received_email.body_text if invoice.received_email else '',
-            'attachment_filename': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
-            'attachment_url': attachment_url,
-            'email_url': email_url,
-        }
-        bills_data.append(bill)
+        try:
+            # Get presigned S3 URL for attachment if it exists
+            attachment_url = ''
+            if invoice.email_attachment:
+                try:
+                    # Generate presigned URL (valid for 1 hour)
+                    attachment_url = invoice.email_attachment.get_download_url()
+                except Exception as e:
+                    # If S3 URL generation fails, use empty string
+                    print(f"Error getting download URL for attachment {invoice.email_attachment.id}: {str(e)}")
+                    attachment_url = ''
+            
+            # Get email URL (link to received email in admin)
+            email_url = ''
+            if invoice.received_email:
+                email_url = f"/admin/core/receivedemail/{invoice.received_email.id}/change/"
+            
+            # Determine xero_instance_id from either direct xero_instance or project
+            xero_instance_id = None
+            if invoice.xero_instance_id:
+                xero_instance_id = invoice.xero_instance_id
+            elif invoice.project and invoice.project.xero_instance_id:
+                xero_instance_id = invoice.project.xero_instance_id
+            
+            bill = {
+                'invoice_pk': invoice.invoice_pk,
+                'invoice_status': invoice.invoice_status,
+                'xero_instance_id': xero_instance_id,
+                'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'supplier_invoice_number': invoice.supplier_invoice_number or '',
+                'total_net': float(invoice.total_net) if invoice.total_net else None,
+                'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
+                'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
+                'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
+                'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
+                'email_body_text': invoice.received_email.body_text if invoice.received_email else '',
+                'attachment_filename': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
+                'attachment_url': attachment_url,
+                'email_url': email_url,
+            }
+            bills_data.append(bill)
+        except Exception as e:
+            # Log error but continue processing other invoices
+            print(f"Error processing invoice {invoice.invoice_pk}: {str(e)}")
+            continue
     
     return JsonResponse({
         'bills': bills_data,
