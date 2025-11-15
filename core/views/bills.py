@@ -83,7 +83,7 @@ def get_bills_list(request):
     # Get dropdown options
     xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name')
     suppliers = Contacts.objects.filter(status='ACTIVE').order_by('name').values('contact_pk', 'name')
-    projects = Projects.objects.all().order_by('project_name').values('projects_pk', 'project_name')
+    projects = Projects.objects.all().order_by('project').values('projects_pk', 'project')
     
     # Prepare bills data
     bills_data = []

@@ -36,7 +36,7 @@
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v48</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v49</div>
 </div>
 
 <div style="padding: 20px;">
@@ -110,7 +110,7 @@
                         var projectSelect = $('<select>').addClass('form-control form-control-sm project-select');
                         projectSelect.append($('<option>').val('').text('Select...'));
                         response.projects.forEach(function(project) {
-                            var option = $('<option>').val(project.projects_pk).text(project.project_name);
+                            var option = $('<option>').val(project.projects_pk).text(project.project);
                             if (bill.project_pk === project.projects_pk) {
                                 option.prop('selected', true);
                             }
