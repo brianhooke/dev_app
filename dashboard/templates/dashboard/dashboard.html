@@ -31,6 +31,36 @@
             z-index: -1; /* Puts it behind all content */
             pointer-events: none; /* Prevents interference with clicks */
         }
+        
+        /* Bills table row selection styling */
+        #billsTableBody tr {
+            transition: opacity 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        /* When any row is selected, dim all rows */
+        #billsTableBody tr.selected-bill-row ~ tr,
+        #billsTableBody tr:has(~ tr.selected-bill-row) {
+            opacity: 0.4;
+        }
+        
+        /* Alternative approach - when there's a selected row, dim all non-selected rows */
+        #billsTableBody.has-selection tr:not(.selected-bill-row) {
+            opacity: 0.4;
+        }
+        
+        /* Highlight the selected row */
+        #billsTableBody tr.selected-bill-row {
+            opacity: 1 !important;
+            background-color: #e3f2fd !important;
+            box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+            position: relative;
+        }
+        
+        /* Keep hover effect visible on all rows */
+        #billsTableBody tr:hover {
+            opacity: 0.8 !important;
+        }
     </style>
 </head>
 
@@ -72,8 +102,10 @@
         
         // Function to populate bills table with filtering
         function populateBillsTable(billsData, filterFn, modalType) {
-            // Clear existing table
+            // Clear existing table and selection state
             $('#billsTableBody').empty();
+            $('#billsTableBody').removeClass('has-selection');
+            $('#allocationsTableBody').empty();
             
             // Update modal title and last column header based on type
             if (modalType === 'inbox') {
@@ -736,6 +768,16 @@
                         }
                         
                         var invoicePk = $(this).attr('data-invoice-pk');
+                        var clickedRow = $(this);
+                        
+                        // Remove previous selection styling
+                        $('#billsTableBody tr').removeClass('selected-bill-row');
+                        
+                        // Add selection styling to clicked row
+                        clickedRow.addClass('selected-bill-row');
+                        
+                        // Add class to tbody to trigger dimming effect
+                        $('#billsTableBody').addClass('has-selection');
                         
                         // Find the invoice in the bills data
                         if (window.billsData && window.billsData.bills) {
