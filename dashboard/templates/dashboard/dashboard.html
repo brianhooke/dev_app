@@ -100,6 +100,7 @@
             $('#billsTableBody').empty();
             $('#billsTableBody').removeClass('has-selection');
             $('#allocationsTableBody').empty();
+            currentSelectedInvoicePk = null; // Reset selected invoice tracking
             
             // Update modal title and last column header based on type
             if (modalType === 'inbox') {
@@ -683,6 +684,7 @@
                     
                     // Global variable to store current invoice data for allocations
                     var currentInvoiceData = null;
+                    var currentSelectedInvoicePk = null;
                     
                     // Function to create an allocation row
                     function createAllocationRow(netAmount, gstAmount) {
@@ -769,6 +771,9 @@
                         var invoicePk = $(this).attr('data-invoice-pk');
                         var clickedRow = $(this);
                         
+                        // Check if this is the same row that's already selected
+                        var isSameRow = (currentSelectedInvoicePk === invoicePk);
+                        
                         // Remove previous selection styling
                         $('#billsTableBody tr').removeClass('selected-bill-row');
                         
@@ -778,32 +783,38 @@
                         // Add class to tbody to trigger dimming effect
                         $('#billsTableBody').addClass('has-selection');
                         
-                        // Find the invoice in the bills data
-                        if (window.billsData && window.billsData.bills) {
-                            var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
-                            if (invoice) {
-                                currentInvoiceData = invoice;
-                                
-                                // Clear and populate allocations table
-                                $('#allocationsTableBody').empty();
-                                
-                                // Add one row with net and gst pre-populated
-                                var row = createAllocationRow(invoice.total_net, invoice.total_gst);
-                                $('#allocationsTableBody').append(row);
-                            }
-                        }
-                        
-                        // Also load PDF when clicking anywhere on row (not just inputs)
-                        var attachmentUrl = clickedRow.attr('data-attachment-url');
-                        var filename = clickedRow.attr('data-filename');
-                        
-                        if (attachmentUrl) {
-                            // Update viewer title
-                            $('#viewerTitle').text(filename);
+                        // Only update data if switching to a different row
+                        if (!isSameRow) {
+                            // Update current selection
+                            currentSelectedInvoicePk = invoicePk;
                             
-                            // Load PDF in iframe
-                            $('#billViewer').attr('src', attachmentUrl).show();
-                            $('#viewerPlaceholder').hide();
+                            // Find the invoice in the bills data
+                            if (window.billsData && window.billsData.bills) {
+                                var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
+                                if (invoice) {
+                                    currentInvoiceData = invoice;
+                                    
+                                    // Clear and populate allocations table
+                                    $('#allocationsTableBody').empty();
+                                    
+                                    // Add one row with net and gst pre-populated
+                                    var row = createAllocationRow(invoice.total_net, invoice.total_gst);
+                                    $('#allocationsTableBody').append(row);
+                                }
+                            }
+                            
+                            // Load PDF when switching to different row
+                            var attachmentUrl = clickedRow.attr('data-attachment-url');
+                            var filename = clickedRow.attr('data-filename');
+                            
+                            if (attachmentUrl) {
+                                // Update viewer title
+                                $('#viewerTitle').text(filename);
+                                
+                                // Load PDF in iframe
+                                $('#billViewer').attr('src', attachmentUrl).show();
+                                $('#viewerPlaceholder').hide();
+                            }
                         }
                     });
                     
