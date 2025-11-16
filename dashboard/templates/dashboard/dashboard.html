@@ -756,8 +756,13 @@
                     
                     // Add click handler for LHS table rows to populate allocations
                     $(document).on('click', '#billsTableBody tr', function(e) {
-                        // Don't trigger if clicking a button or input
-                        if ($(e.target).is('button, input, select, a, i')) {
+                        // Only prevent if clicking buttons or email links (allow inputs/selects)
+                        if ($(e.target).is('button, a, i')) {
+                            return;
+                        }
+                        
+                        // Also check if clicking inside a button (for icons inside buttons)
+                        if ($(e.target).closest('button, a').length > 0) {
                             return;
                         }
                         
@@ -786,6 +791,19 @@
                                 var row = createAllocationRow(invoice.total_net, invoice.total_gst);
                                 $('#allocationsTableBody').append(row);
                             }
+                        }
+                        
+                        // Also load PDF when clicking anywhere on row (not just inputs)
+                        var attachmentUrl = clickedRow.attr('data-attachment-url');
+                        var filename = clickedRow.attr('data-filename');
+                        
+                        if (attachmentUrl) {
+                            // Update viewer title
+                            $('#viewerTitle').text(filename);
+                            
+                            // Load PDF in iframe
+                            $('#billViewer').attr('src', attachmentUrl).show();
+                            $('#viewerPlaceholder').hide();
                         }
                     });
                     
