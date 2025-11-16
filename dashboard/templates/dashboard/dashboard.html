@@ -32,35 +32,27 @@
             pointer-events: none; /* Prevents interference with clicks */
         }
         
-        /* Bills table row selection styling - ONLY in Direct modal */
-        /* Only apply when allocations section is visible */
-        #allocationsSection:not([style*="display: none"]) ~ * #billsTableBody tr,
-        body:has(#allocationsSection[style*="display: flex"]) #billsTableBody tr {
+        /* Bills table row selection styling - applies to BOTH Inbox and Direct modals */
+        #billsTableBody tr {
             transition: opacity 0.3s ease, box-shadow 0.3s ease;
             cursor: pointer;
         }
         
-        /* Alternative approach - add class to modal body when in Direct mode */
-        .direct-modal-active #billsTableBody tr {
-            transition: opacity 0.3s ease, box-shadow 0.3s ease;
-            cursor: pointer;
-        }
-        
-        /* When there's a selected row in Direct modal, dim all non-selected rows */
-        .direct-modal-active #billsTableBody.has-selection tr:not(.selected-bill-row) {
+        /* When there's a selected row, dim all non-selected rows */
+        #billsTableBody.has-selection tr:not(.selected-bill-row) {
             opacity: 0.4;
         }
         
-        /* Highlight the selected row in Direct modal */
-        .direct-modal-active #billsTableBody tr.selected-bill-row {
+        /* Highlight the selected row */
+        #billsTableBody tr.selected-bill-row {
             opacity: 1 !important;
             background-color: #e3f2fd !important;
             box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
             position: relative;
         }
         
-        /* Keep hover effect visible on all rows in Direct modal */
-        .direct-modal-active #billsTableBody tr:hover {
+        /* Keep hover effect visible on all rows */
+        #billsTableBody tr:hover {
             opacity: 0.8 !important;
         }
     </style>
@@ -116,16 +108,12 @@
                 // Hide allocations section for Inbox
                 $('#allocationsSection').hide();
                 $('#viewerSection').css('flex', '1');
-                // Remove Direct modal class
-                $('#billsModal').removeClass('direct-modal-active');
             } else if (modalType === 'direct') {
                 $('#billsModalTitle').text('Bills - Direct');
                 $('#lastColumnHeader').text('Return to Inbox');
                 // Show allocations section for Direct
                 $('#allocationsSection').css('display', 'flex');
                 $('#viewerSection').css('flex', '0 0 66%');
-                // Add Direct modal class to enable selection styling
-                $('#billsModal').addClass('direct-modal-active');
             }
             
             // Filter bills using provided filter function
