@@ -403,21 +403,8 @@
                         $('#viewerPlaceholder').hide();
                     });
                     
-                    // Auto-load PDF when user interacts with any cell in a row
-                    $(document).on('click focus change', '#billsTableBody tr select, #billsTableBody tr input', function(e) {
-                        var row = $(this).closest('tr');
-                        var attachmentUrl = row.attr('data-attachment-url');
-                        var filename = row.attr('data-filename');
-                        
-                        if (attachmentUrl) {
-                            // Update viewer title
-                            $('#viewerTitle').text(filename);
-                            
-                            // Load PDF in iframe
-                            $('#billViewer').attr('src', attachmentUrl).show();
-                            $('#viewerPlaceholder').hide();
-                        }
-                    });
+                    // Note: PDF loading is now handled by the main row click handler
+                    // to prevent duplicate loads and ensure proper selection tracking
                     
                     // Add change handler for Xero Instance / Project dropdown
                     $(document).on('change', '.xero-project-select', function() {
