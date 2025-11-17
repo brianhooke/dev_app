@@ -256,6 +256,12 @@
                                 if (!isNaN(netValue)) {
                                     var gstValue = (netValue * 0.1).toFixed(2);
                                     $(this).closest('tr').find('.gst-input').val(gstValue);
+                                    // Update remaining allocations since invoice totals changed
+                                    if (currentInvoiceData && currentInvoiceData.invoice_pk === parseInt($(this).closest('tr').attr('data-invoice-pk'))) {
+                                        currentInvoiceData.total_net = netValue;
+                                        currentInvoiceData.total_gst = parseFloat(gstValue);
+                                        updateRemainingAllocations();
+                                    }
                                 }
                             });
                         row.append($('<td>').append(netInput));
@@ -279,6 +285,12 @@
                                     if (parts[1] && parts[1].length > 2) {
                                         $(this).val(parseFloat(value).toFixed(2));
                                     }
+                                }
+                                // Update remaining allocations in real-time if this is the selected invoice
+                                var invoicePk = $(this).closest('tr').attr('data-invoice-pk');
+                                if (currentInvoiceData && currentInvoiceData.invoice_pk === parseInt(invoicePk)) {
+                                    currentInvoiceData.total_gst = parseFloat($(this).val()) || 0;
+                                    updateRemainingAllocations();
                                 }
                             });
                         row.append($('<td>').append(gstInput));
@@ -692,6 +704,9 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.status === 'success') {
+                                // Check if this was the currently selected row
+                                var wasSelected = (currentSelectedInvoicePk === invoicePk);
+                                
                                 // Remove row from table with fade effect
                                 row.fadeOut(400, function() {
                                     $(this).remove();
@@ -701,6 +716,25 @@
                                         $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
                                     }
                                 });
+                                
+                                // If this was the selected row, clear RHS allocations and PDF viewer
+                                if (wasSelected) {
+                                    // Clear allocations table
+                                    $('#allocationsTableBody').empty();
+                                    
+                                    // Reset "still to allocate" values
+                                    $('#remainingNet').text('$0.00').css('color', 'green');
+                                    $('#remainingGst').text('$0.00').css('color', 'green');
+                                    
+                                    // Clear PDF viewer
+                                    $('#billViewer').attr('src', '').hide();
+                                    $('#viewerPlaceholder').show();
+                                    $('#viewerTitle').text('');
+                                    
+                                    // Clear current selection
+                                    currentSelectedInvoicePk = null;
+                                    currentInvoiceData = null;
+                                }
                             } else {
                                 // Re-enable button on error
                                 button.prop('disabled', false).html(originalBtnText);
@@ -734,10 +768,32 @@
                                 contentType: 'application/json',
                                 success: function(response) {
                                     if (response.status === 'success') {
+                                        // Check if this was the currently selected row
+                                        var wasSelected = (currentSelectedInvoicePk === invoicePk);
+                                        
                                         // Remove row from table with fade effect
                                         row.fadeOut(300, function() {
                                             $(this).remove();
                                         });
+                                        
+                                        // If this was the selected row, clear RHS allocations and PDF viewer
+                                        if (wasSelected) {
+                                            // Clear allocations table
+                                            $('#allocationsTableBody').empty();
+                                            
+                                            // Reset "still to allocate" values
+                                            $('#remainingNet').text('$0.00').css('color', 'green');
+                                            $('#remainingGst').text('$0.00').css('color', 'green');
+                                            
+                                            // Clear PDF viewer
+                                            $('#billViewer').attr('src', '').hide();
+                                            $('#viewerPlaceholder').show();
+                                            $('#viewerTitle').text('');
+                                            
+                                            // Clear current selection
+                                            currentSelectedInvoicePk = null;
+                                            currentInvoiceData = null;
+                                        }
                                     } else {
                                         alert('Failed to archive bill: ' + response.message);
                                     }
@@ -770,6 +826,9 @@
                                 },
                                 success: function(response) {
                                     if (response.status === 'success') {
+                                        // Check if this was the currently selected row
+                                        var wasSelected = (currentSelectedInvoicePk === invoicePk);
+                                        
                                         // Update the invoice in the global bills data
                                         if (window.billsData && window.billsData.bills) {
                                             var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
@@ -793,6 +852,25 @@
                                                 $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
                                             }
                                         });
+                                        
+                                        // If this was the selected row, clear RHS allocations and PDF viewer
+                                        if (wasSelected) {
+                                            // Clear allocations table
+                                            $('#allocationsTableBody').empty();
+                                            
+                                            // Reset "still to allocate" values
+                                            $('#remainingNet').text('$0.00').css('color', 'green');
+                                            $('#remainingGst').text('$0.00').css('color', 'green');
+                                            
+                                            // Clear PDF viewer
+                                            $('#billViewer').attr('src', '').hide();
+                                            $('#viewerPlaceholder').show();
+                                            $('#viewerTitle').text('');
+                                            
+                                            // Clear current selection
+                                            currentSelectedInvoicePk = null;
+                                            currentInvoiceData = null;
+                                        }
                                     } else {
                                         alert('Failed to return bill to inbox: ' + response.message);
                                     }
@@ -850,6 +928,8 @@
                                 if (!isNaN(netValue)) {
                                     var gstValue = (netValue * 0.1).toFixed(2);
                                     $(this).closest('tr').find('.allocation-gst-input').val(gstValue);
+                                    // Update remaining allocations since GST changed
+                                    updateRemainingAllocations();
                                 }
                             });
                         row.append($('<td>').append(netInput));
@@ -1330,54 +1410,59 @@
                                 if (invoice) {
                                     currentInvoiceData = invoice;
                                     
-                                    // Clear and populate allocations table
-                                    $('#allocationsTableBody').empty();
+                                    // Only populate allocations if we're in Bills - Direct modal
+                                    var isDirectModal = $('#allocationsSection').is(':visible');
                                     
-                                    // Check if there are existing allocations
-                                    if (invoice.allocations && invoice.allocations.length > 0) {
-                                        // Load existing allocations
-                                        invoice.allocations.forEach(function(allocation) {
-                                            var row = createAllocationRow(
-                                                allocation.amount,
-                                                allocation.gst_amount,
-                                                allocation.allocation_pk,
-                                                allocation.xero_account_pk,
-                                                allocation.notes
-                                            );
-                                            $('#allocationsTableBody').append(row);
-                                        });
-                                    } else {
-                                        // Create new allocation row with invoice totals
-                                        var row = createAllocationRow(invoice.total_net, invoice.total_gst);
-                                        $('#allocationsTableBody').append(row);
+                                    if (isDirectModal) {
+                                        // Clear and populate allocations table
+                                        $('#allocationsTableBody').empty();
                                         
-                                        // Create allocation in database via AJAX
-                                        $.ajax({
-                                            url: '/core/create_invoice_allocation/',
-                                            type: 'POST',
-                                            contentType: 'application/json',
-                                            data: JSON.stringify({
-                                                invoice_pk: invoice.invoice_pk,
-                                                amount: invoice.total_net,
-                                                gst_amount: invoice.total_gst
-                                            }),
-                                            success: function(response) {
-                                                if (response.status === 'success') {
-                                                    row.attr('data-allocation-pk', response.allocation_pk);
-                                                    console.log('Created allocation:', response.allocation_pk);
+                                        // Check if there are existing allocations
+                                        if (invoice.allocations && invoice.allocations.length > 0) {
+                                            // Load existing allocations
+                                            invoice.allocations.forEach(function(allocation) {
+                                                var row = createAllocationRow(
+                                                    allocation.amount,
+                                                    allocation.gst_amount,
+                                                    allocation.allocation_pk,
+                                                    allocation.xero_account_pk,
+                                                    allocation.notes
+                                                );
+                                                $('#allocationsTableBody').append(row);
+                                            });
+                                        } else {
+                                            // Create new allocation row with invoice totals
+                                            var row = createAllocationRow(invoice.total_net, invoice.total_gst);
+                                            $('#allocationsTableBody').append(row);
+                                            
+                                            // Create allocation in database via AJAX
+                                            $.ajax({
+                                                url: '/core/create_invoice_allocation/',
+                                                type: 'POST',
+                                                contentType: 'application/json',
+                                                data: JSON.stringify({
+                                                    invoice_pk: invoice.invoice_pk,
+                                                    amount: invoice.total_net,
+                                                    gst_amount: invoice.total_gst
+                                                }),
+                                                success: function(response) {
+                                                    if (response.status === 'success') {
+                                                        row.attr('data-allocation-pk', response.allocation_pk);
+                                                        console.log('Created allocation:', response.allocation_pk);
+                                                    }
+                                                },
+                                                error: function(xhr, status, error) {
+                                                    console.error('Error creating allocation:', error);
                                                 }
-                                            },
-                                            error: function(xhr, status, error) {
-                                                console.error('Error creating allocation:', error);
-                                            }
-                                        });
+                                            });
+                                        }
+                                        
+                                        // Populate dropdowns with Xero data for this instance
+                                        populateAllAllocationDropdowns();
+                                        
+                                        // Update remaining allocation calculations
+                                        updateRemainingAllocations();
                                     }
-                                    
-                                    // Populate dropdowns with Xero data for this instance
-                                    populateAllAllocationDropdowns();
-                                    
-                                    // Update remaining allocation calculations
-                                    updateRemainingAllocations();
                                 }
                             }
                             

@@ -149,6 +149,10 @@ def return_to_inbox(request):
                     'message': 'Invoice not found'
                 }, status=404)
             
+            # Delete all associated allocations
+            deleted_count = Invoice_allocations.objects.filter(invoice_pk=invoice).delete()[0]
+            logger.info(f"Deleted {deleted_count} allocations for invoice {invoice_pk}")
+            
             # Clear fields and set status to -2
             invoice.xero_instance = None
             invoice.project = None
