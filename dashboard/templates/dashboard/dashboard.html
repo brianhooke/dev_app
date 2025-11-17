@@ -105,16 +105,22 @@
             // Update modal title and last column header based on type
             if (modalType === 'inbox') {
                 $('#billsModalTitle').text('Bills - Inbox');
+                $('#sendColumnHeader').text('Send');
                 $('#lastColumnHeader').text('Archive');
                 // Hide allocations section for Inbox
                 $('#allocationsSection').hide();
                 $('#viewerSection').css('flex', '1');
+                // Hide Pull Xero button in Inbox mode
+                $('#pullXeroAccountsBtn').hide();
             } else if (modalType === 'direct') {
                 $('#billsModalTitle').text('Bills - Direct');
+                $('#sendColumnHeader').text('Send to Xero');
                 $('#lastColumnHeader').text('Return to Inbox');
                 // Show allocations section for Direct
                 $('#allocationsSection').css('display', 'flex');
                 $('#viewerSection').css('flex', '0 0 66%');
+                // Show Pull Xero button in Direct mode
+                $('#pullXeroAccountsBtn').show();
             }
             
             // Filter bills using provided filter function
@@ -225,31 +231,49 @@
                             .val(bill.supplier_invoice_number || '');
                         row.append($('<td>').append(invoiceNumberInput));
                         
-                        // 4. $ Net input (limit to 2 decimal places)
+                        // 4. $ Net input (limit to 2 decimal places, no negatives)
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
+                            .attr('min', '0')
                             .addClass('form-control form-control-sm net-input')
                             .val(bill.total_net || '')
                             .on('input', function() {
                                 var value = $(this).val();
+                                // Prevent negative numbers
+                                if (parseFloat(value) < 0) {
+                                    $(this).val(0);
+                                    return;
+                                }
                                 if (value.includes('.')) {
                                     var parts = value.split('.');
                                     if (parts[1] && parts[1].length > 2) {
                                         $(this).val(parseFloat(value).toFixed(2));
                                     }
                                 }
+                                // Auto-calculate GST as 10% of NET
+                                var netValue = parseFloat($(this).val());
+                                if (!isNaN(netValue)) {
+                                    var gstValue = (netValue * 0.1).toFixed(2);
+                                    $(this).closest('tr').find('.gst-input').val(gstValue);
+                                }
                             });
                         row.append($('<td>').append(netInput));
                         
-                        // 5. $ GST input (limit to 2 decimal places)
+                        // 5. $ GST input (limit to 2 decimal places, no negatives)
                         var gstInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
+                            .attr('min', '0')
                             .addClass('form-control form-control-sm gst-input')
                             .val(bill.total_gst || '')
                             .on('input', function() {
                                 var value = $(this).val();
+                                // Prevent negative numbers
+                                if (parseFloat(value) < 0) {
+                                    $(this).val(0);
+                                    return;
+                                }
                                 if (value.includes('.')) {
                                     var parts = value.split('.');
                                     if (parts[1] && parts[1].length > 2) {
@@ -275,10 +299,11 @@
                         row.attr('data-attachment-url', bill.attachment_url);
                         row.attr('data-filename', bill.attachment_filename);
                         
-                        // 7. Send button
+                        // 7. Send button (text depends on modal type)
+                        var sendBtnText = modalType === 'direct' ? 'Send to Xero' : 'Send';
                         var sendBtn = $('<button>')
                             .addClass('btn btn-sm btn-success send-bill-btn')
-                            .text('Send')
+                            .text(sendBtnText)
                             .attr('data-invoice-pk', bill.invoice_pk);
                         row.append($('<td>').append(sendBtn));
                         
@@ -303,6 +328,9 @@
                         
                         // Add row to table
                         $('#billsTableBody').append(row);
+                        
+                        // Validate button state for this invoice
+                        validateAndUpdateSendButton(bill.invoice_pk);
                     });
         }
         
@@ -425,6 +453,66 @@
                             }
                         }
                         
+                        // Update invoice in database and handle allocations
+                        var invoicePk = row.attr('data-invoice-pk');
+                        
+                        // Determine if this is a Xero Instance or Project selection
+                        var updateData = { invoice_pk: invoicePk };
+                        if (selectedValue.startsWith('xero_')) {
+                            updateData.xero_instance_id = xeroInstanceId;
+                            updateData.project_pk = null;
+                        } else if (selectedValue.startsWith('project_')) {
+                            var projectPk = parseInt(selectedValue.replace('project_', ''));
+                            updateData.project_pk = projectPk;
+                            updateData.xero_instance_id = null;
+                        }
+                        
+                        // Update invoice in database
+                        $.ajax({
+                            url: '/core/update_invoice/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify(updateData),
+                            success: function(response) {
+                                console.log('Updated invoice Xero Instance/Project');
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error updating invoice:', error);
+                            }
+                        });
+                        
+                        // If Xero Instance changed, null out allocation Xero fields
+                        if (selectedValue.startsWith('xero_')) {
+                            $.ajax({
+                                url: '/core/null_allocation_xero_fields/',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({ invoice_pk: invoicePk }),
+                                success: function(response) {
+                                    console.log('Nulled allocation Xero fields');
+                                    // If this is the selected row, clear dropdowns in UI
+                                    if (currentSelectedInvoicePk === invoicePk) {
+                                        $('#allocationsTableBody tr').each(function() {
+                                            $(this).find('.xero-account-select').val('');
+                                            $(this).find('.xero-division-select').val('');
+                                            $(this).removeAttr('data-xero-account-pk');
+                                            $(this).removeAttr('data-xero-division-pk');
+                                        });
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error nulling allocation Xero fields:', error);
+                                }
+                            });
+                        }
+                        
+                        // Update currentInvoiceData with new xero_instance_pk if this is the selected row
+                        if (currentSelectedInvoicePk === invoicePk && currentInvoiceData) {
+                            currentInvoiceData.xero_instance_pk = xeroInstanceId;
+                            // Repopulate allocation dropdowns with new instance data
+                            populateAllAllocationDropdowns();
+                        }
+                        
                         // Rebuild supplier dropdown
                         supplierSelect.empty();
                         
@@ -463,6 +551,9 @@
                             supplierSelect.append($('<option>').val('').text('Select Xero Instance first...'));
                             supplierSelect.prop('disabled', true);
                         }
+                        
+                        // Update button state
+                        validateAndUpdateSendButton(invoicePk);
                     });
                     
                     // Handle supplier dropdown change - open Add Supplier modal if selected
@@ -508,8 +599,8 @@
                         var xeroInstanceOrProject = row.find('.xero-project-select').val();
                         var supplierPk = row.find('.supplier-select').val();
                         var invoiceNumber = row.find('.invoice-number-input').val();
-                        var totalNet = row.find('.net-input').val();
-                        var totalGst = row.find('.gst-input').val();
+                        var totalNet = parseFloat(row.find('.net-input').val());
+                        var totalGst = parseFloat(row.find('.gst-input').val());
                         
                         // Validate all required fields
                         var errors = [];
@@ -522,17 +613,64 @@
                         if (!invoiceNumber || invoiceNumber.trim() === '') {
                             errors.push('Please enter an Invoice Number');
                         }
-                        if (!totalNet || totalNet === '') {
-                            errors.push('Please enter a Net amount');
+                        if (!totalNet || isNaN(totalNet) || totalNet === 0) {
+                            errors.push('Please enter a non-zero Net amount');
                         }
-                        if (!totalGst || totalGst === '') {
+                        if (!totalGst || isNaN(totalGst)) {
                             errors.push('Please enter a GST amount');
+                        }
+                        
+                        // Check if we're in Bills - Direct modal (allocations section is visible)
+                        var isDirectModal = $('#allocationsSection').is(':visible');
+                        
+                        if (isDirectModal) {
+                            // Additional validation for Bills - Direct
+                            
+                            // Check if this is the currently selected invoice
+                            if (currentSelectedInvoicePk !== invoicePk) {
+                                errors.push('Please select this bill row to view and complete allocations');
+                            } else {
+                                // Validate allocations
+                                var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                                if (!hasAllocations) {
+                                    errors.push('No allocations found. Please add at least one allocation');
+                                } else {
+                                    // Check that all allocations have Xero Account selected
+                                    var missingAccount = false;
+                                    $('#allocationsTableBody tr').each(function() {
+                                        var accountVal = $(this).find('.xero-account-select').val();
+                                        if (!accountVal) {
+                                            missingAccount = true;
+                                        }
+                                    });
+                                    
+                                    if (missingAccount) {
+                                        errors.push('All allocations must have a Xero Account selected');
+                                    }
+                                    
+                                    // Check remaining allocations are exactly 0.00
+                                    var remainingNetText = $('#remainingNet').text().replace('$', '');
+                                    var remainingGstText = $('#remainingGst').text().replace('$', '');
+                                    var remainingNet = parseFloat(remainingNetText);
+                                    var remainingGst = parseFloat(remainingGstText);
+                                    
+                                    if (Math.abs(remainingNet) >= 0.01) {
+                                        errors.push('Still to allocate Net must be exactly $0.00 (currently: $' + remainingNet.toFixed(2) + ')');
+                                    }
+                                    if (Math.abs(remainingGst) >= 0.01) {
+                                        errors.push('Still to allocate GST must be exactly $0.00 (currently: $' + remainingGst.toFixed(2) + ')');
+                                    }
+                                }
+                            }
                         }
                         
                         if (errors.length > 0) {
                             alert('Please fix the following errors:\n\n' + errors.join('\n'));
                             return;
                         }
+                        
+                        // Store original button text for restoration on error
+                        var originalBtnText = button.text();
                         
                         // Disable button and show processing state
                         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
@@ -567,13 +705,13 @@
                                 });
                             } else {
                                 // Re-enable button on error
-                                button.prop('disabled', false).html('Send');
+                                button.prop('disabled', false).html(originalBtnText);
                                 alert('Error: ' + data.message);
                             }
                         })
                         .catch(error => {
                             console.error('Error sending bill:', error);
-                            button.prop('disabled', false).html('Send');
+                            button.prop('disabled', false).html(originalBtnText);
                             alert('Failed to send bill. Please try again.');
                         });
                     });
@@ -674,56 +812,71 @@
                     var currentSelectedInvoicePk = null;
                     
                     // Function to create an allocation row
-                    function createAllocationRow(netAmount, gstAmount) {
+                    function createAllocationRow(netAmount, gstAmount, allocationPk, xeroAccountPk, xeroDivisionPk, notes) {
                         var row = $('<tr>');
                         
+                        // Store allocation_pk as data attribute
+                        if (allocationPk) {
+                            row.attr('data-allocation-pk', allocationPk);
+                        }
+                        
                         // 1. Xero Account dropdown
-                        var accountSelect = $('<select>').addClass('form-control form-control-sm');
+                        var accountSelect = $('<select>')
+                            .addClass('form-control form-control-sm xero-account-select')
+                            .attr('data-instance-pk', '');
                         accountSelect.append($('<option>').val('').text('Select Account...'));
-                        // TODO: Populate with Xero accounts from backend
-                        // For now, add placeholder options
-                        accountSelect.append($('<option>').val('account1').text('Account 1'));
-                        accountSelect.append($('<option>').val('account2').text('Account 2'));
                         row.append($('<td>').append(accountSelect));
                         
-                        // 2. Division dropdown (Projects)
-                        var divisionSelect = $('<select>').addClass('form-control form-control-sm');
+                        // 2. Division dropdown
+                        var divisionSelect = $('<select>')
+                            .addClass('form-control form-control-sm xero-division-select')
+                            .attr('data-instance-pk', '');
                         divisionSelect.append($('<option>').val('').text('Select Division...'));
-                        // Populate with projects from global billsData
-                        if (window.billsData && window.billsData.projects) {
-                            window.billsData.projects.forEach(function(project) {
-                                divisionSelect.append($('<option>')
-                                    .val(project.projects_pk)
-                                    .text(project.project));
-                            });
-                        }
                         row.append($('<td>').append(divisionSelect));
                         
-                        // 3. $ Net input (with 2dp validation)
+                        // 3. $ Net input (with 2dp validation, no negatives)
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
+                            .attr('min', '0')
                             .addClass('form-control form-control-sm allocation-net-input')
                             .val(netAmount || '')
                             .on('input', function() {
                                 var value = $(this).val();
+                                // Prevent negative numbers
+                                if (parseFloat(value) < 0) {
+                                    $(this).val(0);
+                                    return;
+                                }
                                 if (value.includes('.')) {
                                     var parts = value.split('.');
                                     if (parts[1] && parts[1].length > 2) {
                                         $(this).val(parseFloat(value).toFixed(2));
                                     }
                                 }
+                                // Auto-calculate GST as 10% of NET
+                                var netValue = parseFloat($(this).val());
+                                if (!isNaN(netValue)) {
+                                    var gstValue = (netValue * 0.1).toFixed(2);
+                                    $(this).closest('tr').find('.allocation-gst-input').val(gstValue);
+                                }
                             });
                         row.append($('<td>').append(netInput));
                         
-                        // 4. $ GST input (with 2dp validation)
+                        // 4. $ GST input (with 2dp validation, no negatives)
                         var gstInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
+                            .attr('min', '0')
                             .addClass('form-control form-control-sm allocation-gst-input')
                             .val(gstAmount || '')
                             .on('input', function() {
                                 var value = $(this).val();
+                                // Prevent negative numbers
+                                if (parseFloat(value) < 0) {
+                                    $(this).val(0);
+                                    return;
+                                }
                                 if (value.includes('.')) {
                                     var parts = value.split('.');
                                     if (parts[1] && parts[1].length > 2) {
@@ -737,11 +890,465 @@
                         var notesInput = $('<input>')
                             .attr('type', 'text')
                             .addClass('form-control form-control-sm allocation-notes-input')
-                            .attr('placeholder', 'Notes...');
+                            .attr('placeholder', 'Description...')
+                            .val(notes || '');
                         row.append($('<td>').append(notesInput));
+                        
+                        // 6. Delete button
+                        var deleteBtn = $('<button>')
+                            .addClass('btn btn-sm btn-danger delete-allocation-btn')
+                            .html('<i class="fas fa-times"></i>')
+                            .attr('title', 'Delete allocation');
+                        row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+                        
+                        // Store xero_account_pk and xero_division_pk for later selection
+                        if (xeroAccountPk) {
+                            row.attr('data-xero-account-pk', xeroAccountPk);
+                        }
+                        if (xeroDivisionPk) {
+                            row.attr('data-xero-division-pk', xeroDivisionPk);
+                        }
                         
                         return row;
                     }
+                    
+                    // Function to populate Xero Account dropdown for a specific row
+                    function populateXeroAccounts(row, instancePk) {
+                        var accountSelect = row.find('.xero-account-select');
+                        accountSelect.attr('data-instance-pk', instancePk);
+                        
+                        // Clear existing options except the first one
+                        accountSelect.find('option:not(:first)').remove();
+                        
+                        if (!instancePk) {
+                            return;
+                        }
+                        
+                        // Get the stored xero_account_pk if it exists
+                        var storedAccountPk = row.attr('data-xero-account-pk');
+                        
+                        // Fetch accounts from backend
+                        $.ajax({
+                            url: '/core/get_xero_accounts/' + instancePk + '/',
+                            type: 'GET',
+                            success: function(response) {
+                                if (response.status === 'success' && response.accounts) {
+                                    response.accounts.forEach(function(account) {
+                                        accountSelect.append($('<option>')
+                                            .val(account.xero_account_pk)
+                                            .text(account.account_code + ' - ' + account.account_name)
+                                            .attr('data-account-type', account.account_type));
+                                    });
+                                    
+                                    // Set stored value if it exists
+                                    if (storedAccountPk) {
+                                        accountSelect.val(storedAccountPk);
+                                    }
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error fetching Xero accounts:', error);
+                            }
+                        });
+                    }
+                    
+                    // Function to populate Division dropdown for a specific row
+                    function populateDivisions(row, instancePk) {
+                        var divisionSelect = row.find('.xero-division-select');
+                        divisionSelect.attr('data-instance-pk', instancePk);
+                        
+                        // Clear existing options except the first one
+                        divisionSelect.find('option:not(:first)').remove();
+                        
+                        if (!instancePk) {
+                            return;
+                        }
+                        
+                        // Get the stored xero_division_pk if it exists
+                        var storedDivisionPk = row.attr('data-xero-division-pk');
+                        
+                        // Fetch divisions from backend
+                        $.ajax({
+                            url: '/core/get_xero_divisions/' + instancePk + '/',
+                            type: 'GET',
+                            success: function(response) {
+                                if (response.status === 'success' && response.divisions) {
+                                    response.divisions.forEach(function(division) {
+                                        divisionSelect.append($('<option>')
+                                            .val(division.xero_division_pk)
+                                            .text(division.tracking_category_name + ': ' + division.division_name));
+                                    });
+                                    
+                                    // Set stored value if it exists
+                                    if (storedDivisionPk) {
+                                        divisionSelect.val(storedDivisionPk);
+                                    }
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error fetching Xero divisions:', error);
+                            }
+                        });
+                    }
+                    
+                    // Function to populate all allocation rows with current instance data
+                    function populateAllAllocationDropdowns() {
+                        if (!currentInvoiceData || !currentInvoiceData.xero_instance_pk) {
+                            return;
+                        }
+                        
+                        var instancePk = currentInvoiceData.xero_instance_pk;
+                        
+                        // Populate all rows in the allocations table
+                        $('#allocationsTableBody tr').each(function() {
+                            populateXeroAccounts($(this), instancePk);
+                            populateDivisions($(this), instancePk);
+                        });
+                    }
+                    
+                    // Function to calculate and update remaining allocation amounts
+                    function updateRemainingAllocations() {
+                        if (!currentInvoiceData) {
+                            $('#remainingNet').text('$0.00');
+                            $('#remainingGst').text('$0.00');
+                            return;
+                        }
+                        
+                        var invoiceNet = parseFloat(currentInvoiceData.total_net) || 0;
+                        var invoiceGst = parseFloat(currentInvoiceData.total_gst) || 0;
+                        
+                        var allocatedNet = 0;
+                        var allocatedGst = 0;
+                        
+                        // Sum up all allocation amounts
+                        $('#allocationsTableBody tr').each(function() {
+                            var netVal = parseFloat($(this).find('.allocation-net-input').val()) || 0;
+                            var gstVal = parseFloat($(this).find('.allocation-gst-input').val()) || 0;
+                            allocatedNet += netVal;
+                            allocatedGst += gstVal;
+                        });
+                        
+                        var remainingNet = invoiceNet - allocatedNet;
+                        var remainingGst = invoiceGst - allocatedGst;
+                        
+                        // Update display with color coding
+                        $('#remainingNet').text('$' + remainingNet.toFixed(2));
+                        $('#remainingGst').text('$' + remainingGst.toFixed(2));
+                        
+                        // Color code: green if zero, blue if positive, red if negative
+                        if (Math.abs(remainingNet) < 0.01) {
+                            $('#remainingNet').css('color', 'green');
+                        } else if (remainingNet > 0) {
+                            $('#remainingNet').css('color', 'blue');
+                        } else {
+                            $('#remainingNet').css('color', 'red');
+                        }
+                        
+                        if (Math.abs(remainingGst) < 0.01) {
+                            $('#remainingGst').css('color', 'green');
+                        } else if (remainingGst > 0) {
+                            $('#remainingGst').css('color', 'blue');
+                        } else {
+                            $('#remainingGst').css('color', 'red');
+                        }
+                        
+                        // Update Send to Xero button state
+                        if (currentSelectedInvoicePk) {
+                            validateAndUpdateSendButton(currentSelectedInvoicePk);
+                        }
+                    }
+                    
+                    // Function to validate and update Send to Xero button state
+                    function validateAndUpdateSendButton(invoicePk) {
+                        var button = $('button[data-invoice-pk="' + invoicePk + '"].send-bill-btn');
+                        if (button.length === 0) return;
+                        
+                        var row = button.closest('tr');
+                        var isValid = true;
+                        
+                        // LHS table validations
+                        var xeroInstanceOrProject = row.find('.xero-project-select').val();
+                        var supplierPk = row.find('.supplier-select').val();
+                        var invoiceNumber = row.find('.invoice-number-input').val();
+                        var totalNet = parseFloat(row.find('.net-input').val());
+                        var totalGst = parseFloat(row.find('.gst-input').val());
+                        
+                        if (!xeroInstanceOrProject) isValid = false;
+                        if (!supplierPk || supplierPk === 'add_supplier') isValid = false;
+                        if (!invoiceNumber || invoiceNumber.trim() === '') isValid = false;
+                        if (!totalNet || isNaN(totalNet) || totalNet === 0) isValid = false;
+                        if (!totalGst || isNaN(totalGst)) isValid = false;
+                        
+                        // Check if we're in Bills - Direct modal
+                        var isDirectModal = $('#allocationsSection').is(':visible');
+                        
+                        if (isDirectModal && currentSelectedInvoicePk === invoicePk) {
+                            // RHS allocations validations for the selected invoice
+                            var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                            if (!hasAllocations) {
+                                isValid = false;
+                            } else {
+                                // Check that all allocations have Xero Account selected
+                                $('#allocationsTableBody tr').each(function() {
+                                    var accountVal = $(this).find('.xero-account-select').val();
+                                    if (!accountVal) {
+                                        isValid = false;
+                                    }
+                                });
+                                
+                                // Check remaining allocations are exactly 0.00
+                                var remainingNetText = $('#remainingNet').text().replace('$', '');
+                                var remainingGstText = $('#remainingGst').text().replace('$', '');
+                                var remainingNet = parseFloat(remainingNetText);
+                                var remainingGst = parseFloat(remainingGstText);
+                                
+                                if (Math.abs(remainingNet) >= 0.01) isValid = false;
+                                if (Math.abs(remainingGst) >= 0.01) isValid = false;
+                            }
+                        }
+                        
+                        // Update button state
+                        if (isValid) {
+                            button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+                        } else {
+                            button.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+                        }
+                    }
+                    
+                    // Function to update an allocation in the database
+                    function updateAllocation(row, field, value) {
+                        var allocationPk = row.attr('data-allocation-pk');
+                        if (!allocationPk) {
+                            console.warn('No allocation_pk found for row');
+                            return;
+                        }
+                        
+                        var data = {
+                            allocation_pk: allocationPk
+                        };
+                        data[field] = value;
+                        
+                        $.ajax({
+                            url: '/core/update_invoice_allocation/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify(data),
+                            success: function(response) {
+                                console.log('Updated allocation', allocationPk, field, value);
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error updating allocation:', error);
+                            }
+                        });
+                    }
+                    
+                    // Add event handlers for allocation field changes
+                    $(document).on('change', '.xero-account-select', function() {
+                        var row = $(this).closest('tr');
+                        var value = $(this).val();
+                        updateAllocation(row, 'xero_account_pk', value);
+                        
+                        // Update button state
+                        if (currentSelectedInvoicePk) {
+                            validateAndUpdateSendButton(currentSelectedInvoicePk);
+                        }
+                    });
+                    
+                    $(document).on('change', '.xero-division-select', function() {
+                        var row = $(this).closest('tr');
+                        var value = $(this).val();
+                        updateAllocation(row, 'xero_division_pk', value);
+                    });
+                    
+                    $(document).on('change', '.allocation-net-input', function() {
+                        var row = $(this).closest('tr');
+                        var value = $(this).val();
+                        updateAllocation(row, 'amount', value);
+                        updateRemainingAllocations();
+                    });
+                    
+                    $(document).on('change', '.allocation-gst-input', function() {
+                        var row = $(this).closest('tr');
+                        var value = $(this).val();
+                        updateAllocation(row, 'gst_amount', value);
+                        updateRemainingAllocations();
+                    });
+                    
+                    // Also update on input (real-time) for better UX
+                    $(document).on('input', '.allocation-net-input, .allocation-gst-input', function() {
+                        updateRemainingAllocations();
+                    });
+                    
+                    // Prevent scroll from changing number input values by blurring on scroll
+                    $(document).on('wheel', '.allocation-net-input, .allocation-gst-input', function(e) {
+                        $(this).blur();
+                    });
+                    
+                    // Also prevent mousewheel event as fallback
+                    $(document).on('mousewheel', '.allocation-net-input, .allocation-gst-input', function(e) {
+                        $(this).blur();
+                    });
+                    
+                    $(document).on('change', '.allocation-notes-input', function() {
+                        var row = $(this).closest('tr');
+                        var value = $(this).val();
+                        updateAllocation(row, 'notes', value);
+                    });
+                    
+                    // Add change handlers for LHS table fields to update invoice
+                    $(document).on('change', '.supplier-select', function() {
+                        var row = $(this).closest('tr');
+                        var invoicePk = row.attr('data-invoice-pk');
+                        var supplierPk = $(this).val();
+                        
+                        if (supplierPk && supplierPk !== 'add_supplier') {
+                            $.ajax({
+                                url: '/core/update_invoice/',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    invoice_pk: invoicePk,
+                                    contact_pk: supplierPk
+                                }),
+                                success: function(response) {
+                                    console.log('Updated invoice supplier');
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error updating invoice supplier:', error);
+                                }
+                            });
+                        }
+                        
+                        // Update button state
+                        validateAndUpdateSendButton(invoicePk);
+                    });
+                    
+                    $(document).on('change', '.invoice-number-input', function() {
+                        var row = $(this).closest('tr');
+                        var invoicePk = row.attr('data-invoice-pk');
+                        var invoiceNumber = $(this).val();
+                        
+                        $.ajax({
+                            url: '/core/update_invoice/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                invoice_pk: invoicePk,
+                                supplier_invoice_number: invoiceNumber
+                            }),
+                            success: function(response) {
+                                console.log('Updated invoice number');
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error updating invoice number:', error);
+                            }
+                        });
+                        
+                        // Update button state
+                        validateAndUpdateSendButton(invoicePk);
+                    });
+                    
+                    $(document).on('change', '.net-input', function() {
+                        var row = $(this).closest('tr');
+                        var invoicePk = row.attr('data-invoice-pk');
+                        var netValue = $(this).val();
+                        
+                        $.ajax({
+                            url: '/core/update_invoice/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                invoice_pk: invoicePk,
+                                total_net: netValue
+                            }),
+                            success: function(response) {
+                                console.log('Updated invoice net amount');
+                                // Update currentInvoiceData if this is the selected row
+                                if (currentSelectedInvoicePk === invoicePk && currentInvoiceData) {
+                                    currentInvoiceData.total_net = parseFloat(netValue);
+                                    updateRemainingAllocations();
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error updating invoice net:', error);
+                            }
+                        });
+                        
+                        // Update button state
+                        validateAndUpdateSendButton(invoicePk);
+                    });
+                    
+                    $(document).on('change', '.gst-input', function() {
+                        var row = $(this).closest('tr');
+                        var invoicePk = row.attr('data-invoice-pk');
+                        var gstValue = $(this).val();
+                        
+                        $.ajax({
+                            url: '/core/update_invoice/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                invoice_pk: invoicePk,
+                                total_gst: gstValue
+                            }),
+                            success: function(response) {
+                                console.log('Updated invoice gst amount');
+                                // Update currentInvoiceData if this is the selected row
+                                if (currentSelectedInvoicePk === invoicePk && currentInvoiceData) {
+                                    currentInvoiceData.total_gst = parseFloat(gstValue);
+                                    updateRemainingAllocations();
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error updating invoice gst:', error);
+                            }
+                        });
+                        
+                        // Update button state
+                        validateAndUpdateSendButton(invoicePk);
+                    });
+                    
+                    // Add click handler for delete allocation button
+                    $(document).on('click', '.delete-allocation-btn', function(e) {
+                        e.preventDefault();
+                        
+                        var row = $(this).closest('tr');
+                        var allocationPk = row.attr('data-allocation-pk');
+                        
+                        if (!allocationPk) {
+                            // Just remove the row if no allocation_pk (shouldn't happen)
+                            row.remove();
+                            updateRemainingAllocations();
+                            return;
+                        }
+                        
+                        if (confirm('Are you sure you want to delete this allocation?')) {
+                            // Delete from database
+                            $.ajax({
+                                url: '/core/delete_invoice_allocation/',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    allocation_pk: allocationPk
+                                }),
+                                success: function(response) {
+                                    if (response.status === 'success') {
+                                        // Remove row with fade effect
+                                        row.fadeOut(300, function() {
+                                            $(this).remove();
+                                            updateRemainingAllocations();
+                                        });
+                                    } else {
+                                        alert('Error deleting allocation: ' + response.message);
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error deleting allocation:', error);
+                                    alert('Failed to delete allocation. Please try again.');
+                                }
+                            });
+                        }
+                    });
                     
                     // Add click handler for LHS table rows to populate allocations
                     $(document).on('click', '#billsTableBody tr', function(e) {
@@ -784,9 +1391,52 @@
                                     // Clear and populate allocations table
                                     $('#allocationsTableBody').empty();
                                     
-                                    // Add one row with net and gst pre-populated
-                                    var row = createAllocationRow(invoice.total_net, invoice.total_gst);
-                                    $('#allocationsTableBody').append(row);
+                                    // Check if there are existing allocations
+                                    if (invoice.allocations && invoice.allocations.length > 0) {
+                                        // Load existing allocations
+                                        invoice.allocations.forEach(function(allocation) {
+                                            var row = createAllocationRow(
+                                                allocation.amount,
+                                                allocation.gst_amount,
+                                                allocation.allocation_pk,
+                                                allocation.xero_account_pk,
+                                                allocation.xero_division_pk,
+                                                allocation.notes
+                                            );
+                                            $('#allocationsTableBody').append(row);
+                                        });
+                                    } else {
+                                        // Create new allocation row with invoice totals
+                                        var row = createAllocationRow(invoice.total_net, invoice.total_gst);
+                                        $('#allocationsTableBody').append(row);
+                                        
+                                        // Create allocation in database via AJAX
+                                        $.ajax({
+                                            url: '/core/create_invoice_allocation/',
+                                            type: 'POST',
+                                            contentType: 'application/json',
+                                            data: JSON.stringify({
+                                                invoice_pk: invoice.invoice_pk,
+                                                amount: invoice.total_net,
+                                                gst_amount: invoice.total_gst
+                                            }),
+                                            success: function(response) {
+                                                if (response.status === 'success') {
+                                                    row.attr('data-allocation-pk', response.allocation_pk);
+                                                    console.log('Created allocation:', response.allocation_pk);
+                                                }
+                                            },
+                                            error: function(xhr, status, error) {
+                                                console.error('Error creating allocation:', error);
+                                            }
+                                        });
+                                    }
+                                    
+                                    // Populate dropdowns with Xero data for this instance
+                                    populateAllAllocationDropdowns();
+                                    
+                                    // Update remaining allocation calculations
+                                    updateRemainingAllocations();
                                 }
                             }
                             
@@ -802,6 +1452,9 @@
                                 $('#billViewer').attr('src', attachmentUrl).show();
                                 $('#viewerPlaceholder').hide();
                             }
+                            
+                            // Validate button state for the newly selected row
+                            validateAndUpdateSendButton(invoicePk);
                         }
                     });
                     
@@ -809,9 +1462,110 @@
                     $(document).on('click', '#addAllocationBtn', function(e) {
                         e.preventDefault();
                         
+                        if (!currentInvoiceData) {
+                            alert('Please select a bill first');
+                            return;
+                        }
+                        
                         // Add empty row
                         var row = createAllocationRow(null, null);
                         $('#allocationsTableBody').append(row);
+                        
+                        // Create allocation in database
+                        $.ajax({
+                            url: '/core/create_invoice_allocation/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                invoice_pk: currentInvoiceData.invoice_pk,
+                                amount: 0,
+                                gst_amount: 0
+                            }),
+                            success: function(response) {
+                                if (response.status === 'success') {
+                                    row.attr('data-allocation-pk', response.allocation_pk);
+                                    console.log('Created new allocation:', response.allocation_pk);
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error creating allocation:', error);
+                            }
+                        });
+                        
+                        // Populate dropdowns for the new row
+                        if (currentInvoiceData.xero_instance_pk) {
+                            populateXeroAccounts(row, currentInvoiceData.xero_instance_pk);
+                            populateDivisions(row, currentInvoiceData.xero_instance_pk);
+                        }
+                        
+                        // Update remaining allocations (new row has 0 amounts)
+                        updateRemainingAllocations();
+                    });
+                    
+                    // Add click handler for Pull Xero Accounts button
+                    $(document).on('click', '#pullXeroAccountsBtn', function(e) {
+                        e.preventDefault();
+                        
+                        var button = $(this);
+                        var originalHtml = button.html();
+                        
+                        // Disable button and show loading state
+                        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling...');
+                        
+                        // Send AJAX request
+                        $.ajax({
+                            url: '{% url "core:pull_xero_accounts_and_divisions" %}',
+                            type: 'POST',
+                            headers: {
+                                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                            },
+                            success: function(response) {
+                                if (response.status === 'success') {
+                                    var message = response.message + '\n\n';
+                                    message += '--- Summary ---\n';
+                                    message += 'Accounts: ' + response.summary.total_accounts_added + ' added, ' + 
+                                               response.summary.total_accounts_updated + ' updated, ' + 
+                                               response.summary.total_accounts_unchanged + ' unchanged\n';
+                                    message += 'Divisions: ' + response.summary.total_divisions_added + ' added, ' + 
+                                               response.summary.total_divisions_updated + ' updated, ' + 
+                                               response.summary.total_divisions_unchanged + ' unchanged\n';
+                                    
+                                    if (response.instances && response.instances.length > 0) {
+                                        message += '\n--- Instance Details ---\n';
+                                        response.instances.forEach(function(inst) {
+                                            message += '\n' + inst.instance_name + ': ' + inst.status;
+                                            if (inst.accounts_added !== undefined) {
+                                                message += '\n  Accounts: ' + inst.accounts_added + ' added, ' + 
+                                                           inst.accounts_updated + ' updated, ' + 
+                                                           inst.accounts_unchanged + ' unchanged';
+                                            }
+                                            if (inst.divisions_added !== undefined) {
+                                                message += '\n  Divisions: ' + inst.divisions_added + ' added, ' + 
+                                                           inst.divisions_updated + ' updated, ' + 
+                                                           inst.divisions_unchanged + ' unchanged';
+                                            }
+                                            if (inst.message) {
+                                                message += '\n  ' + inst.message;
+                                            }
+                                        });
+                                    }
+                                    
+                                    alert(message);
+                                } else {
+                                    alert('Error: ' + response.message);
+                                }
+                                
+                                // Re-enable button
+                                button.prop('disabled', false).html(originalHtml);
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error pulling Xero accounts:', error);
+                                alert('Failed to pull Xero accounts. Please try again.');
+                                
+                                // Re-enable button
+                                button.prop('disabled', false).html(originalHtml);
+                            }
+                        });
                     });
     });
 </script>

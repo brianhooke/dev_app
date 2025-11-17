@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', function() {
             row.innerHTML = `
                 <td>${instance.xero_name}</td>
                 <td style="text-align: center;">
+                    <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}" style="margin-right: 5px;">
+                        <i class="fas fa-key"></i> Authorize
+                    </button>
                     <button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
                         Test
                     </button>
@@ -50,6 +53,16 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.appendChild(row);
         });
     }
+    
+    // Authorize Xero Instance
+    $(document).on('click', '.authorize-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        
+        if (confirm(`Authorize "${instanceName}" with Xero?\n\nThis will redirect you to Xero to grant permissions.`)) {
+            window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+        }
+    });
     
     // Test Xero Connection
     $(document).on('click', '.test-xero-btn', function() {

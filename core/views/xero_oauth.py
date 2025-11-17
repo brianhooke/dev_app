@@ -43,7 +43,7 @@ def xero_oauth_authorize(request, instance_pk):
             'response_type': 'code',
             'client_id': xero_instance.xero_client_id,
             'redirect_uri': redirect_uri,
-            'scope': 'offline_access accounting.contacts accounting.transactions',
+            'scope': 'offline_access accounting.contacts accounting.transactions accounting.settings accounting.settings.read',
             'state': state
         }
         

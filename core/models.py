@@ -79,6 +79,50 @@ class XeroInstances(models.Model):
     def __str__(self):
         return self.xero_name
 
+# SERVICE: xero
+class XeroAccounts(models.Model):
+    xero_account_pk = models.AutoField(primary_key=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances, 
+        on_delete=models.CASCADE, 
+        related_name='xero_accounts'
+    )
+    account_name = models.CharField(max_length=255)
+    account_code = models.CharField(max_length=50)
+    account_id = models.CharField(max_length=255)  # Xero's AccountID (unique per instance)
+    account_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, etc.
+    account_type = models.CharField(max_length=100, null=True, blank=True)  # EXPENSE, REVENUE, etc.
+    class Meta:
+        db_table = 'xero_accounts'
+        verbose_name = 'Xero Account'
+        verbose_name_plural = 'Xero Accounts'
+        unique_together = ['xero_instance', 'account_code']
+    def __str__(self):
+        return f"{self.account_code} - {self.account_name}"
+
+# SERVICE: xero
+class XeroDivisions(models.Model):
+    xero_division_pk = models.AutoField(primary_key=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances,
+        on_delete=models.CASCADE,
+        related_name='divisions'
+    )
+    tracking_category_name = models.CharField(max_length=255)  # e.g., "Division", "Region", etc.
+    tracking_category_id = models.CharField(max_length=255)  # Xero's TrackingCategoryID
+    division_name = models.CharField(max_length=255)  # The actual option name
+    division_id = models.CharField(max_length=255)  # Xero's TrackingOptionID
+    division_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, etc.
+    
+    class Meta:
+        db_table = 'xero_divisions'
+        verbose_name = 'Xero Division'
+        verbose_name_plural = 'Xero Divisions'
+        unique_together = ['xero_instance', 'division_id']
+    
+    def __str__(self):
+        return f"{self.tracking_category_name}: {self.division_name}"
+
 # SERVICE: projects
 class Projects(models.Model):
     PROJECT_TYPE_CHOICES = [
@@ -251,14 +295,17 @@ class Invoices(models.Model):
 class Invoice_allocations(models.Model):
     invoice_allocations_pk = models.AutoField(primary_key=True)
     invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE, related_name='invoice_allocations')
-    item = models.ForeignKey(Costing, on_delete=models.CASCADE)
+    item = models.ForeignKey(Costing, on_delete=models.CASCADE, null=True, blank=True)  # Make nullable since we're using Xero accounts now
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    notes = models.CharField(max_length=1000, null=True)
+    notes = models.CharField(max_length=1000, null=True, blank=True)
     allocation_type = models.IntegerField(default=0, choices=[
         (0, "as per invoice_type"),
         (1, "direct cost in progress claim")
     ])
+    xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
+    xero_division = models.ForeignKey('XeroDivisions', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
+    
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
 

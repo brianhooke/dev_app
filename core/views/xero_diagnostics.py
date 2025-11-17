@@ -23,7 +23,7 @@ def xero_oauth_diagnostics(request, instance_pk):
             'response_type': 'code',
             'client_id': xero_instance.xero_client_id,
             'redirect_uri': redirect_uri,
-            'scope': 'offline_access accounting.contacts accounting.transactions',
+            'scope': 'offline_access accounting.contacts accounting.transactions accounting.settings',
             'state': 'diagnostic-test'
         }
         auth_url = f'https://login.xero.com/identity/connect/authorize?{urlencode(params)}'
@@ -37,7 +37,7 @@ def xero_oauth_diagnostics(request, instance_pk):
                 'redirect_uri': redirect_uri,
                 'redirect_uri_length': len(redirect_uri),
                 'has_client_secret': bool(xero_instance.xero_client_secret_encrypted),
-                'scopes': 'offline_access accounting.contacts accounting.transactions',
+                'scopes': 'offline_access accounting.contacts accounting.transactions accounting.settings',
                 'expected_auth_url': auth_url
             },
             'instructions': {

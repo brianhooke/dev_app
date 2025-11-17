@@ -27,7 +27,7 @@
                                     <th>$ Net</th>
                                     <th>$ GST</th>
                                     <th>Email</th>
-                                    <th>Send</th>
+                                    <th id="sendColumnHeader">Send to Xero</th>
                                     <th id="lastColumnHeader">Archive</th>
                                 </tr>
                             </thead>
@@ -48,11 +48,12 @@
                                 <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0;">
                                     <thead>
                                         <tr>
-                                            <th>Xero Account</th>
-                                            <th>Division</th>
-                                            <th>$ Net</th>
-                                            <th>$ GST</th>
-                                            <th>Notes</th>
+                                            <th style="width: 23%;">Xero Account</th>
+                                            <th style="width: 18%;">Division</th>
+                                            <th style="width: 13%;">$ Net</th>
+                                            <th style="width: 13%;">$ GST</th>
+                                            <th style="width: 28%;">Description</th>
+                                            <th style="width: 5%;"></th>
                                         </tr>
                                     </thead>
                                     <tbody id="allocationsTableBody">
@@ -60,10 +61,23 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <div style="margin-top: 5px; text-align: center;">
-                                <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
-                                    <i class="fas fa-plus"></i> Add Row
-                                </button>
+                            <div style="margin-top: 5px; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="flex: 0 0 23%; padding-left: 5px;">
+                                    <strong>Still to allocate:</strong>
+                                </div>
+                                <div style="flex: 0 0 18%;"></div>
+                                <div style="flex: 0 0 13%; text-align: center; font-weight: bold;" id="remainingNet">
+                                    $0.00
+                                </div>
+                                <div style="flex: 0 0 13%; text-align: center; font-weight: bold;" id="remainingGst">
+                                    $0.00
+                                </div>
+                                <div style="flex: 0 0 28%;"></div>
+                                <div style="flex: 0 0 5%; text-align: right; padding-right: 5px;">
+                                    <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
+                                        <i class="fas fa-plus"></i> Add Row
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
@@ -92,7 +106,9 @@
             <div class="modal-footer" style="display: flex; justify-content: space-between; flex-shrink: 0;">
                 {% block bills_modal_footer %}
                 <div>
-                    <button type="button" class="btn btn-primary" id="saveBillsBtn">Save Changes</button>
+                    <button type="button" class="btn btn-info" id="pullXeroAccountsBtn" style="display: none;">
+                        <i class="fas fa-sync-alt"></i> Pull/Update Xero Accounts & Divisions
+                    </button>
                 </div>
                 <div>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>

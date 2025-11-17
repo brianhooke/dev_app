@@ -93,7 +93,7 @@ def send_bill(request):
         invoice.supplier_invoice_number = invoice_number
         invoice.total_net = Decimal(str(total_net))
         invoice.total_gst = Decimal(str(total_gst))
-        invoice.invoice_status = 0  # Set status to 0 (invoice created)
+        invoice.invoice_status = 2  # Set status to 2 (sent to Xero)
         
         invoice.save()
         
