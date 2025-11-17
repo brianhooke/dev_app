@@ -100,29 +100,6 @@ class XeroAccounts(models.Model):
     def __str__(self):
         return f"{self.account_code} - {self.account_name}"
 
-# SERVICE: xero
-class XeroDivisions(models.Model):
-    xero_division_pk = models.AutoField(primary_key=True)
-    xero_instance = models.ForeignKey(
-        XeroInstances,
-        on_delete=models.CASCADE,
-        related_name='divisions'
-    )
-    tracking_category_name = models.CharField(max_length=255)  # e.g., "Division", "Region", etc.
-    tracking_category_id = models.CharField(max_length=255)  # Xero's TrackingCategoryID
-    division_name = models.CharField(max_length=255)  # The actual option name
-    division_id = models.CharField(max_length=255)  # Xero's TrackingOptionID
-    division_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, etc.
-    
-    class Meta:
-        db_table = 'xero_divisions'
-        verbose_name = 'Xero Division'
-        verbose_name_plural = 'Xero Divisions'
-        unique_together = ['xero_instance', 'division_id']
-    
-    def __str__(self):
-        return f"{self.tracking_category_name}: {self.division_name}"
-
 # SERVICE: projects
 class Projects(models.Model):
     PROJECT_TYPE_CHOICES = [
@@ -277,12 +254,8 @@ class Invoices(models.Model):
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True, blank=True)
     associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True, blank=True)
     invoice_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
-    
-    # Email linking fields
     received_email = models.ForeignKey('ReceivedEmail', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     email_attachment = models.ForeignKey('EmailAttachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    
-    # Auto-creation tracking
     auto_created = models.BooleanField(default=False)  # Track if created automatically from email
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -304,7 +277,6 @@ class Invoice_allocations(models.Model):
         (1, "direct cost in progress claim")
     ])
     xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
-    xero_division = models.ForeignKey('XeroDivisions', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
     
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"

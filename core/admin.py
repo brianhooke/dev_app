@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    Categories, Projects, XeroInstances, XeroAccounts, XeroDivisions, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
+    Categories, Projects, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment
@@ -95,10 +95,6 @@ class XeroAccountsAdmin(admin.ModelAdmin):
     list_filter = ('xero_instance', 'account_type', 'account_status')
     search_fields = ('account_code', 'account_name', 'account_id')
 
-class XeroDivisionsAdmin(admin.ModelAdmin):
-    list_display = ("xero_division_pk", "xero_instance", "tracking_category_name", "division_name", "division_status")
-    list_filter = ('xero_instance', 'tracking_category_name', 'division_status')
-    search_fields = ('division_name', 'tracking_category_name', 'division_id')
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
@@ -181,7 +177,6 @@ class HcVariationAllocationsAdmin(admin.ModelAdmin):
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(XeroInstances, XeroInstancesAdmin)
 admin.site.register(XeroAccounts, XeroAccountsAdmin)
-admin.site.register(XeroDivisions, XeroDivisionsAdmin)
 admin.site.register(Projects, ProjectsAdmin)
 admin.site.register(Contacts, ContactsAdmin)
 admin.site.register(Quotes, QuotesAdmin)

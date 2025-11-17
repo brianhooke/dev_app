@@ -236,7 +236,6 @@ def get_bills_list(request):
                     'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else None,
                     'notes': allocation.notes or '',
                     'xero_account_pk': allocation.xero_account_id if allocation.xero_account else None,
-                    'xero_division_pk': allocation.xero_division_id if allocation.xero_division else None,
                 })
             
             bill = {
@@ -646,7 +645,7 @@ def _pull_xero_accounts_for_instance(instance_pk):
     Note: Does not use @handle_xero_request_errors decorator since it returns a dict, not a JsonResponse.
     """
     from .xero import get_xero_auth
-    from core.models import XeroInstances, XeroAccounts, XeroDivisions
+    from core.models import XeroInstances, XeroAccounts
     
     xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
     logger.info(f"Processing Xero instance: {xero_instance.xero_name} (PK: {instance_pk})")
@@ -768,72 +767,19 @@ def _pull_xero_accounts_for_instance(instance_pk):
             'tracking_categories_found': 0
         }
     
-    tracking_data = tracking_response.json()
-    tracking_categories = tracking_data.get('TrackingCategories', [])
-    
-    logger.info(f"Fetched {len(tracking_categories)} tracking categories from Xero for {xero_instance.xero_name} (PK: {xero_instance.xero_instance_pk})")
-    
-    divisions_added = 0
-    divisions_updated = 0
-    divisions_unchanged = 0
-    
-    # Process each tracking category and its options
-    for category in tracking_categories:
-        category_name = category.get('Name', '')
-        category_id = category.get('TrackingCategoryID', '')
-        options = category.get('Options', [])
-        
-        for option in options:
-            division_id = option.get('TrackingOptionID')
-            division_name = option.get('Name', '')
-            division_status = option.get('Status', '')
-            
-            # Save tracking option to database
-            try:
-                division, created = XeroDivisions.objects.update_or_create(
-                    xero_instance=xero_instance,
-                    division_id=division_id,
-                    defaults={
-                        'tracking_category_name': category_name,
-                        'tracking_category_id': category_id,
-                        'division_name': division_name,
-                        'division_status': division_status
-                    }
-                )
-                
-                if created:
-                    divisions_added += 1
-                else:
-                    # Check if anything actually changed
-                    if (division.tracking_category_name == category_name and 
-                        division.tracking_category_id == category_id and 
-                        division.division_name == division_name and 
-                        division.division_status == division_status):
-                        divisions_unchanged += 1
-                    else:
-                        divisions_updated += 1
-            except Exception as e:
-                logger.warning(f"Skipping duplicate division {division_name} for {xero_instance.xero_name}: {str(e)}")
-                continue
-    
-    logger.info(f"Processed {len(tracking_categories)} tracking categories for {xero_instance.xero_name}")
-    
     return {
         'instance_name': xero_instance.xero_name,
         'status': 'success',
         'accounts_added': accounts_added,
         'accounts_updated': accounts_updated,
-        'accounts_unchanged': accounts_unchanged,
-        'divisions_added': divisions_added,
-        'divisions_updated': divisions_updated,
-        'divisions_unchanged': divisions_unchanged
+        'accounts_unchanged': accounts_unchanged
     }
 
 
 @csrf_exempt
 def pull_xero_accounts_and_divisions(request):
     """
-    Pull accounts and tracking categories (divisions) from Xero API for all instances.
+    Pull accounts from Xero API for all instances.
     Inserts new records and updates existing ones.
     
     Uses helper functions from xero.py:
@@ -861,9 +807,6 @@ def pull_xero_accounts_and_divisions(request):
         total_accounts_added = 0
         total_accounts_updated = 0
         total_accounts_unchanged = 0
-        total_divisions_added = 0
-        total_divisions_updated = 0
-        total_divisions_unchanged = 0
         instance_results = []
         
         # Process each Xero instance using the helper function
@@ -879,9 +822,6 @@ def pull_xero_accounts_and_divisions(request):
                 total_accounts_added += result.get('accounts_added', 0)
                 total_accounts_updated += result.get('accounts_updated', 0)
                 total_accounts_unchanged += result.get('accounts_unchanged', 0)
-                total_divisions_added += result.get('divisions_added', 0)
-                total_divisions_updated += result.get('divisions_updated', 0)
-                total_divisions_unchanged += result.get('divisions_unchanged', 0)
                 
             except Exception as e:
                 logger.error(f"Error processing instance {xero_instance.xero_name}: {str(e)}", exc_info=True)
@@ -891,10 +831,7 @@ def pull_xero_accounts_and_divisions(request):
                     'message': f'Error: {str(e)}',
                     'accounts_added': 0,
                     'accounts_updated': 0,
-                    'accounts_unchanged': 0,
-                    'divisions_added': 0,
-                    'divisions_updated': 0,
-                    'divisions_unchanged': 0
+                    'accounts_unchanged': 0
                 })
         
         return JsonResponse({
@@ -903,10 +840,7 @@ def pull_xero_accounts_and_divisions(request):
             'summary': {
                 'total_accounts_added': total_accounts_added,
                 'total_accounts_updated': total_accounts_updated,
-                'total_accounts_unchanged': total_accounts_unchanged,
-                'total_divisions_added': total_divisions_added,
-                'total_divisions_updated': total_divisions_updated,
-                'total_divisions_unchanged': total_divisions_unchanged
+                'total_accounts_unchanged': total_accounts_unchanged
             },
             'instances': instance_results
         })
@@ -950,37 +884,6 @@ def get_xero_accounts_by_instance(request, instance_pk):
             'message': f'Error: {str(e)}'
         }, status=500)
 
-
-@csrf_exempt
-def get_xero_divisions_by_account(request, instance_pk):
-    """
-    Get all Xero divisions (tracking categories) for a specific Xero instance.
-    Used to populate the Division dropdown in bill allocations.
-    Note: Divisions are instance-level, not account-level in Xero.
-    """
-    try:
-        from core.models import XeroDivisions
-        
-        divisions = XeroDivisions.objects.filter(
-            xero_instance_id=instance_pk,
-            division_status='ACTIVE'
-        ).order_by('tracking_category_name', 'division_name').values(
-            'xero_division_pk',
-            'tracking_category_name',
-            'division_name'
-        )
-        
-        return JsonResponse({
-            'status': 'success',
-            'divisions': list(divisions)
-        })
-        
-    except Exception as e:
-        logger.error(f"Error fetching Xero divisions for instance {instance_pk}: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Error: {str(e)}'
-        }, status=500)
 
 
 @csrf_exempt
@@ -1051,8 +954,6 @@ def update_invoice_allocation(request):
             allocation.notes = data['notes']
         if 'xero_account_pk' in data:
             allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
-        if 'xero_division_pk' in data:
-            allocation.xero_division_id = data['xero_division_pk'] if data['xero_division_pk'] else None
         
         allocation.save()
         
@@ -1143,7 +1044,7 @@ def update_invoice(request):
 @csrf_exempt
 def null_allocation_xero_fields(request):
     """
-    Null out xero_account and xero_division for all allocations of an invoice.
+    Null out xero_account for all allocations of an invoice.
     Called when user changes the Xero Instance in the LHS table.
     """
     if request.method != 'POST':
@@ -1156,15 +1057,14 @@ def null_allocation_xero_fields(request):
         if not invoice_pk:
             return JsonResponse({'status': 'error', 'message': 'invoice_pk is required'}, status=400)
         
-        # Null out xero_account and xero_division for all allocations
+        # Null out xero_account for all allocations
         updated_count = Invoice_allocations.objects.filter(
             invoice_pk_id=invoice_pk
         ).update(
-            xero_account=None,
-            xero_division=None
+            xero_account=None
         )
         
-        logger.info(f"Nulled Xero fields for {updated_count} allocations of invoice {invoice_pk}")
+        logger.info(f"Nulled Xero account for {updated_count} allocations of invoice {invoice_pk}")
         
         return JsonResponse({'status': 'success', 'updated_count': updated_count})
         
