@@ -2,10 +2,25 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Show Xero Instances Modal when Xero navbar link is clicked
+    // Show Xero Instances inline in workspace when Xero navbar link is clicked
     $(document).on('click', '#xeroLink', function(event) {
         event.preventDefault();
+        
+        // Hide all other sections
+        $('#billsInboxSection').hide();
+        $('#contentHeader').hide();
+        $('#allocationsSection').hide();
+        $('#contactsSection').css('display', 'none');
+        
+        // Show Xero section and hide empty state
+        $('#emptyState').hide();
+        $('#xeroSection').css('display', 'flex').show();
+        
+        // Load Xero instances
         loadXeroInstances();
+        
+        // Scroll to top
+        $('html, body').animate({ scrollTop: 0 }, 300);
     });
     
     // Load Xero Instances from backend
@@ -14,7 +29,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 displayXeroInstances(data);
-                $('#xeroInstancesModal').modal('show');
             })
             .catch(error => {
                 console.error('Error loading Xero instances:', error);
@@ -28,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
         
         if (instances.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
             return;
         }
         
@@ -37,11 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
             row.innerHTML = `
                 <td>${instance.xero_name}</td>
                 <td style="text-align: center;">
-                    <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}" style="margin-right: 5px;">
-                        <i class="fas fa-key"></i> Authorize
-                    </button>
                     <button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
                         Test
+                    </button>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
+                        <i class="fas fa-key"></i> Authorize
                     </button>
                 </td>
                 <td style="text-align: center;">

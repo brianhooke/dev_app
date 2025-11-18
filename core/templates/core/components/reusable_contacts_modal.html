@@ -137,20 +137,22 @@ function validateContactFields(row, options = {}) {
 
 $(document).ready(function() {
     // Load contacts function
-    function loadContacts(instancePk) {
+    window.loadContacts = function(instancePk) {
         if (!instancePk) {
-            $('#contactsModal tbody').html(`<tr><td colspan="6" style="text-align: center;">Please select a Xero instance</td></tr>`);
+            const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
+            tbody.html(`<tr><td colspan="7" style="text-align: center;">Please select a Xero instance</td></tr>`);
             return;
         }
         
         fetch(`/get_contacts_by_instance/${instancePk}/`)
             .then(response => response.json())
             .then(contacts => {
-                const tbody = $('#contactsModal tbody');
+                // Target either workspace contacts table or modal contacts table
+                const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
                 tbody.empty();
                 
                 if (contacts.length === 0) {
-                    tbody.html(`<tr><td colspan="6" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
+                    tbody.html(`<tr><td colspan="7" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
                 } else {
                     contacts.forEach(contact => {
                         // Create row element and attach data using jQuery
@@ -190,6 +192,7 @@ $(document).ready(function() {
                             <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
                             <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
                             <td class="contact-abn" style="white-space: nowrap;" data-abn="${contact.tax_number || ''}">${formattedAbn}</td>
+                            <td><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>
                             <td><button class="btn btn-sm btn-primary update-contact-btn">Update</button></td>
                         `);
                         
@@ -199,9 +202,10 @@ $(document).ready(function() {
             })
             .catch(error => {
                 console.error('Error loading contacts:', error);
-                $('#contactsModal tbody').html(`<tr><td colspan="6" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
+                const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
+                tbody.html(`<tr><td colspan="7" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
             });
-    }
+    };
     
     // Load contacts when modal is shown
     $('#contactsModal').on('shown.bs.modal', function() {
@@ -316,7 +320,7 @@ $(document).ready(function() {
         const button = $(this);
         const row = button.closest('tr');
         const contactPk = row.data('contact-pk');
-        const instancePk = $('#xeroInstanceSelect').val();
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
         
         // Validate using common function (no required fields for update)
         const validation = validateContactFields(row, {
@@ -397,7 +401,7 @@ $(document).ready(function() {
     
     // Cancel button handler - revert to display mode
     $(document).on('click', '.cancel-contact-btn', function() {
-        const instancePk = $('#xeroInstanceSelect').val();
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
         
         // Reload contacts to reset the row
         if (instancePk) {
@@ -407,7 +411,8 @@ $(document).ready(function() {
     
     // Pull Xero Contacts button handler
     $(document).on('click', '#pullXeroContactsBtn', function() {
-        const xeroInstancePk = $('#xeroInstanceSelect').val();
+        // Check workspace dropdown first, then modal dropdown
+        const xeroInstancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
         
         if (!xeroInstancePk) {
             alert('Please select a Xero instance');
@@ -455,15 +460,17 @@ $(document).ready(function() {
     
     // Add Contact button handler - insert blank row at top
     $(document).on('click', '#addContactBtn', function() {
-        const instancePk = $('#xeroInstanceSelect').val();
+        // Check workspace dropdown first, then modal dropdown
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
         
         if (!instancePk) {
             alert('Please select a Xero instance');
             return;
         }
         
-        // Check if add row already exists
-        if ($('#contactsModal tbody .add-contact-row').length > 0) {
+        // Check if add row already exists (check both workspace and modal)
+        const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
+        if (tbody.find('.add-contact-row').length > 0) {
             alert('Please complete or cancel the current add operation');
             return;
         }
@@ -476,14 +483,15 @@ $(document).ready(function() {
             <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
             <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 120px;"></td>
             <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 130px;"></td>
+            <td></td>
             <td>
                 <button class="btn btn-sm btn-success add-new-contact-btn">Add</button>
                 <button class="btn btn-sm btn-secondary cancel-add-contact-btn">Cancel</button>
             </td>
         `);
         
-        // Insert at the top of tbody
-        $('#contactsModal tbody').prepend(addRow);
+        // Insert at the top of tbody (workspace or modal)
+        tbody.prepend(addRow);
         
         // Focus on name input
         addRow.find('.name-input').focus();
@@ -493,7 +501,7 @@ $(document).ready(function() {
     $(document).on('click', '.add-new-contact-btn', function() {
         const button = $(this);
         const row = button.closest('tr');
-        const instancePk = $('#xeroInstanceSelect').val();
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
         
         // Validate using common function (name and email required for add)
         const validation = validateContactFields(row, {

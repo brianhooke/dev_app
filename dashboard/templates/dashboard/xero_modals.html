@@ -1,5 +1,43 @@
 {% load static %}
 
+<!--
+Template: Xero Instance Management Modals
+
+Purpose:
+Provides modal interfaces for managing Xero OAuth2 instances (organizations/tenants).
+Supports creating, viewing, testing, and deleting Xero instances.
+
+Modals:
+1. Xero Instances Modal (#xeroInstancesModal) - Level 1
+   - Lists all Xero instances with name and client ID
+   - Action buttons: Test Connection, View Accounts, Delete
+   - Footer: Add New button to open Level 2 modal
+
+2. Add New Xero Instance Modal (#addXeroInstanceModal) - Level 2
+   - Form fields:
+     * Xero Name (e.g., "Mason Build")
+     * Xero Client ID (OAuth2 client identifier)
+     * Xero Client Secret (encrypted before storage)
+   - Validation: All fields required
+   - Footer: Cancel, Add buttons
+
+JavaScript Features (in dashboard.html):
+- Load instances via GET /core/get_xero_instances/
+- Test connection via POST /core/test_xero_connection/{instance_pk}/
+- Create instance via POST /core/create_xero_instance/
+- Delete instance via POST /core/delete_xero_instance/ with confirmation
+- Pull accounts via POST /core/pull_xero_accounts_and_divisions/
+
+Backend Endpoints Used:
+- GET  /core/get_xero_instances/ - Fetch all instances
+- POST /core/create_xero_instance/ - Create new instance with OAuth credentials
+- POST /core/delete_xero_instance/ - Delete instance by PK
+- POST /core/test_xero_connection/{instance_pk}/ - Test API connection
+- POST /core/pull_xero_accounts_and_divisions/ - Sync accounts from Xero
+
+Note: OAuth flow handled separately via /core/xero_oauth/authorize/{instance_pk}/
+-->
+
 {% include 'core/components/reusable_form.html' %}
 
 <!-- Level 1 Modal: Display Xero Instances -->
@@ -17,9 +55,10 @@
                     <table class="reusable-table" id="xeroInstancesTable">
                         <thead>
                             <tr>
-                                <th>Xero Name</th>
-                                <th>Actions</th>
-                                <th style="width: 50px;"></th>
+                                <th>Xero Instance</th>
+                                <th>Test</th>
+                                <th>Authorise</th>
+                                <th>Delete</th>
                             </tr>
                         </thead>
                         <tbody id="xeroInstancesTableBody">

@@ -3,15 +3,16 @@ Xero management views.
 
 Helper Functions (exported to contacts.py):
 1. get_xero_auth - Centralized OAuth authentication + tenant ID retrieval
-2. format_bank_details - Combines BSB + account number for Xero format
-3. parse_xero_validation_errors - Extracts validation errors from Xero API responses
-4. @handle_xero_request_errors - Decorator handling timeout/connection/generic errors
+2. build_xero_headers - Build standard Xero API request headers
+3. format_bank_details - Combines BSB + account number for Xero format
+4. parse_xero_validation_errors - Extracts validation errors from Xero API responses
+5. @handle_xero_request_errors - Decorator handling timeout/connection/generic errors
 
 Xero Instance Management:
-5. get_xero_instances - Fetch all Xero instances (PK, name, client ID)
-6. create_xero_instance - Create new Xero instance with encrypted credentials
-7. delete_xero_instance - Delete a Xero instance by PK
-8. test_xero_connection - Test Xero API connection via Contacts endpoint
+6. get_xero_instances - Fetch all Xero instances (PK, name, client ID)
+7. create_xero_instance - Create new Xero instance with encrypted credentials
+8. delete_xero_instance - Delete a Xero instance by PK
+9. test_xero_connection - Test Xero API connection via Contacts endpoint
 
 Note: Contact-related functions (pull_xero_contacts, get_contacts_by_instance, 
 create_contact, update_contact_details, update_contact_status) have been moved 
@@ -75,6 +76,29 @@ def get_xero_auth(instance_pk):
         }, status=401), None
     
     return xero_instance, access_token, tenant_id
+
+
+def build_xero_headers(access_token, tenant_id, include_content_type=True):
+    """
+    Build standard Xero API request headers.
+    
+    Args:
+        access_token: OAuth2 access token
+        tenant_id: Xero tenant ID
+        include_content_type: If True, includes 'Content-Type: application/json' (for POST/PUT)
+                             If False, omits it (for GET requests)
+    
+    Returns:
+        Dictionary of headers ready for requests
+    """
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json',
+        'Xero-tenant-id': tenant_id
+    }
+    if include_content_type:
+        headers['Content-Type'] = 'application/json'
+    return headers
 
 
 def format_bank_details(bsb, account_number):

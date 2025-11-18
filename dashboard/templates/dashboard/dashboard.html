@@ -1,5 +1,100 @@
 {% extends "dashboard/dashboard_master.html" %}
 {% load static %}
+
+<!--
+Template: Dashboard Main Application Template
+
+Purpose:
+Main dashboard interface for the Project Management App. Provides navigation and modal interfaces
+for Bills, Contacts, Xero management, and other core functionality.
+
+Structure:
+1. Master Template Extension
+   - Extends dashboard/dashboard_master.html
+   - Includes global styles, favicon, background image
+   - Navigation bar with dropdown menus
+
+2. Included Modal Templates
+   - {% include 'dashboard/bills.html' %} - Bills modals (Inbox, Direct)
+   - {% include 'dashboard/contacts.html' %} - Extended contacts modal with verification
+   - {% include 'dashboard/xero_modals.html' %} - Xero instance management
+
+Bills Functionality (status-based workflows):
+- Bills - Inbox (invoice_status = -2):
+  * Unprocessed email bills
+  * LHS table: Xero Instance, Supplier, Invoice #, Net, GST fields
+  * Send button → Updates invoice, sets status to 0, moves to Bills - Direct
+  * Archive button → Sets status to 4
+
+- Bills - Direct (invoice_status = 0):
+  * Ready for allocation
+  * LHS table: Same fields as Inbox
+  * RHS table: Allocations with Xero Account selection, amounts, notes
+  * PDF viewer: Display bill attachment
+  * "Still to allocate" calculations (Net/GST must = $0.00)
+  * Send to Xero button → Validates allocations, posts to Xero API as DRAFT, sets status to 2
+  * Return to Inbox (mail icon) → Deletes allocations, clears fields, sets status to -2
+  * Archive button → Sets status to 4
+
+Contacts Functionality:
+- Pull contacts from Xero API (insert/update)
+- Create new contacts in Xero + local DB
+- Update contact details (bank, email, ABN) in Xero
+- Archive/unarchive contacts in Xero
+- Verify contact details with side-by-side comparison
+- Verified status indicators: 0=not verified, 1=verified+matches, 2=verified+changed
+
+Xero Functionality:
+- Manage Xero OAuth2 instances (create, test, delete)
+- Pull accounts from Xero for all instances
+- Display accounts by instance for allocation dropdowns
+
+Key JavaScript Features:
+- Dynamic table population for bills, allocations, contacts
+- Real-time "Still to allocate" calculations with color coding
+- Auto-calculate GST (10% of Net) with immediate updates
+- Row selection with highlighting
+- PDF viewer integration
+- Modal state management (show/hide, data persistence)
+- AJAX form submissions with validation
+- Xero API integration via backend endpoints
+
+Backend Endpoints Used:
+Bills:
+- GET  /get_bills_list/ - Fetch all bills with allocations
+- POST /send_bill/ - Smart endpoint (Inbox→Direct or Direct→Xero)
+- POST /core/archive_bill/ - Archive bill
+- POST /core/return_to_inbox/ - Return bill to inbox, delete allocations
+- POST /core/create_invoice_allocation/ - Create allocation
+- POST /core/update_invoice_allocation/ - Update allocation
+- POST /core/delete_invoice_allocation/ - Delete allocation
+- POST /core/update_invoice/ - Update invoice fields
+- POST /core/null_allocation_xero_fields/ - Clear Xero accounts on instance change
+- GET  /core/get_xero_accounts_by_instance/{pk}/ - Get accounts for dropdown
+
+Contacts:
+- GET  /get_contacts_by_instance/{pk}/ - Get active contacts
+- POST /pull_xero_contacts/{pk}/ - Sync from Xero
+- POST /create_contact/{pk}/ - Create in Xero + DB
+- POST /update_contact_details/{pk}/{contact_pk}/ - Update in Xero
+- POST /update_contact_status/{pk}/{contact_pk}/ - Archive/unarchive
+- POST /verify_contact_details/{contact_pk}/ - Save verified details
+
+Xero:
+- GET  /core/get_xero_instances/ - Fetch all instances
+- POST /core/create_xero_instance/ - Create new instance
+- POST /core/delete_xero_instance/ - Delete instance
+- POST /core/test_xero_connection/{pk}/ - Test API connection
+- POST /core/pull_xero_accounts_and_divisions/ - Sync accounts
+
+Data Structures:
+- Invoice status codes: -2=Inbox, 0=Direct, 2=Sent to Xero, 4=Archived
+- Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
+- Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
+
+Version: v54 (displayed in header)
+-->
+
 {% block title %}
   Project Management Dashboard
 {% endblock %}
@@ -55,20 +150,225 @@
         #billsTableBody tr:hover {
             opacity: 0.8 !important;
         }
+        
+        /* Force sticky headers for all workspace tables */
+        #contactsSection .reusable-table thead,
+        #xeroSection .reusable-table thead {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+        }
+        
+        #contactsSection .reusable-table th,
+        #xeroSection .reusable-table th {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+        }
     </style>
 </head>
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v53</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v54</div>
 </div>
 
-<div style="padding: 20px;">
-    <h4>Welcome to the Project Management Dashboard</h4>
-    <p>This is your central hub for managing all projects.</p>
+<!-- Dynamic Content Area with Gradient Border (Workspace) -->
+<div id="dynamicContentArea" style="margin: 20px; padding: 20px; border: 2px solid; border-image: linear-gradient(45deg, #cf66ff 0%, #0a88ef 100%) 1; height: calc(100vh - 140px);">
+    <!-- Empty State (shown on page load) -->
+    <div id="emptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #6c757d;">
+        <i class="fas fa-folder-open" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
+        <h5 style="margin-bottom: 10px;">Select an option from the menu</h5>
+        <p>Click a menu item to get started</p>
+    </div>
+
+    <!-- Xero Section (hidden initially, shown when Xero clicked) -->
+    <div id="xeroSection" style="display: none; height: 100%; flex-direction: column;">
+        <div id="xeroContentHeader" style="margin-bottom: 15px; flex-shrink: 0;">
+            <h4>Xero Instances</h4>
+            <p>Manage your Xero OAuth2 instances (organizations/tenants). Authorize, test connections, and manage credentials.</p>
+        </div>
+        
+        <!-- Xero Instances Table (scrollable) -->
+        <div style="flex: 1; overflow-y: auto; margin-bottom: 15px; border: 2px solid #ddd; position: relative;">
+            <style>
+                #xeroSection .reusable-table thead {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 10 !important;
+                }
+                #xeroSection .reusable-table thead tr {
+                    background: var(--gradient-primary) !important;
+                }
+                #xeroSection .reusable-table th {
+                    position: sticky !important;
+                    top: 0 !important;
+                    background: var(--gradient-primary) !important;
+                    z-index: 10 !important;
+                    border-bottom: 2px solid #dee2e6 !important;
+                }
+            </style>
+            <table class="reusable-table" id="xeroInstancesTable">
+                <thead>
+                    <tr>
+                        <th>Xero Instance</th>
+                        <th>Test</th>
+                        <th>Authorise</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody id="xeroInstancesTableBody">
+                    <!-- Table rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Footer Button -->
+        <div style="display: flex; justify-content: flex-end; flex-shrink: 0;">
+            <button type="button" class="btn btn-primary" id="addNewXeroBtn">Add New</button>
+        </div>
+    </div>
+
+    <!-- Contacts Section (hidden initially, shown when Contacts clicked) -->
+    <div id="contactsSection" style="display: none; height: 100%; flex-direction: column;">
+        <div id="contactsContentHeader" style="margin-bottom: 15px; flex-shrink: 0;">
+            <h4>Contacts</h4>
+            <p>Manage your Xero contacts. Pull from Xero, add new contacts, or update existing ones.</p>
+        </div>
+        
+        <!-- Xero Instance Dropdown -->
+        <div class="form-group" style="margin-bottom: 20px; max-width: 400px; flex-shrink: 0;">
+            <label for="contactsXeroInstanceSelect">Xero Instance:</label>
+            <select class="form-control" id="contactsXeroInstanceSelect">
+                {% for instance in xero_instances %}
+                    <option value="{{ instance.xero_instance_pk }}" {% if forloop.first %}selected{% endif %}>
+                        {{ instance.xero_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Contacts Table (scrollable) -->
+        <div style="flex: 1; overflow-y: auto; margin-bottom: 15px; border: 2px solid #ddd; position: relative;">
+            <style>
+                #contactsSection .reusable-table thead {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 10 !important;
+                }
+                #contactsSection .reusable-table thead tr {
+                    background: var(--gradient-primary) !important;
+                }
+                #contactsSection .reusable-table th {
+                    position: sticky !important;
+                    top: 0 !important;
+                    background: var(--gradient-primary) !important;
+                    z-index: 10 !important;
+                    border-bottom: 2px solid #dee2e6 !important;
+                }
+            </style>
+            {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
+        </div>
+        
+        <!-- Footer Buttons -->
+        <div style="display: flex; justify-content: space-between; flex-shrink: 0;">
+            <button type="button" class="btn btn-info" id="pullXeroContactsBtn">Pull/Update Xero Contacts</button>
+            <button type="button" class="btn btn-primary" id="addContactBtn">Add Contact</button>
+        </div>
+    </div>
+
+    <!-- Bills - Inbox Section (hidden initially, shown when Bills - Inbox clicked) -->
+    <div id="billsInboxSection" style="display: none; height: 100%;">
+        <div style="display: flex; height: 100%;">
+            <!-- Left side: Bills Table (60%) -->
+            <div style="width: 60%; padding-right: 15px; overflow-y: auto; border-right: 2px solid #ddd;">
+                <!-- Content Header (only on left side) -->
+                <div id="contentHeader" style="display: none; margin-bottom: 15px;">
+                    <h4 id="contentTitle">Bills - Inbox</h4>
+                    <p id="contentDescription">Review and process incoming bills. Click a row to view the PDF and enter invoice details.</p>
+                </div>
+                <table class="table table-bordered table-hover" id="billsTable">
+                    <thead>
+                        <tr>
+                            <th>Xero Instance / Project</th>
+                            <th>Supplier</th>
+                            <th>Invoice #</th>
+                            <th>$ Net</th>
+                            <th>$ GST</th>
+                            <th>Email</th>
+                            <th id="sendColumnHeader">Send to Xero</th>
+                            <th id="lastColumnHeader">Archive</th>
+                        </tr>
+                    </thead>
+                    <tbody id="billsTableBody">
+                        <!-- Bills will be populated here via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Right side: Allocations table (1/3) and PDF Viewer (2/3) (40%) -->
+            <div style="width: 40%; padding-left: 15px; display: flex; flex-direction: column;">
+                <!-- Allocations section (hidden for Bills - Inbox) -->
+                <div id="allocationsSection" style="height: 33%; display: none; flex-direction: column; margin-bottom: 15px;">
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <h6 id="allocationsTitle">Bill Allocations</h6>
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; border: 2px solid #ddd;">
+                        <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 28%;">Xero Account</th>
+                                    <th style="width: 15%;">$ Net</th>
+                                    <th style="width: 15%;">$ GST</th>
+                                    <th style="width: 42%;">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allocationsTableBody">
+                                <!-- Allocations will be populated here via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 5px; display: flex; align-items: center; gap: 10px;">
+                        <div style="flex: 0 0 28%; padding-left: 5px;">
+                            <strong>Still to allocate:</strong>
+                        </div>
+                        <div style="flex: 0 0 15%; text-align: center; font-weight: bold;" id="remainingNet">
+                            $0.00
+                        </div>
+                        <div style="flex: 0 0 15%; text-align: center; font-weight: bold;" id="remainingGst">
+                            $0.00
+                        </div>
+                        <div style="flex: 1;"></div>
+                        <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
+                            <i class="fas fa-plus"></i> Add Row
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- PDF Viewer (bottom 2/3) -->
+                <div id="viewerSection" style="flex: 1; display: flex; flex-direction: column;">
+                    <div style="flex: 1; border: 2px solid #ddd; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                        <iframe 
+                            id="billViewer" 
+                            style="width: 100%; height: 100%; border: none; display: none;"
+                            allow="fullscreen"
+                            src="">
+                        </iframe>
+                        <div id="viewerPlaceholder" style="text-align: center; color: #6c757d;">
+                            <i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px;"></i>
+                            <p>Click on a bill to view the attachment</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-{% include 'core/components/reusable_table.html' with columns=table_columns rows=table_rows show_totals=show_totals %}
+<!-- Old reusable table replaced above -->
+<!-- {% include 'core/components/reusable_table.html' with columns=table_columns rows=table_rows show_totals=show_totals %} -->
 
 {{ ... }}
 {% include 'dashboard/xero_modals.html' %}
@@ -88,11 +388,101 @@
             dropdown.toggleClass('open');
         });
         
-        // Dashboard controller - opens contacts modal
+        // Dashboard link - resets workspace to empty state
+        $('#dashboardLink').click(function(e) {
+            e.preventDefault();
+            
+            // Hide all content sections
+            $('#billsInboxSection').hide();
+            $('#contentHeader').hide();
+            $('#allocationsSection').hide();
+            $('#contactsSection').css('display', 'none');
+            $('#xeroSection').css('display', 'none');
+            
+            // Show empty state
+            $('#emptyState').show();
+            
+            // Clear any selected bills
+            currentSelectedInvoicePk = null;
+            $('#billsTableBody').empty();
+            $('#allocationsTableBody').empty();
+            $('#billViewer').hide();
+            $('#viewerPlaceholder').show();
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Contacts controller - shows inline in workspace
         $('#contactsLink').click(function(e) {
             e.preventDefault();
-            $('#contactsModal').modal('show');
+            
+            // Hide all other sections
+            $('#billsInboxSection').hide();
+            $('#contentHeader').hide();
+            $('#allocationsSection').hide();
+            $('#xeroSection').css('display', 'none');
+            
+            // Show contacts section and hide empty state
+            $('#emptyState').hide();
+            $('#contactsSection').css('display', 'flex').show();
+            
+            // Load contacts for the selected Xero instance
+            const instancePk = $('#contactsXeroInstanceSelect').val();
+            if (instancePk && typeof loadContacts === 'function') {
+                loadContacts(instancePk);
+            }
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
         });
+        
+        // Handle Xero instance change in workspace contacts dropdown
+        $(document).on('change', '#contactsXeroInstanceSelect', function() {
+            const instancePk = $(this).val();
+            if (instancePk && typeof loadContacts === 'function') {
+                loadContacts(instancePk);
+            }
+        });
+        
+        // Load Bills - Inbox function (called when navbar link is clicked)
+        function loadBillsInbox() {
+            $.ajax({
+                url: '{% url "core:get_bills_list" %}',
+                type: 'GET',
+                success: function(response) {
+                    console.log('Bills loaded:', response);
+                    
+                    // Store data globally for later use
+                    window.billsData = response;
+                    
+                    // Populate table with status = -2 (Inbox: unprocessed email bills)
+                    populateBillsTable(response, function(bill) {
+                        return bill.invoice_status === -2;
+                    }, 'inbox');
+                    
+                    // Update content header for Inbox
+                    $('#contentTitle').text('Bills - Inbox');
+                    $('#contentDescription').text('Review and process incoming bills. Click a row to view the PDF and enter invoice details.');
+                    
+                    // Hide allocations section for Inbox
+                    $('#allocationsSection').hide();
+                    
+                    // Hide other sections
+                    $('#contactsSection').hide();
+                    $('#xeroSection').css('display', 'none');
+                    
+                    // Show content, hide empty state
+                    $('#emptyState').hide();
+                    $('#contentHeader').show();
+                    $('#billsInboxSection').show();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load bills:', error);
+                    alert('Failed to load bills. Please try again.');
+                }
+            });
+        }
         
         // Function to populate bills table with filtering
         function populateBillsTable(billsData, filterFn, modalType) {
@@ -346,40 +736,22 @@
                     });
         }
         
-        // Handle Bills Inbox link click
+        // Handle Bills Inbox link click - loads inline content
         $('#billsInboxLink').click(function(e) {
             e.preventDefault();
             
-            // Fetch bills data and populate modal
-            $.ajax({
-                url: '{% url "core:get_bills_list" %}',
-                type: 'GET',
-                success: function(response) {
-                    console.log('Bills loaded:', response);
-                    
-                    // Store data globally for later use
-                    window.billsData = response;
-                    
-                    // Populate table with status = -2 (Inbox: unprocessed email bills)
-                    populateBillsTable(response, function(bill) {
-                        return bill.invoice_status === -2;
-                    }, 'inbox');
-                    
-                    // Show modal
-                    $('#billsModal').modal('show');
-                },
-                error: function(xhr, status, error) {
-                    console.error('Failed to load bills:', error);
-                    alert('Failed to load bills. Please try again.');
-                }
-            });
+            // Load Bills - Inbox into workspace (inline, no modal)
+            loadBillsInbox();
+            
+            // Scroll to top to show the bills section
+            $('html, body').animate({ scrollTop: 0 }, 300);
         });
         
-        // Handle Bills Direct link click
+        // Handle Bills Direct link click - loads inline content
         $('#billsDirectLink').click(function(e) {
             e.preventDefault();
             
-            // Fetch bills data and populate modal
+            // Fetch bills data and populate workspace (inline, no modal)
             $.ajax({
                 url: '{% url "core:get_bills_list" %}',
                 type: 'GET',
@@ -396,14 +768,30 @@
                                bill.project_pk === null;
                     }, 'direct');
                     
-                    // Show modal
-                    $('#billsModal').modal('show');
+                    // Update content header for Direct
+                    $('#contentTitle').text('Bills - Direct');
+                    $('#contentDescription').text('Allocate bills to Xero accounts and send to Xero. Click a row to add allocations.');
+                    
+                    // Hide other sections
+                    $('#contactsSection').hide();
+                    $('#xeroSection').css('display', 'none');
+                    
+                    // Show content, hide empty state
+                    $('#emptyState').hide();
+                    $('#contentHeader').show();
+                    $('#billsInboxSection').show();
+                    
+                    // Show allocations section for Direct
+                    $('#allocationsSection').css('display', 'flex');
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load bills:', error);
                     alert('Failed to load bills. Please try again.');
                 }
             });
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
         });
                     
                     // Add click handler for email links

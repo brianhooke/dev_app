@@ -1,0 +1,188 @@
+================================================================================================
+SERVICES ORDER TEMPLATE
+For consistent views.py documentation across all PROJECT TYPE apps
+================================================================================================
+
+This file defines the standard order for documenting functions in any PROJECT TYPE's views.py file.
+When documenting views.py, list ALL services in this exact order, even if no functions exist for that service.
+
+USAGE:
+1. Copy the structure below
+2. Replace {APP_NAME} with the actual app name (e.g., 'dashboard', 'core', 'claims_app')
+3. For each service, list the functions that exist in that views.py file
+4. If no functions exist for a service, still include the heading with "(none)" or leave empty
+
+================================================================================================
+STANDARD SERVICES ORDER:
+================================================================================================
+
+1. SELF (App-Specific Views)
+   - These are views specific to the app itself (e.g., dashboard homepage, app landing pages)
+   - Use format: "{APP_NAME} View:" or "{APP_NAME} Views:"
+   
+2. Contacts
+   - Contact management, verification, CRUD operations
+   - Use format: "Contacts Views:"
+
+3. Bills
+   - Invoice management, allocations, bill processing
+   - Use format: "Bills Views:"
+
+4. Quotes
+   - Quote management, quote allocations, quote processing
+   - Use format: "Quotes Views:"
+
+5. POs (Purchase Orders)
+   - Purchase order management, PO processing
+   - Use format: "PO Views:"
+
+6. Claims
+   - Claims management, claim allocations, claim processing
+   - Use format: "Claims Views:"
+
+7. Xero
+   - Xero API integration, OAuth, instance management
+   - Use format: "Xero Views:"
+
+================================================================================================
+TEMPLATE STRUCTURE FOR views.py HEADER:
+================================================================================================
+
+"""
+{APP_NAME} app views.
+
+{APP_NAME} View:
+1. function_name - Brief description
+2. another_function - Brief description
+
+Contacts Views:
+(none)
+
+Bills Views:
+1. function_name - Brief description
+
+Quotes Views:
+(none)
+
+PO Views:
+(none)
+
+Claims Views:
+(none)
+
+Xero Views:
+(none)
+
+Note: Functions may use helper functions from core.views.xero:
+- get_xero_auth() - OAuth authentication
+- format_bank_details() - BSB + account formatting
+- parse_xero_validation_errors() - Error parsing
+- @handle_xero_request_errors - Exception handling decorator
+"""
+
+================================================================================================
+NUMBERING CONVENTION:
+================================================================================================
+
+- Number functions sequentially across ALL services (1, 2, 3, 4... not restarting for each service)
+- Example:
+  
+  Dashboard View:
+  1. dashboard_view - Main homepage
+  
+  Contacts Views:
+  2. verify_contact_details - Save verified details
+  3. pull_xero_contacts - Pull from Xero
+  
+  Bills Views:
+  4. send_bill - Send to Xero
+  5. archive_bill - Archive bill
+
+================================================================================================
+EXAMPLES BY APP:
+================================================================================================
+
+EXAMPLE 1: dashboard/views.py
+-----------------------------
+Dashboard View:
+1. dashboard_view - Main dashboard homepage
+
+Contacts Views:
+2. verify_contact_details - Save verified contact details to separate verified fields
+3. pull_xero_contacts - Pull contacts from Xero API, insert/update locally
+4. get_contacts_by_instance - Get ACTIVE contacts with verified status (0/1/2)
+5. create_contact - Create contact in Xero + local DB
+6. update_contact_details - Update bank details, email, ABN in Xero
+7. update_contact_status - Archive/unarchive contact in Xero
+
+Bills Views:
+8. send_bill - Smart endpoint (Inbox→Direct or Direct→Xero)
+
+Quotes Views:
+(none)
+
+PO Views:
+(none)
+
+Claims Views:
+(none)
+
+Xero Views:
+(none)
+
+
+EXAMPLE 2: core/views/bills.py
+-------------------------------
+Core View:
+(none - this is a service-specific file, not an app homepage)
+
+Contacts Views:
+(none)
+
+Bills Views:
+1. archive_bill - Set invoice_status to 4 (archived)
+2. return_to_inbox - Clear fields, delete allocations, set status to -2 (inbox)
+3. get_bills_list - Get all invoices with allocations, PDFs, and contacts
+... (etc)
+
+Quotes Views:
+(none)
+
+PO Views:
+(none)
+
+Claims Views:
+(none)
+
+Xero Views:
+(none)
+
+
+EXAMPLE 3: quotes_app/views.py (hypothetical)
+----------------------------------------------
+Quotes App View:
+1. quotes_dashboard - Main quotes dashboard
+
+Contacts Views:
+(none)
+
+Bills Views:
+(none)
+
+Quotes Views:
+2. create_quote - Create new quote
+3. update_quote - Update existing quote
+4. get_quote_allocations - Fetch quote allocations
+
+PO Views:
+(none)
+
+Claims Views:
+(none)
+
+Xero Views:
+(none)
+
+================================================================================================
+END OF TEMPLATE
+================================================================================================

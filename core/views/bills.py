@@ -1,5 +1,35 @@
 """
 Bills-related views.
+
+Bill Status Management:
+1. archive_bill - Set invoice_status to 4 (archived)
+2. return_to_inbox - Clear fields, delete allocations, set status to -2 (inbox)
+3. get_bills_list - Get all invoices with allocations, PDFs, and contacts for Bills modals
+
+Invoice Management:
+4. delete_invoice - Delete an invoice by ID
+5. upload_invoice - Create invoice from file upload
+6. post_invoice - Legacy: Post invoice to Xero (deprecated, use dashboard.bills.send_bill)
+7. test_xero_invoice - Test Xero invoice creation
+8. get_invoices_by_supplier - Get invoices filtered by supplier
+9. get_invoice_allocations - Fetch existing allocations for an invoice (for update mode)
+10. update_invoice - Update invoice fields (Xero Instance, Supplier, Invoice #, Net, GST)
+
+Allocation Management:
+11. upload_invoice_allocations - Bulk upload allocations from file
+12. create_invoice_allocation - Create new allocation entry
+13. update_invoice_allocation - Update allocation (Xero Account, amounts, description)
+14. delete_invoice_allocation - Delete allocation entry
+15. null_allocation_xero_fields - Clear xero_account for all allocations when Xero Instance changes
+
+Xero Account Management:
+16. pull_xero_accounts_and_divisions - Pull accounts from Xero API for all instances
+17. get_xero_accounts_by_instance - Get accounts for a specific instance (for dropdown)
+18. _pull_xero_accounts_for_instance - Helper: Pull accounts for single instance
+
+Note: Uses helper functions from xero.py:
+- get_xero_auth() - OAuth authentication + tenant ID retrieval
+- @handle_xero_request_errors - Decorator handling timeout/connection/generic errors
 """
 
 import csv

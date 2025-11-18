@@ -1,5 +1,37 @@
 {% load static %}
 
+<!--
+Template: Contacts Modal (Dashboard Extended Version)
+
+Purpose:
+Extended contacts management modal that adds Xero instance selection, contact verification,
+and additional functionality to the base reusable_contacts_modal.html component.
+
+Components:
+1. Base Modal Extension
+   - Includes core/components/reusable_contacts_modal.html
+   - Dynamically adds Xero Instance dropdown to modal body
+   - Adds Delete button to modal footer
+
+2. Verify Details Modal (#verifyContactModal)
+   - Side-by-side comparison of Xero data vs Verified data
+   - Highlights mismatches in yellow (Xero) and red (Verified)
+   - Fields: Name, Email, BSB, Account Number, ABN
+   - Notes section with previous/new notes comparison
+   - Verify button to save verified details via /verify_contact_details/
+
+JavaScript Features:
+- MutationObserver to add "Verify" buttons to contact rows
+- Click handler for Verify buttons - opens verification modal
+- Format BSB as XXX-XXX and ABN as XX XXX XXX XXX
+- Mismatch detection and highlighting
+- AJAX submission to verify_contact_details endpoint
+- Updates contact row with verified badge after successful verification
+
+Backend Endpoints Used:
+- POST /verify_contact_details/{contact_pk}/ - Save verified contact details
+-->
+
 <!-- Extended Contacts Modal with XeroInstances dropdown, Pull Xero Contacts, and Delete button -->
 
 <!-- Wrapper to override blocks in base modal -->
@@ -111,31 +143,6 @@
                 archiveBtn.after('<button type="button" class="btn btn-danger" id="deleteContactBtn" style="margin-left: 10px;">Delete</button>');
             }
         });
-        
-        // Add Verify button to each contact row after they're loaded
-        // Use MutationObserver to detect when rows are added
-        const observer = new MutationObserver(function(mutations) {
-            $('#contactsModal tbody tr').each(function() {
-                const row = $(this);
-                // Skip if already has verify button or is add-contact-row
-                if (row.find('.verify-contact-btn').length > 0 || row.hasClass('add-contact-row')) {
-                    return;
-                }
-                
-                // Find the action cell (last td with update button)
-                const actionCell = row.find('td:last');
-                if (actionCell.find('.update-contact-btn').length > 0) {
-                    // Add Verify button after Update button
-                    actionCell.find('.update-contact-btn').after(' <button class="btn btn-sm btn-info verify-contact-btn">Verify</button>');
-                }
-            });
-        });
-        
-        // Start observing the contacts table body
-        const targetNode = document.querySelector('#contactsModal tbody');
-        if (targetNode) {
-            observer.observe(targetNode, { childList: true, subtree: true });
-        }
         
         // Handle Verify button click
         $(document).on('click', '.verify-contact-btn', function() {
