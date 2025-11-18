@@ -92,7 +92,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
 
-Version: v55 (displayed in header)
+Version: v56 (displayed in header)
 -->
 
 {% block title %}
@@ -172,7 +172,7 @@ Version: v55 (displayed in header)
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v55</div>
+    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">v56</div>
 </div>
 
 <!-- Dynamic Content Area with Gradient Border (Workspace) -->
@@ -186,10 +186,6 @@ Version: v55 (displayed in header)
 
     <!-- Xero Section (hidden initially, shown when Xero clicked) -->
     <div id="xeroSection" style="display: none; height: 100%; flex-direction: column;">
-        <div id="xeroContentHeader" style="margin-bottom: 15px; flex-shrink: 0;">
-            <h4>Xero Instances</h4>
-            <p>Manage your Xero OAuth2 instances (organizations/tenants). Authorize, test connections, and manage credentials.</p>
-        </div>
         
         <!-- Xero Instances Table (scrollable) -->
         <div style="flex: 1; overflow-y: auto; margin-bottom: 15px; border: 2px solid #ddd; position: relative;">
@@ -233,10 +229,6 @@ Version: v55 (displayed in header)
 
     <!-- Contacts Section (hidden initially, shown when Contacts clicked) -->
     <div id="contactsSection" style="display: none; height: 100%; flex-direction: column;">
-        <div id="contactsContentHeader" style="margin-bottom: 15px; flex-shrink: 0;">
-            <h4>Contacts</h4>
-            <p>Manage your Xero contacts. Pull from Xero, add new contacts, or update existing ones.</p>
-        </div>
         
         <!-- Xero Instance Dropdown -->
         <div class="form-group" style="margin-bottom: 20px; max-width: 400px; flex-shrink: 0;">
@@ -284,11 +276,6 @@ Version: v55 (displayed in header)
         <div style="display: flex; height: 100%;">
             <!-- Left side: Bills Table (60%) -->
             <div style="width: 60%; padding-right: 15px; overflow-y: auto; border-right: 2px solid #ddd;">
-                <!-- Content Header (only on left side) -->
-                <div id="contentHeader" style="display: none; margin-bottom: 15px;">
-                    <h4 id="contentTitle">Bills - Inbox</h4>
-                    <p id="contentDescription">Review and process incoming bills. Click a row to view the PDF and enter invoice details.</p>
-                </div>
                 <table class="table table-bordered table-hover" id="billsTable">
                     <thead>
                         <tr>
@@ -392,9 +379,12 @@ Version: v55 (displayed in header)
         $('#dashboardLink').click(function(e) {
             e.preventDefault();
             
+            // Remove active class from all nav items
+            $('.navbar-nav .nav-link').removeClass('active');
+            $(this).addClass('active');
+            
             // Hide all content sections
             $('#billsInboxSection').hide();
-            $('#contentHeader').hide();
             $('#allocationsSection').hide();
             $('#contactsSection').css('display', 'none');
             $('#xeroSection').css('display', 'none');
@@ -417,9 +407,12 @@ Version: v55 (displayed in header)
         $('#contactsLink').click(function(e) {
             e.preventDefault();
             
+            // Remove active class from all nav items and set this one
+            $('.navbar-nav .nav-link').removeClass('active');
+            $(this).addClass('active');
+            
             // Hide all other sections
             $('#billsInboxSection').hide();
-            $('#contentHeader').hide();
             $('#allocationsSection').hide();
             $('#xeroSection').css('display', 'none');
             
@@ -461,9 +454,9 @@ Version: v55 (displayed in header)
                         return bill.invoice_status === -2;
                     }, 'inbox');
                     
-                    // Update content header for Inbox
-                    $('#contentTitle').text('Bills - Inbox');
-                    $('#contentDescription').text('Review and process incoming bills. Click a row to view the PDF and enter invoice details.');
+                    // Remove active class from all nav items and set this one
+                    $('.navbar-nav .nav-link').removeClass('active');
+                    $('#billsInboxLink').addClass('active');
                     
                     // Hide allocations section for Inbox
                     $('#allocationsSection').hide();
@@ -474,7 +467,6 @@ Version: v55 (displayed in header)
                     
                     // Show content, hide empty state
                     $('#emptyState').hide();
-                    $('#contentHeader').show();
                     $('#billsInboxSection').show();
                 },
                 error: function(xhr, status, error) {
@@ -768,9 +760,9 @@ Version: v55 (displayed in header)
                                bill.project_pk === null;
                     }, 'direct');
                     
-                    // Update content header for Direct
-                    $('#contentTitle').text('Bills - Direct');
-                    $('#contentDescription').text('Allocate bills to Xero accounts and send to Xero. Click a row to add allocations.');
+                    // Remove active class from all nav items and set this one
+                    $('.navbar-nav .nav-link').removeClass('active');
+                    $('#billsDirectLink').addClass('active');
                     
                     // Hide other sections
                     $('#contactsSection').hide();
@@ -778,7 +770,6 @@ Version: v55 (displayed in header)
                     
                     // Show content, hide empty state
                     $('#emptyState').hide();
-                    $('#contentHeader').show();
                     $('#billsInboxSection').show();
                     
                     // Show allocations section for Direct

@@ -6,9 +6,12 @@ document.addEventListener('DOMContentLoaded', function() {
     $(document).on('click', '#xeroLink', function(event) {
         event.preventDefault();
         
+        // Remove active class from all nav items and set this one
+        $('.navbar-nav .nav-link').removeClass('active');
+        $(this).addClass('active');
+        
         // Hide all other sections
         $('#billsInboxSection').hide();
-        $('#contentHeader').hide();
         $('#allocationsSection').hide();
         $('#contactsSection').css('display', 'none');
         
