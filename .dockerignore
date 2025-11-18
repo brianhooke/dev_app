@@ -21,3 +21,18 @@ db.sqlite3
 set_eb_env_vars.sh
 eb_logs.txt
 dependency_tree.txt
+
+# Large directories that don't need to be in Docker image
+media/
+pdfs/
+csv/
+staticfiles/
+*.zip
+deploy.zip
+
+# Documentation and planning files
+*.md
+*.txt
+!requirements.txt
+REPO_GUIDE.txt
+DEPLOYMENT.txt
