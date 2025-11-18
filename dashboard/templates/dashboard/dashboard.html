@@ -180,6 +180,29 @@ Version: v56 (displayed in header)
         }
         
         /* Navbar active state is already defined in reusable_navbar.html */
+        
+        /* Mason logo background for workspace */
+        #dynamicContentArea::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('{% static 'media/mason_logo.png' %}');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.08;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* Ensure content appears above background */
+        #dynamicContentArea > * {
+            position: relative;
+            z-index: 1;
+        }
     </style>
 </head>
 
@@ -189,7 +212,7 @@ Version: v56 (displayed in header)
 </div>
 
 <!-- Dynamic Content Area with Gradient Border (Workspace) -->
-<div id="dynamicContentArea" style="margin: 20px; padding: 20px; border: 2px solid; border-image: linear-gradient(45deg, #cf66ff 0%, #0a88ef 100%) 1; height: calc(100vh - 140px);">
+<div id="dynamicContentArea" style="margin: 20px; padding: 20px; border: 2px solid; border-image: linear-gradient(45deg, #cf66ff 0%, #0a88ef 100%) 1; height: calc(100vh - 140px); position: relative;">
     <!-- Empty State (shown on page load) -->
     <div id="emptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #6c757d;">
         <i class="fas fa-folder-open" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
