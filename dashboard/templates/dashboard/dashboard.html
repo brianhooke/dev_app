@@ -168,20 +168,7 @@ Version: v56 (displayed in header)
             z-index: 100 !important;
         }
         
-        /* Navbar active state with gradient text */
-        .navbar-nav .nav-link.active {
-            background: var(--gradient-primary-45deg) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            background-clip: text !important;
-        }
-        
-        /* Ensure non-active links are black */
-        .navbar-nav .nav-link:not(.active) {
-            color: black !important;
-            background: none !important;
-            -webkit-text-fill-color: currentColor !important;
-        }
+        /* Navbar active state is already defined in reusable_navbar.html */
     </style>
 </head>
 
@@ -378,7 +365,7 @@ Version: v56 (displayed in header)
             e.preventDefault();
             
             // Remove active class from all nav items
-            $('.navbar-nav .nav-link').removeClass('active');
+            $('.reusable-navbar a').removeClass('active');
             $(this).addClass('active');
             
             // Hide all content sections
@@ -406,7 +393,7 @@ Version: v56 (displayed in header)
             e.preventDefault();
             
             // Remove active class from all nav items and set this one
-            $('.navbar-nav .nav-link').removeClass('active');
+            $('.reusable-navbar a').removeClass('active');
             $(this).addClass('active');
             
             // Hide all other sections
@@ -453,7 +440,7 @@ Version: v56 (displayed in header)
                     }, 'inbox');
                     
                     // Remove active class from all nav items and set this one
-                    $('.navbar-nav .nav-link').removeClass('active');
+                    $('.reusable-navbar a').removeClass('active');
                     $('#billsInboxLink').addClass('active');
                     
                     // Hide allocations section for Inbox
@@ -759,7 +746,7 @@ Version: v56 (displayed in header)
                     }, 'direct');
                     
                     // Remove active class from all nav items and set this one
-                    $('.navbar-nav .nav-link').removeClass('active');
+                    $('.reusable-navbar a').removeClass('active');
                     $('#billsDirectLink').addClass('active');
                     
                     // Hide other sections

@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
         event.preventDefault();
         
         // Remove active class from all nav items and set this one
-        $('.navbar-nav .nav-link').removeClass('active');
+        $('.reusable-navbar a').removeClass('active');
         $(this).addClass('active');
         
         // Hide all other sections
