@@ -8,7 +8,9 @@
     border-radius: 8px;
     overflow: hidden;
     font-size: 14px;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
   
   .reusable-table thead {
@@ -38,7 +40,7 @@
     display: block;
     width: 100%;
     overflow-y: auto;
-    max-height: 100%;
+    flex: 1;
   }
   
   .reusable-table tbody tr {
