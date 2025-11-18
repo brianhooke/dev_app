@@ -263,10 +263,8 @@ Version: v56 (displayed in header)
         </div>
         
         <!-- Contacts Table (scrollable) -->
-        <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; display: flex; flex-direction: column; overflow: hidden;">
-            <div style="flex: 1; overflow-y: scroll; overflow-x: hidden;">
-                {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
-            </div>
+        <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow: hidden;">
+            {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
         </div>
         
         <!-- Footer Buttons -->
