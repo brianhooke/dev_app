@@ -151,18 +151,23 @@ Version: v56 (displayed in header)
             opacity: 0.8 !important;
         }
         
-        /* Force sticky headers for all workspace tables */
+        /* Force sticky headers for all workspace tables - MAXIMUM SPECIFICITY */
         #contactsSection .reusable-table thead,
         #xeroSection .reusable-table thead {
             position: -webkit-sticky !important;
             position: sticky !important;
             top: 0 !important;
-            z-index: 100 !important;
+            z-index: 1000 !important;
+            background: var(--gradient-primary) !important;
         }
         
         #contactsSection .reusable-table thead tr,
         #xeroSection .reusable-table thead tr {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 0 !important;
             background: var(--gradient-primary) !important;
+            z-index: 1000 !important;
         }
         
         #contactsSection .reusable-table th,
@@ -171,7 +176,14 @@ Version: v56 (displayed in header)
             position: sticky !important;
             top: 0 !important;
             background: var(--gradient-primary) !important;
-            z-index: 100 !important;
+            z-index: 1000 !important;
+            /* Debug border to see if sticky is working */
+            border: 3px solid red !important;
+        }
+        
+        /* Debug: Make scrollable container visible */
+        #contactsSection > div[style*="overflow-y"] {
+            border: 5px solid blue !important;
         }
         
         /* Navbar active state is already defined in reusable_navbar.html */
@@ -415,6 +427,24 @@ Version: v56 (displayed in header)
             const instancePk = $('#contactsXeroInstanceSelect').val();
             if (instancePk && typeof loadContacts === 'function') {
                 loadContacts(instancePk);
+                
+                // Debug sticky headers after contacts load
+                setTimeout(() => {
+                    console.log('=== STICKY HEADER DEBUG ===');
+                    const thead = $('#contactsSection .reusable-table thead');
+                    const th = $('#contactsSection .reusable-table th').first();
+                    const scrollContainer = $('#contactsSection > div[style*="overflow-y"]');
+                    
+                    console.log('Thead position:', thead.css('position'));
+                    console.log('Thead top:', thead.css('top'));
+                    console.log('Thead z-index:', thead.css('z-index'));
+                    console.log('TH position:', th.css('position'));
+                    console.log('TH top:', th.css('top'));
+                    console.log('TH z-index:', th.css('z-index'));
+                    console.log('Scroll container overflow-y:', scrollContainer.css('overflow-y'));
+                    console.log('Scroll container height:', scrollContainer.height());
+                    console.log('Table height:', $('#contactsSection .reusable-table').height());
+                }, 500);
             }
             
             // Scroll to top
