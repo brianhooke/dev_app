@@ -1,0 +1,130 @@
+TABLE HEADER SCROLLING ISSUE - STICKY POSITIONING FIX
+======================================================
+
+PROBLEM:
+--------
+Table headers scroll away with the table data instead of staying fixed at the top.
+Even when CSS shows position: sticky is applied, the headers still scroll.
+
+ROOT CAUSE:
+-----------
+Sticky positioning in HTML tables is fundamentally broken when the table is inside 
+a scrolling container. For position: sticky to work, the sticky element must be a 
+direct descendant of the scrolling container.
+
+With normal table structure:
+  Scrolling Container
+    └─ <table>        ← Creates a barrier
+        └─ <thead>    ← Cannot be sticky ❌
+
+The <table> element creates a containing block that breaks sticky positioning.
+
+WHY IT'S HARD TO DIAGNOSE:
+---------------------------
+1. Browser dev tools show position: sticky is correctly applied
+2. All CSS properties (top: 0, z-index, etc.) look correct
+3. The issue is STRUCTURAL, not CSS-related
+4. Wrapper divs with overflow properties add more complexity
+
+THE SOLUTION:
+-------------
+Break the table's normal display model using flexbox:
+
+In reusable_table.html:
+
+  .reusable-table {
+    display: flex;              /* Convert table to flex container */
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .reusable-table thead {
+    display: block;             /* Make thead a block element */
+    width: 100%;
+    position: sticky;           /* Now sticky works! */
+    top: 0;
+    z-index: 10;
+  }
+
+  .reusable-table thead tr {
+    display: table;             /* Restore table layout for the row */
+    width: 100%;
+    table-layout: fixed;        /* Keep columns aligned */
+    background: var(--gradient-primary);
+  }
+
+  .reusable-table tbody {
+    display: block;             /* Make tbody a block element */
+    width: 100%;
+    overflow-y: auto;           /* Tbody scrolls independently */
+    flex: 1;                    /* Fill remaining space */
+  }
+
+  .reusable-table tbody tr {
+    display: table;             /* Restore table layout for each row */
+    width: 100%;
+    table-layout: fixed;        /* Match header column widths */
+  }
+
+PARENT CONTAINER REQUIREMENTS:
+-------------------------------
+The container holding the table must also use flexbox:
+
+  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    {% include 'core/components/reusable_table.html' %}
+  </div>
+
+HOW IT WORKS:
+-------------
+1. Table becomes a flex container (not a table element)
+2. Thead and tbody become flex children (not table parts)
+3. Thead stays fixed with position: sticky
+4. Tbody scrolls independently with overflow-y: auto and flex: 1
+5. Each individual row (tr) still displays as a table for proper column alignment
+6. table-layout: fixed ensures header and body columns stay aligned
+
+KEY POINTS:
+-----------
+- The table itself is display: flex (not display: table)
+- Thead and tbody are display: block (not table-header-group/table-row-group)
+- Individual rows (tr) are display: table (to maintain column structure)
+- table-layout: fixed is critical for column alignment
+- Tbody uses flex: 1 to fill available space and enable scrolling
+
+DEBUGGING TIPS:
+---------------
+If sticky headers aren't working:
+
+1. Check browser console for computed styles:
+   - position should be "sticky"
+   - top should be "0px"
+   - Check parent elements for overflow properties
+
+2. Add visual debugging:
+   - Add border: 3px solid red to thead/th elements
+   - Add border: 5px solid blue to scroll container
+   - Verify elements are being targeted
+
+3. Check the DOM hierarchy:
+   - Ensure no wrapper divs with overflow between container and table
+   - Verify parent has defined height (flex: 1 or specific height)
+
+4. Console log to verify structure:
+   console.log('Thead position:', $('thead').css('position'));
+   console.log('Container overflow:', $('container').css('overflow-y'));
+
+AFFECTED FILES:
+---------------
+- core/templates/core/components/reusable_table.html (table structure and CSS)
+- dashboard/templates/dashboard/dashboard.html (container structure for contacts section)
+- Any other sections using reusable_table.html (Xero, Bills, etc.)
+
+LAST FIXED:
+-----------
+November 19, 2025 - v56
+Commits: 7f0a1e7, 8873783, 952578b, bea2ea5, 0a1ab80, 2bd1329
+
+REFERENCE:
+----------
+This is a well-known CSS issue. The display: block approach is the standard solution
+for sticky table headers when you need the tbody to scroll independently.
