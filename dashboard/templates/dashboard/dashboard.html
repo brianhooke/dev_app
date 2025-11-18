@@ -167,6 +167,21 @@ Version: v56 (displayed in header)
             top: 0 !important;
             z-index: 100 !important;
         }
+        
+        /* Navbar active state with gradient text */
+        .navbar-nav .nav-link.active {
+            background: var(--gradient-primary-45deg) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+        }
+        
+        /* Ensure non-active links are black */
+        .navbar-nav .nav-link:not(.active) {
+            color: black !important;
+            background: none !important;
+            -webkit-text-fill-color: currentColor !important;
+        }
     </style>
 </head>
 
@@ -244,23 +259,6 @@ Version: v56 (displayed in header)
         
         <!-- Contacts Table (scrollable) -->
         <div style="flex: 1; overflow-y: auto; margin-bottom: 15px; border: 2px solid #ddd; position: relative;">
-            <style>
-                #contactsSection .reusable-table thead {
-                    position: sticky !important;
-                    top: 0 !important;
-                    z-index: 10 !important;
-                }
-                #contactsSection .reusable-table thead tr {
-                    background: var(--gradient-primary) !important;
-                }
-                #contactsSection .reusable-table th {
-                    position: sticky !important;
-                    top: 0 !important;
-                    background: var(--gradient-primary) !important;
-                    z-index: 10 !important;
-                    border-bottom: 2px solid #dee2e6 !important;
-                }
-            </style>
             {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
         </div>
         
