@@ -190,8 +190,8 @@ test.describe('Bills - Inbox', () => {
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     const firstRow = page.locator('#billsTable tbody tr').first();
     
-    // Fill in all fields correctly
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    // Fill in all fields correctly (index 2 = first actual option after blank + header)
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 1 });
     await firstRow.locator('.invoice-number-input').fill('TEST-004');
     await firstRow.locator('.net-input').fill('100.00');
