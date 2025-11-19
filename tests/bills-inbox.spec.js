@@ -17,7 +17,13 @@ test.describe('Bills - Inbox', () => {
     // Wait for page to load
     await page.waitForLoadState('networkidle');
     
-    // Click Bills - Inbox link
+    // First click Bills dropdown to reveal submenu
+    await page.click('#billsLink');
+    
+    // Wait for dropdown menu to be visible
+    await page.waitForSelector('#billsLink-menu.show', { state: 'visible' });
+    
+    // Then click Bills - Inbox link
     await page.click('#billsInboxLink');
     
     // Wait for bills section to be visible

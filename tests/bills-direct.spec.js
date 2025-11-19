@@ -15,7 +15,13 @@ test.describe('Bills - Direct', () => {
     await page.goto('/dashboard/');
     await page.waitForLoadState('networkidle');
     
-    // Click Bills - Direct link
+    // First click Bills dropdown to reveal submenu
+    await page.click('#billsLink');
+    
+    // Wait for dropdown menu to be visible
+    await page.waitForSelector('#billsLink-menu.show', { state: 'visible' });
+    
+    // Then click Bills - Direct link
     await page.click('#billsDirectLink');
     
     // Wait for bills section to be visible
