@@ -97,7 +97,7 @@ test.describe('Bills - Direct', () => {
     // Still grey - not all fields filled
     await expect(sendButton).toHaveClass(/btn-secondary/);
     
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await page.waitForTimeout(200);
     await expect(sendButton).toHaveClass(/btn-secondary/);
     
@@ -181,7 +181,7 @@ test.describe('Bills - Direct', () => {
     
     // Fill in all LHS fields
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-DIRECT-002');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill('10.00');
@@ -222,7 +222,7 @@ test.describe('Bills - Direct', () => {
     
     // Fill in all LHS fields
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-PERSIST-001');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill('10.00');

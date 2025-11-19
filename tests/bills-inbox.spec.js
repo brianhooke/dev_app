@@ -63,7 +63,7 @@ test.describe('Bills - Inbox', () => {
     
     // Fill in all required fields (index 2 = first actual option after blank + header)
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-001');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill('0'); // GST = 0
@@ -101,8 +101,8 @@ test.describe('Bills - Inbox', () => {
     const firstRow = page.locator('#billsTable tbody tr').first();
     
     // Fill in all fields except GST
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-002');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill(''); // Empty GST
@@ -124,7 +124,7 @@ test.describe('Bills - Inbox', () => {
     
     // Fill in all required fields (index 2 = first actual option after blank + header)
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-003');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill('10.00');
@@ -192,7 +192,7 @@ test.describe('Bills - Inbox', () => {
     
     // Fill in all fields correctly (index 2 = first actual option after blank + header)
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
-    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-004');
     await firstRow.locator('.net-input').fill('100.00');
     await firstRow.locator('.gst-input').fill('0');
