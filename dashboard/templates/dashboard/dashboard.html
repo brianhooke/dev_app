@@ -1014,8 +1014,8 @@ Version: v56 (displayed in header)
                         if (!totalNet || isNaN(totalNet) || totalNet === 0) {
                             errors.push('Please enter a non-zero Net amount');
                         }
-                        if (!totalGst || isNaN(totalGst)) {
-                            errors.push('Please enter a GST amount');
+                        if (totalGst === null || totalGst === undefined || totalGst === '' || isNaN(totalGst)) {
+                            errors.push('Please enter a GST amount (can be 0)');
                         }
                         
                         // Check if we're in Bills - Direct modal (allocations section is visible)
