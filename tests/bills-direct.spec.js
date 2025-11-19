@@ -248,6 +248,14 @@ test.describe('Bills - Direct', () => {
     // Select Xero account in allocations
     const firstAllocation = page.locator('#allocationsTableBody tr').first();
     await firstAllocation.locator('.xero-account-select').selectOption({ index: 1 });
+    
+    // Wait for remaining allocations to become 0 (validation requirement)
+    await page.waitForFunction(() => {
+      const remainingNet = document.querySelector('#remainingNet')?.textContent?.replace('$', '').trim();
+      const remainingGst = document.querySelector('#remainingGst')?.textContent?.replace('$', '').trim();
+      return remainingNet === '0.00' && remainingGst === '0.00';
+    }, { timeout: 5000 });
+    
     await page.waitForTimeout(500);
     
     // Button should now be green
