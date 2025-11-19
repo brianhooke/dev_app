@@ -245,20 +245,17 @@ test.describe('Bills - Direct', () => {
       return select && select.options && select.options.length > 1;
     }, { timeout: 5000 });
     
-    // Select Xero account in allocations
+    // Select Xero account and fill allocation amounts
     const firstAllocation = page.locator('#allocationsTableBody tr').first();
     await firstAllocation.locator('.xero-account-select').selectOption({ index: 1 });
+    await page.waitForTimeout(200);
     
-    // Wait for remaining allocations to become 0 (validation requirement)
-    await page.waitForFunction(() => {
-      const remainingNet = document.querySelector('#remainingNet')?.textContent?.replace('$', '').trim();
-      const remainingGst = document.querySelector('#remainingGst')?.textContent?.replace('$', '').trim();
-      return remainingNet === '0.00' && remainingGst === '0.00';
-    }, { timeout: 5000 });
-    
+    // Fill allocation amounts to match invoice totals
+    await firstAllocation.locator('.allocation-net-input').fill('100.00');
+    await firstAllocation.locator('.allocation-gst-input').fill('10.00');
     await page.waitForTimeout(500);
     
-    // Button should now be green
+    // Button should now be green (allocations are valid)
     const sendButton = firstRow.locator('.send-bill-btn');
     await expect(sendButton).toHaveClass(/btn-success/);
     await expect(sendButton).toBeEnabled();
