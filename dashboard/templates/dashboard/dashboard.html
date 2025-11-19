@@ -1003,8 +1003,10 @@ Version: v56 (displayed in header)
                         var xeroInstanceOrProject = row.find('.xero-project-select').val();
                         var supplierPk = row.find('.supplier-select').val();
                         var invoiceNumber = row.find('.invoice-number-input').val();
-                        var totalNet = parseFloat(row.find('.net-input').val());
-                        var totalGst = parseFloat(row.find('.gst-input').val());
+                        var netValue = row.find('.net-input').val();
+                        var gstValue = row.find('.gst-input').val();
+                        var totalNet = parseFloat(netValue);
+                        var totalGst = parseFloat(gstValue);
                         
                         // Validate all required fields
                         var errors = [];
@@ -1020,11 +1022,9 @@ Version: v56 (displayed in header)
                         if (!totalNet || isNaN(totalNet) || totalNet === 0) {
                             errors.push('Please enter a non-zero Net amount');
                         }
-                        // GST can be 0, but cannot be null/undefined/empty
-                        if (totalGst === null || totalGst === undefined || totalGst === '') {
+                        // GST can be 0, but field cannot be empty
+                        if (gstValue === null || gstValue === undefined || gstValue === '' || isNaN(totalGst)) {
                             errors.push('Please enter a GST amount (can be 0)');
-                        } else if (isNaN(totalGst)) {
-                            errors.push('GST must be a valid number');
                         }
                         
                         // Check if we're in Bills - Direct modal using stored modal type
