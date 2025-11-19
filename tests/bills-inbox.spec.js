@@ -100,12 +100,14 @@ test.describe('Bills - Inbox', () => {
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     const firstRow = page.locator('#billsTable tbody tr').first();
     
-    // Fill in all fields except GST
+    // Fill in all fields
     await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 4 }); // Index 4 = first supplier (after blank, separator, Add+, separator)
     await firstRow.locator('.invoice-number-input').fill('TEST-002');
     await firstRow.locator('.net-input').fill('100.00');
-    await firstRow.locator('.gst-input').fill(''); // Empty GST
+    // NET auto-fills GST to 10.00, so we need to clear it properly
+    await firstRow.locator('.gst-input').clear();
+    await firstRow.locator('.gst-input').blur(); // Trigger validation
     
     await page.waitForTimeout(500);
     
@@ -132,7 +134,8 @@ test.describe('Bills - Inbox', () => {
     await page.waitForTimeout(500);
     
     // Verify allocations section is hidden (this is Bills - Inbox, not Direct)
-    const allocationsSection = page.locator('#allocationsSection');
+    // Use specific selector to target the one in billsInboxSection
+    const allocationsSection = page.locator('#billsInboxSection #allocationsSection').first();
     await expect(allocationsSection).toBeHidden();
     
     // Send button should be enabled

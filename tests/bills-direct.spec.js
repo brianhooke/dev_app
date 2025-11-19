@@ -159,8 +159,13 @@ test.describe('Bills - Direct', () => {
   test('Allocations section: visible in Direct mode', async ({ page }) => {
     // This test verifies that allocations section is visible in Direct mode
     
-    // Use more specific selector
+    // Wait for bills to load
+    await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
+    
+    // Use more specific selector - check if section exists and is displayed
     const allocationsSection = page.locator('#billsInboxSection #allocationsSection').first();
+    
+    // In Direct mode, allocations section should be visible (display: flex)
     await expect(allocationsSection).toBeVisible();
     
     // Should have the allocations table
@@ -168,7 +173,7 @@ test.describe('Bills - Direct', () => {
     await expect(allocationsTable).toBeVisible();
     
     // Should have "Still to allocate" section
-    const remainingNet = page.locator('#remainingNet');
+    const remainingNet = page.locator('#remainingNet').first();
     await expect(remainingNet).toBeVisible();
   });
 
@@ -230,6 +235,15 @@ test.describe('Bills - Direct', () => {
     // Click row to select and load allocations
     await firstRow.click();
     await page.waitForTimeout(500);
+    
+    // Wait for allocations to load
+    await page.waitForSelector('#allocationsTableBody tr', { timeout: 5000 });
+    
+    // Wait for Xero account dropdown to be populated (AJAX call)
+    await page.waitForFunction(() => {
+      const select = document.querySelector('#allocationsTableBody tr .xero-account-select');
+      return select && select.options && select.options.length > 1;
+    }, { timeout: 5000 });
     
     // Select Xero account in allocations
     const firstAllocation = page.locator('#allocationsTableBody tr').first();
