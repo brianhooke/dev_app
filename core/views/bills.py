@@ -266,8 +266,8 @@ def get_bills_list(request):
             for allocation in invoice.invoice_allocations.all():
                 allocations.append({
                     'allocation_pk': allocation.invoice_allocations_pk,
-                    'amount': float(allocation.amount) if allocation.amount else None,
-                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else None,
+                    'amount': float(allocation.amount) if allocation.amount is not None else None,
+                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount is not None else None,
                     'notes': allocation.notes or '',
                     'xero_account_pk': allocation.xero_account_id if allocation.xero_account else None,
                 })
@@ -280,8 +280,8 @@ def get_bills_list(request):
                 'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
                 'project_pk': invoice.project.projects_pk if invoice.project else None,
                 'supplier_invoice_number': invoice.supplier_invoice_number or '',
-                'total_net': float(invoice.total_net) if invoice.total_net else None,
-                'total_gst': float(invoice.total_gst) if invoice.total_gst else None,
+                'total_net': float(invoice.total_net) if invoice.total_net is not None else None,
+                'total_gst': float(invoice.total_gst) if invoice.total_gst is not None else None,
                 'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
                 'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
                 'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
