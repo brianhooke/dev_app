@@ -34,6 +34,15 @@ test.describe('Bills - Inbox', () => {
     
     // Wait for bills section to be visible
     await page.waitForSelector('#billsInboxSection', { state: 'visible' });
+    
+    // Wait for bills table to have rows
+    await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
+    
+    // Wait for dropdowns to be populated
+    await page.waitForFunction(() => {
+      const select = document.querySelector('#billsTable tbody tr .xero-project-select');
+      return select && select.options && select.options.length > 1;
+    }, { timeout: 10000 });
   });
 
   test('GST validation: accepts 0 value', async ({ page }) => {
@@ -45,6 +54,12 @@ test.describe('Bills - Inbox', () => {
     
     // Get the first bill row
     const firstRow = page.locator('#billsTable tbody tr').first();
+    
+    // Wait for dropdowns to be populated (check that they have options)
+    await page.waitForFunction(() => {
+      const select = document.querySelector('#billsTable tbody tr .xero-project-select');
+      return select && select.options.length > 1;
+    }, { timeout: 10000 });
     
     // Fill in all required fields
     await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
@@ -146,8 +161,8 @@ test.describe('Bills - Inbox', () => {
     
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     
-    // Get initial viewer height
-    const viewerSection = page.locator('#viewerSection');
+    // Get initial viewer height - use more specific selector to avoid duplicate ID
+    const viewerSection = page.locator('#billsInboxSection #viewerSection').first();
     const initialBox = await viewerSection.boundingBox();
     const initialHeight = initialBox?.height || 0;
     
