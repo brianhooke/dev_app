@@ -8,6 +8,8 @@ staticfiles/
 *.pyc
 *.sqlite3
 db.sqlite3
+db_test.sqlite3
+media_test/
 deploy.zip
 xero_instances_export.json
 # Elastic Beanstalk Files
