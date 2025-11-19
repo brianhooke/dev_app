@@ -1020,6 +1020,7 @@ Version: v56 (displayed in header)
                         
                         // Check if we're in Bills - Direct modal (allocations section is visible)
                         var isDirectModal = $('#allocationsSection').is(':visible');
+                        console.log('Send button clicked - isDirectModal:', isDirectModal, 'allocations display:', $('#allocationsSection').css('display'));
                         
                         if (isDirectModal) {
                             // Additional validation for Bills - Direct
