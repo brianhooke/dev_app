@@ -8,8 +8,9 @@ from . import views
 app_name = 'dashboard'
 
 urlpatterns = [
-    # Dashboard homepage
+    # Dashboard homepage (accessible at both / and /dashboard/)
     path('', views.dashboard_view, name='dashboard'),
+    path('dashboard/', views.dashboard_view, name='dashboard_alt'),
     
     # Contact management endpoints
     path('pull_xero_contacts/<int:instance_pk>/', views.pull_xero_contacts, name='pull_xero_contacts'),
