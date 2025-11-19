@@ -1510,28 +1510,34 @@ Version: v56 (displayed in header)
                         // Check if we're in Bills - Direct modal using stored modal type
                         var isDirectModal = (currentBillsModalType === 'direct');
                         
-                        if (isDirectModal && currentSelectedInvoicePk === invoicePk) {
-                            // RHS allocations validations for the selected invoice
-                            var hasAllocations = $('#allocationsTableBody tr').length > 0;
-                            if (!hasAllocations) {
+                        if (isDirectModal) {
+                            // In Direct mode, invoice must be selected to validate allocations
+                            if (currentSelectedInvoicePk !== invoicePk) {
+                                // Invoice not selected - button must stay grey
                                 isValid = false;
                             } else {
-                                // Check that all allocations have Xero Account selected
-                                $('#allocationsTableBody tr').each(function() {
-                                    var accountVal = $(this).find('.xero-account-select').val();
-                                    if (!accountVal) {
-                                        isValid = false;
-                                    }
-                                });
-                                
-                                // Check remaining allocations are exactly 0.00
-                                var remainingNetText = $('#remainingNet').text().replace('$', '');
-                                var remainingGstText = $('#remainingGst').text().replace('$', '');
-                                var remainingNet = parseFloat(remainingNetText);
-                                var remainingGst = parseFloat(remainingGstText);
-                                
-                                if (Math.abs(remainingNet) >= 0.01) isValid = false;
-                                if (Math.abs(remainingGst) >= 0.01) isValid = false;
+                                // Invoice is selected - validate allocations
+                                var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                                if (!hasAllocations) {
+                                    isValid = false;
+                                } else {
+                                    // Check that all allocations have Xero Account selected
+                                    $('#allocationsTableBody tr').each(function() {
+                                        var accountVal = $(this).find('.xero-account-select').val();
+                                        if (!accountVal) {
+                                            isValid = false;
+                                        }
+                                    });
+                                    
+                                    // Check remaining allocations are exactly 0.00
+                                    var remainingNetText = $('#remainingNet').text().replace('$', '');
+                                    var remainingGstText = $('#remainingGst').text().replace('$', '');
+                                    var remainingNet = parseFloat(remainingNetText);
+                                    var remainingGst = parseFloat(remainingGstText);
+                                    
+                                    if (Math.abs(remainingNet) >= 0.01) isValid = false;
+                                    if (Math.abs(remainingGst) >= 0.01) isValid = false;
+                                }
                             }
                         }
                         
