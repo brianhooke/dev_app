@@ -272,8 +272,8 @@ Version: v56 (displayed in header)
     </div>
 
     <!-- Bills - Inbox Section (hidden initially, shown when Bills - Inbox clicked) -->
-    <div id="billsInboxSection" style="display: none; height: 100%;">
-        <div style="display: flex; height: 100%;">
+    <div id="billsInboxSection" style="display: none; height: 100%; flex-direction: column;">
+        <div style="display: flex; flex: 1;">
             <!-- Left side: Bills Table (60%) -->
             <div style="width: 60%; padding-right: 15px; overflow-y: auto; border-right: 2px solid #ddd;">
                 <table class="table table-bordered table-hover" id="billsTable">
@@ -350,6 +350,11 @@ Version: v56 (displayed in header)
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Footer Buttons -->
+        <div style="display: flex; justify-content: flex-end; flex-shrink: 0; padding-top: 15px;">
+            <button type="button" class="btn btn-info" id="pullXeroAccountsBtn" style="display: none;">Pull Xero Accounts</button>
         </div>
     </div>
 </div>
