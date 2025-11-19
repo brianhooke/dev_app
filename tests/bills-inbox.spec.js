@@ -38,10 +38,10 @@ test.describe('Bills - Inbox', () => {
     // Wait for bills table to have rows
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     
-    // Wait for dropdowns to be populated
+    // Wait for dropdowns to be populated (need at least 3 options: blank + header + actual option)
     await page.waitForFunction(() => {
       const select = document.querySelector('#billsTable tbody tr .xero-project-select');
-      return select && select.options && select.options.length > 1;
+      return select && select.options && select.options.length > 2;
     }, { timeout: 10000 });
   });
 
@@ -61,8 +61,8 @@ test.describe('Bills - Inbox', () => {
       return select && select.options.length > 1;
     }, { timeout: 10000 });
     
-    // Fill in all required fields
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    // Fill in all required fields (index 2 = first actual option after blank + header)
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 1 });
     await firstRow.locator('.invoice-number-input').fill('TEST-001');
     await firstRow.locator('.net-input').fill('100.00');
@@ -122,8 +122,8 @@ test.describe('Bills - Inbox', () => {
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     const firstRow = page.locator('#billsTable tbody tr').first();
     
-    // Fill in all required fields
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    // Fill in all required fields (index 2 = first actual option after blank + header)
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 1 });
     await firstRow.locator('.invoice-number-input').fill('TEST-003');
     await firstRow.locator('.net-input').fill('100.00');

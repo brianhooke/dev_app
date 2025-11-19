@@ -41,10 +41,10 @@ test.describe('Bills - Direct', () => {
     // Wait for bills table to have rows
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     
-    // Wait for dropdowns to be populated
+    // Wait for dropdowns to be populated (need at least 3 options: blank + header + actual option)
     await page.waitForFunction(() => {
       const select = document.querySelector('#billsTable tbody tr .xero-project-select');
-      return select && select.options && select.options.length > 1;
+      return select && select.options && select.options.length > 2;
     }, { timeout: 10000 });
   });
 
@@ -92,7 +92,7 @@ test.describe('Bills - Direct', () => {
     await expect(sendButton).toHaveClass(/btn-secondary/);
     
     // Fill fields one by one and check button state
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await page.waitForTimeout(200);
     // Still grey - not all fields filled
     await expect(sendButton).toHaveClass(/btn-secondary/);
@@ -180,7 +180,7 @@ test.describe('Bills - Direct', () => {
     const firstRow = page.locator('#billsTable tbody tr').first();
     
     // Fill in all LHS fields
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 1 });
     await firstRow.locator('.invoice-number-input').fill('TEST-DIRECT-002');
     await firstRow.locator('.net-input').fill('100.00');
@@ -221,7 +221,7 @@ test.describe('Bills - Direct', () => {
     const firstRow = page.locator('#billsTable tbody tr').first();
     
     // Fill in all LHS fields
-    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    await firstRow.locator('.xero-project-select').selectOption({ index: 2 });
     await firstRow.locator('.supplier-select').selectOption({ index: 1 });
     await firstRow.locator('.invoice-number-input').fill('TEST-PERSIST-001');
     await firstRow.locator('.net-input').fill('100.00');
