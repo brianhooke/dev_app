@@ -626,13 +626,13 @@ Version: v56 (displayed in header)
                             .val(bill.supplier_invoice_number || '');
                         row.append($('<td>').append(invoiceNumberInput));
                         
-                        // 4. $ Net input (limit to 2 decimal places, no negatives)
+                        // 4. $ NET input (limit to 2 decimal places, no negatives)
                         var netInput = $('<input>')
                             .attr('type', 'number')
                             .attr('step', '0.01')
                             .attr('min', '0')
                             .addClass('form-control form-control-sm net-input')
-                            .val(bill.total_net || '')
+                            .val(bill.total_net !== null && bill.total_net !== undefined ? bill.total_net : '')
                             .on('input', function() {
                                 var value = $(this).val();
                                 // Prevent negative numbers
@@ -667,7 +667,7 @@ Version: v56 (displayed in header)
                             .attr('step', '0.01')
                             .attr('min', '0')
                             .addClass('form-control form-control-sm gst-input')
-                            .val(bill.total_gst || '')
+                            .val(bill.total_gst !== null && bill.total_gst !== undefined ? bill.total_gst : '')
                             .on('input', function() {
                                 var value = $(this).val();
                                 // Prevent negative numbers
