@@ -15,9 +15,10 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#allocationsSection').hide();
         $('#contactsSection').css('display', 'none');
         
-        // Show Xero section and hide empty state
+        // Show Xero section, hide empty state, and add has-content class to hide background
         $('#emptyState').hide();
         $('#xeroSection').css('display', 'flex').show();
+        $('#dynamicContentArea').addClass('has-content');
         
         // Load Xero instances
         loadXeroInstances();

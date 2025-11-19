@@ -177,6 +177,11 @@ Version: v56 (displayed in header)
             z-index: 0;
         }
         
+        /* Hide background when any section is active */
+        #dynamicContentArea.has-content::before {
+            display: none;
+        }
+        
         /* Ensure content appears above background */
         #dynamicContentArea > * {
             position: relative;
@@ -384,8 +389,9 @@ Version: v56 (displayed in header)
             $('#contactsSection').css('display', 'none');
             $('#xeroSection').css('display', 'none');
             
-            // Show empty state
+            // Show empty state and remove has-content class to show background
             $('#emptyState').show();
+            $('#dynamicContentArea').removeClass('has-content');
             
             // Clear any selected bills
             currentSelectedInvoicePk = null;
@@ -411,9 +417,10 @@ Version: v56 (displayed in header)
             $('#allocationsSection').hide();
             $('#xeroSection').css('display', 'none');
             
-            // Show contacts section and hide empty state
+            // Show contacts section, hide empty state, and add has-content class to hide background
             $('#emptyState').hide();
             $('#contactsSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
             
             // Load contacts for the selected Xero instance
             const instancePk = $('#contactsXeroInstanceSelect').val();
@@ -460,9 +467,10 @@ Version: v56 (displayed in header)
                     $('#contactsSection').hide();
                     $('#xeroSection').css('display', 'none');
                     
-                    // Show content, hide empty state
+                    // Show content, hide empty state, and add has-content class to hide background
                     $('#emptyState').hide();
                     $('#billsInboxSection').show();
+                    $('#dynamicContentArea').addClass('has-content');
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load bills:', error);
@@ -763,9 +771,10 @@ Version: v56 (displayed in header)
                     $('#contactsSection').hide();
                     $('#xeroSection').css('display', 'none');
                     
-                    // Show content, hide empty state
+                    // Show content, hide empty state, and add has-content class to hide background
                     $('#emptyState').hide();
                     $('#billsInboxSection').show();
+                    $('#dynamicContentArea').addClass('has-content');
                     
                     // Show allocations section for Direct
                     $('#allocationsSection').css('display', 'flex');
