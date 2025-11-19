@@ -734,6 +734,36 @@ Version: v56 (displayed in header)
                             row.append($('<td>').append(archiveBtn));
                         }
                         
+                        // Check if bill has valid allocations (for Direct mode button validation)
+                        if (modalType === 'direct' && bill.allocations && bill.allocations.length > 0) {
+                            // Check if all allocations have xero_account_pk
+                            var allHaveAccounts = bill.allocations.every(function(alloc) {
+                                return alloc.xero_account_pk !== null && alloc.xero_account_pk !== undefined;
+                            });
+                            
+                            // Calculate total allocated amounts
+                            var totalAllocatedNet = bill.allocations.reduce(function(sum, alloc) {
+                                return sum + (alloc.amount || 0);
+                            }, 0);
+                            var totalAllocatedGst = bill.allocations.reduce(function(sum, alloc) {
+                                return sum + (alloc.gst_amount || 0);
+                            }, 0);
+                            
+                            // Check if allocations match invoice totals (within 0.01)
+                            var netMatches = Math.abs((bill.total_net || 0) - totalAllocatedNet) < 0.01;
+                            var gstMatches = Math.abs((bill.total_gst || 0) - totalAllocatedGst) < 0.01;
+                            
+                            // Set data attribute based on validation
+                            if (allHaveAccounts && netMatches && gstMatches) {
+                                row.attr('data-allocations-valid', 'true');
+                            } else {
+                                row.attr('data-allocations-valid', 'false');
+                            }
+                        } else if (modalType === 'direct') {
+                            // No allocations or empty allocations
+                            row.attr('data-allocations-valid', 'false');
+                        }
+                        
                         // Add row to table
                         $('#billsTableBody').append(row);
                         
