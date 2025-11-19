@@ -3,9 +3,16 @@
 ## Current Status: Ready to Test ✅
 
 ### Test Data Created
-- ✅ 9 invoices generated (IDs: 12-20)
+- ✅ 9 invoices generated using `test_email_sender.py`
 - ✅ 3 emails with 3 PDFs each
 - ✅ All bills have status -2 (Bills - Inbox)
+
+**To generate more test data:**
+```bash
+python3 test_email_sender.py
+```
+
+**Note:** PDFs won't display in viewer (no S3 URLs in local testing), but bills data exists for Playwright tests.
 
 ### Test Fixes Applied
 1. ✅ Fixed duplicate ID selectors
