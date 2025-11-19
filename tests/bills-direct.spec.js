@@ -5,7 +5,15 @@ const { test, expect } = require('@playwright/test');
  * Bills - Direct Tests
  * 
  * These tests verify the Bills - Direct functionality to prevent regressions.
- * Tests cover the bugs fixed in v56.
+ * 
+ * Test Summary:
+ * 1. Send to Xero button starts grey when validation fails
+ * 2. Send to Xero button turns green only when all fields valid
+ * 3. Send to Xero button stays green after switching views (if allocations valid)
+ * 4. Pull Xero Accounts button visible in Direct mode
+ * 5. PDF viewer maintains height in Direct mode
+ * 6. Allocations section visible in Direct mode
+ * 7. Send to Xero validates allocations in Direct mode
  */
 
 test.describe('Bills - Direct', () => {
@@ -195,5 +203,72 @@ test.describe('Bills - Direct', () => {
       await page.waitForTimeout(500);
       expect(allocationErrorShown).toBe(true);
     }
+  });
+
+  test('Send to Xero button: stays green after switching views', async ({ page }) => {
+    // This test verifies that button stays green after switching to Inbox and back
+    // Bug: Button turned grey after view switch even though allocations were valid
+    
+    await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
+    const firstRow = page.locator('#billsTable tbody tr').first();
+    
+    // Fill in all LHS fields
+    await firstRow.locator('.xero-project-select').selectOption({ index: 1 });
+    await firstRow.locator('.supplier-select').selectOption({ index: 1 });
+    await firstRow.locator('.invoice-number-input').fill('TEST-PERSIST-001');
+    await firstRow.locator('.net-input').fill('100.00');
+    await firstRow.locator('.gst-input').fill('10.00');
+    
+    // Click row to select and load allocations
+    await firstRow.click();
+    await page.waitForTimeout(500);
+    
+    // Select Xero account in allocations
+    const firstAllocation = page.locator('#allocationsTableBody tr').first();
+    await firstAllocation.locator('.xero-account-select').selectOption({ index: 1 });
+    await page.waitForTimeout(500);
+    
+    // Button should now be green
+    const sendButton = firstRow.locator('.send-bill-btn');
+    await expect(sendButton).toHaveClass(/btn-success/);
+    await expect(sendButton).toBeEnabled();
+    
+    // Now switch to Bills - Inbox
+    await page.click('#billsLink'); // Open dropdown
+    await page.waitForSelector('#billsLink-menu.show', { state: 'visible' });
+    await page.click('#billsInboxLink');
+    await page.waitForSelector('#billsInboxSection', { state: 'visible' });
+    await page.waitForTimeout(500);
+    
+    // Switch back to Bills - Direct
+    await page.click('#billsLink'); // Open dropdown
+    await page.waitForSelector('#billsLink-menu.show', { state: 'visible' });
+    await page.click('#billsDirectLink');
+    await page.waitForSelector('#billsInboxSection', { state: 'visible' });
+    await page.waitForSelector('#allocationsSection', { state: 'visible' });
+    await page.waitForTimeout(500);
+    
+    // Find the same row again (by invoice number)
+    const rowWithInvoice = page.locator('#billsTable tbody tr').filter({
+      has: page.locator('.invoice-number-input[value="TEST-PERSIST-001"]')
+    });
+    
+    // Button should STILL be green (not grey)
+    const buttonAfterSwitch = rowWithInvoice.locator('.send-bill-btn');
+    await expect(buttonAfterSwitch).toHaveClass(/btn-success/);
+    await expect(buttonAfterSwitch).toBeEnabled();
+    
+    // Click the row to verify allocations are still there
+    await rowWithInvoice.click();
+    await page.waitForTimeout(500);
+    
+    // Verify allocation still has account selected
+    const allocationAfterSwitch = page.locator('#allocationsTableBody tr').first();
+    const accountValue = await allocationAfterSwitch.locator('.xero-account-select').inputValue();
+    expect(accountValue).toBeTruthy(); // Should have a value
+    
+    // Button should remain green
+    await expect(buttonAfterSwitch).toHaveClass(/btn-success/);
+    await expect(buttonAfterSwitch).toBeEnabled();
   });
 });

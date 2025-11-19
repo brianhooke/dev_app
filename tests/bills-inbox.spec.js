@@ -5,7 +5,13 @@ const { test, expect } = require('@playwright/test');
  * Bills - Inbox Tests
  * 
  * These tests verify the Bills - Inbox functionality to prevent regressions.
- * Tests cover the bugs fixed in v56.
+ * 
+ * Test Summary:
+ * 1. GST validation accepts 0 value
+ * 2. GST validation rejects empty value
+ * 3. Send button does not validate allocations (Inbox mode only)
+ * 4. PDF viewer maintains height regardless of table rows
+ * 5. Send button validation matches click handler validation
  */
 
 test.describe('Bills - Inbox', () => {
