@@ -494,7 +494,14 @@ class EmailAttachment(models.Model):
         return f"s3://{self.s3_bucket}/{self.s3_key}"
     
     def get_download_url(self):
-        """Generate presigned URL for downloading attachment"""
+        """Generate presigned URL for downloading attachment (or local URL in DEBUG mode)"""
+        from django.conf import settings
+        
+        # For local testing, return media URL
+        if settings.DEBUG and self.s3_bucket == 'local':
+            return f"{settings.MEDIA_URL}{self.s3_key}"
+        
+        # For production, generate S3 presigned URL
         import boto3
         from botocore.exceptions import ClientError
         

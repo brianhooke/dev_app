@@ -87,13 +87,42 @@ def receive_email(request):
         attachments_created = []
         
         for att_data in attachments_data:
+            # Check if this is a local test with base64 content
+            base64_content = att_data.get('content')
+            s3_bucket = att_data.get('s3_bucket', '')
+            s3_key = att_data.get('s3_key', '')
+            
+            # If base64 content provided (local testing), save to local file
+            if base64_content and settings.DEBUG:
+                import base64
+                import os
+                from django.core.files.base import ContentFile
+                from django.core.files.storage import default_storage
+                
+                # Decode base64
+                file_content = base64.b64decode(base64_content)
+                
+                # Create filename path
+                filename = att_data.get('filename', 'unknown')
+                file_path = f'test_attachments/{email.id}/{filename}'
+                
+                # Save file using Django's storage system
+                saved_path = default_storage.save(file_path, ContentFile(file_content))
+                
+                # Use the saved path as s3_key for local files
+                s3_bucket = 'local'
+                s3_key = saved_path
+                size_bytes = len(file_content)
+            else:
+                size_bytes = att_data.get('size_bytes', 0)
+            
             attachment = EmailAttachment.objects.create(
                 email=email,
                 filename=att_data.get('filename', 'unknown'),
                 content_type=att_data.get('content_type', 'application/octet-stream'),
-                size_bytes=att_data.get('size_bytes', 0),
-                s3_bucket=att_data.get('s3_bucket', ''),
-                s3_key=att_data.get('s3_key', ''),
+                size_bytes=size_bytes,
+                s3_bucket=s3_bucket,
+                s3_key=s3_key,
             )
             attachments_created.append(attachment.filename)
         
