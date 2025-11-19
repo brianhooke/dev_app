@@ -1480,6 +1480,25 @@ Version: v56 (displayed in header)
                         // Update Send to Xero button state
                         if (currentSelectedInvoicePk) {
                             validateAndUpdateSendButton(currentSelectedInvoicePk);
+                            
+                            // Mark row as having valid allocations if all checks pass
+                            var row = $('tr[data-invoice-pk="' + currentSelectedInvoicePk + '"]');
+                            var remainingNetVal = parseFloat($('#remainingNet').text().replace('$', ''));
+                            var remainingGstVal = parseFloat($('#remainingGst').text().replace('$', ''));
+                            var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                            var allAccountsSelected = true;
+                            $('#allocationsTableBody tr').each(function() {
+                                if (!$(this).find('.xero-account-select').val()) {
+                                    allAccountsSelected = false;
+                                }
+                            });
+                            
+                            if (hasAllocations && allAccountsSelected && 
+                                Math.abs(remainingNetVal) < 0.01 && Math.abs(remainingGstVal) < 0.01) {
+                                row.attr('data-allocations-valid', 'true');
+                            } else {
+                                row.attr('data-allocations-valid', 'false');
+                            }
                         }
                     }
                     
@@ -1511,10 +1530,14 @@ Version: v56 (displayed in header)
                         var isDirectModal = (currentBillsModalType === 'direct');
                         
                         if (isDirectModal) {
-                            // In Direct mode, invoice must be selected to validate allocations
+                            // In Direct mode, check if invoice is selected OR has valid allocations saved
                             if (currentSelectedInvoicePk !== invoicePk) {
-                                // Invoice not selected - button must stay grey
-                                isValid = false;
+                                // Invoice not currently selected - check if it has valid allocations from before
+                                var hasValidAllocations = row.attr('data-allocations-valid') === 'true';
+                                if (!hasValidAllocations) {
+                                    isValid = false;
+                                }
+                                // If hasValidAllocations is true, isValid stays true (from LHS validation)
                             } else {
                                 // Invoice is selected - validate allocations
                                 var hasAllocations = $('#allocationsTableBody tr').length > 0;
@@ -1868,6 +1891,30 @@ Version: v56 (displayed in header)
                                         
                                         // Update remaining allocation calculations
                                         updateRemainingAllocations();
+                                        
+                                        // After loading allocations, check if they're valid and mark the row
+                                        // This happens after a short delay to ensure dropdowns are populated
+                                        setTimeout(function() {
+                                            var remainingNetVal = parseFloat($('#remainingNet').text().replace('$', ''));
+                                            var remainingGstVal = parseFloat($('#remainingGst').text().replace('$', ''));
+                                            var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                                            var allAccountsSelected = true;
+                                            $('#allocationsTableBody tr').each(function() {
+                                                if (!$(this).find('.xero-account-select').val()) {
+                                                    allAccountsSelected = false;
+                                                }
+                                            });
+                                            
+                                            if (hasAllocations && allAccountsSelected && 
+                                                Math.abs(remainingNetVal) < 0.01 && Math.abs(remainingGstVal) < 0.01) {
+                                                clickedRow.attr('data-allocations-valid', 'true');
+                                            } else {
+                                                clickedRow.attr('data-allocations-valid', 'false');
+                                            }
+                                            
+                                            // Re-validate button state with new allocation status
+                                            validateAndUpdateSendButton(invoicePk);
+                                        }, 100);
                                     }
                                 }
                             }
