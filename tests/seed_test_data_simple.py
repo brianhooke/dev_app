@@ -33,13 +33,14 @@ xero = XeroInstances.objects.create(
     xero_client_id='test-id'
 )
 
-# Suppliers
+# Suppliers (checked=1 means supplier)
 supplier1 = Contacts.objects.create(
     name='Test Supplier 1',
     xero_instance=xero,
     xero_contact_id='contact-1',
     email='supplier1@test.com',
-    status='active'
+    status='ACTIVE',
+    checked=1  # 1 = supplier
 )
 
 supplier2 = Contacts.objects.create(
@@ -47,7 +48,8 @@ supplier2 = Contacts.objects.create(
     xero_instance=xero,
     xero_contact_id='contact-2',
     email='supplier2@test.com',
-    status='active'
+    status='ACTIVE',
+    checked=1  # 1 = supplier
 )
 
 # Project
