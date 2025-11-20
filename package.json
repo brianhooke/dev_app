@@ -12,9 +12,9 @@
     "test:bills-inbox": "playwright test bills-inbox",
     "test:bills-direct": "playwright test bills-direct",
     "test:report": "playwright show-report",
-    "test:setup": "python manage.py migrate --settings=dev_app.settings.test && python manage.py shell < tests/seed_test_data.py",
-    "test:server": "python manage.py runserver --settings=dev_app.settings.test",
-    "test:reset": "rm -f db_test.sqlite3 && npm run test:setup"
+    "test:setup": "python3 manage.py migrate --settings=dev_app.settings.test && python3 manage.py shell < tests/seed_test_data_simple.py",
+    "test:server": "python3 manage.py runserver --settings=dev_app.settings.test",
+    "test:reset": "rm -f \"db_test.sqlite3\" && npm run test:setup"
   },
   "keywords": [],
   "author": "",

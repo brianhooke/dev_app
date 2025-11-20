@@ -11,9 +11,10 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dev_app.settings.test')
 django.setup()
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from core.models import (
-    XeroInstance, Contacts, Projects, Invoices, 
-    InvoiceAllocations, XeroAccounts, ReceivedEmails, EmailAttachment
+    XeroInstances, Contacts, Projects, Invoices, 
+    Invoice_allocations, XeroAccounts, ReceivedEmail, EmailAttachment
 )
 from decimal import Decimal
 
@@ -21,17 +22,13 @@ User = get_user_model()
 
 print("🌱 Seeding test database...")
 
-# Clear existing data
-print("  Clearing existing data...")
-InvoiceAllocations.objects.all().delete()
-Invoices.objects.all().delete()
-EmailAttachment.objects.all().delete()
-ReceivedEmails.objects.all().delete()
-XeroAccounts.objects.all().delete()
-Projects.objects.all().delete()
-Contacts.objects.all().delete()
-XeroInstance.objects.all().delete()
-User.objects.all().delete()
+# Check if data already exists
+if Invoices.objects.exists() or User.objects.filter(username='testuser').exists():
+    print("  ⚠️  Data already exists! Use 'npm run test:reset' to wipe and recreate.")
+    print("  Exiting without changes...")
+    exit(0)
+
+print("  Database is empty, creating test data...")
 
 # Create test user
 print("  Creating test user...")
@@ -43,12 +40,10 @@ user = User.objects.create_user(
 
 # Create Xero Instance
 print("  Creating Xero instance...")
-xero_instance = XeroInstance.objects.create(
-    xero_instance_pk=1,
+xero_instance = XeroInstances.objects.create(
     xero_name='Test Xero Instance',
-    xero_tenant_id='test-tenant-123',
-    xero_token_set='{}',
-    xero_instance_type='test'
+    xero_client_id='test-client-id',
+    oauth_tenant_id='test-tenant-123'
 )
 
 # Create Suppliers (Contacts)
@@ -56,40 +51,44 @@ print("  Creating suppliers...")
 supplier1 = Contacts.objects.create(
     contact_pk=1,
     name='Test Supplier 1',
-    xero_instance_id=xero_instance.xero_instance_pk,
-    xero_contact_id='contact-1'
+    xero_instance=xero_instance,
+    xero_contact_id='contact-1',
+    email='supplier1@test.com',
+    status='active'
 )
 
 supplier2 = Contacts.objects.create(
     contact_pk=2,
     name='Test Supplier 2',
-    xero_instance_id=xero_instance.xero_instance_pk,
-    xero_contact_id='contact-2'
+    xero_instance=xero_instance,
+    xero_contact_id='contact-2',
+    email='supplier2@test.com',
+    status='active'
 )
 
 # Create Project
 print("  Creating project...")
 project = Projects.objects.create(
     projects_pk=1,
-    project_name='Test Project',
-    xero_instance_id=xero_instance.xero_instance_pk,
-    xero_project_id='project-1'
+    project='Test Project',
+    xero_instance=xero_instance,
+    project_type='general'
 )
 
 # Create Xero Accounts
 print("  Creating Xero accounts...")
 account1 = XeroAccounts.objects.create(
     xero_account_pk=1,
-    xero_instance_id=xero_instance.xero_instance_pk,
-    xero_account_id='account-1',
+    xero_instance=xero_instance,
+    account_id='account-1',
     account_name='Test Account 1',
     account_code='1000'
 )
 
 account2 = XeroAccounts.objects.create(
     xero_account_pk=2,
-    xero_instance_id=xero_instance.xero_instance_pk,
-    xero_account_id='account-2',
+    xero_instance=xero_instance,
+    account_id='account-2',
     account_name='Test Account 2',
     account_code='2000'
 )
@@ -98,28 +97,31 @@ account2 = XeroAccounts.objects.create(
 print("  Creating test invoices...")
 
 # Invoice 1: In Inbox (status=-2)
-email1 = ReceivedEmails.objects.create(
-    received_email_pk=1,
+email1 = ReceivedEmail.objects.create(
     from_address='supplier1@test.com',
+    to_address='invoices@test.com',
     subject='Invoice INV-001',
+    message_id='msg-001@test.com',
     body_text='Test invoice 1',
-    body_html='<p>Test invoice 1</p>'
-)
-
-attachment1 = EmailAttachment.objects.create(
-    email_attachment_pk=1,
-    received_email=email1,
-    filename='invoice1.pdf',
+    body_html='<p>Test invoice 1</p>',
+    received_at=timezone.now(),
     s3_bucket='local',
     s3_key='test/invoice1.pdf'
 )
 
+attachment1 = EmailAttachment.objects.create(
+    received_email=email1,
+    filename='invoice1.pdf',
+    s3_bucket='local',
+    s3_key='test/invoice1.pdf',
+    file_size=1024
+)
+
 invoice1 = Invoices.objects.create(
-    invoice_pk=1,
     invoice_status=-2,  # Inbox
     received_email=email1,
     email_attachment=attachment1,
-    xero_instance_id=None,
+    xero_instance=None,
     contact_pk=None,
     project=None,
     supplier_invoice_number='',
@@ -128,7 +130,7 @@ invoice1 = Invoices.objects.create(
 )
 
 # Invoice 2: In Direct with valid allocations (status=0)
-email2 = ReceivedEmails.objects.create(
+email2 = ReceivedEmail.objects.create(
     received_email_pk=2,
     from_address='supplier2@test.com',
     subject='Invoice INV-002',
@@ -149,7 +151,7 @@ invoice2 = Invoices.objects.create(
     invoice_status=0,  # Direct
     received_email=email2,
     email_attachment=attachment2,
-    xero_instance_id=xero_instance.xero_instance_pk,
+    xero_instance=xero_instance,
     contact_pk=supplier1,
     project=None,
     supplier_invoice_number='INV-002',
@@ -158,9 +160,9 @@ invoice2 = Invoices.objects.create(
 )
 
 # Create allocation for invoice2
-allocation1 = InvoiceAllocations.objects.create(
+allocation1 = Invoice_allocations.objects.create(
     invoice_allocations_pk=1,
-    invoice=invoice2,
+    invoice_pk=invoice2,
     xero_account=account1,
     amount=Decimal('100.00'),
     gst_amount=Decimal('10.00'),
@@ -168,7 +170,7 @@ allocation1 = InvoiceAllocations.objects.create(
 )
 
 # Invoice 3: In Direct without allocations (status=0)
-email3 = ReceivedEmails.objects.create(
+email3 = ReceivedEmail.objects.create(
     received_email_pk=3,
     from_address='supplier1@test.com',
     subject='Invoice INV-003',
@@ -189,7 +191,7 @@ invoice3 = Invoices.objects.create(
     invoice_status=0,  # Direct
     received_email=email3,
     email_attachment=attachment3,
-    xero_instance_id=xero_instance.xero_instance_pk,
+    xero_instance=xero_instance,
     contact_pk=supplier2,
     project=None,
     supplier_invoice_number='INV-003',
@@ -198,7 +200,7 @@ invoice3 = Invoices.objects.create(
 )
 
 # Invoice 4: Another inbox invoice
-email4 = ReceivedEmails.objects.create(
+email4 = ReceivedEmail.objects.create(
     received_email_pk=4,
     from_address='supplier2@test.com',
     subject='Invoice INV-004',
@@ -219,7 +221,7 @@ invoice4 = Invoices.objects.create(
     invoice_status=-2,  # Inbox
     received_email=email4,
     email_attachment=attachment4,
-    xero_instance_id=None,
+    xero_instance=None,
     contact_pk=None,
     project=None,
     supplier_invoice_number='',
@@ -229,11 +231,11 @@ invoice4 = Invoices.objects.create(
 
 print("\n✅ Test database seeded successfully!")
 print(f"   - Users: {User.objects.count()}")
-print(f"   - Xero Instances: {XeroInstance.objects.count()}")
+print(f"   - Xero Instances: {XeroInstances.objects.count()}")
 print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Projects: {Projects.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
 print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")
 print(f"   - Invoices (Direct): {Invoices.objects.filter(invoice_status=0).count()}")
-print(f"   - Allocations: {InvoiceAllocations.objects.count()}")
+print(f"   - Allocations: {Invoice_allocations.objects.count()}")
 print("\n🎭 Ready for Playwright tests!")
