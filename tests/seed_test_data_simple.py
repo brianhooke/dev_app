@@ -10,7 +10,7 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from core.models import XeroInstances, Contacts, XeroAccounts, Invoices
+from core.models import XeroInstances, Contacts, XeroAccounts, Invoices, Projects
 from decimal import Decimal
 
 User = get_user_model()
@@ -48,6 +48,13 @@ supplier2 = Contacts.objects.create(
     xero_contact_id='contact-2',
     email='supplier2@test.com',
     status='active'
+)
+
+# Project
+project = Projects.objects.create(
+    project='Test Project',
+    xero_instance=xero,
+    project_type='general'
 )
 
 # Xero Accounts
@@ -101,6 +108,7 @@ Invoices.objects.create(
 print("\n✅ Test database seeded!")
 print(f"   - Users: {User.objects.count()}")
 print(f"   - Xero Instances: {XeroInstances.objects.count()}")
+print(f"   - Projects: {Projects.objects.count()}")
 print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
 print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")
