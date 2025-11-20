@@ -14,7 +14,8 @@
     "test:report": "playwright show-report",
     "test:setup": "python3 manage.py migrate --settings=dev_app.settings.test && python3 manage.py shell < tests/seed_test_data_simple.py",
     "test:server": "python3 manage.py runserver --settings=dev_app.settings.test",
-    "test:reset": "rm -f \"db_test.sqlite3\" && npm run test:setup"
+    "test:reset": "rm -f \"db_test.sqlite3\" && npm run test:setup",
+    "test:fresh": "echo '🔄 Resetting test database...' && npm run test:reset && echo '✅ Database reset complete! Now run: npm run test:server'"
   },
   "keywords": [],
   "author": "",
