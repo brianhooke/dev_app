@@ -80,6 +80,7 @@ def dashboard_view(request):
         "contacts_columns": contacts_columns,
         "contacts_rows": contacts_rows,
         "xero_instances": xero_instances,
+        "settings": settings,  # Add settings to context for environment indicator
     }
     
     return render(request, "dashboard/dashboard.html", context)
