@@ -1,6 +1,7 @@
 """
 Development script to create sample emails with invoices
 Simulates emails received via SES → Lambda → Django flow
+Creates local PDF files for development (no S3 required)
 """
 
 import os
@@ -10,10 +11,39 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dev_app.settings.local')
 django.setup()
 
 from django.utils import timezone
+from django.conf import settings
 from core.models import ReceivedEmail, EmailAttachment, Invoices
 from datetime import timedelta
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+
+def create_dummy_pdf(filepath, title, content_lines):
+    """Create a simple PDF file for development"""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    
+    c = canvas.Canvas(filepath, pagesize=A4)
+    width, height = A4
+    
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 50, title)
+    
+    # Content
+    c.setFont("Helvetica", 12)
+    y = height - 100
+    for line in content_lines:
+        c.drawString(50, y, line)
+        y -= 20
+    
+    c.save()
+    return os.path.getsize(filepath)
 
 print("📧 Creating sample emails for development...")
+
+# Create media directory for dev emails if it doesn't exist
+dev_emails_dir = os.path.join(settings.MEDIA_ROOT, 'dev_emails')
+os.makedirs(dev_emails_dir, exist_ok=True)
+print(f"  Using local storage: {dev_emails_dir}")
 
 # Sample email data
 emails_data = [
@@ -123,16 +153,52 @@ for i, email_data in enumerate(emails_data, 1):
     
     print(f"    ✓ Email created: {received_email.message_id}")
     
-    # Create attachments
+    # Create attachments with actual PDF files
     for j, attachment_data in enumerate(email_data['attachments'], 1):
+        # Create actual PDF file locally
+        pdf_filename = attachment_data['filename']
+        pdf_path = os.path.join(dev_emails_dir, f'email-{i}-{pdf_filename}')
+        
+        # Generate PDF content based on filename
+        if 'invoice' in pdf_filename.lower():
+            pdf_content = [
+                f"Invoice Number: {pdf_filename.replace('.pdf', '')}",
+                f"Date: {timezone.now().strftime('%d/%m/%Y')}",
+                "",
+                "Bill To: Mason Build",
+                "From: " + email_data['from'],
+                "",
+                "Description                    Amount",
+                "Building Materials            $1,000.00",
+                "Labour                          $250.00",
+                "                              ----------",
+                "Subtotal:                     $1,250.00",
+                "GST (10%):                      $125.00",
+                "Total:                        $1,375.00",
+            ]
+        else:
+            pdf_content = [
+                f"Document: {pdf_filename.replace('.pdf', '')}",
+                f"Date: {timezone.now().strftime('%d/%m/%Y')}",
+                "",
+                "This is a supporting document",
+                "for the invoice.",
+            ]
+        
+        file_size = create_dummy_pdf(pdf_path, pdf_filename.replace('.pdf', ''), pdf_content)
+        
+        # Store relative path from MEDIA_ROOT
+        relative_path = os.path.relpath(pdf_path, settings.MEDIA_ROOT)
+        
         attachment = EmailAttachment.objects.create(
             email=received_email,
-            filename=attachment_data['filename'],
+            filename=pdf_filename,
             content_type='application/pdf',
-            size_bytes=attachment_data['size'],
-            s3_bucket='dev-emails',
-            s3_key=f'attachments/test-email-{i}-attachment-{j}.pdf'
+            size_bytes=file_size,
+            s3_bucket='local',  # Use 'local' to indicate local storage
+            s3_key=relative_path  # Store relative path for local files
         )
+        print(f"    ✓ PDF created: {pdf_path}")
         print(f"    ✓ Attachment created: {attachment.filename} ({attachment.size_bytes} bytes)")
         
         # Create invoice for each PDF attachment
