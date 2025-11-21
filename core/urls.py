@@ -3,6 +3,7 @@ from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations
 from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, get_xero_accounts_by_instance, create_invoice_allocation, update_invoice_allocation, delete_invoice_allocation, update_invoice, null_allocation_xero_fields
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
+from .views.projects import create_project, get_projects, update_project, toggle_project_archive
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
@@ -79,6 +80,12 @@ urlpatterns = [
     path('switch_project/', switch_project, name='switch_project'),
     path('get_current_project_info/', get_current_project_info, name='get_current_project_info'),
     path('project_selector/', project_selector_view, name='project_selector'),
+    
+    # Projects management endpoints
+    path('create_project/', create_project, name='create_project'),
+    path('get_projects/', get_projects, name='get_projects'),
+    path('update_project/<int:project_pk>/', update_project, name='update_project'),
+    path('toggle_project_archive/<int:project_pk>/', toggle_project_archive, name='toggle_project_archive'),
     
     # Xero management endpoints (contact endpoints moved to dashboard app)
     path('get_xero_instances/', get_xero_instances, name='get_xero_instances'),

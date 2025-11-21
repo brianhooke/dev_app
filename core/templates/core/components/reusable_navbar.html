@@ -46,6 +46,13 @@
     background-clip: text;
   }
   
+  .reusable-navbar a.disabled {
+    color: #ccc !important;
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+  
   .reusable-navbar .divider {
     height: 3px;
     background: var(--gradient-primary-45deg);
@@ -125,7 +132,7 @@
                 <li>
                     <a href="{{ item.url }}" 
                        id="{{ item.id }}" 
-                       class="{% if current_page == item.page_id %}active{% endif %}">
+                       class="{% if current_page == item.page_id %}active{% endif %}{% if item.disabled %} disabled{% endif %}">
                         {{ item.label }}
                     </a>
                 </li>

@@ -4,21 +4,23 @@ const { test, expect } = require('@playwright/test');
 /**
  * Bills - Inbox Tests
  * 
- * These tests verify the Bills - Inbox functionality to prevent regressions.
- * 
- * Test Summary:
- * 1. GST validation accepts 0 value
+ * These tests verify the Bills - Inbox functionality, specifically:
+ * 1. GST validation accepts 0 value (bug fix v56)
  * 2. GST validation rejects empty value
- * 3. Send button does not validate allocations (Inbox mode only)
- * 4. PDF viewer maintains height regardless of table rows
- * 5. Send button validation matches click handler validation
+ * 3. Send button does not validate allocations in Inbox mode (bug fix v56)
+ * 4. Send button validation matches click handler validation
+ * 5. PDF viewer maintains fixed height regardless of table rows (bug fix v56)
+ * 6. PDF loads correctly when clicking on a bill row
  */
+
+test.describe.configure({ mode: 'serial' });
 
 test.describe('Bills - Inbox', () => {
   
   test.beforeEach(async ({ page }) => {
     // Navigate to dashboard and open Bills - Inbox
-    await page.goto('/dashboard/');
+    // Force a fresh page load to avoid state issues between tests
+    await page.goto('/dashboard/', { waitUntil: 'networkidle' });
     
     // Wait for page to load
     await page.waitForLoadState('networkidle');
@@ -38,11 +40,21 @@ test.describe('Bills - Inbox', () => {
     // Wait for bills table to have rows
     await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
     
-    // Wait for dropdowns to be populated (need at least 3 options: blank + header + actual option)
+    // Give the page a moment to settle before checking dropdowns
+    await page.waitForTimeout(1000);
+    
+    // Wait for dropdowns to be populated with projects
+    // Check that project options exist (value starts with 'project_')
     await page.waitForFunction(() => {
-      const select = document.querySelector('#billsTable tbody tr .xero-project-select');
-      return select && select.options && select.options.length > 2;
-    }, { timeout: 10000 });
+      const options = document.querySelectorAll('#billsTable tbody tr .xero-project-select option');
+      for (const option of options) {
+        const value = option.getAttribute('value');
+        if (value && value.startsWith('project_')) {
+          return true;
+        }
+      }
+      return false;
+    }, { timeout: 25000 }); // Increased timeout for serial test execution
   });
 
   test('GST validation: accepts 0 value', async ({ page }) => {
@@ -226,5 +238,73 @@ test.describe('Bills - Inbox', () => {
       // No validation errors should have been shown
       expect(validationErrorShown).toBe(false);
     }
+  });
+
+  test('PDF loads correctly when clicking on a bill row', async ({ page }) => {
+    // This test verifies that PDFs load from local storage without S3 errors
+    // Bug: Previously tried to load from S3 causing 403 Forbidden errors
+    
+    await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
+    
+    // Get the PDF viewer iframe - use specific selector for Bills section
+    const pdfViewer = page.locator('#billsInboxSection #billViewer').first();
+    const viewerPlaceholder = page.locator('#billsInboxSection #viewerPlaceholder').first();
+    
+    // Initially, viewer should be hidden and placeholder visible
+    await expect(pdfViewer).toBeHidden();
+    await expect(viewerPlaceholder).toBeVisible();
+    
+    // Click on the first bill row to load its PDF
+    const firstRow = page.locator('#billsTable tbody tr').first();
+    await firstRow.click();
+    
+    // Wait for PDF to load
+    await page.waitForTimeout(1000);
+    
+    // Viewer should now be visible and placeholder hidden
+    await expect(pdfViewer).toBeVisible();
+    await expect(viewerPlaceholder).toBeHidden();
+    
+    // Check that the PDF src is a local URL (not S3)
+    const pdfSrc = await pdfViewer.getAttribute('src');
+    expect(pdfSrc).toBeTruthy();
+    expect(pdfSrc).toContain('/media/invoices/');
+    expect(pdfSrc).not.toContain('s3.amazonaws.com');
+    expect(pdfSrc).not.toContain('AWSAccessKeyId');
+    
+    // Wait for iframe to load and check for errors
+    await page.waitForTimeout(2000);
+    
+    // Check browser console for 403 errors
+    const consoleErrors = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+    
+    // Check network requests for failed PDF loads
+    /** @type {Array<{url: string, failure: any}>} */
+    const failedRequests = [];
+    page.on('requestfailed', request => {
+      if (request.url().includes('.pdf')) {
+        failedRequests.push({
+          url: request.url(),
+          failure: request.failure()
+        });
+      }
+    });
+    
+    // Wait a bit to catch any errors
+    await page.waitForTimeout(1000);
+    
+    // Should not have any 403 or S3-related errors
+    const has403Error = failedRequests.some(req => 
+      req.failure && req.failure.errorText && req.failure.errorText.includes('403')
+    );
+    const hasS3Error = failedRequests.some(req => req.url.includes('s3.amazonaws.com'));
+    
+    expect(has403Error).toBe(false);
+    expect(hasS3Error).toBe(false);
   });
 });

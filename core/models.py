@@ -120,7 +120,10 @@ class Projects(models.Model):
     xero_instance = models.ForeignKey(
         XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects'
     )
-    xero_sales_account = models.CharField(max_length=255, null=True)
+    xero_sales_account = models.CharField(max_length=255, null=True, blank=True)
+    background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
+    archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
+    
     def __str__(self):
         return self.project
 

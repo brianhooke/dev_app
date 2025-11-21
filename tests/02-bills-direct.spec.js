@@ -14,6 +14,7 @@ const { test, expect } = require('@playwright/test');
  * 5. PDF viewer maintains height in Direct mode
  * 6. Allocations section visible in Direct mode
  * 7. Send to Xero validates allocations in Direct mode
+ * 8. PDF loads correctly when clicking on a bill row
  */
 
 test.describe('Bills - Direct', () => {
@@ -272,5 +273,42 @@ test.describe('Bills - Direct', () => {
     const buttonAfterSwitch = rowAfterSwitch.locator('.send-bill-btn');
     await expect(buttonAfterSwitch).toHaveClass(/btn-success/);
     await expect(buttonAfterSwitch).toBeEnabled();
+  });
+
+  test('PDF loads correctly when clicking on a bill row', async ({ page }) => {
+    // This test verifies that PDFs load from local storage without S3 errors
+    // Bug: Previously tried to load from S3 causing 403 Forbidden errors
+    
+    await page.waitForSelector('#billsTable tbody tr', { timeout: 10000 });
+    
+    // Get the PDF viewer iframe - use specific selector for Bills section
+    const pdfViewer = page.locator('#billsInboxSection #billViewer').first();
+    const viewerPlaceholder = page.locator('#billsInboxSection #viewerPlaceholder').first();
+    
+    // Initially, viewer should be hidden and placeholder visible
+    await expect(pdfViewer).toBeHidden();
+    await expect(viewerPlaceholder).toBeVisible();
+    
+    // Click on the first bill row to load its PDF
+    const firstRow = page.locator('#billsTable tbody tr').first();
+    await firstRow.click();
+    
+    // Wait for PDF to load
+    await page.waitForTimeout(1000);
+    
+    // Viewer should now be visible and placeholder hidden
+    await expect(pdfViewer).toBeVisible();
+    await expect(viewerPlaceholder).toBeHidden();
+    
+    // Check that the PDF src is a local URL (not S3)
+    const pdfSrc = await pdfViewer.getAttribute('src');
+    expect(pdfSrc).toBeTruthy();
+    expect(pdfSrc).toContain('/media/invoices/');
+    expect(pdfSrc).not.toContain('s3.amazonaws.com');
+    expect(pdfSrc).not.toContain('AWSAccessKeyId');
+    
+    // Verify allocations section is visible in Direct mode
+    const allocationsSection = page.locator('#billsInboxSection #allocationsSection').first();
+    await expect(allocationsSection).toBeVisible();
   });
 });

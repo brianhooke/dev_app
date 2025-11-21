@@ -98,7 +98,7 @@ class XeroAccountsAdmin(admin.ModelAdmin):
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
-    list_display = ("projects_pk", "project", "xero_instance", "xero_sales_account")
+    list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived")
 
 class ContactsAdmin(admin.ModelAdmin):
     list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "email", "status", "bank_details_verified", "division", "checked")

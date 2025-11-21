@@ -26,8 +26,8 @@ PASSWORD_HASHERS = [
 # Use console email backend for tests
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Test-specific media root
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media_test')
+# Use same media folder as local environment (not separate media_test)
+# MEDIA_ROOT and MEDIA_URL are inherited from local.py
 
 # Logging - show errors but reduce noise
 LOGGING = {
@@ -47,5 +47,5 @@ LOGGING = {
 print("=" * 60)
 print("🧪 RUNNING IN TEST MODE")
 print(f"📁 Test Database: {DATABASES['default']['NAME']}")
-print(f"📁 Test Media: {MEDIA_ROOT}")
+print(f"📁 Media Folder: {MEDIA_ROOT}")
 print("=" * 60)

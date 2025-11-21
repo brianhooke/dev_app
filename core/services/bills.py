@@ -88,19 +88,25 @@ def get_invoices_list(division):
         F('associated_hc_claim__pk').desc(nulls_first=True)
     ).all()
     
-    return [{
-        'invoice_pk': i.invoice_pk,
-        'invoice_status': i.invoice_status,
-        'contact_name': i.contact_pk.contact_name,
-        'total_net': i.total_net,
-        'total_gst': i.total_gst,
-        'supplier_invoice_number': i.supplier_invoice_number,
-        'pdf_url': i.pdf.url,
-        'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,
-        'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,
-        'invoice_date': i.invoice_date,
-        'invoice_due_date': i.invoice_due_date
-    } for i in invoices]
+    result = []
+    for i in invoices:
+        pdf_url = i.pdf.url if i.pdf else None
+        logger.info(f"Invoice {i.invoice_pk} PDF URL: {pdf_url}")
+        logger.info(f"  Storage class: {i.pdf.storage.__class__.__name__ if i.pdf else 'N/A'}")
+        result.append({
+            'invoice_pk': i.invoice_pk,
+            'invoice_status': i.invoice_status,
+            'contact_name': i.contact_pk.contact_name,
+            'total_net': i.total_net,
+            'total_gst': i.total_gst,
+            'supplier_invoice_number': i.supplier_invoice_number,
+            'pdf_url': pdf_url,
+            'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,
+            'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,
+            'invoice_date': i.invoice_date,
+            'invoice_due_date': i.invoice_due_date
+        })
+    return result
 
 
 def get_unallocated_invoices(division):
@@ -122,6 +128,9 @@ def get_unallocated_invoices(division):
     
     result = []
     for i in invoices_unallocated:
+        pdf_url = i.pdf.url if i.pdf else None
+        logger.info(f"Unallocated Invoice {i.invoice_pk} PDF URL: {pdf_url}")
+        logger.info(f"  Storage class: {i.pdf.storage.__class__.__name__ if i.pdf else 'N/A'}")
         result.append({
             'invoice_pk': i.invoice_pk,
             'contact_pk': i.contact_pk.pk,
@@ -130,7 +139,7 @@ def get_unallocated_invoices(division):
             'total_net': i.total_net,
             'total_gst': i.total_gst,
             'supplier_invoice_number': i.supplier_invoice_number,
-            'pdf_url': i.pdf.url,
+            'pdf_url': pdf_url,
             'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,
             'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,
             'invoice_date': i.invoice_date,
@@ -157,20 +166,26 @@ def get_allocated_invoices(division):
         invoice_division=division
     ).select_related('contact_pk', 'associated_hc_claim')
     
-    return [{
-        'invoice_pk': i.invoice_pk,
-        'invoice_status': i.invoice_status,
-        'contact_name': i.contact_pk.contact_name,
-        'total_net': i.total_net,
-        'total_gst': i.total_gst,
-        'supplier_invoice_number': i.supplier_invoice_number,
-        'pdf_url': i.pdf.url,
-        'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,
-        'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,
-        'invoice_date': i.invoice_date,
-        'invoice_due_date': i.invoice_due_date,
-        'invoice_type': i.invoice_type
-    } for i in invoices_allocated]
+    result = []
+    for i in invoices_allocated:
+        pdf_url = i.pdf.url if i.pdf else None
+        logger.info(f"Allocated Invoice {i.invoice_pk} PDF URL: {pdf_url}")
+        logger.info(f"  Storage class: {i.pdf.storage.__class__.__name__ if i.pdf else 'N/A'}")
+        result.append({
+            'invoice_pk': i.invoice_pk,
+            'invoice_status': i.invoice_status,
+            'contact_name': i.contact_pk.contact_name,
+            'total_net': i.total_net,
+            'total_gst': i.total_gst,
+            'supplier_invoice_number': i.supplier_invoice_number,
+            'pdf_url': pdf_url,
+            'associated_hc_claim': i.associated_hc_claim.hc_claim_pk if i.associated_hc_claim else None,
+            'display_id': i.associated_hc_claim.display_id if i.associated_hc_claim else None,
+            'invoice_date': i.invoice_date,
+            'invoice_due_date': i.invoice_due_date,
+            'invoice_type': i.invoice_type
+        })
+    return result
 
 
 def get_invoice_totals_by_hc_claim():

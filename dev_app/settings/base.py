@@ -81,7 +81,7 @@ ROOT_URLCONF = 'dev_app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -140,6 +140,10 @@ EMAIL_BACKEND = 'dev_app.email_backends.CustomEmailBackend'
 EMAIL_HOST = 'smtp.office365.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+
+# Authentication settings
+LOGIN_REDIRECT_URL = '/'
+LOGIN_URL = '/accounts/login/'
 
 #to be deleted pre production:
 

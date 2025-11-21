@@ -278,6 +278,48 @@ Version: v58 (displayed in header)
         </div>
     </div>
 
+    <!-- Projects Section (hidden initially, shown when Projects clicked) -->
+    <div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
+        
+        <!-- Projects Table (scrollable with fixed header) -->
+        <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="overflow-y: auto; flex: 1;">
+                <table class="table table-bordered table-hover" id="projectsTable" style="margin-bottom: 0;">
+                    <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                        <tr>
+                            <th>Project</th>
+                            <th>Type</th>
+                            <th>Xero Instance</th>
+                            <th>Sales Account</th>
+                            <th>Background Image</th>
+                            <th>Last Edited</th>
+                            <th>Last Invoiced</th>
+                            <th>Bills Status</th>
+                            <th style="width: 100px; text-align: center;">Update</th>
+                            <th style="width: 80px; text-align: center;" id="archiveColumnHeader">Archive</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectsTableBody">
+                        <!-- Projects will be populated here via JavaScript -->
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 40px; color: #6c757d;">
+                                No projects found. Click "Add Project" to create one.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Footer Buttons -->
+        <div style="display: flex; justify-content: space-between; flex-shrink: 0;">
+            <button id="toggleArchiveBtn" class="btn btn-secondary" data-showing-archived="0">
+                <i class="fas fa-archive"></i> Show Archived
+            </button>
+            <button id="addProjectBtn" class="btn btn-success">Add Project</button>
+        </div>
+    </div>
+
     <!-- Bills - Inbox Section (hidden initially, shown when Bills - Inbox clicked) -->
     <div id="billsInboxSection" style="display: none; height: calc(100% - 50px); flex-direction: column;">
         <div style="display: flex; height: 100%;">
@@ -402,6 +444,7 @@ Version: v58 (displayed in header)
             $('#billsInboxSection').hide();
             $('#allocationsSection').hide();
             $('#contactsSection').css('display', 'none');
+            $('#projectsSection').css('display', 'none');
             $('#xeroSection').css('display', 'none');
             
             // Show empty state and remove has-content class to show background
@@ -430,6 +473,7 @@ Version: v58 (displayed in header)
             // Hide all other sections
             $('#billsInboxSection').hide();
             $('#allocationsSection').hide();
+            $('#projectsSection').css('display', 'none');
             $('#xeroSection').css('display', 'none');
             
             // Show contacts section, hide empty state, and add has-content class to hide background
@@ -453,6 +497,592 @@ Version: v58 (displayed in header)
             if (instancePk && typeof loadContacts === 'function') {
                 loadContacts(instancePk);
             }
+        });
+        
+        // Projects controller - shows inline in workspace
+        $('#projectsLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all other sections
+            $('#billsInboxSection').hide();
+            $('#allocationsSection').hide();
+            $('#contactsSection').css('display', 'none');
+            $('#xeroSection').css('display', 'none');
+            
+            // Show projects section, hide empty state, and add has-content class to hide background
+            $('#emptyState').hide();
+            $('#projectsSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Load projects data
+            loadProjects();
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Function to load and display projects
+        function loadProjects(showArchived) {
+            // Default to showing active projects (archived=0)
+            if (showArchived === undefined) {
+                showArchived = $('#toggleArchiveBtn').data('showing-archived') === 1;
+            }
+            
+            const archivedParam = showArchived ? '1' : '0';
+            
+            $.ajax({
+                url: '{% url "core:get_projects" %}?archived=' + archivedParam,
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        populateProjectsTable(response.projects, showArchived);
+                    } else {
+                        console.error('Error loading projects:', response.message);
+                        alert('Error loading projects. Please try again.');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading projects:', error);
+                    alert('Error loading projects. Please try again.');
+                }
+            });
+        }
+        
+        // Function to populate projects table with data
+        function populateProjectsTable(projects, showingArchived) {
+            const tbody = $('#projectsTableBody');
+            const archiveHeader = $('#archiveColumnHeader');
+            
+            console.log('📊 Populating projects table with', projects.length, 'projects');
+            
+            // Update archive column header based on view
+            if (showingArchived) {
+                archiveHeader.html('Unarchive');
+            } else {
+                archiveHeader.html('Archive');
+            }
+            
+            // Clear existing rows (except add row if present)
+            tbody.find('tr:not(.add-project-row)').remove();
+            
+            if (projects.length === 0) {
+                // Show empty state if no projects and no add row
+                if (tbody.find('.add-project-row').length === 0) {
+                    const message = showingArchived ? 'No archived projects found.' : 'No projects found. Click "Add Project" to create one.';
+                    tbody.html(`
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 40px; color: #6c757d;">
+                                ${message}
+                            </td>
+                        </tr>
+                    `);
+                }
+                return;
+            }
+            
+            // Add project rows
+            projects.forEach(project => {
+                console.log(`📁 Project: ${project.project}`);
+                console.log(`  - Background URL: ${project.background_url || '(none)'}`);
+                
+                const row = $(`<tr data-project-pk="${project.projects_pk}"></tr>`);
+                
+                // Store original data for update functionality
+                row.data('original-project', project.project);
+                row.data('original-sales-account', project.xero_sales_account || '');
+                row.data('background-url', project.background_url || '');
+                
+                // Build background image cell
+                let backgroundCell = '-';
+                if (project.background_url) {
+                    console.log(`  - Creating img tag for: ${project.background_url}`);
+                    backgroundCell = `<img src="${project.background_url}" alt="Background" style="max-width: 60px; max-height: 40px; cursor: pointer;" onclick="window.open('${project.background_url}', '_blank')">`;
+                } else {
+                    console.log(`  - No background URL, showing "-"`);
+                }
+                
+                // Build archive/unarchive button
+                let archiveButton;
+                if (showingArchived) {
+                    archiveButton = `<button class="btn btn-sm btn-info unarchive-project-btn" title="Unarchive project">
+                        <i class="fas fa-box-open"></i>
+                    </button>`;
+                } else {
+                    archiveButton = `<button class="btn btn-sm btn-danger archive-project-btn" title="Archive project">
+                        <i class="fas fa-archive"></i>
+                    </button>`;
+                }
+                
+                row.append(`
+                    <td class="project-name">${project.project}</td>
+                    <td>${project.project_type_display}</td>
+                    <td>${project.xero_instance_name || '-'}</td>
+                    <td class="sales-account">${project.xero_sales_account_display || '-'}</td>
+                    <td class="background-image">${backgroundCell}</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-sm btn-primary update-project-btn">Update</button>
+                    </td>
+                    <td style="text-align: center;">
+                        ${archiveButton}
+                    </td>
+                `);
+                tbody.append(row);
+            });
+        }
+        
+        // Add Project button handler - insert blank row at top
+        $(document).on('click', '#addProjectBtn', function() {
+            const tbody = $('#projectsTableBody');
+            
+            // Check if add row already exists
+            if (tbody.find('.add-project-row').length > 0) {
+                alert('Please complete or cancel the current add operation');
+                return;
+            }
+            
+            // Remove empty state message if present
+            tbody.find('tr:has(td[colspan])').remove();
+            
+            // Build project type options
+            const projectTypes = [
+                { value: 'general', label: 'General' },
+                { value: 'development', label: 'Development' },
+                { value: 'construction', label: 'Construction' },
+                { value: 'precast', label: 'Precast' },
+                { value: 'pods', label: 'Pods' }
+            ];
+            const typeOptions = projectTypes.map(type => 
+                `<option value="${type.value}">${type.label}</option>`
+            ).join('');
+            
+            // Build Xero Instance options
+            const xeroInstances = {{ xero_instances_json|safe }};
+            const xeroOptions = '<option value="">Select Xero Instance</option>' + 
+                xeroInstances.map(instance => 
+                    `<option value="${instance.xero_instance_pk}">${instance.xero_name}</option>`
+                ).join('');
+            
+            // Create blank input row
+            const addRow = $(`<tr class="add-project-row" style="background-color: #f8f9fa;"></tr>`);
+            addRow.append(`
+                <td><input type="text" class="form-control form-control-sm project-name-input" placeholder="Project Name *" style="width: 100%;"></td>
+                <td>
+                    <select class="form-control form-control-sm project-type-select" style="width: 100%;">
+                        ${typeOptions}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-control form-control-sm xero-instance-select" style="width: 100%;">
+                        ${xeroOptions}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-control form-control-sm sales-account-select" style="width: 100%;" disabled>
+                        <option value="">Select Xero Instance first</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="file" class="form-control-file form-control-sm background-input" accept="image/*" style="font-size: 0.875rem;">
+                </td>
+                <td colspan="3" style="color: #6c757d; font-style: italic; vertical-align: middle;">New project</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-success add-new-project-btn">Add</button>
+                    <button class="btn btn-sm btn-secondary cancel-add-project-btn">Cancel</button>
+                </td>
+            `);
+            
+            // Insert at the top of tbody
+            tbody.prepend(addRow);
+            
+            // Focus on project name input
+            addRow.find('.project-name-input').focus();
+        });
+        
+        // Handle Xero Instance change in add project row - load sales accounts
+        $(document).on('change', '.add-project-row .xero-instance-select', function() {
+            const row = $(this).closest('tr');
+            const instancePk = $(this).val();
+            const salesAccountSelect = row.find('.sales-account-select');
+            
+            if (!instancePk) {
+                salesAccountSelect.prop('disabled', true).html('<option value="">Select Xero Instance first</option>');
+                return;
+            }
+            
+            // Load Xero accounts for this instance
+            salesAccountSelect.prop('disabled', true).html('<option value="">Loading...</option>');
+            
+            $.ajax({
+                url: `/core/get_xero_accounts/${instancePk}/`,
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success' && response.accounts) {
+                        const accountOptions = '<option value="">Select Sales Account</option>' + 
+                            response.accounts
+                                .filter(acc => acc.account_type === 'REVENUE')
+                                .map(acc => `<option value="${acc.account_code}">${acc.account_name} (${acc.account_code})</option>`)
+                                .join('');
+                        salesAccountSelect.prop('disabled', false).html(accountOptions);
+                    } else {
+                        salesAccountSelect.html('<option value="">No accounts found</option>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading Xero accounts:', error);
+                    salesAccountSelect.html('<option value="">Error loading accounts</option>');
+                }
+            });
+        });
+        
+        // Cancel add project button handler
+        $(document).on('click', '.cancel-add-project-btn', function() {
+            const row = $(this).closest('tr');
+            row.remove();
+            
+            // If no rows left, show empty state
+            const tbody = $('#projectsTableBody');
+            if (tbody.find('tr').length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: #6c757d;">
+                            No projects found. Click "Add Project" to create one.
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+        
+        // Add new project save button handler
+        $(document).on('click', '.add-new-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectName = row.find('.project-name-input').val().trim();
+            const projectType = row.find('.project-type-select').val();
+            const xeroInstancePk = row.find('.xero-instance-select').val();
+            const salesAccount = row.find('.sales-account-select').val();
+            const backgroundFile = row.find('.background-input')[0].files[0];
+            
+            // Validate project name
+            if (!projectName) {
+                alert('Project name is required');
+                row.find('.project-name-input').focus();
+                return;
+            }
+            
+            // Show processing state
+            const inputs = row.find('input, select');
+            inputs.prop('disabled', true);
+            row.find('input').css('background-color', '#e9ecef');
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            row.find('.cancel-add-project-btn').prop('disabled', true);
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('project_name', projectName);
+            formData.append('project_type', projectType);
+            if (xeroInstancePk) {
+                formData.append('xero_instance_pk', xeroInstancePk);
+            }
+            if (salesAccount) {
+                formData.append('xero_sales_account', salesAccount);
+            }
+            if (backgroundFile) {
+                formData.append('background', backgroundFile);
+            }
+            
+            // Make AJAX call to create project
+            $.ajax({
+                url: '{% url "core:create_project" %}',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Remove the add row
+                        row.remove();
+                        
+                        // Reload the entire projects list to show the new project
+                        loadProjects();
+                        
+                        // Show success message
+                        alert('Project created successfully!');
+                    } else {
+                        alert(response.message || 'Error creating project');
+                        inputs.prop('disabled', false);
+                        row.find('input').css('background-color', '');
+                        button.prop('disabled', false).html('Add');
+                        row.find('.cancel-add-project-btn').prop('disabled', false);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error creating project:', error);
+                    const errorMsg = xhr.responseJSON?.message || 'Error creating project. Please try again.';
+                    alert(errorMsg);
+                    inputs.prop('disabled', false);
+                    row.find('input').css('background-color', '');
+                    button.prop('disabled', false).html('Add');
+                    row.find('.cancel-add-project-btn').prop('disabled', false);
+                }
+            });
+        });
+        
+        // Update project button handler - convert row to editable inputs
+        $(document).on('click', '.update-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            
+            // Get current values
+            const projectName = row.find('.project-name').text();
+            const currentSalesAccount = row.data('original-sales-account');
+            const backgroundUrl = row.data('background-url');
+            
+            // Replace project name with input
+            row.find('.project-name').html(`
+                <input type="text" class="form-control form-control-sm project-name-input" 
+                       value="${projectName}" style="width: 100%;">
+            `);
+            
+            // Replace sales account with loading dropdown
+            row.find('.sales-account').html(`
+                <select class="form-control form-control-sm sales-account-select" style="width: 100%;" disabled>
+                    <option value="">Loading accounts...</option>
+                </select>
+            `);
+            
+            // Load sales accounts for this project's Xero instance
+            const xeroInstancePk = row.closest('tr').find('td:eq(2)').text().trim();
+            
+            // Find the Xero instance PK from the stored data
+            $.ajax({
+                url: '{% url "core:get_projects" %}',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        const project = response.projects.find(p => p.projects_pk === projectPk);
+                        if (project && project.xero_instance_pk) {
+                            // Load Xero accounts for this instance
+                            $.ajax({
+                                url: `/core/get_xero_accounts/${project.xero_instance_pk}/`,
+                                type: 'GET',
+                                success: function(accountsResponse) {
+                                    if (accountsResponse.status === 'success' && accountsResponse.accounts) {
+                                        const accountOptions = '<option value="">Select Sales Account</option>' + 
+                                            accountsResponse.accounts
+                                                .filter(acc => acc.account_type === 'REVENUE')
+                                                .map(acc => {
+                                                    const selected = acc.account_code === currentSalesAccount ? 'selected' : '';
+                                                    return `<option value="${acc.account_code}" ${selected}>${acc.account_name} (${acc.account_code})</option>`;
+                                                })
+                                                .join('');
+                                        row.find('.sales-account-select').prop('disabled', false).html(accountOptions);
+                                    } else {
+                                        row.find('.sales-account-select').html('<option value="">No accounts found</option>');
+                                    }
+                                },
+                                error: function() {
+                                    row.find('.sales-account-select').html('<option value="">Error loading accounts</option>');
+                                }
+                            });
+                        } else {
+                            row.find('.sales-account-select').prop('disabled', false).html('<option value="">No Xero instance set</option>');
+                        }
+                    }
+                }
+            });
+            
+            // Replace background image with file input
+            let backgroundHtml = `
+                <input type="file" class="form-control-file form-control-sm background-update-input" 
+                       accept="image/*" style="font-size: 0.75rem;">
+            `;
+            if (backgroundUrl) {
+                backgroundHtml += `<div style="margin-top: 5px;">
+                    <img src="${backgroundUrl}" alt="Current" style="max-width: 50px; max-height: 30px;">
+                    <small style="display: block; color: #6c757d;">Current image</small>
+                </div>`;
+            }
+            row.find('.background-image').html(backgroundHtml);
+            
+            // Change button to Save/Cancel
+            button.replaceWith(`
+                <button class="btn btn-sm btn-success save-project-btn">Save</button>
+                <button class="btn btn-sm btn-secondary cancel-update-project-btn">Cancel</button>
+            `);
+            
+            // Focus on name input
+            row.find('.project-name-input').focus();
+        });
+        
+        // Cancel update project button handler
+        $(document).on('click', '.cancel-update-project-btn', function() {
+            const row = $(this).closest('tr');
+            
+            // Reload projects to restore original state
+            loadProjects();
+        });
+        
+        // Save project button handler
+        $(document).on('click', '.save-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name-input').val().trim();
+            const salesAccount = row.find('.sales-account-select').val();
+            const backgroundFile = row.find('.background-update-input')[0].files[0];
+            
+            // Validate project name
+            if (!projectName) {
+                alert('Project name is required');
+                row.find('.project-name-input').focus();
+                return;
+            }
+            
+            // Show processing state
+            const inputs = row.find('input');
+            inputs.prop('disabled', true);
+            row.find('input[type="text"]').css('background-color', '#e9ecef');
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            row.find('.cancel-update-project-btn').prop('disabled', true);
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('project_name', projectName);
+            formData.append('xero_sales_account', salesAccount);
+            if (backgroundFile) {
+                formData.append('background', backgroundFile);
+            }
+            
+            // Make AJAX call to update project
+            $.ajax({
+                url: `/core/update_project/${projectPk}/`,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Reload projects list to show updated data
+                        loadProjects();
+                        alert('Project updated successfully!');
+                    } else {
+                        alert(response.message || 'Error updating project');
+                        inputs.prop('disabled', false);
+                        row.find('input[type="text"]').css('background-color', '');
+                        button.prop('disabled', false).html('Save');
+                        row.find('.cancel-update-project-btn').prop('disabled', false);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating project:', error);
+                    const errorMsg = xhr.responseJSON?.message || 'Error updating project. Please try again.';
+                    alert(errorMsg);
+                    inputs.prop('disabled', false);
+                    row.find('input[type="text"]').css('background-color', '');
+                    button.prop('disabled', false).html('Save');
+                    row.find('.cancel-update-project-btn').prop('disabled', false);
+                }
+            });
+        });
+        
+        // Toggle Archive button handler
+        $(document).on('click', '#toggleArchiveBtn', function() {
+            const button = $(this);
+            const currentlyShowingArchived = button.data('showing-archived');
+            
+            if (currentlyShowingArchived === 0) {
+                // Switch to showing archived
+                button.data('showing-archived', 1);
+                button.html('<i class="fas fa-list"></i> Show Active');
+                button.removeClass('btn-secondary').addClass('btn-info');
+                loadProjects(true);
+            } else {
+                // Switch to showing active
+                button.data('showing-archived', 0);
+                button.html('<i class="fas fa-archive"></i> Show Archived');
+                button.removeClass('btn-info').addClass('btn-secondary');
+                loadProjects(false);
+            }
+        });
+        
+        // Archive project button handler
+        $(document).on('click', '.archive-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name').text();
+            
+            if (!confirm(`Are you sure you want to archive "${projectName}"?`)) {
+                return;
+            }
+            
+            // Show processing state
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Make AJAX call to archive project
+            $.ajax({
+                url: `/core/toggle_project_archive/${projectPk}/`,
+                type: 'POST',
+                data: { archived: '1' },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Reload projects list (will remove archived project from view)
+                        loadProjects(false);
+                    } else {
+                        alert(response.message || 'Error archiving project');
+                        button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error archiving project:', error);
+                    alert('Error archiving project. Please try again.');
+                    button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
+                }
+            });
+        });
+        
+        // Unarchive project button handler
+        $(document).on('click', '.unarchive-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name').text();
+            
+            if (!confirm(`Are you sure you want to unarchive "${projectName}"?`)) {
+                return;
+            }
+            
+            // Show processing state
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Make AJAX call to unarchive project
+            $.ajax({
+                url: `/core/toggle_project_archive/${projectPk}/`,
+                type: 'POST',
+                data: { archived: '0' },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Reload projects list (will remove unarchived project from archived view)
+                        loadProjects(true);
+                    } else {
+                        alert(response.message || 'Error unarchiving project');
+                        button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error unarchiving project:', error);
+                    alert('Error unarchiving project. Please try again.');
+                    button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
+                }
+            });
         });
         
         // Load Bills - Inbox function (called when navbar link is clicked)
@@ -712,8 +1342,8 @@ Version: v58 (displayed in header)
                             .attr('title', bill.email_subject + ' from ' + bill.email_from);
                         row.append($('<td>').append(emailLink));
                         
-                        // Store attachment data on the row for auto-loading
-                        row.attr('data-attachment-url', bill.attachment_url);
+                        // Store PDF URL on the row for auto-loading
+                        row.attr('data-pdf-url', bill.pdf_url || bill.attachment_url);  // Prefer pdf_url, fallback to attachment_url
                         row.attr('data-filename', bill.attachment_filename);
                         
                         // 7. Send button (text depends on modal type)
@@ -1963,15 +2593,15 @@ Version: v58 (displayed in header)
                             }
                             
                             // Load PDF when switching to different row
-                            var attachmentUrl = clickedRow.attr('data-attachment-url');
+                            var pdfUrl = clickedRow.attr('data-pdf-url');
                             var filename = clickedRow.attr('data-filename');
                             
-                            if (attachmentUrl) {
+                            if (pdfUrl) {
                                 // Update viewer title
                                 $('#viewerTitle').text(filename);
                                 
                                 // Load PDF in iframe
-                                $('#billViewer').attr('src', attachmentUrl).show();
+                                $('#billViewer').attr('src', pdfUrl).show();
                                 $('#viewerPlaceholder').hide();
                             }
                             

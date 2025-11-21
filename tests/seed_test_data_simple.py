@@ -10,8 +10,11 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from core.models import XeroInstances, Contacts, XeroAccounts, Invoices, Projects
 from decimal import Decimal
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 User = get_user_model()
 
@@ -23,6 +26,35 @@ if Invoices.objects.exists():
     exit(0)
 
 print("  Creating minimal test data...")
+
+# Helper function to create fake PDF
+def create_fake_pdf(text):
+    """Create a simple PDF with text"""
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer)
+    p.drawString(100, 750, text)
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return ContentFile(buffer.read())
+
+# Helper function to create fake PNG image
+def create_fake_image(text, width=200, height=100):
+    """Create a simple PNG image with text"""
+    from PIL import Image, ImageDraw, ImageFont
+    
+    # Create a new image with a colored background
+    img = Image.new('RGB', (width, height), color=(73, 109, 137))
+    d = ImageDraw.Draw(img)
+    
+    # Add text to the image
+    d.text((10, 40), text, fill=(255, 255, 255))
+    
+    # Save to BytesIO buffer
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return ContentFile(buffer.read())
 
 # User
 user = User.objects.create_user('testuser', 'test@test.com', 'testpass123')
@@ -58,44 +90,121 @@ supplier2 = Contacts.objects.create(
     tax_number='10987654321'
 )
 
-# Project
-project = Projects.objects.create(
-    project='Test Project',
+# Xero Accounts (create before projects so we can assign sales accounts)
+revenue_account = XeroAccounts.objects.create(
     xero_instance=xero,
-    project_type='general'
+    account_id='acc-revenue',
+    account_name='Sales Revenue',
+    account_code='4000',
+    account_type='REVENUE',
+    account_status='ACTIVE'
 )
 
-# Xero Accounts
+# More Xero Accounts
 account1 = XeroAccounts.objects.create(
     xero_instance=xero,
     account_id='acc-1',
     account_name='Test Account 1',
-    account_code='1000'
+    account_code='1000',
+    account_type='EXPENSE',
+    account_status='ACTIVE'
 )
 
 account2 = XeroAccounts.objects.create(
     xero_instance=xero,
     account_id='acc-2',
     account_name='Test Account 2',
-    account_code='2000'
+    account_code='2000',
+    account_type='EXPENSE',
+    account_status='ACTIVE'
 )
 
-# Invoices - 2 in Inbox, 2 in Direct
-Invoices.objects.create(
+# Projects - 2 active (archived=0), 2 archived (archived=1)
+project1 = Projects.objects.create(
+    project='Active Project 1',
+    xero_instance=xero,
+    project_type='development',
+    xero_sales_account='4000',
+    archived=0
+)
+# Add background image (actual PNG, not PDF)
+project1.background.save('project1_bg.png', create_fake_image('Project 1'))
+
+project2 = Projects.objects.create(
+    project='Active Project 2',
+    xero_instance=xero,
+    project_type='construction',
+    xero_sales_account='4000',
+    archived=0
+)
+
+project3 = Projects.objects.create(
+    project='Archived Project 1',
+    xero_instance=xero,
+    project_type='precast',
+    xero_sales_account='4000',
+    archived=1
+)
+# Add background image (actual PNG, not PDF)
+project3.background.save('project3_bg.png', create_fake_image('Archived 1'))
+
+project4 = Projects.objects.create(
+    project='Archived Project 2',
+    xero_instance=xero,
+    project_type='pods',
+    archived=1
+)
+
+# Invoices - 6 in Inbox (enough for all tests that click Send), 2 in Direct (with PDFs)
+invoice1 = Invoices.objects.create(
     invoice_status=-2,  # Inbox
     supplier_invoice_number='',
     total_net=None,
     total_gst=None
 )
+invoice1.pdf.save('test_invoice_1.pdf', create_fake_pdf('Test Invoice 1 - Inbox'))
 
-Invoices.objects.create(
+invoice2 = Invoices.objects.create(
     invoice_status=-2,  # Inbox
     supplier_invoice_number='',
     total_net=None,
     total_gst=None
 )
+invoice2.pdf.save('test_invoice_2.pdf', create_fake_pdf('Test Invoice 2 - Inbox'))
 
-Invoices.objects.create(
+invoice3_inbox = Invoices.objects.create(
+    invoice_status=-2,  # Inbox
+    supplier_invoice_number='',
+    total_net=None,
+    total_gst=None
+)
+invoice3_inbox.pdf.save('test_invoice_3_inbox.pdf', create_fake_pdf('Test Invoice 3 - Inbox'))
+
+invoice4_inbox = Invoices.objects.create(
+    invoice_status=-2,  # Inbox
+    supplier_invoice_number='',
+    total_net=None,
+    total_gst=None
+)
+invoice4_inbox.pdf.save('test_invoice_4_inbox.pdf', create_fake_pdf('Test Invoice 4 - Inbox'))
+
+invoice5_inbox = Invoices.objects.create(
+    invoice_status=-2,  # Inbox
+    supplier_invoice_number='',
+    total_net=None,
+    total_gst=None
+)
+invoice5_inbox.pdf.save('test_invoice_5_inbox.pdf', create_fake_pdf('Test Invoice 5 - Inbox'))
+
+invoice6_inbox = Invoices.objects.create(
+    invoice_status=-2,  # Inbox
+    supplier_invoice_number='',
+    total_net=None,
+    total_gst=None
+)
+invoice6_inbox.pdf.save('test_invoice_6_inbox.pdf', create_fake_pdf('Test Invoice 6 - Inbox'))
+
+invoice3 = Invoices.objects.create(
     invoice_status=0,  # Direct
     xero_instance=xero,
     contact_pk=supplier1,
@@ -103,8 +212,9 @@ Invoices.objects.create(
     total_net=Decimal('100.00'),
     total_gst=Decimal('10.00')
 )
+invoice3.pdf.save('test_invoice_3.pdf', create_fake_pdf('Test Invoice 3 - Direct'))
 
-Invoices.objects.create(
+invoice4 = Invoices.objects.create(
     invoice_status=0,  # Direct
     xero_instance=xero,
     contact_pk=supplier2,
@@ -112,11 +222,13 @@ Invoices.objects.create(
     total_net=Decimal('200.00'),
     total_gst=Decimal('20.00')
 )
+invoice4.pdf.save('test_invoice_4.pdf', create_fake_pdf('Test Invoice 4 - Direct'))
 
 print("\n✅ Test database seeded!")
 print(f"   - Users: {User.objects.count()}")
 print(f"   - Xero Instances: {XeroInstances.objects.count()}")
-print(f"   - Projects: {Projects.objects.count()}")
+print(f"   - Projects (Active): {Projects.objects.filter(archived=0).count()}")
+print(f"   - Projects (Archived): {Projects.objects.filter(archived=1).count()}")
 print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
 print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")

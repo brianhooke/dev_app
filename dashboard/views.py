@@ -77,8 +77,9 @@ def dashboard_view(request):
             {'label': 'Inbox', 'id': 'billsInboxLink', 'page_id': 'bills_inbox'},
             {'label': 'Direct', 'id': 'billsDirectLink', 'page_id': 'bills_direct'},
         ]},
-        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake'},
-        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours'},
+        {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects'},
+        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True},
+        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True},
         {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
         {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
     ]
@@ -90,6 +91,16 @@ def dashboard_view(request):
     # Get XeroInstances for dropdown
     xero_instances = XeroInstances.objects.all()
     
+    # Serialize xero_instances for JavaScript
+    import json
+    xero_instances_json = json.dumps([
+        {
+            'xero_instance_pk': instance.xero_instance_pk,
+            'xero_name': instance.xero_name
+        }
+        for instance in xero_instances
+    ])
+    
     context = {
         "current_page": "dashboard",
         "project_name": settings.PROJECT_NAME,
@@ -98,6 +109,7 @@ def dashboard_view(request):
         "contacts_columns": contacts_columns,
         "contacts_rows": contacts_rows,
         "xero_instances": xero_instances,
+        "xero_instances_json": xero_instances_json,
         "settings": settings,  # Add settings to context for environment indicator
     }
     

@@ -17,6 +17,9 @@ urlpatterns = [
     path('pods/', include(('pods.urls', 'pods'), namespace='pods')),
     path('general/', include(('general.urls', 'general'), namespace='general')),
     
+    # Authentication URLs (for testing and future use)
+    path('accounts/', include('django.contrib.auth.urls')),
+    
     # Admin
     path('admin/', admin.site.urls),
 ]

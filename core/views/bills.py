@@ -272,6 +272,10 @@ def get_bills_list(request):
                     'xero_account_pk': allocation.xero_account_id if allocation.xero_account else None,
                 })
             
+            # Get PDF URL (local file or S3)
+            pdf_url = invoice.pdf.url if invoice.pdf else ''
+            print(f"Invoice {invoice.invoice_pk} PDF URL: {pdf_url}")  # Debug logging
+            
             bill = {
                 'invoice_pk': invoice.invoice_pk,
                 'invoice_status': invoice.invoice_status,
@@ -282,6 +286,7 @@ def get_bills_list(request):
                 'supplier_invoice_number': invoice.supplier_invoice_number or '',
                 'total_net': float(invoice.total_net) if invoice.total_net is not None else None,
                 'total_gst': float(invoice.total_gst) if invoice.total_gst is not None else None,
+                'pdf_url': pdf_url,  # Add PDF URL for viewing invoices
                 'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
                 'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
                 'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
