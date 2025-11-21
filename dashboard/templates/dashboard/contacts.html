@@ -144,6 +144,27 @@ Backend Endpoints Used:
             }
         });
         
+        function updateVerifiedRow(contactPk, updatedData) {
+            const rows = $(`#contactsSection tbody tr[data-contact-pk="${contactPk}"], #contactsModal tbody tr[data-contact-pk="${contactPk}"]`);
+            if (!rows.length) {
+                return;
+            }
+
+            rows.each(function() {
+                const row = $(this);
+                const nameCell = row.find('.contact-name');
+                nameCell.find('.verified-badge').remove();
+                nameCell.append(' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>');
+
+                const contactData = row.data('contact') || {};
+                row.data('contact', {
+                    ...contactData,
+                    ...updatedData,
+                    verified: 1
+                });
+            });
+        }
+
         // Handle Verify button click
         $(document).on('click', '.verify-contact-btn', function() {
             const row = $(this).closest('tr');
@@ -297,29 +318,14 @@ Backend Endpoints Used:
                     $('#verifyContactModal').modal('hide');
                     
                     // Update the main contacts table to show verified status
-                    const row = $(`#contactsModal tbody tr[data-contact-pk="${contactPk}"]`);
-                    if (row.length) {
-                        // Remove any existing verified badge (could be red "Details Changed")
-                        const nameCell = row.find('.contact-name');
-                        nameCell.find('.verified-badge').remove();
-                        
-                        // Add green verified badge
-                        nameCell.append(' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>');
-                        
-                        // Update the contact data stored in the row with new verified values
-                        const contactData = row.data('contact');
-                        if (contactData) {
-                            contactData.verified = 1;
-                            // Update verified fields with the values that were just saved
-                            contactData.verified_name = name;
-                            contactData.verified_email = email;
-                            contactData.verified_bank_bsb = bsb.replace('-', '');
-                            contactData.verified_bank_account_number = accountNumber;
-                            contactData.verified_tax_number = abn.replace(/\s/g, '');
-                            contactData.verified_notes = notes;
-                            row.data('contact', contactData);
-                        }
-                    }
+                    updateVerifiedRow(contactPk, {
+                        verified_name: name,
+                        verified_email: email,
+                        verified_bank_bsb: bsb.replace('-', ''),
+                        verified_bank_account_number: accountNumber,
+                        verified_tax_number: abn.replace(/\s/g, ''),
+                        verified_notes: notes
+                    });
                     
                     button.prop('disabled', false).html('Verify');
                 } else {

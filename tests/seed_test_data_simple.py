@@ -40,7 +40,10 @@ supplier1 = Contacts.objects.create(
     xero_contact_id='contact-1',
     email='supplier1@test.com',
     status='ACTIVE',
-    checked=1  # 1 = supplier
+    checked=1,  # 1 = supplier
+    bank_bsb='123456',
+    bank_account_number='12345678',
+    tax_number='12345678901'
 )
 
 supplier2 = Contacts.objects.create(
@@ -49,7 +52,10 @@ supplier2 = Contacts.objects.create(
     xero_contact_id='contact-2',
     email='supplier2@test.com',
     status='ACTIVE',
-    checked=1  # 1 = supplier
+    checked=1,  # 1 = supplier
+    bank_bsb='654321',
+    bank_account_number='87654321',
+    tax_number='10987654321'
 )
 
 # Project
