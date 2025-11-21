@@ -1,5 +1,10 @@
 """
 URL configuration for Dashboard app.
+
+Routes:
+- / and /dashboard/ - Main dashboard view
+- Contact management - Pull, get, create, update, verify, archive contacts
+- Bills management - Send bills to Xero or move to Direct workflow
 """
 
 from django.urls import path

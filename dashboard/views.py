@@ -1,22 +1,32 @@
 """
 Dashboard app views.
 
+Response Helpers:
+- error_response(message, status) - Standardized error JSON response
+- success_response(message, data) - Standardized success JSON response
+
 Dashboard View:
 1. dashboard_view - Main dashboard homepage
 
 Contacts Views:
 2. verify_contact_details - Save verified contact details to separate verified fields
+   Uses validators from dashboard.validators for email, BSB, account, ABN validation
 3. pull_xero_contacts - Pull contacts from Xero API, insert/update locally
+   Uses loop-based field comparison for efficient updates
 4. get_contacts_by_instance - Get ACTIVE contacts with verified status (0/1/2)
+   Uses Contact.verified_status model property
 5. create_contact - Create contact in Xero + local DB
 6. update_contact_details - Update bank details, email, ABN in Xero
 7. update_contact_status - Archive/unarchive contact in Xero
 
-Note: Contact functions 3-7 use helper functions from core.views.xero:
-- get_xero_auth() - OAuth authentication
-- format_bank_details() - BSB + account formatting
-- parse_xero_validation_errors() - Error parsing
-- @handle_xero_request_errors - Exception handling decorator
+Bills Views:
+8. send_bill - Send invoice to Xero (Direct mode) or move to Direct (Inbox mode)
+
+Dependencies:
+- Validators: dashboard.validators (validate_email, validate_bsb, validate_account_number, validate_abn)
+- Xero helpers: core.views.xero (get_xero_auth, format_bank_details, parse_xero_validation_errors)
+- Decorator: @handle_xero_request_errors for Xero API exception handling
+- Model property: Contact.verified_status for verification status calculation
 """
 
 import json
@@ -27,13 +37,30 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations
 from decimal import Decimal
 from datetime import date
 # Import helpers from core.views.xero
 from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
+# Import validators
+from .validators import validate_email, validate_bsb, validate_account_number, validate_abn, validate_required_field
 
 logger = logging.getLogger(__name__)
+
+
+# Response helper functions
+def error_response(message, status=400):
+    """Return a standardized error JSON response."""
+    return JsonResponse({'status': 'error', 'message': message}, status=status)
+
+
+def success_response(message, data=None):
+    """Return a standardized success JSON response."""
+    response = {'status': 'success', 'message': message}
+    if data:
+        response.update(data)
+    return JsonResponse(response)
 
 
 def dashboard_view(request):
@@ -41,12 +68,6 @@ def dashboard_view(request):
     Main dashboard view - serves as the application homepage.
     """
     spv_data = SPVData.objects.first()
-    
-    # Table configuration for dashboard
-    table_columns = [
-        "Fake 1", "Fake 2", "Fake 3", "Fake 4", "Fake 5",
-        "Fake 6", "Fake 7", "Fake 8", "Fake 9", "Fake 10"
-    ]
     
     # Navigation items for navbar
     nav_items = [
@@ -73,9 +94,6 @@ def dashboard_view(request):
         "current_page": "dashboard",
         "project_name": settings.PROJECT_NAME,
         "spv_data": spv_data,
-        "table_columns": table_columns,
-        "table_rows": [],  # No data for now
-        "show_totals": False,  # No totals row for dashboard
         "nav_items": nav_items,
         "contacts_columns": contacts_columns,
         "contacts_rows": contacts_rows,
@@ -96,77 +114,16 @@ def verify_contact_details(request, contact_pk):
         try:
             data = json.loads(request.body)
             
-            # Extract fields from request
-            verified_name = data.get('name', '').strip()
-            verified_email = data.get('email', '').strip()
-            verified_bsb = data.get('bsb', '').strip()
-            verified_account = data.get('account_number', '').strip()
-            verified_tax_number = data.get('tax_number', '').strip()
-            verified_notes = data.get('notes', '').strip()
-            
-            # Validation - all fields required except tax_number (ABN)
-            if not verified_name:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Name is required'
-                }, status=400)
-            
-            if not verified_email:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Email is required'
-                }, status=400)
-            
-            # Email format validation
-            import re
-            email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
-            if not re.match(email_regex, verified_email):
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid email format'
-                }, status=400)
-            
-            if not verified_bsb:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'BSB is required'
-                }, status=400)
-            
-            # BSB should be 6 digits
-            bsb_digits = verified_bsb.replace('-', '')
-            if not bsb_digits.isdigit() or len(bsb_digits) != 6:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'BSB must be exactly 6 digits'
-                }, status=400)
-            
-            if not verified_account:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Account Number is required'
-                }, status=400)
-            
-            # Account should be at least 6 digits
-            if not verified_account.isdigit() or len(verified_account) < 6:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Account Number must be at least 6 digits'
-                }, status=400)
-            
-            if not verified_notes:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Notes are required'
-                }, status=400)
-            
-            # Tax number (ABN) is optional, but if provided, must be 11 digits
-            if verified_tax_number:
-                tax_digits = verified_tax_number.replace(' ', '')
-                if not tax_digits.isdigit() or len(tax_digits) != 11:
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': 'ABN must be exactly 11 digits if provided'
-                    }, status=400)
+            # Extract and validate fields using validators
+            try:
+                verified_name = validate_required_field(data.get('name', ''), 'Name')
+                verified_email = validate_email(data.get('email', ''))
+                bsb_digits = validate_bsb(data.get('bsb', ''))
+                verified_account = validate_account_number(data.get('account_number', ''))
+                tax_digits = validate_abn(data.get('tax_number', ''))
+                verified_notes = validate_required_field(data.get('notes', ''), 'Notes')
+            except ValidationError as e:
+                return error_response(str(e))
             
             # Get the contact
             contact = Contacts.objects.get(contact_pk=contact_pk)
@@ -174,51 +131,40 @@ def verify_contact_details(request, contact_pk):
             # Save verified details
             contact.verified_name = verified_name
             contact.verified_email = verified_email
-            contact.verified_bank_bsb = bsb_digits  # Store without dash
+            contact.verified_bank_bsb = bsb_digits
             contact.verified_bank_account_number = verified_account
-            contact.verified_tax_number = verified_tax_number.replace(' ', '') if verified_tax_number else ''
+            contact.verified_tax_number = tax_digits
             contact.verified_notes = verified_notes
             contact.bank_details_verified = 1  # Mark as verified
             contact.save()
             
             logger.info(f"Successfully verified contact details for {contact.name} (PK: {contact_pk})")
             
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Contact details verified successfully',
-                'contact': {
-                    'contact_pk': contact.contact_pk,
-                    'verified_name': contact.verified_name,
-                    'verified_email': contact.verified_email,
-                    'verified_bank_bsb': contact.verified_bank_bsb,
-                    'verified_bank_account_number': contact.verified_bank_account_number,
-                    'verified_tax_number': contact.verified_tax_number,
-                    'verified_notes': contact.verified_notes,
-                    'bank_details_verified': contact.bank_details_verified
+            return success_response(
+                'Contact details verified successfully',
+                {
+                    'contact': {
+                        'contact_pk': contact.contact_pk,
+                        'verified_name': contact.verified_name,
+                        'verified_email': contact.verified_email,
+                        'verified_bank_bsb': contact.verified_bank_bsb,
+                        'verified_bank_account_number': contact.verified_bank_account_number,
+                        'verified_tax_number': contact.verified_tax_number,
+                        'verified_notes': contact.verified_notes,
+                        'bank_details_verified': contact.bank_details_verified
+                    }
                 }
-            })
+            )
             
         except Contacts.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Contact not found'
-            }, status=404)
+            return error_response('Contact not found', 404)
         except json.JSONDecodeError:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Invalid JSON data'
-            }, status=400)
+            return error_response('Invalid JSON data')
         except Exception as e:
             logger.error(f"Error verifying contact details: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
-            }, status=500)
+            return error_response(f'Unexpected error: {str(e)}', 500)
     
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
-    }, status=405)
+    return error_response('Only POST method is allowed', 405)
 
 
 @csrf_exempt
@@ -295,28 +241,21 @@ def pull_xero_contacts(request, instance_pk):
                 existing_contact = Contacts.objects.get(xero_contact_id=contact_id)
                 
                 # Compare and update if any field has changed
+                fields_to_update = {
+                    'name': name,
+                    'email': email,
+                    'status': status,
+                    'bank_details': bank_details,
+                    'bank_bsb': bank_bsb,
+                    'bank_account_number': bank_account_number,
+                    'tax_number': tax_number
+                }
+                
                 updated = False
-                if existing_contact.name != name:
-                    existing_contact.name = name
-                    updated = True
-                if existing_contact.email != email:
-                    existing_contact.email = email
-                    updated = True
-                if existing_contact.status != status:
-                    existing_contact.status = status
-                    updated = True
-                if existing_contact.bank_details != bank_details:
-                    existing_contact.bank_details = bank_details
-                    updated = True
-                if existing_contact.bank_bsb != bank_bsb:
-                    existing_contact.bank_bsb = bank_bsb
-                    updated = True
-                if existing_contact.bank_account_number != bank_account_number:
-                    existing_contact.bank_account_number = bank_account_number
-                    updated = True
-                if existing_contact.tax_number != tax_number:
-                    existing_contact.tax_number = tax_number
-                    updated = True
+                for field, value in fields_to_update.items():
+                    if getattr(existing_contact, field) != value:
+                        setattr(existing_contact, field, value)
+                        updated = True
                 
                 if updated:
                     existing_contact.save()
@@ -371,32 +310,9 @@ def get_contacts_by_instance(request, instance_pk):
                 status='ACTIVE'
             ).order_by('name')
             
-            # Build contact list with verified status
+            # Build contact list with verified status from model property
             contacts_list = []
             for contact in contacts:
-                # Calculate verified status
-                verified_status = 0  # Default: not verified
-                
-                # Check if any verified fields have data
-                has_verified_data = any([
-                    contact.verified_name,
-                    contact.verified_email,
-                    contact.verified_bank_bsb,
-                    contact.verified_bank_account_number
-                ])
-                
-                if has_verified_data:
-                    # Check if verified fields match current fields
-                    name_matches = contact.verified_name == contact.name
-                    email_matches = contact.verified_email == contact.email
-                    bsb_matches = contact.verified_bank_bsb == contact.bank_bsb
-                    account_matches = contact.verified_bank_account_number == contact.bank_account_number
-                    
-                    if name_matches and email_matches and bsb_matches and account_matches:
-                        verified_status = 1  # Verified and matches
-                    else:
-                        verified_status = 2  # Verified but data has changed
-                
                 contacts_list.append({
                     'contact_pk': contact.contact_pk,
                     'xero_instance_id': contact.xero_instance_id,
@@ -407,7 +323,7 @@ def get_contacts_by_instance(request, instance_pk):
                     'bank_bsb': contact.bank_bsb,
                     'bank_account_number': contact.bank_account_number,
                     'tax_number': contact.tax_number,
-                    'verified': verified_status,
+                    'verified': contact.verified_status,  # Use model property
                     'verified_name': contact.verified_name or '',
                     'verified_email': contact.verified_email or '',
                     'verified_bank_bsb': contact.verified_bank_bsb or '',

@@ -21,9 +21,10 @@ Components:
    - Verify button to save verified details via /verify_contact_details/
 
 JavaScript Features:
+- Utility functions: formatBSB() and formatABN() for consistent formatting
 - MutationObserver to add "Verify" buttons to contact rows
 - Click handler for Verify buttons - opens verification modal
-- Format BSB as XXX-XXX and ABN as XX XXX XXX XXX
+- Format BSB as XXX-XXX and ABN as XX XXX XXX XXX using utility functions
 - Mismatch detection and highlighting
 - AJAX submission to verify_contact_details endpoint
 - Updates contact row with verified badge after successful verification
@@ -116,6 +117,34 @@ Backend Endpoints Used:
 <!-- Override modal body and footer with JavaScript -->
 <script>
     $(document).ready(function() {
+        // Utility functions for formatting
+        function formatBSB(bsb) {
+            /**
+             * Format BSB as XXX-XXX
+             * @param {string} bsb - BSB number (6 digits)
+             * @returns {string} Formatted BSB or original value
+             */
+            if (bsb && bsb.length === 6) {
+                return bsb.substring(0, 3) + '-' + bsb.substring(3);
+            }
+            return bsb || '';
+        }
+        
+        function formatABN(abn) {
+            /**
+             * Format ABN as XX XXX XXX XXX
+             * @param {string} abn - ABN number (11 digits)
+             * @returns {string} Formatted ABN or original value
+             */
+            if (!abn) return '';
+            const cleaned = abn.replace(/\s/g, '');
+            if (cleaned.length === 11) {
+                return cleaned.substring(0, 2) + ' ' + cleaned.substring(2, 5) + ' ' + 
+                       cleaned.substring(5, 8) + ' ' + cleaned.substring(8);
+            }
+            return abn;
+        }
+        
         // Add XeroInstances dropdown to modal body
         const xeroDropdown = `
             <div class="form-group" style="margin-bottom: 20px;">
@@ -175,43 +204,11 @@ Backend Endpoints Used:
                 return;
             }
             
-            // Format BSB as XXX-XXX
-            let formattedBsb = '';
-            if (contact.bank_bsb && contact.bank_bsb.length === 6) {
-                formattedBsb = contact.bank_bsb.substring(0, 3) + '-' + contact.bank_bsb.substring(3);
-            } else {
-                formattedBsb = contact.bank_bsb || '';
-            }
-            
-            // Format ABN as XX XXX XXX XXX
-            let formattedAbn = '';
-            if (contact.tax_number) {
-                const abn = contact.tax_number.replace(/\s/g, '');
-                if (abn.length === 11) {
-                    formattedAbn = abn.substring(0, 2) + ' ' + abn.substring(2, 5) + ' ' + abn.substring(5, 8) + ' ' + abn.substring(8);
-                } else {
-                    formattedAbn = contact.tax_number;
-                }
-            }
-            
-            // Format verified BSB
-            let formattedVerifiedBsb = '';
-            if (contact.verified_bank_bsb && contact.verified_bank_bsb.length === 6) {
-                formattedVerifiedBsb = contact.verified_bank_bsb.substring(0, 3) + '-' + contact.verified_bank_bsb.substring(3);
-            } else {
-                formattedVerifiedBsb = contact.verified_bank_bsb || '';
-            }
-            
-            // Format verified ABN
-            let formattedVerifiedAbn = '';
-            if (contact.verified_tax_number) {
-                const abn = contact.verified_tax_number.replace(/\s/g, '');
-                if (abn.length === 11) {
-                    formattedVerifiedAbn = abn.substring(0, 2) + ' ' + abn.substring(2, 5) + ' ' + abn.substring(5, 8) + ' ' + abn.substring(8);
-                } else {
-                    formattedVerifiedAbn = contact.verified_tax_number;
-                }
-            }
+            // Format BSB and ABN using utility functions
+            const formattedBsb = formatBSB(contact.bank_bsb);
+            const formattedAbn = formatABN(contact.tax_number);
+            const formattedVerifiedBsb = formatBSB(contact.verified_bank_bsb);
+            const formattedVerifiedAbn = formatABN(contact.verified_tax_number);
             
             // Check for mismatches
             const nameMatches = contact.verified_name === contact.name;

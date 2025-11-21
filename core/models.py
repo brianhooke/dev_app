@@ -370,6 +370,36 @@ class Contacts(models.Model):
     verified_tax_number = models.CharField(max_length=100, blank=True, null=True)
     verified_notes = models.CharField(max_length=500, blank=True, null=True)
     
+    @property
+    def verified_status(self):
+        """
+        Calculate verified status for this contact.
+        
+        Returns:
+            int: 0 = not verified
+                 1 = verified and matches current data
+                 2 = verified but data has changed
+        """
+        # Check if any verified fields have data
+        has_verified_data = any([
+            self.verified_name,
+            self.verified_email,
+            self.verified_bank_bsb,
+            self.verified_bank_account_number
+        ])
+        
+        if not has_verified_data:
+            return 0  # Not verified
+        
+        # Check if verified fields match current fields
+        if (self.verified_name == self.name and
+            self.verified_email == self.email and
+            self.verified_bank_bsb == self.bank_bsb and
+            self.verified_bank_account_number == self.bank_account_number):
+            return 1  # Verified and matches
+        
+        return 2  # Verified but data has changed
+    
     def __str__(self):
         return self.name
 
