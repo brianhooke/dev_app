@@ -27,4 +27,12 @@ urlpatterns = [
     
     # Bills management endpoints
     path('send_bill/', views.send_bill, name='send_bill'),
+    
+    # Items (Categories & Costings) management endpoints
+    path('get_project_categories/<int:project_pk>/', views.get_project_categories, name='get_project_categories'),
+    path('get_project_items/<int:project_pk>/', views.get_project_items, name='get_project_items'),
+    path('create_category/<int:project_pk>/', views.create_category, name='create_category'),
+    path('create_item/<int:project_pk>/', views.create_item, name='create_item'),
+    path('reorder_category/<int:project_pk>/<int:category_pk>/', views.reorder_category, name='reorder_category'),
+    path('reorder_item/<int:project_pk>/<int:item_pk>/', views.reorder_item, name='reorder_item'),
 ]

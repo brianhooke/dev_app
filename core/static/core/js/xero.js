@@ -10,13 +10,12 @@ document.addEventListener('DOMContentLoaded', function() {
         $('.reusable-navbar a').removeClass('active');
         $(this).addClass('active');
         
-        // Hide all other sections
-        $('#billsInboxSection').hide();
-        $('#allocationsSection').hide();
-        $('#contactsSection').css('display', 'none');
+        // Hide all sections using universal function
+        if (typeof window.hideAllSections === 'function') {
+            window.hideAllSections();
+        }
         
-        // Show Xero section, hide empty state, and add has-content class to hide background
-        $('#emptyState').hide();
+        // Show Xero section and add has-content class to hide background
         $('#xeroSection').css('display', 'flex').show();
         $('#dynamicContentArea').addClass('has-content');
         

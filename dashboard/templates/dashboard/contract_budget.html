@@ -1,0 +1,324 @@
+<!-- Contract Budget Template -->
+<style>
+    .contract-budget-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+    }
+    
+    .contract-budget-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    
+    .contract-budget-table thead {
+        display: block;
+        width: 100%;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .contract-budget-table thead tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+        background: var(--gradient-primary);
+        color: white;
+    }
+    
+    .contract-budget-table th {
+        padding: 12px 8px;
+        text-align: left;
+        font-weight: bold;
+        background: var(--gradient-primary);
+    }
+    
+    .contract-budget-table tbody {
+        display: block;
+        width: 100%;
+        overflow-y: auto;
+        flex: 1;
+    }
+    
+    .contract-budget-table tbody tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+    }
+    
+    .contract-budget-table tbody tr {
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s;
+    }
+    
+    .contract-budget-table tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .contract-budget-table tbody tr.category-row {
+        background-color: #f9f9f9;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .contract-budget-table tbody tr.category-row:hover {
+        background-color: #ececec;
+    }
+    
+    .contract-budget-table tbody tr.item-row {
+        background-color: #ffffff;
+    }
+    
+    .contract-budget-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .contract-budget-table td.indent {
+        padding-left: 30px;
+    }
+    
+    .contract-budget-table input[type="number"] {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        text-align: right;
+    }
+    
+    .contract-budget-table input[type="number"]:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .contract-budget-table .budget-amount {
+        text-align: right;
+        font-weight: 500;
+    }
+    
+    .contract-budget-table .committed-amount {
+        text-align: right;
+        color: #6c757d;
+    }
+</style>
+
+<div class="contract-budget-container">
+    <table class="contract-budget-table">
+        <thead>
+            <tr>
+                <th style="width: 40%;">Category / Item</th>
+                <th style="width: 20%;">Contract Budget</th>
+                <th style="width: 20%;">Uncommitted</th>
+                <th style="width: 20%;">Committed</th>
+            </tr>
+        </thead>
+        <tbody id="contractBudgetTableBody">
+            <tr>
+                <td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">
+                    Loading...
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    console.log('Contract Budget script loaded');
+    
+    // Initialize Contract Budget when loaded - use setTimeout to ensure DOM is ready
+    setTimeout(function() {
+        if (window.currentTenderProject && window.currentTenderProject.pk) {
+            console.log('Initializing contract budget for project:', window.currentTenderProject.pk);
+            loadContractBudget(window.currentTenderProject.pk);
+        } else {
+            // No project selected yet - this is normal on page load
+            console.log('Contract Budget waiting for project selection...');
+        }
+    }, 100);
+    
+    function loadContractBudget(projectPk) {
+        console.log('Loading contract budget for project:', projectPk);
+        
+        // Load categories, items, and committed amounts
+        $.ajax({
+            url: '/get_project_categories/' + projectPk + '/',
+            type: 'GET',
+            success: function(categoriesResponse) {
+                console.log('Categories loaded:', categoriesResponse);
+                
+                // Load items
+                $.ajax({
+                    url: '/get_project_items/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(itemsResponse) {
+                        console.log('Items loaded:', itemsResponse);
+                        
+                        // Load committed amounts
+                        $.ajax({
+                            url: '/core/get_project_committed_amounts/' + projectPk + '/',
+                            type: 'GET',
+                            success: function(committedResponse) {
+                                console.log('Committed amounts loaded:', committedResponse);
+                                renderContractBudgetTable(
+                                    categoriesResponse.categories, 
+                                    itemsResponse.items,
+                                    committedResponse.committed_amounts || {}
+                                );
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error loading committed amounts:', error);
+                                // Still render table with empty committed amounts
+                                renderContractBudgetTable(
+                                    categoriesResponse.categories, 
+                                    itemsResponse.items,
+                                    {}
+                                );
+                            }
+                        });
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading items:', error);
+                        $('#tenderContentArea #contractBudgetTableBody').html('<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading items</td></tr>');
+                    }
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading categories:', error);
+                $('#tenderContentArea #contractBudgetTableBody').html('<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading categories</td></tr>');
+            }
+        });
+    }
+    
+    function renderContractBudgetTable(categories, items, committedAmounts) {
+        console.log('renderContractBudgetTable called');
+        console.log('Categories:', categories);
+        console.log('Items:', items);
+        console.log('Committed amounts:', committedAmounts);
+        
+        // Target tbody within tenderContentArea to avoid template storage
+        var tbody = $('#tenderContentArea #contractBudgetTableBody');
+        console.log('Found tbody:', tbody.length > 0);
+        
+        tbody.empty();
+        
+        if (!categories || categories.length === 0) {
+            console.log('No categories found');
+            tbody.html('<tr><td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">No categories yet. Add categories and items in the Items section first.</td></tr>');
+            return;
+        }
+        
+        console.log('Rendering', categories.length, 'categories');
+        
+        // Sort categories by order_in_list
+        categories.sort(function(a, b) {
+            return a.order_in_list - b.order_in_list;
+        });
+        
+        // Render each category and its items
+        categories.forEach(function(category) {
+            // Render category row
+            var categoryRow = $('<tr class="category-row"></tr>');
+            categoryRow.append('<td><strong>' + escapeHtml(category.category) + '</strong></td>');
+            categoryRow.append('<td class="budget-amount">-</td>');
+            categoryRow.append('<td>-</td>');
+            categoryRow.append('<td class="committed-amount">-</td>');
+            tbody.append(categoryRow);
+            
+            // Get items for this category
+            var categoryItems = items.filter(function(item) {
+                return item.category__category === category.category;
+            });
+            
+            // Sort items by order_in_list
+            categoryItems.sort(function(a, b) {
+                return a.order_in_list - b.order_in_list;
+            });
+            
+            // Render item rows
+            categoryItems.forEach(function(item) {
+                var itemRow = $('<tr class="item-row"></tr>');
+                
+                // Category / Item column with indent
+                itemRow.append('<td class="indent">' + escapeHtml(item.item) + '</td>');
+                
+                // Contract Budget column (calculated: Uncommitted + Committed)
+                var budgetCell = $('<td class="budget-amount"></td>');
+                budgetCell.attr('data-item-pk', item.costing_pk);
+                budgetCell.text('$0.00');
+                itemRow.append(budgetCell);
+                
+                // Uncommitted column (editable input)
+                var uncommittedCell = $('<td></td>');
+                var uncommittedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00">');
+                uncommittedInput.attr('data-item-pk', item.costing_pk);
+                uncommittedInput.on('input', function() {
+                    // Enforce 2 decimal places
+                    var value = $(this).val();
+                    if (value && value.indexOf('.') !== -1) {
+                        var parts = value.split('.');
+                        if (parts[1].length > 2) {
+                            $(this).val(parseFloat(value).toFixed(2));
+                        }
+                    }
+                    // Update Contract Budget
+                    updateContractBudget(item.costing_pk);
+                });
+                uncommittedCell.append(uncommittedInput);
+                itemRow.append(uncommittedCell);
+                
+                // Committed column (read-only, from quote allocations)
+                var committedAmount = committedAmounts[item.costing_pk] || 0;
+                var committedCell = $('<td class="committed-amount"></td>');
+                committedCell.attr('data-item-pk', item.costing_pk);
+                committedCell.attr('data-committed-amount', committedAmount);
+                committedCell.text('$' + committedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                itemRow.append(committedCell);
+                
+                tbody.append(itemRow);
+                
+                // Initial calculation of Contract Budget with committed amount
+                updateContractBudget(item.costing_pk);
+            });
+        });
+    }
+    
+    function updateContractBudget(itemPk) {
+        // Get uncommitted value
+        var uncommittedInput = $('input[data-item-pk="' + itemPk + '"]');
+        var uncommitted = parseFloat(uncommittedInput.val()) || 0;
+        
+        // Get committed value from data attribute
+        var committedCell = $('td.committed-amount[data-item-pk="' + itemPk + '"]');
+        var committed = parseFloat(committedCell.attr('data-committed-amount')) || 0;
+        
+        // Calculate contract budget
+        var contractBudget = uncommitted + committed;
+        
+        // Update Contract Budget cell
+        var budgetCell = $('td.budget-amount[data-item-pk="' + itemPk + '"]');
+        budgetCell.text('$' + contractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+    }
+    
+    function escapeHtml(text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+})();
+</script>

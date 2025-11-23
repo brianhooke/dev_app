@@ -11,7 +11,7 @@ django.setup()
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.files.base import ContentFile
-from core.models import XeroInstances, Contacts, XeroAccounts, Invoices, Projects
+from core.models import XeroInstances, Contacts, XeroAccounts, Invoices, Projects, Categories, Costing
 from decimal import Decimal
 from reportlab.pdfgen import canvas
 from io import BytesIO
@@ -224,6 +224,103 @@ invoice4 = Invoices.objects.create(
 )
 invoice4.pdf.save('test_invoice_4.pdf', create_fake_pdf('Test Invoice 4 - Direct'))
 
+# Categories and Items (Costings) for Active Project 1 only
+# Active Project 2 will have NO items (for testing empty state)
+
+# Create categories for Project 1
+cat1 = Categories.objects.create(
+    project=project1,
+    category='Electrical',
+    invoice_category='Electrical',
+    order_in_list=1,
+    division=0
+)
+
+cat2 = Categories.objects.create(
+    project=project1,
+    category='Plumbing',
+    invoice_category='Plumbing',
+    order_in_list=2,
+    division=0
+)
+
+cat3 = Categories.objects.create(
+    project=project1,
+    category='Carpentry',
+    invoice_category='Carpentry',
+    order_in_list=3,
+    division=0
+)
+
+# Create items (Costings) for each category
+# Electrical items
+Costing.objects.create(
+    project=project1,
+    category=cat1,
+    item='Wiring',
+    order_in_list=1,
+    xero_account_code='5000',
+    contract_budget=Decimal('5000.00'),
+    uncommitted=Decimal('0.00'),
+    fixed_on_site=Decimal('0.00'),
+    sc_invoiced=Decimal('0.00'),
+    sc_paid=Decimal('0.00')
+)
+
+Costing.objects.create(
+    project=project1,
+    category=cat1,
+    item='Lighting Fixtures',
+    order_in_list=2,
+    xero_account_code='5001',
+    contract_budget=Decimal('3000.00'),
+    uncommitted=Decimal('0.00'),
+    fixed_on_site=Decimal('0.00'),
+    sc_invoiced=Decimal('0.00'),
+    sc_paid=Decimal('0.00')
+)
+
+# Plumbing items
+Costing.objects.create(
+    project=project1,
+    category=cat2,
+    item='Pipes',
+    order_in_list=1,
+    xero_account_code='5100',
+    contract_budget=Decimal('4000.00'),
+    uncommitted=Decimal('0.00'),
+    fixed_on_site=Decimal('0.00'),
+    sc_invoiced=Decimal('0.00'),
+    sc_paid=Decimal('0.00')
+)
+
+Costing.objects.create(
+    project=project1,
+    category=cat2,
+    item='Fixtures',
+    order_in_list=2,
+    xero_account_code='5101',
+    contract_budget=Decimal('2000.00'),
+    uncommitted=Decimal('0.00'),
+    fixed_on_site=Decimal('0.00'),
+    sc_invoiced=Decimal('0.00'),
+    sc_paid=Decimal('0.00')
+)
+
+# Carpentry item
+Costing.objects.create(
+    project=project1,
+    category=cat3,
+    item='Framing',
+    order_in_list=1,
+    xero_account_code='5200',
+    contract_budget=Decimal('8000.00'),
+    uncommitted=Decimal('0.00'),
+    fixed_on_site=Decimal('0.00'),
+    sc_invoiced=Decimal('0.00'),
+    sc_paid=Decimal('0.00')
+)
+
 print("\n✅ Test database seeded!")
 print(f"   - Users: {User.objects.count()}")
 print(f"   - Xero Instances: {XeroInstances.objects.count()}")
@@ -233,4 +330,6 @@ print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
 print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")
 print(f"   - Invoices (Direct): {Invoices.objects.filter(invoice_status=0).count()}")
+print(f"   - Categories: {Categories.objects.count()}")
+print(f"   - Items (Costings): {Costing.objects.count()}")
 print("\n🎭 Ready for Playwright tests!")

@@ -854,3 +854,472 @@ def send_bill(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+# ============================================================================
+# ITEMS (CATEGORIES & COSTINGS) VIEWS
+# ============================================================================
+
+@require_http_methods(["GET"])
+def get_project_categories(request, project_pk):
+    """
+    Get all categories for a specific project, ordered by order_in_list.
+    """
+    try:
+        from core.models import Categories
+        
+        categories = Categories.objects.filter(
+            project_id=project_pk
+        ).order_by('order_in_list').values('categories_pk', 'category', 'order_in_list')
+        
+        categories_list = list(categories)
+        
+        logger.info(f"Retrieved {len(categories_list)} categories for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'categories': categories_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting project categories: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting categories: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_project_items(request, project_pk):
+    """
+    Get all items (costings) for a specific project, grouped by category.
+    """
+    try:
+        from core.models import Costing
+        
+        items = Costing.objects.filter(
+            project_id=project_pk
+        ).select_related('category').order_by('category__order_in_list', 'order_in_list').values(
+            'costing_pk', 'item', 'order_in_list', 'category__category', 'category__order_in_list'
+        )
+        
+        items_list = list(items)
+        
+        logger.info(f"Retrieved {len(items_list)} items for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'items': items_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting project items: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting items: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_category(request, project_pk):
+    """
+    Create a new category for a project.
+    
+    Expected POST data:
+    - category: str (max 20 chars)
+    - order_in_list: int
+    """
+    try:
+        from core.models import Categories, Projects
+        
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        category_name = data.get('category', '').strip()
+        order_in_list = data.get('order_in_list')
+        
+        if not category_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category name is required'
+            }, status=400)
+        
+        if len(category_name) > 20:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category name must be 20 characters or less'
+            }, status=400)
+        
+        if order_in_list is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Order in list is required'
+            }, status=400)
+        
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Check for duplicate category name (case-insensitive)
+        existing_category = Categories.objects.filter(
+            project=project,
+            category__iexact=category_name
+        ).first()
+        
+        if existing_category:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'A category named "{existing_category.category}" already exists for this project'
+            }, status=400)
+        
+        # Reorder existing categories if needed
+        # If inserting at position N and there are already items at N or higher, increment them
+        categories_to_reorder = Categories.objects.filter(
+            project=project,
+            order_in_list__gte=order_in_list
+        ).order_by('-order_in_list')  # Order descending to avoid conflicts
+        
+        for cat in categories_to_reorder:
+            cat.order_in_list += 1
+            cat.save()
+        
+        logger.info(f"Reordered {categories_to_reorder.count()} categories to make space at position {order_in_list}")
+        
+        # Create the category
+        category = Categories.objects.create(
+            project=project,
+            category=category_name,
+            invoice_category=category_name,  # Default to same as category
+            order_in_list=order_in_list,
+            division=0  # Default division
+        )
+        
+        logger.info(f"Created category '{category_name}' for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Category created successfully',
+            'category': {
+                'categories_pk': category.categories_pk,
+                'category': category.category,
+                'order_in_list': int(category.order_in_list)
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error creating category: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error creating category: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_item(request, project_pk):
+    """
+    Create a new item (costing) for a project.
+    
+    Expected POST data:
+    - item: str (max 20 chars)
+    - category_pk: int
+    - order_in_list: int
+    """
+    try:
+        from core.models import Costing, Categories, Projects
+        
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        item_name = data.get('item', '').strip()
+        category_pk = data.get('category_pk')
+        order_in_list = data.get('order_in_list')
+        
+        if not item_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Item name is required'
+            }, status=400)
+        
+        if len(item_name) > 20:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Item name must be 20 characters or less'
+            }, status=400)
+        
+        if not category_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category is required'
+            }, status=400)
+        
+        if order_in_list is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Order in list is required'
+            }, status=400)
+        
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the category
+        try:
+            category = Categories.objects.get(categories_pk=category_pk, project=project)
+        except Categories.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category not found for this project'
+            }, status=404)
+        
+        # Reorder existing items in this category if needed
+        # If inserting at position N and there are already items at N or higher, increment them
+        items_to_reorder = Costing.objects.filter(
+            project=project,
+            category=category,
+            order_in_list__gte=order_in_list
+        ).order_by('-order_in_list')  # Order descending to avoid conflicts
+        
+        for item_obj in items_to_reorder:
+            item_obj.order_in_list += 1
+            item_obj.save()
+        
+        logger.info(f"Reordered {items_to_reorder.count()} items in category '{category.category}' to make space at position {order_in_list}")
+        
+        # Create the item
+        item = Costing.objects.create(
+            project=project,
+            category=category,
+            item=item_name,
+            order_in_list=order_in_list,
+            xero_account_code='',  # Default empty
+            contract_budget=0,
+            uncommitted=0,
+            fixed_on_site=0,
+            sc_invoiced=0,
+            sc_paid=0
+        )
+        
+        logger.info(f"Created item '{item_name}' in category '{category.category}' for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Item created successfully',
+            'item': {
+                'costing_pk': item.costing_pk,
+                'item': item.item,
+                'category': category.category,
+                'category_pk': category.categories_pk
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error creating item: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error creating item: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def reorder_category(request, project_pk, category_pk):
+    """
+    Reorder a category to a new position.
+    All items in the category move with it.
+    
+    Expected POST data:
+    - new_order: int (new position in list)
+    """
+    try:
+        from core.models import Categories, Projects
+        
+        data = json.loads(request.body)
+        new_order = data.get('new_order')
+        
+        if new_order is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New order position is required'
+            }, status=400)
+        
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the category to move
+        try:
+            category = Categories.objects.get(categories_pk=category_pk, project=project)
+        except Categories.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category not found'
+            }, status=404)
+        
+        old_order = int(category.order_in_list)
+        new_order = int(new_order)
+        
+        if old_order == new_order:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'No change in position'
+            })
+        
+        # Get all categories for this project
+        categories = Categories.objects.filter(project=project).exclude(categories_pk=category_pk).order_by('order_in_list')
+        
+        # Update order_in_list for all affected categories
+        if new_order < old_order:
+            # Moving up: increment categories between new_order and old_order
+            for cat in categories:
+                if new_order <= int(cat.order_in_list) < old_order:
+                    cat.order_in_list += 1
+                    cat.save()
+        else:
+            # Moving down: decrement categories between old_order and new_order
+            for cat in categories:
+                if old_order < int(cat.order_in_list) <= new_order:
+                    cat.order_in_list -= 1
+                    cat.save()
+        
+        # Update the moved category
+        category.order_in_list = new_order
+        category.save()
+        
+        logger.info(f"Reordered category '{category.category}' from position {old_order} to {new_order}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Category reordered successfully'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error reordering category: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error reordering category: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def reorder_item(request, project_pk, item_pk):
+    """
+    Reorder an item to a new position within its category.
+    Items can only be reordered within their own category.
+    
+    Expected POST data:
+    - new_order: int (new position in list within the category)
+    """
+    try:
+        from core.models import Costing, Projects
+        
+        data = json.loads(request.body)
+        new_order = data.get('new_order')
+        
+        if new_order is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New order position is required'
+            }, status=400)
+        
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the item to move
+        try:
+            item = Costing.objects.get(costing_pk=item_pk, project=project)
+        except Costing.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Item not found'
+            }, status=404)
+        
+        old_order = int(item.order_in_list)
+        new_order = int(new_order)
+        
+        if old_order == new_order:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'No change in position'
+            })
+        
+        # Get all items in the same category
+        items = Costing.objects.filter(
+            project=project,
+            category=item.category
+        ).exclude(costing_pk=item_pk).order_by('order_in_list')
+        
+        # Update order_in_list for all affected items in this category
+        if new_order < old_order:
+            # Moving up: increment items between new_order and old_order
+            for itm in items:
+                if new_order <= int(itm.order_in_list) < old_order:
+                    itm.order_in_list += 1
+                    itm.save()
+        else:
+            # Moving down: decrement items between old_order and new_order
+            for itm in items:
+                if old_order < int(itm.order_in_list) <= new_order:
+                    itm.order_in_list -= 1
+                    itm.save()
+        
+        # Update the moved item
+        item.order_in_list = new_order
+        item.save()
+        
+        logger.info(f"Reordered item '{item.item}' in category '{item.category.category}' from position {old_order} to {new_order}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Item reordered successfully'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error reordering item: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error reordering item: {str(e)}'
+        }, status=500)

@@ -53,20 +53,22 @@ test.describe('Projects Management', () => {
     test('should display correct table columns and data', async ({ page }) => {
         // Check table headers - scope to Projects table only
         const projectsTable = page.locator('#projectsTable');
-        await expect(projectsTable.locator('th', { hasText: 'Project' }).first()).toBeVisible();
-        await expect(projectsTable.locator('th', { hasText: 'Type' })).toBeVisible();
-        await expect(projectsTable.locator('th', { hasText: 'Xero Instance' })).toBeVisible();
-        await expect(projectsTable.locator('th', { hasText: 'Sales Account' })).toBeVisible();
-        await expect(projectsTable.locator('th', { hasText: 'Background Image' })).toBeVisible();
-        await expect(projectsTable.locator('th', { hasText: 'Update' })).toBeVisible();
-        await expect(page.locator('#archiveColumnHeader')).toHaveText('Archive');
+        const headers = projectsTable.locator('thead th');
+        await expect(headers.nth(0)).toHaveText('Project');
+        await expect(headers.nth(1)).toHaveText('Status');
+        await expect(headers.nth(2)).toHaveText('Type');
+        await expect(headers.nth(3)).toHaveText('Xero Instance');
+        await expect(headers.nth(4)).toHaveText('Sales Account');
+        await expect(headers.nth(5)).toHaveText('Background Image');
+        await expect(headers.nth(10)).toHaveText('Archive');
         
-        // Check first project data
+        // Check first project data - Column order: Project, Status, Type, Xero Instance, Sales Account...
         const firstRow = page.locator('#projectsTableBody tr').first();
         await expect(firstRow.locator('td').nth(0)).toContainText('Active Project 1');
-        await expect(firstRow.locator('td').nth(1)).toContainText('Development');
-        await expect(firstRow.locator('td').nth(2)).toContainText('Test Xero');
-        await expect(firstRow.locator('td').nth(3)).toContainText('4000 - Sales Revenue');
+        await expect(firstRow.locator('td').nth(1)).toContainText('Tender'); // Status column
+        await expect(firstRow.locator('td').nth(2)).toContainText('Development'); // Type column
+        await expect(firstRow.locator('td').nth(3)).toContainText('Test Xero');
+        await expect(firstRow.locator('td').nth(4)).toContainText('4000 - Sales Revenue');
         
         // Check Update button exists
         await expect(firstRow.locator('button.update-project-btn')).toBeVisible();
@@ -79,8 +81,9 @@ test.describe('Projects Management', () => {
 
     test('should display background images as thumbnails', async ({ page }) => {
         // Active Project 1 has a background image
+        // Column order: Project(0), Status(1), Type(2), Xero Instance(3), Sales Account(4), Background Image(5)
         const firstRow = page.locator('#projectsTableBody tr').first();
-        const bgCell = firstRow.locator('td').nth(4);
+        const bgCell = firstRow.locator('td').nth(5); // Background Image is column 5
         
         // Should have an img tag
         const img = bgCell.locator('img');
@@ -92,7 +95,7 @@ test.describe('Projects Management', () => {
         
         // Active Project 2 has no background
         const secondRow = page.locator('#projectsTableBody tr').nth(1);
-        const bgCell2 = secondRow.locator('td').nth(4);
+        const bgCell2 = secondRow.locator('td').nth(5); // Background Image is column 5
         await expect(bgCell2).toContainText('-');
     });
 
@@ -129,7 +132,7 @@ test.describe('Projects Management', () => {
         
         // Button should change to "Show Active"
         await expect(page.locator('#toggleArchiveBtn')).toContainText('Show Active');
-        await expect(page.locator('#toggleArchiveBtn')).toHaveClass(/btn-info/);
+        await expect(page.locator('#toggleArchiveBtn')).toHaveClass(/btn-secondary/);
         
         // Archive column header should change to "Unarchive"
         await expect(page.locator('#archiveColumnHeader')).toHaveText('Unarchive');

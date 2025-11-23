@@ -76,6 +76,10 @@ MIDDLEWARE = [
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
+# File upload settings - allow larger PDFs for quotes (10 MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+
 ROOT_URLCONF = 'dev_app.urls'
 
 TEMPLATES = [

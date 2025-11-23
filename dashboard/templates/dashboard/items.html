@@ -1,0 +1,515 @@
+<!-- Items Management for Project Tender View -->
+<style>
+    .items-container {
+        display: flex;
+        height: 100%;
+        gap: 20px;
+    }
+    
+    .items-left-panel {
+        width: 50%;
+        overflow-y: auto;
+        padding: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .items-right-panel {
+        width: 50%;
+        overflow-y: auto;
+        padding: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .items-section {
+        margin-bottom: 30px;
+    }
+    
+    .items-section h5 {
+        margin-bottom: 15px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .items-form-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .items-form-table th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        font-weight: 600;
+    }
+    
+    .items-form-table td {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .items-form-table input[type="text"] {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .items-form-table select {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .items-add-btn {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    
+    .items-add-btn.disabled {
+        background-color: #6c757d;
+        color: white;
+        cursor: not-allowed;
+    }
+    
+    .items-add-btn.enabled {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .items-add-btn.enabled:hover {
+        background-color: #218838;
+    }
+    
+    .items-display-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    
+    .items-display-table th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .items-display-table td {
+        padding: 8px 10px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .items-display-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .category-group-header {
+        background-color: #e9ecef;
+        font-weight: bold;
+    }
+</style>
+
+<div class="items-container">
+    <!-- Left Panel: Add Category and Add Item Forms -->
+    <div class="items-left-panel">
+        <!-- Add Category Section -->
+        <div class="items-section">
+            <h5>Add Category</h5>
+            <table class="items-form-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="categoryNameInput" maxlength="20" placeholder="Enter category name">
+                        </td>
+                        <td>
+                            <select id="categoryOrderSelect">
+                                <option value="">Select order...</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button id="addCategoryBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Add Item Section -->
+        <div class="items-section">
+            <h5>Add Item</h5>
+            <table class="items-form-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="itemNameInput" maxlength="20" placeholder="Enter item name">
+                        </td>
+                        <td>
+                            <select id="itemCategorySelect">
+                                <option value="">Select category...</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select id="itemOrderSelect" disabled>
+                                <option value="">Select category first...</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button id="addItemBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Category | Item Display Table -->
+    <div class="items-right-panel">
+        <table class="items-display-table">
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Category</th>
+                    <th style="width: 60%;">Item</th>
+                </tr>
+            </thead>
+            <tbody id="itemsDisplayTableBody">
+                <tr>
+                    <td colspan="2" style="text-align: center; color: #6c757d; padding: 20px;">
+                        No items yet. Add a category and items to get started.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Global variables for items management
+    window.itemsCategories = [];
+    window.itemsItems = [];
+    
+    // Initialize items view when Items button is clicked
+    $(document).on('click', '[data-section="items"]', function() {
+        if (window.currentTenderProject && window.currentTenderProject.pk) {
+            loadProjectItems(window.currentTenderProject.pk);
+        }
+    });
+    
+    // Load categories and items for a project
+    function loadProjectItems(projectPk) {
+        console.log('Loading items for project:', projectPk);
+        
+        // Load categories
+        $.ajax({
+            url: '/get_project_categories/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    window.itemsCategories = response.categories;
+                    console.log('Loaded categories:', window.itemsCategories);
+                    updateCategoryOrderDropdown();
+                    updateItemCategoryDropdown();
+                    loadItems(projectPk);
+                } else {
+                    console.error('Error loading categories:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load categories:', error);
+            }
+        });
+    }
+    
+    // Load items
+    function loadItems(projectPk) {
+        $.ajax({
+            url: '/get_project_items/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    window.itemsItems = response.items;
+                    console.log('Loaded items:', window.itemsItems);
+                    renderItemsTable();
+                } else {
+                    console.error('Error loading items:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load items:', error);
+            }
+        });
+    }
+    
+    // Update category order dropdown
+    function updateCategoryOrderDropdown() {
+        var select = $('#categoryOrderSelect');
+        select.empty();
+        select.append('<option value="">Select order...</option>');
+        
+        var maxOrder = window.itemsCategories.length;
+        for (var i = 1; i <= maxOrder + 1; i++) {
+            select.append('<option value="' + i + '">' + i + '</option>');
+        }
+    }
+    
+    // Update item category dropdown
+    function updateItemCategoryDropdown() {
+        var select = $('#itemCategorySelect');
+        select.empty();
+        select.append('<option value="">Select category...</option>');
+        
+        window.itemsCategories.forEach(function(category) {
+            select.append('<option value="' + category.categories_pk + '">' + category.category + '</option>');
+        });
+    }
+    
+    // Update item order dropdown based on selected category
+    function updateItemOrderDropdown(categoryPk) {
+        var select = $('#itemOrderSelect');
+        select.empty();
+        
+        if (!categoryPk) {
+            select.append('<option value="">Select category first...</option>');
+            select.prop('disabled', true);
+            return;
+        }
+        
+        // Count items in this category
+        var itemsInCategory = window.itemsItems.filter(function(item) {
+            return item.category__category === getCategoryName(categoryPk);
+        });
+        
+        var maxOrder = itemsInCategory.length;
+        select.append('<option value="">Select order...</option>');
+        for (var i = 1; i <= maxOrder + 1; i++) {
+            select.append('<option value="' + i + '">' + i + '</option>');
+        }
+        
+        select.prop('disabled', false);
+    }
+    
+    // Get category name by PK
+    function getCategoryName(categoryPk) {
+        var category = window.itemsCategories.find(function(cat) {
+            return cat.categories_pk == categoryPk;
+        });
+        return category ? category.category : '';
+    }
+    
+    // Render items display table
+    function renderItemsTable() {
+        var tbody = $('#itemsDisplayTableBody');
+        tbody.empty();
+        
+        if (window.itemsItems.length === 0) {
+            tbody.append('<tr><td colspan="2" style="text-align: center; color: #6c757d; padding: 20px;">No items yet. Add a category and items to get started.</td></tr>');
+            return;
+        }
+        
+        // Group items by category
+        var groupedItems = {};
+        window.itemsItems.forEach(function(item) {
+            var categoryName = item.category__category;
+            if (!groupedItems[categoryName]) {
+                groupedItems[categoryName] = [];
+            }
+            groupedItems[categoryName].push(item);
+        });
+        
+        // Sort categories by order_in_list
+        var sortedCategories = Object.keys(groupedItems).sort(function(a, b) {
+            var catA = window.itemsCategories.find(function(cat) { return cat.category === a; });
+            var catB = window.itemsCategories.find(function(cat) { return cat.category === b; });
+            return (catA ? catA.order_in_list : 999) - (catB ? catB.order_in_list : 999);
+        });
+        
+        // Render grouped items
+        sortedCategories.forEach(function(categoryName) {
+            var items = groupedItems[categoryName];
+            
+            items.forEach(function(item, index) {
+                var row = '<tr>';
+                if (index === 0) {
+                    // First item in category - show category name with rowspan
+                    row += '<td rowspan="' + items.length + '" class="category-group-header">' + categoryName + '</td>';
+                }
+                row += '<td>' + item.item + '</td>';
+                row += '</tr>';
+                tbody.append(row);
+            });
+        });
+    }
+    
+    // Validation for Add Category button
+    function validateCategoryForm() {
+        var categoryName = $('#categoryNameInput').val().trim();
+        var orderInList = $('#categoryOrderSelect').val();
+        
+        var isValid = categoryName.length > 0 && orderInList !== '';
+        
+        var btn = $('#addCategoryBtn');
+        if (isValid) {
+            btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+        } else {
+            btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+        }
+    }
+    
+    // Validation for Add Item button
+    function validateItemForm() {
+        var itemName = $('#itemNameInput').val().trim();
+        var categoryPk = $('#itemCategorySelect').val();
+        var orderInList = $('#itemOrderSelect').val();
+        
+        var isValid = itemName.length > 0 && categoryPk !== '' && orderInList !== '';
+        
+        var btn = $('#addItemBtn');
+        if (isValid) {
+            btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+        } else {
+            btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+        }
+    }
+    
+    // Event listeners for validation
+    $('#categoryNameInput, #categoryOrderSelect').on('input change', validateCategoryForm);
+    $('#itemNameInput, #itemCategorySelect, #itemOrderSelect').on('input change', validateItemForm);
+    
+    // Event listener for item category selection
+    $('#itemCategorySelect').on('change', function() {
+        var categoryPk = $(this).val();
+        updateItemOrderDropdown(categoryPk);
+        validateItemForm();
+    });
+    
+    // Add Category button click
+    $('#addCategoryBtn').on('click', function() {
+        if ($(this).hasClass('disabled')) return;
+        
+        var categoryName = $('#categoryNameInput').val().trim();
+        var orderInList = $('#categoryOrderSelect').val();
+        
+        if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+            alert('No project selected');
+            return;
+        }
+        
+        $.ajax({
+            url: '/create_category/' + window.currentTenderProject.pk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                category: categoryName,
+                order_in_list: parseInt(orderInList)
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Category created:', response.category);
+                    
+                    // Add to local array
+                    window.itemsCategories.push(response.category);
+                    
+                    // Update dropdowns
+                    updateCategoryOrderDropdown();
+                    updateItemCategoryDropdown();
+                    renderItemsTable();
+                    
+                    // Clear form
+                    $('#categoryNameInput').val('');
+                    $('#categoryOrderSelect').val('');
+                    validateCategoryForm();
+                    
+                    alert('Category added successfully!');
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to create category:', error);
+                alert('Failed to create category: ' + error);
+            }
+        });
+    });
+    
+    // Add Item button click
+    $('#addItemBtn').on('click', function() {
+        if ($(this).hasClass('disabled')) return;
+        
+        var itemName = $('#itemNameInput').val().trim();
+        var categoryPk = $('#itemCategorySelect').val();
+        var orderInList = $('#itemOrderSelect').val();
+        
+        if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+            alert('No project selected');
+            return;
+        }
+        
+        $.ajax({
+            url: '/create_item/' + window.currentTenderProject.pk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                item: itemName,
+                category_pk: parseInt(categoryPk),
+                order_in_list: parseInt(orderInList)
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Item created:', response.item);
+                    
+                    // Add to local array
+                    window.itemsItems.push({
+                        costing_pk: response.item.costing_pk,
+                        item: response.item.item,
+                        category__category: response.item.category,
+                        category__order_in_list: 0  // Will be sorted by category
+                    });
+                    
+                    // Update table
+                    renderItemsTable();
+                    
+                    // Update item order dropdown for this category
+                    updateItemOrderDropdown(categoryPk);
+                    
+                    // Clear form
+                    $('#itemNameInput').val('');
+                    $('#itemOrderSelect').val('');
+                    validateItemForm();
+                    
+                    alert('Item added successfully!');
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to create item:', error);
+                alert('Failed to create item: ' + error);
+            }
+        });
+    });
+});
+</script>

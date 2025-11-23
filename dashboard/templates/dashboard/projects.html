@@ -8,6 +8,11 @@
     {% include 'core/documents.html' %}
 </div>
 
+<!-- Hidden template storage for contract budget template -->
+<div id="contractBudgetTemplateStorage" style="display: none;">
+    {% include 'dashboard/contract_budget.html' %}
+</div>
+
 <!-- Projects Section (hidden initially, shown when Projects clicked) -->
 <div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
     
@@ -760,6 +765,9 @@
             } else if (section === 'documents') {
                 // Load Documents section
                 loadDocumentsSection();
+            } else if (section === 'contract-budget') {
+                // Load Contract Budget section
+                loadContractBudgetSection();
             } else {
                 // Placeholder for other sections
                 $('#tenderContentArea').html(`
@@ -951,8 +959,42 @@
                                     .addClass('btn btn-sm btn-warning')
                                     .text('Update')
                                     .on('click', function() {
-                                        alert('Update functionality coming soon');
-                                        // TODO: Implement update functionality
+                                        console.log('Update quote clicked. Full quote object:', quote);
+                                        console.log('Available keys:', Object.keys(quote));
+                                        
+                                        // Use QuotesEntry module for update mode
+                                        QuotesEntry.init({
+                                            pdfUrl: quote.pdf_url,
+                                            pdfDataUrl: null, // No data URL needed for update
+                                            containerSelector: '#tenderContentArea',
+                                            projectPk: window.currentTenderProject.pk,
+                                            suppliers: window.projectContacts,
+                                            items: window.itemsItems,
+                                            // Update mode options
+                                            isUpdate: true,
+                                            quoteId: quote.quotes_pk,
+                                            existingData: {
+                                                supplier: quote.supplier_pk || quote.contact_pk,
+                                                totalCost: quote.total_cost,
+                                                quoteNumber: quote.supplier_quote_number,
+                                                allocations: quote.allocations.map(function(alloc) {
+                                                    return {
+                                                        item: alloc.item_name,
+                                                        costing_pk: alloc.costing_pk,
+                                                        amount: alloc.amount,
+                                                        notes: alloc.notes || ''
+                                                    };
+                                                })
+                                            },
+                                            onSave: function(response) {
+                                                console.log('Quote updated:', response);
+                                                // After update, return to quotes list
+                                                loadQuotesSection();
+                                            },
+                                            onCancel: function() {
+                                                loadQuotesSection();
+                                            }
+                                        });
                                     });
                                 row.append($('<td></td>').append(updateBtn));
                                 
@@ -1012,6 +1054,20 @@
             });
             
             console.log('Documents section loaded for project:', window.currentTenderProject.pk);
+        }
+        
+        // Load the contract budget section view
+        function loadContractBudgetSection() {
+            if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                console.error('No project selected');
+                return;
+            }
+            
+            // Load the contract budget template from hidden storage
+            var contractBudgetHtml = $('#contractBudgetTemplateStorage').html();
+            $('#tenderContentArea').html(contractBudgetHtml);
+            
+            console.log('Contract Budget section loaded for project:', window.currentTenderProject.pk);
         }
         
         // Initialize Items Section Function

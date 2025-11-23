@@ -4,7 +4,7 @@ from .views import commit_data, update_quote, create_contacts, delete_quote, del
 from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, get_xero_accounts_by_instance, create_invoice_allocation, update_invoice_allocation, delete_invoice_allocation, update_invoice, null_allocation_xero_fields
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive
-from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes
+from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes, get_project_committed_amounts
 from .views.documents import get_project_folders, create_folder, rename_folder, delete_folder, upload_files, download_file, delete_file
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
@@ -75,6 +75,7 @@ urlpatterns = [
     path('get_project_contacts/<int:project_pk>/', get_project_contacts, name='get_project_contacts'),
     path('save_project_quote/', save_project_quote, name='save_project_quote'),
     path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
+    path('get_project_committed_amounts/<int:project_pk>/', get_project_committed_amounts, name='get_project_committed_amounts'),
     path('get_invoice_allocations/<int:invoice_id>/', get_invoice_allocations, name='get_invoice_allocations'),
     path('post_progress_claim_data/', views.post_progress_claim_data, name='post_progress_claim_data'),
     path('post_direct_cost_data/', views.post_direct_cost_data, name='post_direct_cost_data'),

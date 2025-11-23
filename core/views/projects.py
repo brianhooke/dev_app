@@ -102,7 +102,8 @@ def create_project(request):
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
-                'background_url': background_url
+                'background_url': background_url,
+                'project_status': project.project_status
             }
         })
         
@@ -162,7 +163,8 @@ def get_projects(request):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
-                'background_url': background_url
+                'background_url': background_url,
+                'project_status': project.project_status
             })
         
         return JsonResponse({
@@ -267,7 +269,8 @@ def update_project(request, project_pk):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
-                'background_url': background_url
+                'background_url': background_url,
+                'project_status': project.project_status
             }
         })
         

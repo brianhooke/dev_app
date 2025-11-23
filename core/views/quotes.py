@@ -20,6 +20,7 @@ from ..services import costings as costing_service
 from ..services import contacts as contact_service
 from ..services import aggregations as aggregation_service
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
 import uuid
 from django.core.files.base import ContentFile
@@ -98,30 +99,84 @@ def commit_data(request):
         return JsonResponse({'status': 'success'})
 @csrf_exempt
 def update_quote(request):
+    """
+    Update an existing quote with new data
+    Expects: quote_id, total_cost, quote_number, supplier, line_items
+    """
     if request.method == 'POST':
-        data = json.loads(request.body)
-        quote_id = data.get('quote_id')
-        total_cost = data.get('total_cost')
-        supplier_quote_number = data.get('supplier_quote_number')  
-        allocations = data.get('allocations')
         try:
-            quote = Quotes.objects.get(pk=quote_id)
-        except Quotes.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Quote not found'})
-        quote.total_cost = total_cost
-        quote.supplier_quote_number = supplier_quote_number
-        quote.save()
-        Quote_allocations.objects.filter(quotes_pk=quote_id).delete()
-        for allocation in allocations:
-            notes = allocation.get('notes', '')  
-            item = Costing.objects.get(pk=allocation['item'])
-            alloc = Quote_allocations(quotes_pk=quote, item=item, amount=allocation['amount'], notes=notes)
-            alloc.save()
-            uncommitted = allocation['uncommitted']
-            Costing.objects.filter(item=allocation['item']).update(uncommitted=uncommitted)
-        return JsonResponse({'status': 'success'})
+            data = json.loads(request.body)
+            logger.info(f"Update quote request data: {data}")
+            
+            quote_id = data.get('quote_id')
+            total_cost = data.get('total_cost')
+            quote_number = data.get('quote_number')
+            supplier_id = data.get('supplier')
+            line_items = data.get('line_items', [])
+            
+            # Validate required fields
+            if not quote_id:
+                return JsonResponse({'status': 'error', 'message': 'Quote ID is required'}, status=400)
+            
+            # Get the quote
+            try:
+                quote = Quotes.objects.get(pk=quote_id)
+            except Quotes.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Quote not found'}, status=404)
+            
+            # Update quote fields
+            quote.total_cost = total_cost
+            quote.supplier_quote_number = quote_number
+            
+            # Update supplier if provided
+            if supplier_id:
+                try:
+                    contact = Contacts.objects.get(pk=supplier_id)
+                    quote.contact_pk = contact
+                except Contacts.DoesNotExist:
+                    logger.warning(f"Contact {supplier_id} not found, keeping existing supplier")
+            
+            quote.save()
+            logger.info(f"Updated quote {quote_id} - Total: {total_cost}, Number: {quote_number}")
+            
+            # Delete existing allocations and create new ones
+            Quote_allocations.objects.filter(quotes_pk=quote).delete()
+            
+            for line_item in line_items:
+                item_pk = line_item.get('item')
+                amount = line_item.get('amount', 0)
+                notes = line_item.get('notes', '')
+                
+                if not item_pk:
+                    continue
+                
+                try:
+                    costing = Costing.objects.get(pk=item_pk)
+                    Quote_allocations.objects.create(
+                        quotes_pk=quote,
+                        item=costing,
+                        amount=amount,
+                        notes=notes
+                    )
+                    logger.info(f"Created allocation: Item {item_pk}, Amount {amount}")
+                except Costing.DoesNotExist:
+                    logger.error(f"Costing {item_pk} not found, skipping allocation")
+                    continue
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Quote updated successfully',
+                'quote_id': quote_id
+            })
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in update_quote: {str(e)}")
+            return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
+        except Exception as e:
+            logger.error(f"Error updating quote: {str(e)}", exc_info=True)
+            return JsonResponse({'status': 'error', 'message': f'Error updating quote: {str(e)}'}, status=500)
     else:
-        return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 @csrf_exempt
 def delete_quote(request):
     if request.method == 'DELETE':
@@ -196,3 +251,281 @@ def get_quotes_by_supplier(request):
         }
         quotes_data.append(quote_info)
     return JsonResponse(quotes_data, safe=False)
+
+@require_http_methods(["GET"])
+def get_project_contacts(request, project_pk):
+    """
+    Get all contacts for a project's Xero instance
+    
+    Returns contacts filtered by the project's xero_instance
+    """
+    try:
+        # Get the project
+        try:
+            project = Projects.objects.select_related('xero_instance').get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Check if project has a Xero instance
+        if not project.xero_instance:
+            return JsonResponse({
+                'status': 'success',
+                'contacts': [],
+                'message': 'Project has no Xero instance assigned'
+            })
+        
+        # Get contacts for this Xero instance
+        contacts = Contacts.objects.filter(
+            xero_instance=project.xero_instance
+        ).order_by('name').values('contact_pk', 'name')
+        
+        contacts_list = list(contacts)
+        
+        logger.info(f"Retrieved {len(contacts_list)} contacts for project {project.project} (Xero instance: {project.xero_instance.xero_name})")
+        
+        return JsonResponse({
+            'status': 'success',
+            'contacts': contacts_list,
+            'xero_instance_name': project.xero_instance.xero_name
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting project contacts: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting contacts: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def save_project_quote(request):
+    """
+    Save a quote for a project
+    
+    Expected POST data:
+    {
+        "project_pk": int,
+        "supplier": int (contact_pk),
+        "total_cost": decimal,
+        "quote_number": string,
+        "line_items": [
+            {"item": int (costing_pk), "amount": decimal, "notes": string}
+        ],
+        "pdf_data_url": string (base64 encoded PDF)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Extract data
+        project_pk = data.get('project_pk')
+        supplier_pk = data.get('supplier')
+        total_cost = data.get('total_cost')
+        quote_number = data.get('quote_number')
+        line_items = data.get('line_items', [])
+        pdf_data_url = data.get('pdf_data_url')
+        
+        # Validate required fields
+        if not all([project_pk, supplier_pk, total_cost, quote_number, pdf_data_url]):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing required fields'
+            }, status=400)
+        
+        if not line_items:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'At least one line item is required'
+            }, status=400)
+        
+        # Get related objects
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        try:
+            contact = Contacts.objects.get(contact_pk=supplier_pk)
+        except Contacts.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Contact/Supplier not found'
+            }, status=404)
+        
+        # Process PDF
+        try:
+            # Extract base64 data from data URL
+            format_part, imgstr = pdf_data_url.split(';base64,')
+            ext = format_part.split('/')[-1]
+            
+            # Generate unique filename
+            supplier_name = contact.name.replace(' ', '_')
+            unique_filename = f"{supplier_name}_{quote_number}_{uuid.uuid4()}.{ext}"
+            
+            # Decode and create file
+            pdf_content = ContentFile(base64.b64decode(imgstr), name=unique_filename)
+        except Exception as e:
+            logger.error(f"Error processing PDF: {str(e)}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Error processing PDF: {str(e)}'
+            }, status=400)
+        
+        # Create Quote using transaction
+        with transaction.atomic():
+            # Create the quote
+            quote = Quotes.objects.create(
+                supplier_quote_number=quote_number,
+                total_cost=total_cost,
+                pdf=pdf_content,
+                contact_pk=contact,
+                project=project
+            )
+            
+            # Create quote allocations
+            for item_data in line_items:
+                item_pk = item_data.get('item')
+                amount = item_data.get('amount')
+                notes = item_data.get('notes', '')
+                
+                try:
+                    item = Costing.objects.get(costing_pk=item_pk)
+                except Costing.DoesNotExist:
+                    raise Exception(f'Costing item with pk {item_pk} not found')
+                
+                Quote_allocations.objects.create(
+                    quotes_pk=quote,
+                    item=item,
+                    amount=amount,
+                    notes=notes
+                )
+            
+            logger.info(f"Quote {quote.quotes_pk} created for project {project.project} with {len(line_items)} allocations")
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Quote saved successfully',
+                'quote_pk': quote.quotes_pk,
+                'quote_number': quote.supplier_quote_number
+            })
+    
+    except Exception as e:
+        logger.error(f"Error saving quote: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error saving quote: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_project_quotes(request, project_pk):
+    """
+    Get all quotes for a project with their allocations
+    
+    Returns quotes with related allocations and supplier info
+    """
+    try:
+        # Verify project exists
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get all quotes for this project with related data
+        quotes = Quotes.objects.filter(
+            project_id=project_pk
+        ).select_related('contact_pk').prefetch_related(
+            Prefetch(
+                'quote_allocations',
+                queryset=Quote_allocations.objects.select_related('item', 'item__category')
+            )
+        ).order_by('-quotes_pk')
+        
+        # Format data
+        quotes_data = []
+        for quote in quotes:
+            # Get allocations
+            allocations = []
+            for allocation in quote.quote_allocations.all():
+                allocations.append({
+                    'quote_allocations_pk': allocation.quote_allocations_pk,
+                    'item_pk': allocation.item.costing_pk,
+                    'item_name': allocation.item.item,
+                    'category': allocation.item.category.category if allocation.item.category else None,
+                    'amount': str(allocation.amount),
+                    'notes': allocation.notes or ''
+                })
+            
+            quote_info = {
+                'quotes_pk': quote.quotes_pk,
+                'supplier_quote_number': quote.supplier_quote_number,
+                'total_cost': str(quote.total_cost),
+                'supplier_name': quote.contact_pk.name if quote.contact_pk else 'Unknown',
+                'supplier_pk': quote.contact_pk.contact_pk if quote.contact_pk else None,
+                'pdf_url': quote.pdf.url if quote.pdf else None,
+                'allocations': allocations
+            }
+            quotes_data.append(quote_info)
+        
+        logger.info(f"Retrieved {len(quotes_data)} quotes for project {project.project}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'quotes': quotes_data,
+            'project_name': project.project
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting project quotes: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting quotes: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_project_committed_amounts(request, project_pk):
+    """
+    Get committed amounts (sum of quote allocations) per item for a project.
+    Returns a dictionary of {costing_pk: total_committed_amount}
+    """
+    try:
+        project = get_object_or_404(Projects, pk=project_pk)
+        
+        # Get all quotes for this project
+        project_quotes = Quotes.objects.filter(project=project)
+        
+        # Get all quote allocations for these quotes and aggregate by item
+        committed_amounts = Quote_allocations.objects.filter(
+            quotes_pk__in=project_quotes
+        ).values('item__costing_pk').annotate(
+            total_committed=Sum('amount')
+        )
+        
+        # Convert to dictionary {costing_pk: amount}
+        committed_dict = {
+            item['item__costing_pk']: float(item['total_committed'])
+            for item in committed_amounts
+        }
+        
+        return JsonResponse({
+            'status': 'success',
+            'committed_amounts': committed_dict
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting committed amounts: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting committed amounts: {str(e)}'
+        }, status=500)

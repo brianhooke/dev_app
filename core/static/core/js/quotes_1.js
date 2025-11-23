@@ -1,31 +1,56 @@
-var itemsData = JSON.parse(document.getElementById('items-data').textContent);
+// Initialize itemsData - will be set from window.itemsData when needed
+var itemsData = [];
+var itemsDataElement = document.getElementById('items-data');
+if (itemsDataElement) {
+    itemsData = JSON.parse(itemsDataElement.textContent);
+}
 
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('dropdown').addEventListener('change', function() {
-        if (this.value === 'commitCosts') {
-            document.getElementById('pdfInput').click();
-        }
-    });
-    document.getElementById('pdfInput').addEventListener('change', function(event) {
-        var file = event.target.files[0];
-        if (file) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var pdfData = e.target.result;
-                displayCombinedModal(pdfData);
-            };
-            reader.readAsDataURL(file);
-        }
-    });
+    // Only set up listeners if elements exist (for legacy pages)
+    var dropdown = document.getElementById('dropdown');
+    var pdfInput = document.getElementById('pdfInput');
+    
+    if (dropdown) {
+        dropdown.addEventListener('change', function() {
+            if (this.value === 'commitCosts') {
+                if (pdfInput) {
+                    pdfInput.click();
+                }
+            }
+        });
+    }
+    
+    if (pdfInput) {
+        pdfInput.addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var pdfData = e.target.result;
+                    displayCombinedModal(pdfData);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
 });
 
 function updateHiddenInput(selectElement) {
     var selectedOption = selectElement.options[selectElement.selectedIndex];
     document.getElementById('contact_pk').value = selectedOption.value;
+    // Trigger validation when supplier changes
+    if (typeof validateAndUpdateButtonState === 'function') {
+        validateAndUpdateButtonState();
+    }
 }
 
 function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact_pk = "", totalCost = 0.00, allocations = [], updating = false, supplier_quote_number = "") {
     var pdfUrl = pdfFilename;
+    
+    // Use window.itemsData if local itemsData is empty
+    if (itemsData.length === 0 && window.itemsData && window.itemsData.length > 0) {
+        itemsData = window.itemsData;
+    }
 
     // Generate options for the supplier dropdown list
     console.log("Contacts list is: " + contacts);
@@ -97,8 +122,8 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
         </table>
         <button id="addRowButton">+</button>
             <button id="closeBtn">Close</button>
-            <button id="commitBtn" style="float: right; display: ${updating ? 'none' : 'inline-block'};">Save</button>
-            <button id="updateBtn" style="float: right; display: ${updating ? 'inline-block' : 'none'};">Update</button>
+            <button id="commitBtn" style="float: right; display: ${updating ? 'none' : 'inline-block'}; background-color: grey; color: white;">Save</button>
+            <button id="updateBtn" style="float: right; display: ${updating ? 'inline-block' : 'none'}; background-color: grey; color: white;">Update</button>
             </div>
     </div>
     `;
@@ -120,7 +145,10 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
     // Set the default value of the 'total cost' input to 0.00
     var totalCostInput = document.getElementById('totalCost');
     // Add event listener to the 'total cost' input field
-    totalCostInput.addEventListener('input', updateStillToAllocateValue);
+    totalCostInput.addEventListener('input', function() {
+        updateStillToAllocateValue();
+        validateAndUpdateButtonState();
+    });
     // Set up 'close' button event listener
     document.getElementById('closeBtn').addEventListener('click', function() {
         var modal = document.getElementById('combinedModal');
@@ -238,6 +266,50 @@ function displayCombinedModal(pdfFilename, quote_id = "", supplier = "", contact
             }
         });
     });
+    
+    // Add listener to quote number for validation
+    document.getElementById('quoteNumber').addEventListener('input', validateAndUpdateButtonState);
+    
+    // Validation function to update button state
+    function validateAndUpdateButtonState() {
+        var totalCost = parseFloat(document.getElementById('totalCost').value);
+        totalCost = isNaN(totalCost) ? 0 : totalCost;
+        var allocated = 0;
+        var contact_pk = document.getElementById('contact_pk').value;
+        var supplier_quote_number = document.getElementById('quoteNumber').value;
+        var tableBody = document.getElementById('lineItemsTable').tBodies[0];
+        
+        // Calculate allocated amount
+        for (var i = 0; i < tableBody.rows.length - 1; i++) {
+            var cellValue = parseFloat(tableBody.rows[i].cells[4].firstChild.value.replace(/,/g, ''));
+            cellValue = isNaN(cellValue) ? 0 : cellValue;
+            allocated += cellValue;
+        }
+        allocated = parseFloat(allocated.toFixed(2));
+        
+        // Check all validation conditions
+        var isValid = (
+            totalCost === allocated &&
+            totalCost > 0 &&
+            contact_pk !== '' &&
+            supplier_quote_number !== ''
+        );
+        
+        // Update button colors
+        var commitBtn = document.getElementById('commitBtn');
+        var updateBtn = document.getElementById('updateBtn');
+        
+        if (isValid) {
+            commitBtn.style.backgroundColor = 'green';
+            updateBtn.style.backgroundColor = 'green';
+        } else {
+            commitBtn.style.backgroundColor = 'grey';
+            updateBtn.style.backgroundColor = 'grey';
+        }
+    }
+    
+    // Run initial validation
+    validateAndUpdateButtonState();
 }
 
 function addLineItem(item, amount, notes = '') {
@@ -264,7 +336,10 @@ function addLineItem(item, amount, notes = '') {
             input.step = '0.01';
             input.style.width = '100%';
             newCell.appendChild(input);
-            input.addEventListener('input', updateStillToAllocateValue);
+            input.addEventListener('input', function() {
+                updateStillToAllocateValue();
+                validateAndUpdateButtonState();
+            });
         } else if (i === 6) {
             var input = document.createElement('input');
             input.type = 'text';

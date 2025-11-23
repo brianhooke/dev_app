@@ -1,0 +1,190 @@
+================================================================================
+DEVELOPMENT NOTES - Navigation & Section Management
+================================================================================
+Date: November 22, 2025
+Version: v61
+
+================================================================================
+ISSUE 1: Navigation Not Hiding Previous Sections
+================================================================================
+
+PROBLEM:
+When navigating between navbar sections (Projects, Bills - Inbox, Bills - Direct, 
+Contacts, Xero), previous sections were not being hidden. This caused sections 
+to appear stacked on top of each other or pushed off screen.
+
+Example:
+- User clicks "Projects" → Projects section appears
+- User clicks "Bills - Inbox" → Bills section appears BELOW Projects section
+- Projects section remained visible, causing layout issues
+
+ROOT CAUSE:
+Each navbar click handler manually specified which sections to hide. This created:
+1. Maintenance burden - Every new section required updating all other handlers
+2. Combinatorial complexity - N sections meant N*(N-1) hide statements
+3. Error-prone - Easy to forget to hide a section in new handlers
+
+SOLUTION:
+Created a universal section hiding function in dashboard.html:
+
+```javascript
+// Universal function to hide all workspace sections
+window.hideAllSections = function() {
+    $('#emptyState').hide();
+    $('#billsInboxSection').hide();
+    $('#allocationsSection').hide();
+    $('#contactsSection').hide();
+    $('#projectsSection').hide();
+    $('#xeroSection').hide();
+};
+```
+
+Updated ALL navigation handlers to call this function before showing their section:
+
+BEFORE (manual, error-prone):
+```javascript
+$('#billsInboxSection').hide();
+$('#allocationsSection').hide();
+$('#contactsSection').hide();
+$('#projectsSection').hide();
+$('#xeroSection').hide();
+```
+
+AFTER (universal, clean):
+```javascript
+window.hideAllSections();
+```
+
+FILES MODIFIED:
+- /dashboard/templates/dashboard/dashboard.html (hideAllSections function + Dashboard, Contacts handlers)
+- /dashboard/templates/dashboard/bills.html (Bills Inbox, Bills Direct handlers)
+- /dashboard/templates/dashboard/projects.html (Projects handler)
+- /core/static/core/js/xero.js (Xero handler)
+
+BENEFITS:
+✓ Single source of truth for section hiding
+✓ Adding new sections only requires updating hideAllSections() once
+✓ All navigation automatically works correctly
+✓ ~27 redundant hide statements eliminated
+
+================================================================================
+ISSUE 2: Items Section Re-initialization Error
+================================================================================
+
+PROBLEM:
+When navigating to Projects → Tender → Items → Back → Tender → Items (second visit),
+the Items section failed to load with error:
+"Uncaught TypeError: Cannot read properties of undefined (reading 'replace')"
+
+ROOT CAUSE:
+The Items section HTML template was stored in a hidden div (#itemsTemplateStorage).
+On first load, the code did:
+1. Copy HTML from template: `var itemsContent = $('#itemsTemplateStorage').html();`
+2. Remove template from DOM: `$('#itemsTemplateStorage').remove();`
+3. Modify and insert HTML into workspace
+
+On second visit:
+1. Template div no longer existed
+2. `$('#itemsTemplateStorage').html()` returned undefined
+3. `itemsContent.replace()` failed
+
+SECONDARY ISSUE - Duplicate IDs:
+Even after fixing the template removal, having #itemsTemplateStorage in the DOM
+created duplicate IDs:
+- #categoryNameInput exists in both template storage AND active content
+- jQuery selectors like $('#categoryNameInput') would find the WRONG element
+  (the one in hidden template storage instead of visible form)
+
+SOLUTION (Two-Part):
+
+PART 1: Keep Template in DOM
+Removed the line that deleted the template:
+```javascript
+// REMOVED: $('#itemsTemplateStorage').remove();
+```
+Template now stays in DOM and can be reused on subsequent visits.
+
+PART 2: Scope All Selectors to Active Content Area
+Changed ALL jQuery selectors to target only elements within #tenderContentArea:
+
+BEFORE (finds template elements):
+```javascript
+var categoryName = $('#categoryNameInput').val();
+$('#categoryNameInput').val('');
+$(document).on('click', '#addCategoryBtn', function() { ... });
+```
+
+AFTER (finds only active elements):
+```javascript
+var categoryName = $('#tenderContentArea #categoryNameInput').val();
+$('#tenderContentArea #categoryNameInput').val('');
+$('#tenderContentArea').on('click', '#addCategoryBtn', function() { ... });
+```
+
+CHANGES MADE:
+1. Validation functions - scoped all selectors to #tenderContentArea
+2. Event listeners - scoped from $(document) to $('#tenderContentArea')
+3. Form clearing - scoped all .val('') calls
+4. Button state updates - scoped button selectors
+
+FILES MODIFIED:
+- /dashboard/templates/dashboard/projects.html
+  * initializeItemsSection() function
+  * validateCategoryForm()
+  * validateItemForm()
+  * Event listeners for form fields
+  * Add Category button handler
+  * Add Item button handler
+  * Form clearing after successful submission
+
+BENEFITS:
+✓ Items section works correctly on unlimited re-visits
+✓ No ID conflicts between template storage and active content
+✓ Selectors always target the correct elements
+✓ Cleaner console output (removed debug logs)
+✓ More maintainable and predictable code
+
+================================================================================
+BEST PRACTICES FOR FUTURE DEVELOPMENT
+================================================================================
+
+1. NAVIGATION SECTIONS:
+   - Always call window.hideAllSections() before showing a new section
+   - Add new sections to hideAllSections() function
+   - Never manually hide individual sections in navigation handlers
+
+2. REUSABLE TEMPLATES:
+   - Keep template storage divs in the DOM (don't remove them)
+   - Always scope jQuery selectors to the active content area
+   - Use parent container selectors: $('#containerID #elementID')
+   - Use scoped event delegation: $('#containerID').on('event', '#elementID', ...)
+
+3. AVOIDING DUPLICATE IDs:
+   - Scope all selectors to prevent selecting template elements
+   - Consider using unique IDs per instance if templates are used multiple times
+   - Use classes instead of IDs where possible for reusable elements
+
+4. EVENT DELEGATION:
+   - For dynamically loaded content, use event delegation
+   - Attach listeners to parent containers, not document
+   - Example: $('#tenderContentArea').on('click', '#button', fn)
+
+5. STATE MANAGEMENT:
+   - Keep data in global variables (window.itemsCategories, etc.)
+   - Reload data from server when needed (after create/update/delete)
+   - Let server be source of truth for data ordering
+
+================================================================================
+TESTING CHECKLIST
+================================================================================
+
+When adding new sections or modifying navigation:
+
+□ Test navigation FROM each section TO every other section
+□ Test returning to the same section multiple times
+□ Check console for errors or warnings
+□ Verify no sections remain visible when switching
+□ Test all interactive elements in the section
+□ Verify data persists correctly across navigation
+
+================================================================================

@@ -1,0 +1,212 @@
+<!-- Items Management for Project Tender View - HTML Only -->
+<style>
+    .items-container {
+        display: flex;
+        height: 100%;
+        gap: 20px;
+    }
+    
+    .items-left-panel {
+        width: 50%;
+        overflow-y: auto;
+        padding: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .items-right-panel {
+        width: 50%;
+        overflow-y: auto;
+        padding: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .items-section {
+        margin-bottom: 30px;
+    }
+    
+    .items-section h5 {
+        margin-bottom: 15px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .items-form-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .items-form-table th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        font-weight: 600;
+    }
+    
+    .items-form-table td {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .items-form-table input[type="text"] {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .items-form-table select {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .items-add-btn {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    
+    .items-add-btn.disabled {
+        background-color: #6c757d;
+        color: white;
+        cursor: not-allowed;
+    }
+    
+    .items-add-btn.enabled {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .items-add-btn.enabled:hover {
+        background-color: #218838;
+    }
+    
+    .items-display-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    
+    .items-display-table th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .items-display-table td {
+        padding: 8px 10px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .items-display-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .items-display-table .category-group-header {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    /* Drag-and-drop styles */
+    .drag-over {
+        border-top: 3px solid #007bff !important;
+        background-color: #e3f2fd !important;
+    }
+    
+    .category-row:hover,
+    .item-row:hover {
+        background-color: #f5f5f5;
+    }
+</style>
+
+<div class="items-container">
+    <!-- Left Panel: Add Category and Add Item Forms -->
+    <div class="items-left-panel">
+        <!-- Add Category Section -->
+        <div class="items-section">
+            <h5>Add Category</h5>
+            <table class="items-form-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="categoryNameInput" maxlength="20" placeholder="Enter category name">
+                        </td>
+                        <td>
+                            <select id="categoryOrderSelect"></select>
+                        </td>
+                        <td>
+                            <button id="addCategoryBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Add Item Section -->
+        <div class="items-section">
+            <h5>Add Item</h5>
+            <table class="items-form-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="itemNameInput" maxlength="20" placeholder="Enter item name">
+                        </td>
+                        <td>
+                            <select id="itemCategorySelect"></select>
+                        </td>
+                        <td>
+                            <select id="itemOrderSelect" disabled></select>
+                        </td>
+                        <td>
+                            <button id="addItemBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Category / Item Display Table -->
+    <div class="items-right-panel">
+        <table class="items-display-table">
+            <thead>
+                <tr>
+                    <th>Category / Item</th>
+                </tr>
+            </thead>
+            <tbody id="itemsDisplayTableBody">
+                <tr>
+                    <td style="text-align: center; color: #6c757d; padding: 20px;">
+                        No items yet. Add a category and items to get started.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
