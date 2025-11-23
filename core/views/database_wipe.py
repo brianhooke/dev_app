@@ -26,45 +26,82 @@ def wipe_database(request):
     Preserves:
     - Auth tables (users, permissions, groups, sessions)
     - Django admin tables (content types, migrations)
+    
+    Supports both SQLite and PostgreSQL databases.
     """
     try:
         logger.warning("Database wipe requested!")
         
+        # Detect database engine
+        db_engine = connection.settings_dict['ENGINE']
+        is_postgres = 'postgresql' in db_engine
+        is_sqlite = 'sqlite' in db_engine
+        
+        logger.info(f"Database engine: {db_engine}")
+        
         # Get all table names
         with connection.cursor() as cursor:
-            # Get list of all tables
-            cursor.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' 
-                AND name NOT LIKE 'sqlite_%'
-                AND name NOT LIKE 'auth_%'
-                AND name NOT LIKE 'django_%'
-                ORDER BY name;
-            """)
+            if is_postgres:
+                # PostgreSQL query to get all tables
+                cursor.execute("""
+                    SELECT tablename FROM pg_tables 
+                    WHERE schemaname = 'public'
+                    AND tablename NOT LIKE 'auth_%'
+                    AND tablename NOT LIKE 'django_%'
+                    ORDER BY tablename;
+                """)
+            elif is_sqlite:
+                # SQLite query to get all tables
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' 
+                    AND name NOT LIKE 'sqlite_%'
+                    AND name NOT LIKE 'auth_%'
+                    AND name NOT LIKE 'django_%'
+                    ORDER BY name;
+                """)
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Unsupported database engine: {db_engine}'
+                }, status=400)
             
             tables = [row[0] for row in cursor.fetchall()]
             
             logger.info(f"Tables to be wiped: {tables}")
             
-            # Disable foreign key checks temporarily
-            cursor.execute("PRAGMA foreign_keys = OFF;")
+            # Disable foreign key checks
+            if is_postgres:
+                # PostgreSQL doesn't need FK disabling for DELETE
+                pass
+            elif is_sqlite:
+                cursor.execute("PRAGMA foreign_keys = OFF;")
             
             # Delete all data from each table
             deleted_counts = {}
             for table in tables:
                 try:
-                    cursor.execute(f"DELETE FROM {table};")
-                    deleted_counts[table] = cursor.rowcount
-                    logger.info(f"Deleted {cursor.rowcount} rows from {table}")
+                    if is_postgres:
+                        # PostgreSQL - use TRUNCATE for better performance
+                        cursor.execute(f"TRUNCATE TABLE {table} CASCADE;")
+                        deleted_counts[table] = "Truncated"
+                        logger.info(f"Truncated table {table}")
+                    else:
+                        # SQLite - use DELETE
+                        cursor.execute(f"DELETE FROM {table};")
+                        deleted_counts[table] = cursor.rowcount
+                        logger.info(f"Deleted {cursor.rowcount} rows from {table}")
                 except Exception as e:
-                    logger.error(f"Error deleting from {table}: {str(e)}")
+                    logger.error(f"Error clearing {table}: {str(e)}")
                     deleted_counts[table] = f"Error: {str(e)}"
             
             # Re-enable foreign key checks
-            cursor.execute("PRAGMA foreign_keys = ON;")
+            if is_sqlite:
+                cursor.execute("PRAGMA foreign_keys = ON;")
             
-            # Vacuum to reclaim space
-            cursor.execute("VACUUM;")
+            # Vacuum to reclaim space (SQLite only)
+            if is_sqlite:
+                cursor.execute("VACUUM;")
         
         logger.warning(f"Database wipe completed. Deleted from {len(deleted_counts)} tables.")
         
