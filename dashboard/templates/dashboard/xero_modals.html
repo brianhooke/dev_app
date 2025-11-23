@@ -14,6 +14,20 @@
     background-color: white !important;
     pointer-events: auto !important;
 }
+
+/* Force add new modal to be on top of any other modals */
+#addXeroInstanceModal.show {
+    z-index: 1060 !important;
+}
+#addXeroInstanceModal + .modal-backdrop {
+    z-index: 1059 !important;
+    opacity: 0.5 !important;
+}
+/* Ensure modal content is clickable and white */
+#addXeroInstanceModal .modal-content {
+    background-color: white !important;
+    pointer-events: auto !important;
+}
 </style>
 
 <!--
@@ -93,9 +107,9 @@ Note: OAuth flow handled separately via /core/xero_oauth/authorize/{instance_pk}
 </div>
 
 <!-- Level 2 Modal: Add New Xero Instance -->
-<div class="modal fade" id="addXeroInstanceModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="addXeroInstanceModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="true" data-keyboard="true" style="z-index: 1060;">
     <div class="modal-dialog" role="document" style="max-width: 500px;">
-        <div class="modal-content" style="border: 3px solid black;">
+        <div class="modal-content" style="border: 3px solid black; background-color: white; position: relative; z-index: 1061;">
             <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
                 <h5 class="modal-title">Add New Xero Instance</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">

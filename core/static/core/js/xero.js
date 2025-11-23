@@ -179,8 +179,23 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('xeroClientIdInput').value = '';
         document.getElementById('xeroClientSecretInput').value = '';
         
-        // Show second modal
-        $('#addXeroInstanceModal').modal('show');
+        // Hide the first modal and remove all backdrops
+        $('#xeroInstancesModal').modal('hide');
+        
+        // Remove any lingering backdrops
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        
+        // Small delay to allow first modal to close, then show add new modal
+        setTimeout(function() {
+            $('#addXeroInstanceModal').modal('show');
+            
+            // Force the backdrop z-index after modal opens
+            setTimeout(function() {
+                $('.modal-backdrop').last().css('z-index', '1059');
+                $('#addXeroInstanceModal').css('z-index', '1060');
+            }, 100);
+        }, 350);
     });
     
     // Submit New Xero Instance
@@ -214,8 +229,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.status === 'success') {
                 alert('Xero instance added successfully');
                 $('#addXeroInstanceModal').modal('hide');
-                // Reload the main modal
-                loadXeroInstances();
+                
+                // After add modal is hidden, reopen the main modal
+                setTimeout(function() {
+                    loadXeroInstances();
+                    $('#xeroInstancesModal').modal('show');
+                }, 300);
             } else {
                 alert('Error: ' + data.message);
             }
@@ -325,6 +344,17 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('xeroNameInput').value = '';
         document.getElementById('xeroClientIdInput').value = '';
         document.getElementById('xeroClientSecretInput').value = '';
+        
+        // Clean up any lingering backdrops
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        
+        // Small delay then check if we need to reopen main modal (e.g., user clicked Cancel)
+        setTimeout(function() {
+            if (!$('#xeroInstancesModal').hasClass('show')) {
+                $('#xeroInstancesModal').modal('show');
+            }
+        }, 150);
     });
     
     $('#editXeroInstanceModal').on('hidden.bs.modal', function (e) {
