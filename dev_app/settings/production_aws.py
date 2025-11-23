@@ -30,6 +30,13 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+# Session Configuration for OAuth flows
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Database-backed sessions
+SESSION_COOKIE_AGE = 3600  # 1 hour (enough for OAuth flow)
+SESSION_SAVE_EVERY_REQUEST = True  # Ensure session is saved on every request
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # Allow OAuth redirects to work
+
 # Database - AWS RDS PostgreSQL
 # Configure via environment variables in Elastic Beanstalk
 DATABASES = {

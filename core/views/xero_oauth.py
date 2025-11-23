@@ -17,9 +17,6 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Store state tokens temporarily (in production, use Redis or database)
-oauth_states = {}
-
 
 def xero_oauth_authorize(request, instance_pk):
     """
@@ -31,10 +28,13 @@ def xero_oauth_authorize(request, instance_pk):
         
         # Generate state token for CSRF protection
         state = secrets.token_urlsafe(32)
-        oauth_states[state] = {
+        
+        # Store state in session (works across workers and restarts)
+        request.session[f'xero_oauth_state_{state}'] = {
             'instance_pk': instance_pk,
-            'timestamp': timezone.now()
+            'timestamp': timezone.now().isoformat()
         }
+        request.session.modified = True
         
         # Build authorization URL - dynamically detect domain
         redirect_uri = request.build_absolute_uri('/core/xero_oauth_callback/')
@@ -84,14 +84,18 @@ def xero_oauth_callback(request):
             'message': 'Missing code or state parameter'
         }, status=400)
     
-    # Verify state token
-    if state not in oauth_states:
+    # Verify state token from session
+    session_key = f'xero_oauth_state_{state}'
+    if session_key not in request.session:
+        logger.error(f"State token not found in session: {state}")
+        logger.error(f"Available session keys: {list(request.session.keys())}")
         return JsonResponse({
             'status': 'error',
             'message': 'Invalid state token'
         }, status=400)
     
-    state_data = oauth_states.pop(state)
+    state_data = request.session.pop(session_key)
+    request.session.modified = True
     instance_pk = state_data['instance_pk']
     
     try:
