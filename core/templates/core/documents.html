@@ -1,0 +1,205 @@
+<!-- Document Management Template - Reusable across apps -->
+<div id="documentsContainer" style="display: flex; height: 100%; gap: 15px;">
+    <!-- Left side: Folder Tree (40%) -->
+    <div style="width: 40%; height: 100%; display: flex; flex-direction: column;">
+        <!-- Toolbar -->
+        <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
+            <button id="newFolderBtn" class="btn btn-sm btn-primary" title="Create new folder">
+                <i class="fa fa-folder-plus"></i> New Folder
+            </button>
+            <button id="uploadFileBtn" class="btn btn-sm btn-success" title="Upload file to selected folder">
+                <i class="fa fa-upload"></i> Upload File
+            </button>
+            <input type="file" id="fileUploadInput" style="display: none;" multiple>
+        </div>
+        
+        <!-- Folder Tree -->
+        <div id="folderTreeContainer" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa;">
+            <div id="folderTree">
+                <!-- Folder tree will be rendered here -->
+                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fa fa-folder-open" style="font-size: 48px; margin-bottom: 15px;"></i>
+                    <p>No folders yet. Click "New Folder" to create one.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right side: File Viewer (60%) -->
+    <div style="width: 60%; height: 100%; display: flex; flex-direction: column;">
+        <!-- File Info Bar -->
+        <div id="fileInfoBar" style="margin-bottom: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong id="currentFileName">No file selected</strong>
+                    <div id="currentFileInfo" style="font-size: 12px; color: #6c757d; margin-top: 5px;"></div>
+                </div>
+                <div>
+                    <button id="downloadFileBtn" class="btn btn-sm btn-primary" title="Download file">
+                        <i class="fa fa-download"></i> Download
+                    </button>
+                    <button id="deleteFileBtn" class="btn btn-sm btn-danger" title="Delete file">
+                        <i class="fa fa-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- File Viewer -->
+        <div id="fileViewer" style="flex: 1; border: 1px solid #ddd; background-color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <div style="text-align: center; color: #6c757d;">
+                <i class="fa fa-file" style="font-size: 64px; margin-bottom: 20px;"></i>
+                <p>Select a file to view</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Folder Modal -->
+<div class="modal fade" id="newFolderModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Folder</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newFolderName">Folder Name:</label>
+                    <input type="text" id="newFolderName" class="form-control" placeholder="Enter folder name" maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label for="parentFolderSelect">Parent Folder:</label>
+                    <select id="parentFolderSelect" class="form-control">
+                        <option value="">Root (No parent)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" id="createFolderBtn" class="btn btn-primary">Create Folder</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Folder Modal -->
+<div class="modal fade" id="renameFolderModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rename Folder</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="renameFolderName">New Folder Name:</label>
+                    <input type="text" id="renameFolderName" class="form-control" placeholder="Enter new folder name" maxlength="255">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" id="renameFolderBtn" class="btn btn-primary">Rename</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Folder tree styling */
+.folder-item {
+    padding: 5px 10px;
+    margin: 2px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+}
+
+.folder-item:hover {
+    background-color: #e9ecef;
+}
+
+.folder-item.selected {
+    background-color: #007bff;
+    color: white;
+}
+
+.folder-item.selected:hover {
+    background-color: #0056b3;
+}
+
+.folder-item .folder-icon {
+    margin-right: 5px;
+}
+
+.folder-item .folder-actions {
+    float: right;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.folder-item:hover .folder-actions {
+    opacity: 1;
+}
+
+.folder-item .folder-actions button {
+    padding: 0 5px;
+    font-size: 12px;
+    margin-left: 3px;
+}
+
+.folder-children {
+    margin-left: 20px;
+}
+
+.file-item {
+    padding: 5px 10px;
+    margin: 2px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.file-item:hover {
+    background-color: #e9ecef;
+}
+
+.file-item.selected {
+    background-color: #28a745;
+    color: white;
+}
+
+.file-item .file-icon {
+    margin-right: 5px;
+}
+
+.file-item .file-size {
+    float: right;
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.file-item.selected .file-size {
+    color: #fff;
+}
+
+/* Ensure modals appear above backdrop */
+#newFolderModal,
+#renameFolderModal {
+    z-index: 1055 !important;
+}
+
+#newFolderModal .modal-dialog,
+#renameFolderModal .modal-dialog {
+    z-index: 1056 !important;
+}
+
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+</style>

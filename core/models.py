@@ -123,6 +123,7 @@ class Projects(models.Model):
     xero_sales_account = models.CharField(max_length=255, null=True, blank=True)
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
+    project_status = models.IntegerField(default=0)  # 0=tender, 1=won_not_started, 2=started, 3=finished
     
     def __str__(self):
         return self.project
@@ -198,6 +199,7 @@ class Po_globals(models.Model):
 # SERVICE: costings
 class Categories(models.Model):
     categories_pk = models.AutoField(primary_key=True)
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     division = models.IntegerField()
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
@@ -208,8 +210,10 @@ class Categories(models.Model):
 # SERVICE: costings
 class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     category = models.ForeignKey(Categories, on_delete=models.CASCADE)
     item = models.CharField(max_length=100)
+    order_in_list = models.DecimalField(max_digits=10, decimal_places=0, default=1)
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
@@ -227,6 +231,7 @@ class Quotes(models.Model):
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     pdf = models.FileField(upload_to='pdfs/', null=True)
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True)
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, related_name='quotes')
     def __str__(self):
         return f"Quote #{self.quotes_pk} - Cost: {self.total_cost}"
 
@@ -239,6 +244,39 @@ class Quote_allocations(models.Model):
     notes = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
+
+# SERVICE: documents
+class Document_folders(models.Model):
+    folder_pk = models.AutoField(primary_key=True)
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, related_name='document_folders')
+    folder_name = models.CharField(max_length=255)
+    parent_folder = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subfolders')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    order_index = models.IntegerField(default=0)  # For custom ordering
+    
+    class Meta:
+        ordering = ['order_index', 'folder_name']
+    
+    def __str__(self):
+        return f"{self.folder_name} (Project: {self.project.project})"
+
+class Document_files(models.Model):
+    file_pk = models.AutoField(primary_key=True)
+    folder = models.ForeignKey(Document_folders, on_delete=models.CASCADE, related_name='files')
+    file_name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='project_documents/')
+    file_type = models.CharField(max_length=50, null=True, blank=True)  # pdf, jpg, png, etc.
+    file_size = models.IntegerField(null=True, blank=True)  # in bytes
+    uploaded_by = models.CharField(max_length=255, null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['file_name']
+    
+    def __str__(self):
+        return f"{self.file_name} in {self.folder.folder_name}"
 
 # SERVICE: bills
 class Invoices(models.Model):

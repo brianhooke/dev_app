@@ -245,3 +245,400 @@ def get_report_pdf_url(request, report_category, report_reference=None):
         return JsonResponse({'error': 'ReportPdfs not found'}, status=404)
 def alphanumeric_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split('([0-9]+)', s)]
+
+
+# ============================================================================
+# PROJECT DOCUMENT MANAGEMENT VIEWS
+# ============================================================================
+
+from django.views.decorators.http import require_http_methods
+from ..models import Document_folders, Document_files
+import mimetypes
+
+
+@require_http_methods(["GET"])
+def get_project_folders(request, project_pk):
+    """
+    Get all folders and files for a project
+    Returns nested folder structure with files
+    """
+    try:
+        # Get all folders for this project
+        folders = Document_folders.objects.filter(
+            project_id=project_pk
+        ).prefetch_related(
+            Prefetch(
+                'files',
+                queryset=Document_files.objects.all().order_by('file_name')
+            )
+        ).order_by('order_index', 'folder_name')
+        
+        # Build folder data
+        folders_data = []
+        for folder in folders:
+            files_data = []
+            for file in folder.files.all():
+                files_data.append({
+                    'file_pk': file.file_pk,
+                    'file_name': file.file_name,
+                    'file_url': file.file.url if file.file else None,
+                    'file_type': file.file_type or '',
+                    'file_size': file.file_size or 0,
+                    'uploaded_at': file.uploaded_at.isoformat() if file.uploaded_at else None,
+                    'description': file.description or ''
+                })
+            
+            folders_data.append({
+                'folder_pk': folder.folder_pk,
+                'folder_name': folder.folder_name,
+                'parent_folder_id': folder.parent_folder_id,
+                'order_index': folder.order_index,
+                'files': files_data
+            })
+        
+        logger.info(f"Retrieved {len(folders_data)} folders for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'folders': folders_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting project folders: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting folders: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_folder(request):
+    """
+    Create a new folder
+    
+    Expected POST data:
+    {
+        "project_pk": int,
+        "folder_name": string,
+        "parent_folder_id": int (optional)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        project_pk = data.get('project_pk')
+        folder_name = data.get('folder_name', '').strip()
+        parent_folder_id = data.get('parent_folder_id')
+        
+        if not project_pk or not folder_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project PK and folder name are required'
+            }, status=400)
+        
+        # Get project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get parent folder if specified
+        parent_folder = None
+        if parent_folder_id:
+            try:
+                parent_folder = Document_folders.objects.get(folder_pk=parent_folder_id)
+            except Document_folders.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Parent folder not found'
+                }, status=404)
+        
+        # Create folder
+        folder = Document_folders.objects.create(
+            project=project,
+            folder_name=folder_name,
+            parent_folder=parent_folder
+        )
+        
+        logger.info(f"Created folder '{folder_name}' for project {project.project}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'folder_pk': folder.folder_pk,
+            'folder_name': folder.folder_name
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating folder: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error creating folder: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def rename_folder(request):
+    """
+    Rename a folder
+    
+    Expected POST data:
+    {
+        "folder_pk": int,
+        "new_name": string
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        folder_pk = data.get('folder_pk')
+        new_name = data.get('new_name', '').strip()
+        
+        if not folder_pk or not new_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder PK and new name are required'
+            }, status=400)
+        
+        # Get folder
+        try:
+            folder = Document_folders.objects.get(folder_pk=folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder not found'
+            }, status=404)
+        
+        old_name = folder.folder_name
+        folder.folder_name = new_name
+        folder.save()
+        
+        logger.info(f"Renamed folder from '{old_name}' to '{new_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Folder renamed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error renaming folder: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error renaming folder: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_folder(request):
+    """
+    Delete a folder and all its contents
+    
+    Expected POST data:
+    {
+        "folder_pk": int
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        folder_pk = data.get('folder_pk')
+        
+        if not folder_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder PK is required'
+            }, status=400)
+        
+        # Get folder
+        try:
+            folder = Document_folders.objects.get(folder_pk=folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder not found'
+            }, status=404)
+        
+        folder_name = folder.folder_name
+        
+        # Delete folder (CASCADE will delete subfolders and files)
+        folder.delete()
+        
+        logger.info(f"Deleted folder '{folder_name}' and all its contents")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Folder deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting folder: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error deleting folder: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def upload_files(request):
+    """
+    Upload files to a folder
+    """
+    try:
+        folder_pk = request.POST.get('folder_pk')
+        files = request.FILES.getlist('files')
+        
+        if not folder_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder PK is required'
+            }, status=400)
+        
+        if not files:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No files provided'
+            }, status=400)
+        
+        # Get folder
+        try:
+            folder = Document_folders.objects.get(folder_pk=folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder not found'
+            }, status=404)
+        
+        uploaded_files = []
+        
+        for file in files:
+            # Get file extension and type
+            file_name = file.name
+            file_ext = os.path.splitext(file_name)[1].lower().replace('.', '')
+            file_type = file_ext
+            
+            # Guess MIME type
+            mime_type, _ = mimetypes.guess_type(file_name)
+            
+            # Create document file
+            doc_file = Document_files.objects.create(
+                folder=folder,
+                file_name=file_name,
+                file=file,
+                file_type=file_type,
+                file_size=file.size
+            )
+            
+            uploaded_files.append({
+                'file_pk': doc_file.file_pk,
+                'file_name': doc_file.file_name
+            })
+            
+            logger.info(f"Uploaded file '{file_name}' to folder '{folder.folder_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Uploaded {len(uploaded_files)} file(s)',
+            'files': uploaded_files
+        })
+        
+    except Exception as e:
+        logger.error(f"Error uploading files: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error uploading files: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def download_file(request, file_pk):
+    """
+    Download a file
+    """
+    try:
+        # Get file
+        try:
+            doc_file = Document_files.objects.get(file_pk=file_pk)
+        except Document_files.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File not found'
+            }, status=404)
+        
+        # Return file
+        if doc_file.file:
+            response = HttpResponse(doc_file.file.read(), content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{doc_file.file_name}"'
+            return response
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File content not found'
+            }, status=404)
+        
+    except Exception as e:
+        logger.error(f"Error downloading file: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error downloading file: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_file(request):
+    """
+    Delete a file
+    
+    Expected POST data:
+    {
+        "file_pk": int
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        file_pk = data.get('file_pk')
+        
+        if not file_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File PK is required'
+            }, status=400)
+        
+        # Get file
+        try:
+            doc_file = Document_files.objects.get(file_pk=file_pk)
+        except Document_files.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File not found'
+            }, status=404)
+        
+        file_name = doc_file.file_name
+        
+        # Delete the physical file
+        if doc_file.file:
+            doc_file.file.delete(save=False)
+        
+        # Delete the database record
+        doc_file.delete()
+        
+        logger.info(f"Deleted file '{file_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'File deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting file: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error deleting file: {str(e)}'
+        }, status=500)

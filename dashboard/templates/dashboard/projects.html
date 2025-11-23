@@ -1,0 +1,1560 @@
+<!-- Hidden template storage for items template -->
+<div id="itemsTemplateStorage" style="display: none;">
+    {% include 'dashboard/items_template.html' %}
+</div>
+
+<!-- Hidden template storage for documents template -->
+<div id="documentsTemplateStorage" style="display: none;">
+    {% include 'core/documents.html' %}
+</div>
+
+<!-- Projects Section (hidden initially, shown when Projects clicked) -->
+<div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
+    
+    <!-- Projects Table (scrollable with fixed header) -->
+    <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow: hidden; display: flex; flex-direction: column;">
+        <div style="overflow-y: auto; flex: 1;">
+            <table class="table table-bordered table-hover" id="projectsTable" style="margin-bottom: 0;">
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                    <tr>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                        <th>Xero Instance</th>
+                        <th>Sales Account</th>
+                        <th>Background Image</th>
+                        <th>Last Edited</th>
+                        <th>Last Invoiced</th>
+                        <th>Bills Status</th>
+                        <th style="width: 100px; text-align: center;">Update</th>
+                        <th style="width: 80px; text-align: center;" id="archiveColumnHeader">Archive</th>
+                    </tr>
+                </thead>
+                <tbody id="projectsTableBody">
+                    <!-- Projects will be populated here via JavaScript -->
+                    <tr>
+                        <td colspan="10" style="text-align: center; padding: 40px; color: #6c757d;">
+                            No projects found. Click "Add Project" to create one.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Tender View (hidden initially, shown when Tender link clicked) -->
+    <div id="tenderView" style="display: none; height: 100%; flex-direction: column;">
+        <!-- Back button and Project heading -->
+        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+            <button id="backToProjectsBtn" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Projects
+            </button>
+            <h3 id="tenderProjectName" style="margin: 0; flex: 1;"></h3>
+        </div>
+        
+        <!-- Tender navigation buttons -->
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-primary tender-nav-btn" data-section="items">Items</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
+            
+            <!-- Dynamic action buttons (shown based on selected section) -->
+            <button id="newQuoteBtn" class="btn btn-success" style="display: none; margin-left: 10px;">
+                <i class="fas fa-plus"></i> New Quote
+            </button>
+        </div>
+        
+        <!-- Hidden file input for quote PDF upload -->
+        <input type="file" id="tenderQuotePdfInput" accept="application/pdf" style="display: none;">
+        
+        <!-- Tender content area -->
+        <div id="tenderContentArea" style="flex: 1; border: 2px solid #ddd; padding: 20px; overflow-y: auto;">
+            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+        </div>
+    </div>
+    
+    <!-- Footer Buttons -->
+    <div id="projectsFooterButtons" style="display: flex; justify-content: space-between; flex-shrink: 0;">
+        <button id="toggleArchiveBtn" class="btn btn-secondary" data-showing-archived="0">
+            <i class="fas fa-archive"></i> Show Archived
+        </button>
+        <button id="addProjectBtn" class="btn btn-success">Add Project</button>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // Function to reset tender view state (make it global so other scripts can call it)
+        window.resetTenderViewState = function() {
+            // Reset all tender navigation buttons to default state
+            $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+            
+            // Hide all dynamic action buttons
+            $('#newQuoteBtn').hide();
+            
+            // Clear tender content area
+            $('#tenderContentArea').html(`
+                <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+            `);
+            
+            // Clear current tender project
+            window.currentTenderProject = null;
+        };
+        
+        // Projects controller - shows inline in workspace
+        $('#projectsLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            if (typeof window.hideAllSections === 'function') {
+                window.hideAllSections();
+            }
+            
+            // Reset tender view state when returning to projects
+            resetTenderViewState();
+            
+            // Hide tender view if it's showing
+            $('#tenderView').hide();
+            
+            // Show projects section and add has-content class to hide background
+            $('#projectsSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Show projects table and footer buttons
+            $('#projectsTable').closest('div').parent().show();
+            $('#projectsFooterButtons').show();
+            
+            // Load projects data
+            loadProjects();
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Function to load and display projects
+        function loadProjects(showArchived) {
+            const archived = showArchived ? '1' : '0';
+            
+            $.ajax({
+                url: '{% url "core:get_projects" %}',
+                type: 'GET',
+                data: { archived: archived },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        populateProjectsTable(response.projects, showArchived);
+                    } else {
+                        alert('Error loading projects: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading projects:', error);
+                    alert('Failed to load projects. Please try again.');
+                }
+            });
+        }
+        
+        // Function to populate projects table with data
+        function populateProjectsTable(projects, showingArchived) {
+            const tbody = $('#projectsTableBody');
+            const archiveHeader = $('#archiveColumnHeader');
+            
+            console.log('📊 Populating projects table with', projects.length, 'projects');
+            
+            // Update archive column header based on view
+            if (showingArchived) {
+                archiveHeader.html('Unarchive');
+            } else {
+                archiveHeader.html('Archive');
+            }
+            
+            // Clear existing rows (except add row if present)
+            tbody.find('tr:not(.add-project-row)').remove();
+            
+            if (projects.length === 0) {
+                // Show empty state if no projects and no add row
+                if (tbody.find('.add-project-row').length === 0) {
+                    const message = showingArchived ? 'No archived projects found.' : 'No projects found. Click "Add Project" to create one.';
+                    tbody.html(`
+                        <tr>
+                            <td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;">
+                                ${message}
+                            </td>
+                        </tr>
+                    `);
+                }
+                return;
+            }
+            
+            // Add project rows
+            projects.forEach(project => {
+                console.log(`📁 Project: ${project.project}`);
+                console.log(`  - Background URL: ${project.background_url || '(none)'}`);
+                
+                const row = $(`<tr data-project-pk="${project.projects_pk}"></tr>`);
+                
+                // Store original data for update functionality
+                row.data('original-project', project.project);
+                row.data('original-sales-account', project.xero_sales_account || '');
+                row.data('xero-instance-pk', project.xero_instance_pk);
+                row.data('background-url', project.background_url || '');
+                
+                // Build background image cell
+                let backgroundCell = '-';
+                if (project.background_url) {
+                    console.log(`  - Creating img tag for: ${project.background_url}`);
+                    backgroundCell = `<img src="${project.background_url}" alt="Background" style="max-width: 60px; max-height: 40px; cursor: pointer;" onclick="window.open('${project.background_url}', '_blank')">`;
+                } else {
+                    console.log(`  - No background URL, showing "-"`);
+                }
+                
+                // Build archive/unarchive button
+                let archiveButton;
+                if (showingArchived) {
+                    archiveButton = `<button class="btn btn-sm btn-info unarchive-project-btn" title="Unarchive project">
+                        <i class="fas fa-box-open"></i>
+                    </button>`;
+                } else {
+                    archiveButton = `<button class="btn btn-sm btn-danger archive-project-btn" title="Archive project">
+                        <i class="fas fa-archive"></i>
+                    </button>`;
+                }
+                
+                // Build status display
+                let statusDisplay = '-';
+                if (project.project_status === 0) {
+                    statusDisplay = '<a href="#" class="project-status-link" data-status="0">Tender</a>';
+                } else if (project.project_status === 1) {
+                    statusDisplay = 'Won (Not Started)';
+                } else if (project.project_status === 2) {
+                    statusDisplay = 'Started';
+                } else if (project.project_status === 3) {
+                    statusDisplay = 'Finished';
+                }
+                
+                row.append(`
+                    <td class="project-name">${project.project}</td>
+                    <td class="project-status">${statusDisplay}</td>
+                    <td>${project.project_type_display}</td>
+                    <td>${project.xero_instance_name || '-'}</td>
+                    <td class="sales-account">${project.xero_sales_account_display || '-'}</td>
+                    <td class="background-image">${backgroundCell}</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-sm btn-primary update-project-btn">Update</button>
+                    </td>
+                    <td style="text-align: center;">
+                        ${archiveButton}
+                    </td>
+                `);
+                
+                tbody.append(row);
+            });
+        }
+        
+        // Toggle Archive button handler
+        $('#toggleArchiveBtn').click(function() {
+            const currentlyShowingArchived = $(this).data('showing-archived') === 1;
+            const newShowingArchived = !currentlyShowingArchived;
+            
+            // Update button state
+            $(this).data('showing-archived', newShowingArchived ? 1 : 0);
+            
+            if (newShowingArchived) {
+                $(this).html('<i class="fas fa-list"></i> Show Active');
+            } else {
+                $(this).html('<i class="fas fa-archive"></i> Show Archived');
+            }
+            
+            // Load projects with new filter
+            loadProjects(newShowingArchived);
+        });
+        
+        // Add Project button handler - insert blank row at top
+        $(document).on('click', '#addProjectBtn', function() {
+            const tbody = $('#projectsTableBody');
+            
+            // Check if add row already exists
+            if (tbody.find('.add-project-row').length > 0) {
+                alert('Please complete or cancel the current add operation first.');
+                return;
+            }
+            
+            // Clear empty state message if present
+            tbody.find('tr').filter(function() {
+                return $(this).find('td[colspan]').length > 0;
+            }).remove();
+            
+            // Build Xero Instance dropdown options
+            const xeroInstances = {{ xero_instances_json|safe }};
+            let xeroInstanceOptions = '<option value="">Select Xero Instance *</option>';
+            xeroInstances.forEach(instance => {
+                xeroInstanceOptions += `<option value="${instance.xero_instance_pk}">${instance.xero_name}</option>`;
+            });
+            
+            // Create add row
+            const addRow = $('<tr class="add-project-row" style="background-color: #f8f9fa;"></tr>');
+            
+            addRow.html(`
+                <td><input type="text" class="form-control form-control-sm add-project-name" placeholder="Project name *" required></td>
+                <td>-</td>
+                <td>
+                    <select class="form-control form-control-sm add-project-type">
+                        <option value="general">General</option>
+                        <option value="development">Development</option>
+                        <option value="construction">Construction</option>
+                        <option value="precast">Precast</option>
+                        <option value="pods">Pods</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-control form-control-sm add-xero-instance" required>
+                        ${xeroInstanceOptions}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-control form-control-sm add-sales-account" disabled>
+                        <option value="">Select Xero Instance first</option>
+                    </select>
+                </td>
+                <td><input type="file" class="form-control form-control-sm add-background-image" accept="image/*"></td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-success save-new-project-btn">Save</button>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-secondary cancel-add-project-btn">Cancel</button>
+                </td>
+            `);
+            
+            tbody.prepend(addRow);
+            
+            // Focus on project name input
+            addRow.find('.add-project-name').focus();
+        });
+        
+        // Handle Xero Instance selection to populate Sales Account dropdown
+        $(document).on('change', '.add-xero-instance', function() {
+            const xeroInstancePk = $(this).val();
+            const salesAccountSelect = $(this).closest('tr').find('.add-sales-account');
+            
+            if (!xeroInstancePk) {
+                salesAccountSelect.prop('disabled', true).html('<option value="">Select Xero Instance first</option>');
+                return;
+            }
+            
+            // Fetch accounts for this Xero instance
+            $.ajax({
+                url: `/core/get_xero_accounts/${xeroInstancePk}/`,
+                type: 'GET',
+                success: function(response) {
+                    salesAccountSelect.prop('disabled', false);
+                    salesAccountSelect.empty();
+                    salesAccountSelect.append('<option value="">Select Sales Account</option>');
+                    
+                    if (response.accounts && response.accounts.length > 0) {
+                        // Filter for REVENUE accounts
+                        const revenueAccounts = response.accounts.filter(acc => acc.account_type === 'REVENUE');
+                        
+                        revenueAccounts.forEach(account => {
+                            salesAccountSelect.append(
+                                `<option value="${account.account_code}">${account.account_code} - ${account.account_name}</option>`
+                            );
+                        });
+                    } else {
+                        salesAccountSelect.append('<option value="">No accounts found</option>');
+                    }
+                },
+                error: function() {
+                    alert('Failed to load Xero accounts');
+                    salesAccountSelect.prop('disabled', true).html('<option value="">Error loading accounts</option>');
+                }
+            });
+        });
+        
+        // Save new project handler
+        $(document).on('click', '.save-new-project-btn', function() {
+            const row = $(this).closest('tr');
+            const projectName = row.find('.add-project-name').val().trim();
+            const projectType = row.find('.add-project-type').val();
+            const xeroInstancePk = row.find('.add-xero-instance').val();
+            const salesAccount = row.find('.add-sales-account').val();
+            const backgroundFile = row.find('.add-background-image')[0].files[0];
+            
+            // Validate required fields
+            if (!projectName) {
+                alert('Project name is required');
+                row.find('.add-project-name').focus();
+                return;
+            }
+            
+            if (!xeroInstancePk) {
+                alert('Xero Instance is required');
+                row.find('.add-xero-instance').focus();
+                return;
+            }
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('project_name', projectName);
+            formData.append('project_type', projectType);
+            formData.append('xero_instance_pk', xeroInstancePk);
+            if (salesAccount) {
+                formData.append('xero_sales_account', salesAccount);
+            }
+            if (backgroundFile) {
+                formData.append('background', backgroundFile);
+            }
+            // Note: project_status will default to 0 (Tender) in the backend
+            
+            // Show processing state
+            $(this).prop('disabled', true).text('Saving...');
+            
+            // Make AJAX call to create project
+            $.ajax({
+                url: '{% url "core:create_project" %}',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Remove add row
+                        row.remove();
+                        
+                        // Reload projects list to show new project
+                        loadProjects();
+                        
+                        alert('Project created successfully!');
+                    } else {
+                        alert('Error creating project: ' + response.message);
+                        row.find('.save-new-project-btn').prop('disabled', false).text('Save');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error creating project:', error);
+                    alert('Failed to create project. Please try again.');
+                    row.find('.save-new-project-btn').prop('disabled', false).text('Save');
+                }
+            });
+        });
+        
+        // Cancel add project handler
+        $(document).on('click', '.cancel-add-project-btn', function() {
+            const row = $(this).closest('tr');
+            row.remove();
+            
+            // If no rows left, show empty state
+            const tbody = $('#projectsTableBody');
+            if (tbody.find('tr').length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;">
+                            No projects found. Click "Add Project" to create one.
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+        
+        // Update project button handler
+        $(document).on('click', '.update-project-btn', function() {
+            const row = $(this).closest('tr');
+            const projectPk = row.data('project-pk');
+            const currentName = row.find('.project-name').text();
+            const currentSalesAccount = row.find('.sales-account').text();
+            const originalName = row.data('original-project');
+            const originalSalesAccount = row.data('original-sales-account');
+            
+            // Check if already in edit mode
+            if (row.hasClass('editing')) {
+                // Save changes
+                const newName = row.find('.edit-project-name').val().trim();
+                const newSalesAccount = row.find('.edit-sales-account').val().trim();
+                const backgroundFile = row.find('.edit-background-image')[0].files[0];
+                
+                // Validate
+                if (!newName) {
+                    alert('Project name is required');
+                    return;
+                }
+                
+                // Check if anything changed
+                if (newName === originalName && newSalesAccount === originalSalesAccount && !backgroundFile) {
+                    // No changes, just exit edit mode
+                    row.removeClass('editing');
+                    row.find('.project-name').html(originalName);
+                    row.find('.sales-account').html(originalSalesAccount || '-');
+                    $(this).text('Update');
+                    return;
+                }
+                
+                // Prepare form data
+                const formData = new FormData();
+                formData.append('project_name', newName);
+                formData.append('xero_sales_account', newSalesAccount);
+                if (backgroundFile) {
+                    formData.append('background', backgroundFile);
+                }
+                
+                // Show processing state
+                $(this).prop('disabled', true).text('Saving...');
+                
+                // Make AJAX call to update project
+                $.ajax({
+                    url: `/core/update_project/${projectPk}/`,
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Update row data
+                            row.data('original-project', response.project.project);
+                            row.data('original-sales-account', response.project.xero_sales_account || '');
+                            row.data('background-url', response.project.background_url || '');
+                            
+                            // Exit edit mode and reload to show updated data
+                            row.removeClass('editing');
+                            loadProjects();
+                            
+                            alert('Project updated successfully!');
+                        } else {
+                            alert('Error updating project: ' + response.message);
+                            row.find('.update-project-btn').prop('disabled', false).text('Save');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error updating project:', error);
+                        alert('Failed to update project. Please try again.');
+                        row.find('.update-project-btn').prop('disabled', false).text('Save');
+                    }
+                });
+            } else {
+                // Enter edit mode
+                row.addClass('editing');
+                
+                // Replace project name with input
+                row.find('.project-name').html(`<input type="text" class="form-control form-control-sm edit-project-name" value="${currentName}">`);
+                
+                // Replace sales account with dropdown (populated dynamically)
+                const xeroInstancePk = row.data('xero-instance-pk');
+                const currentSalesAccountCode = row.data('original-sales-account');
+                
+                // Create dropdown with loading state
+                row.find('.sales-account').html(`
+                    <select class="form-control form-control-sm edit-sales-account" disabled>
+                        <option value="">Loading accounts...</option>
+                    </select>
+                `);
+                
+                // Fetch and populate accounts if xero instance exists
+                if (xeroInstancePk) {
+                    $.ajax({
+                        url: `/core/get_xero_accounts/${xeroInstancePk}/`,
+                        type: 'GET',
+                        success: function(response) {
+                            const salesAccountSelect = row.find('.edit-sales-account');
+                            salesAccountSelect.prop('disabled', false);
+                            salesAccountSelect.empty();
+                            salesAccountSelect.append('<option value="">Select Sales Account</option>');
+                            
+                            if (response.accounts && response.accounts.length > 0) {
+                                // Filter for REVENUE accounts
+                                const revenueAccounts = response.accounts.filter(acc => acc.account_type === 'REVENUE');
+                                
+                                revenueAccounts.forEach(account => {
+                                    const isSelected = account.account_code === currentSalesAccountCode ? 'selected' : '';
+                                    salesAccountSelect.append(
+                                        `<option value="${account.account_code}" ${isSelected}>${account.account_code} - ${account.account_name}</option>`
+                                    );
+                                });
+                            } else {
+                                salesAccountSelect.append('<option value="">No revenue accounts found</option>');
+                            }
+                        },
+                        error: function() {
+                            row.find('.edit-sales-account').html('<option value="">Error loading accounts</option>');
+                        }
+                    });
+                } else {
+                    row.find('.edit-sales-account').html('<option value="">No Xero Instance assigned</option>');
+                }
+                
+                // Add file input for background image
+                row.find('.background-image').html(`<input type="file" class="form-control form-control-sm edit-background-image" accept="image/*">`);
+                
+                // Change button text
+                $(this).text('Save');
+                
+                // Focus on project name
+                row.find('.edit-project-name').focus();
+            }
+        });
+        
+        // Archive project button handler
+        $(document).on('click', '.archive-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name').text();
+            
+            if (!confirm(`Are you sure you want to archive "${projectName}"?`)) {
+                return;
+            }
+            
+            // Show processing state
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Make AJAX call to archive project
+            $.ajax({
+                url: `/core/toggle_project_archive/${projectPk}/`,
+                type: 'POST',
+                data: { archived: '1' },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Reload projects list (will remove archived project from active view)
+                        loadProjects(false);
+                    } else {
+                        alert(response.message || 'Error archiving project');
+                        button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error archiving project:', error);
+                    alert('Error archiving project. Please try again.');
+                    button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
+                }
+            });
+        });
+        
+        // Unarchive project button handler
+        $(document).on('click', '.unarchive-project-btn', function() {
+            const button = $(this);
+            const row = button.closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name').text();
+            
+            if (!confirm(`Are you sure you want to unarchive "${projectName}"?`)) {
+                return;
+            }
+            
+            // Show processing state
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Make AJAX call to unarchive project
+            $.ajax({
+                url: `/core/toggle_project_archive/${projectPk}/`,
+                type: 'POST',
+                data: { archived: '0' },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Reload projects list (will remove unarchived project from archived view)
+                        loadProjects(true);
+                    } else {
+                        alert(response.message || 'Error unarchiving project');
+                        button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error unarchiving project:', error);
+                    alert('Error unarchiving project. Please try again.');
+                    button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
+                }
+            });
+        });
+        
+        // Handle Tender link click - show tender view
+        $(document).on('click', '.project-status-link', function(e) {
+            e.preventDefault();
+            
+            const row = $(this).closest('tr');
+            const projectPk = row.data('project-pk');
+            const projectName = row.find('.project-name').text();
+            
+            console.log(`Opening tender view for project: ${projectName} (pk=${projectPk})`);
+            
+            // Store current project info globally
+            window.currentTenderProject = {
+                pk: projectPk,
+                name: projectName
+            };
+            
+            // Hide projects table and footer buttons
+            $('#projectsTable').closest('div').parent().hide();
+            $('#projectsFooterButtons').hide();
+            
+            // Show tender view
+            $('#tenderView').css('display', 'flex').show();
+            $('#tenderProjectName').text(projectName);
+        });
+        
+        // Handle Back to Projects button
+        $('#backToProjectsBtn').click(function() {
+            console.log('Returning to projects list');
+            
+            // Reset tender view state
+            resetTenderViewState();
+            
+            // Hide tender view
+            $('#tenderView').hide();
+            
+            // Show projects table and footer buttons
+            $('#projectsTable').closest('div').parent().show();
+            $('#projectsFooterButtons').show();
+        });
+        
+        // Handle Tender navigation button clicks
+        $(document).on('click', '.tender-nav-btn', function() {
+            const section = $(this).data('section');
+            console.log(`Tender section clicked: ${section}`);
+            
+            // Remove active class from all buttons
+            $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+            
+            // Add active class to clicked button
+            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+            
+            // Hide all dynamic action buttons first
+            $('#newQuoteBtn').hide();
+            
+            // Update content area based on section
+            if (section === 'quotes') {
+                loadQuotesSection();
+            } else if (section === 'items') {
+                // Load Items section from hidden storage
+                var itemsContent = $('#itemsTemplateStorage').html();
+                
+                // Build the category order dropdown HTML (0 categories = option 1, 3 categories = options 1-4)
+                var categoryOrderOptions = '<option value="">Select order...</option><option value="1">1</option>';
+                
+                // Build the item category dropdown HTML  
+                var itemCategoryOptions = '<option value="">Select category...</option>';
+                
+                // Build the item order dropdown HTML
+                var itemOrderOptions = '<option value="">Select category first...</option>';
+                
+                // Replace the empty selects with pre-populated ones
+                itemsContent = itemsContent.replace('<select id="categoryOrderSelect"></select>', 
+                    '<select id="categoryOrderSelect">' + categoryOrderOptions + '</select>');
+                itemsContent = itemsContent.replace('<select id="itemCategorySelect"></select>', 
+                    '<select id="itemCategorySelect">' + itemCategoryOptions + '</select>');
+                itemsContent = itemsContent.replace('<select id="itemOrderSelect" disabled></select>', 
+                    '<select id="itemOrderSelect" disabled>' + itemOrderOptions + '</select>');
+                
+                $('#tenderContentArea').html(itemsContent);
+                console.log('Items section loaded with pre-populated dropdowns');
+                
+                // Initialize items functionality after DOM is ready
+                setTimeout(function() {
+                    initializeItemsSection();
+                }, 0);
+            } else if (section === 'documents') {
+                // Load Documents section
+                loadDocumentsSection();
+            } else {
+                // Placeholder for other sections
+                $('#tenderContentArea').html(`
+                    <h4>${section.charAt(0).toUpperCase() + section.slice(1).replace('-', ' ')}</h4>
+                    <p style="color: #6c757d;">Content for ${section} will be implemented next.</p>
+                `);
+            }
+        });
+        
+        // Tender Quote Functions - Now handled by QuotesEntry module in core/static/core/js/quotes_entry.js
+        
+        // Load the quotes section view
+        function loadQuotesSection() {
+            // Show New Quote button
+            $('#newQuoteBtn').show();
+            
+            // Fetch contacts for this project's Xero instance
+            if (window.currentTenderProject && window.currentTenderProject.pk) {
+                $.ajax({
+                    url: '{% url "core:get_project_contacts" 0 %}'.replace('0', window.currentTenderProject.pk),
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Store contacts globally for use in quote entry form
+                            window.projectContacts = response.contacts;
+                            console.log(`Loaded ${response.contacts.length} contacts for project from ${response.xero_instance_name}`);
+                        } else {
+                            console.error('Error loading contacts:', response.message);
+                            window.projectContacts = [];
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load project contacts:', error);
+                        window.projectContacts = [];
+                    }
+                });
+            }
+            
+            // Show Committed Quotes view
+            $('#tenderContentArea').html(`
+                <div style="display: flex; height: 100%; gap: 15px;">
+                    <!-- Left side: Quotes Table (60%) -->
+                    <div style="width: 60%; height: 100%;">
+                        <div style="height: 100%; overflow-y: auto; border: 1px solid #ddd;">
+                            <table id="tenderCommittedQuotesTable" class="table table-bordered table-hover" style="margin-bottom: 0; font-size: 12px;">
+                                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                                    <tr>
+                                        <th style="width: 20%;">Quote #</th>
+                                        <th style="width: 30%;">Supplier</th>
+                                        <th style="width: 20%;">Total Cost</th>
+                                        <th style="width: 10%;">View</th>
+                                        <th style="width: 10%;">Update</th>
+                                        <th style="width: 10%;">Delete</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                                            Loading quotes...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Right side: PDF Viewer (40%) - full height -->
+                    <div style="width: 40%; height: 100%;">
+                        <iframe id="tenderQuotePdfViewer" style="width: 100%; height: 100%; border: 1px solid #ddd;" src=""></iframe>
+                    </div>
+                </div>
+            `);
+            
+            // Load quotes for this project
+            loadProjectQuotes();
+            
+            // Attach handler for New Quote button (using event delegation)
+            $(document).off('click', '#newQuoteBtn').on('click', '#newQuoteBtn', function() {
+                console.log('New Quote button clicked');
+                // Trigger file input click to open file selection dialog
+                $('#tenderQuotePdfInput').click();
+            });
+            
+            // Attach handler for file input change
+            $(document).off('change', '#tenderQuotePdfInput').on('change', '#tenderQuotePdfInput', function(event) {
+                var file = event.target.files[0];
+                if (file) {
+                    console.log('Quote PDF selected:', file.name);
+                    
+                    // Create a blob URL for the PDF (better browser compatibility than data URL)
+                    var pdfBlobUrl = URL.createObjectURL(file);
+                    console.log('PDF blob URL created:', pdfBlobUrl);
+                    
+                    // Also read as data URL for backend submission later
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var pdfData = e.target.result;
+                        console.log('PDF file loaded, size:', pdfData.length, 'bytes');
+                        
+                        // Store the data URL globally for later submission
+                        window.currentQuotePdfData = pdfData;
+                        
+                        // Display quote entry form using QuotesEntry module
+                        QuotesEntry.init({
+                            pdfUrl: pdfBlobUrl,
+                            pdfDataUrl: pdfData,
+                            containerSelector: '#tenderContentArea',
+                            projectPk: window.currentTenderProject.pk,
+                            suppliers: window.projectContacts,
+                            items: window.itemsItems,
+                            onSave: function(response) {
+                                console.log('Quote saved:', response);
+                                // After save, return to quotes list
+                                loadQuotesSection();
+                            },
+                            onCancel: function() {
+                                loadQuotesSection();
+                            }
+                        });
+                    };
+                    reader.onerror = function(e) {
+                        console.error('Error reading PDF file:', e);
+                        alert('Error reading PDF file. Please try again.');
+                    };
+                    reader.readAsDataURL(file);
+                    
+                    // Reset file input so same file can be selected again
+                    $(this).val('');
+                }
+            });
+        }
+        
+        // Load and display quotes for the current project
+        function loadProjectQuotes() {
+            if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                console.error('No project selected');
+                return;
+            }
+            
+            $.ajax({
+                url: '/core/get_project_quotes/' + window.currentTenderProject.pk + '/',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        var quotes = response.quotes || [];
+                        var tbody = $('#tenderCommittedQuotesTable tbody');
+                        tbody.empty();
+                        
+                        if (quotes.length === 0) {
+                            tbody.append(`
+                                <tr>
+                                    <td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                                        No quotes found for this project. Click "New Quote" to add one.
+                                    </td>
+                                </tr>
+                            `);
+                        } else {
+                            quotes.forEach(function(quote) {
+                                var row = $('<tr></tr>');
+                                
+                                // Quote #
+                                row.append('<td>' + quote.supplier_quote_number + '</td>');
+                                
+                                // Supplier
+                                row.append('<td>' + quote.supplier_name + '</td>');
+                                
+                                // Total Cost
+                                var formattedCost = parseFloat(quote.total_cost).toLocaleString('en-AU', {
+                                    style: 'currency',
+                                    currency: 'AUD'
+                                });
+                                row.append('<td>' + formattedCost + '</td>');
+                                
+                                // View button
+                                var viewBtn = $('<button></button>')
+                                    .addClass('btn btn-sm btn-primary')
+                                    .text('View')
+                                    .on('click', function() {
+                                        if (quote.pdf_url) {
+                                            $('#tenderQuotePdfViewer').attr('src', quote.pdf_url);
+                                        } else {
+                                            alert('No PDF available for this quote');
+                                        }
+                                    });
+                                row.append($('<td></td>').append(viewBtn));
+                                
+                                // Update button
+                                var updateBtn = $('<button></button>')
+                                    .addClass('btn btn-sm btn-warning')
+                                    .text('Update')
+                                    .on('click', function() {
+                                        alert('Update functionality coming soon');
+                                        // TODO: Implement update functionality
+                                    });
+                                row.append($('<td></td>').append(updateBtn));
+                                
+                                // Delete button
+                                var deleteBtn = $('<button></button>')
+                                    .addClass('btn btn-sm btn-danger')
+                                    .text('Delete')
+                                    .on('click', function() {
+                                        if (confirm('Are you sure you want to delete quote ' + quote.supplier_quote_number + '?')) {
+                                            deleteProjectQuote(quote.quotes_pk);
+                                        }
+                                    });
+                                row.append($('<td></td>').append(deleteBtn));
+                                
+                                tbody.append(row);
+                            });
+                            
+                            // Auto-load first quote PDF
+                            if (quotes.length > 0 && quotes[0].pdf_url) {
+                                $('#tenderQuotePdfViewer').attr('src', quotes[0].pdf_url);
+                            }
+                        }
+                        
+                        console.log('Loaded ' + quotes.length + ' quotes for project');
+                    } else {
+                        console.error('Error loading quotes:', response.message);
+                        alert('Error loading quotes: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX error loading quotes:', error);
+                    alert('Error loading quotes. Please try again.');
+                }
+            });
+        }
+        
+        // Delete a quote
+        function deleteProjectQuote(quotePk) {
+            // TODO: Implement delete endpoint
+            alert('Delete functionality to be implemented');
+        }
+        
+        // Load the documents section view
+        function loadDocumentsSection() {
+            if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                console.error('No project selected');
+                return;
+            }
+            
+            // Load the documents template from hidden storage
+            var documentsHtml = $('#documentsTemplateStorage').html();
+            $('#tenderContentArea').html(documentsHtml);
+            
+            // Initialize DocumentsManager module
+            DocumentsManager.init({
+                projectPk: window.currentTenderProject.pk
+            });
+            
+            console.log('Documents section loaded for project:', window.currentTenderProject.pk);
+        }
+        
+        // Initialize Items Section Function
+        function initializeItemsSection() {
+            // Clear global variables for items management
+            window.itemsCategories = [];
+            window.itemsItems = [];
+            
+            // Clear the table immediately to prevent showing stale data
+            var tbody = $('#tenderContentArea #itemsDisplayTableBody');
+            if (tbody.length > 0) {
+                tbody.html('<tr><td style="text-align: center; color: #6c757d; padding: 20px;">Loading...</td></tr>');
+            }
+            
+            // Dropdown update functions
+            // Update category order dropdown
+            function updateCategoryOrderDropdown() {
+                var select = document.querySelector('#tenderContentArea #categoryOrderSelect');
+                if (!select) return;
+                
+                // Add 1 to number of categories: if 0 categories, show option 1; if 3 categories, show 1,2,3,4
+                var maxOrder = window.itemsCategories.length + 1;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select order...</option>';
+                for (var i = 1; i <= maxOrder; i++) {
+                    optionsHTML += '<option value="' + i + '">' + i + '</option>';
+                }
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+            }
+            
+            // Update item category dropdown
+            function updateItemCategoryDropdown() {
+                var select = document.querySelector('#tenderContentArea #itemCategorySelect');
+                if (!select) return;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select category...</option>';
+                window.itemsCategories.forEach(function(category) {
+                    optionsHTML += '<option value="' + category.categories_pk + '">' + category.category + '</option>';
+                });
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+            }
+            
+            // Update item order dropdown based on selected category
+            function updateItemOrderDropdown(categoryPk) {
+                var select = document.querySelector('#tenderContentArea #itemOrderSelect');
+                if (!select) return;
+                
+                if (!categoryPk) {
+                    select.innerHTML = '<option value="">Select category first...</option>';
+                    select.disabled = true;
+                    return;
+                }
+                
+                // Count items in this category
+                var itemsInCategory = window.itemsItems.filter(function(item) {
+                    return item.category__category === getCategoryName(categoryPk);
+                });
+                
+                // Add 1 to number of items: if 0 items, show option 1; if 3 items, show 1,2,3,4
+                var maxOrder = itemsInCategory.length + 1;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select order...</option>';
+                for (var i = 1; i <= maxOrder; i++) {
+                    optionsHTML += '<option value="' + i + '">' + i + '</option>';
+                }
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+                select.disabled = false;
+            }
+            
+            // Get category name by PK
+            function getCategoryName(categoryPk) {
+                var category = window.itemsCategories.find(function(cat) {
+                    return cat.categories_pk == categoryPk;
+                });
+                return category ? category.category : '';
+            }
+            
+            // Load categories and items for current project
+            if (window.currentTenderProject && window.currentTenderProject.pk) {
+                loadProjectItems(window.currentTenderProject.pk);
+            }
+            
+            // Load categories and items for a project
+            function loadProjectItems(projectPk) {
+                console.log('Loading items for project:', projectPk);
+                
+                // Load categories
+                $.ajax({
+                    url: '/get_project_categories/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.itemsCategories = response.categories;
+                            console.log('Loaded categories:', window.itemsCategories);
+                            updateCategoryOrderDropdown();
+                            updateItemCategoryDropdown();
+                            loadItems(projectPk);
+                        } else {
+                            console.error('Error loading categories:', response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load categories:', error);
+                    }
+                });
+            }
+            
+            // Load items
+            function loadItems(projectPk) {
+                $.ajax({
+                    url: '/get_project_items/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.itemsItems = response.items;
+                            console.log('Loaded items:', window.itemsItems);
+                            renderItemsTable();
+                        } else {
+                            console.error('Error loading items:', response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load items:', error);
+                    }
+                });
+            }
+            
+            // Render items display table with drag-and-drop
+            function renderItemsTable() {
+                // Use scoped selector to ensure we target the correct table in tenderContentArea
+                var tbody = $('#tenderContentArea #itemsDisplayTableBody');
+                if (tbody.length === 0) {
+                    console.error('Table body not found in DOM');
+                    return;
+                }
+                
+                tbody.empty();
+                
+                if (window.itemsItems.length === 0) {
+                    tbody.append('<tr><td style="text-align: center; color: #6c757d; padding: 20px;">No items yet. Add a category and items to get started.</td></tr>');
+                    return;
+                }
+                
+                // Group items by category
+                var groupedItems = {};
+                window.itemsItems.forEach(function(item) {
+                    var categoryName = item.category__category;
+                    if (!groupedItems[categoryName]) {
+                        groupedItems[categoryName] = [];
+                    }
+                    groupedItems[categoryName].push(item);
+                });
+                
+                // Sort categories by order_in_list
+                window.itemsCategories.sort(function(a, b) {
+                    return a.order_in_list - b.order_in_list;
+                });
+                
+                // Render each category and its items
+                window.itemsCategories.forEach(function(category, catIndex) {
+                    var items = groupedItems[category.category] || [];
+                    
+                    // Sort items by order_in_list
+                    items.sort(function(a, b) {
+                        return (a.order_in_list || 0) - (b.order_in_list || 0);
+                    });
+                    
+                    // Render category header row (draggable)
+                    var categoryRow = $('<tr></tr>')
+                        .addClass('category-row')
+                        .attr('draggable', 'true')
+                        .attr('data-category-pk', category.categories_pk)
+                        .attr('data-category-order', category.order_in_list)
+                        .css({
+                            'background-color': '#f0f0f0',
+                            'font-weight': 'bold',
+                            'cursor': 'move'
+                        });
+                    
+                    categoryRow.append('<td>📁 ' + category.category + '</td>');
+                    tbody.append(categoryRow);
+                    
+                    // Render items under this category (draggable within category)
+                    items.forEach(function(item, itemIndex) {
+                        var itemRow = $('<tr></tr>')
+                            .addClass('item-row')
+                            .attr('draggable', 'true')
+                            .attr('data-item-pk', item.costing_pk)
+                            .attr('data-category-pk', category.categories_pk)
+                            .attr('data-item-order', item.order_in_list || (itemIndex + 1))
+                            .css({
+                                'cursor': 'move',
+                                'padding-left': '20px'
+                            });
+                        
+                        itemRow.append('<td style="padding-left: 30px;">└─ ' + item.item + '</td>');
+                        tbody.append(itemRow);
+                    });
+                });
+                
+                // Attach drag-and-drop event handlers
+                attachDragHandlers();
+            }
+            
+            // Drag-and-drop event handlers
+            var draggedElement = null;
+            var draggedType = null; // 'category' or 'item'
+            
+            function attachDragHandlers() {
+                // Category rows - can drag anywhere
+                $('.category-row').on('dragstart', function(e) {
+                    draggedElement = this;
+                    draggedType = 'category';
+                    $(this).css('opacity', '0.4');
+                    e.originalEvent.dataTransfer.effectAllowed = 'move';
+                });
+                
+                $('.category-row').on('dragend', function(e) {
+                    $(this).css('opacity', '1');
+                    $('.drag-over').removeClass('drag-over');
+                });
+                
+                $('.category-row').on('dragover', function(e) {
+                    if (e.preventDefault) {
+                        e.preventDefault();
+                    }
+                    e.originalEvent.dataTransfer.dropEffect = 'move';
+                    
+                    if ($(this)[0] !== draggedElement) {
+                        $(this).addClass('drag-over');
+                    }
+                    return false;
+                });
+                
+                $('.category-row').on('dragleave', function(e) {
+                    $(this).removeClass('drag-over');
+                });
+                
+                $('.category-row').on('drop', function(e) {
+                    if (e.stopPropagation) {
+                        e.stopPropagation();
+                    }
+                    
+                    $(this).removeClass('drag-over');
+                    
+                    if (draggedElement !== this) {
+                        if (draggedType === 'category') {
+                            // Moving a category
+                            var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                            var targetCategoryOrder = parseInt($(this).attr('data-category-order'));
+                            
+                            reorderCategory(draggedCategoryPk, targetCategoryOrder);
+                        }
+                    }
+                    
+                    return false;
+                });
+                
+                // Item rows - can only drag within category
+                $('.item-row').on('dragstart', function(e) {
+                    draggedElement = this;
+                    draggedType = 'item';
+                    $(this).css('opacity', '0.4');
+                    e.originalEvent.dataTransfer.effectAllowed = 'move';
+                });
+                
+                $('.item-row').on('dragend', function(e) {
+                    $(this).css('opacity', '1');
+                    $('.drag-over').removeClass('drag-over');
+                });
+                
+                $('.item-row').on('dragover', function(e) {
+                    if (e.preventDefault) {
+                        e.preventDefault();
+                    }
+                    
+                    // Only allow drop if same category
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryPk = $(this).attr('data-category-pk');
+                    
+                    if (draggedType === 'item' && draggedCategoryPk === targetCategoryPk) {
+                        e.originalEvent.dataTransfer.dropEffect = 'move';
+                        if ($(this)[0] !== draggedElement) {
+                            $(this).addClass('drag-over');
+                        }
+                    } else {
+                        e.originalEvent.dataTransfer.dropEffect = 'none';
+                    }
+                    
+                    return false;
+                });
+                
+                $('.item-row').on('dragleave', function(e) {
+                    $(this).removeClass('drag-over');
+                });
+                
+                $('.item-row').on('drop', function(e) {
+                    if (e.stopPropagation) {
+                        e.stopPropagation();
+                    }
+                    
+                    $(this).removeClass('drag-over');
+                    
+                    // Only allow drop if same category
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryPk = $(this).attr('data-category-pk');
+                    
+                    if (draggedElement !== this && draggedType === 'item' && draggedCategoryPk === targetCategoryPk) {
+                        var draggedItemPk = $(draggedElement).attr('data-item-pk');
+                        var targetItemOrder = parseInt($(this).attr('data-item-order'));
+                        
+                        reorderItem(draggedItemPk, targetItemOrder);
+                    }
+                    
+                    return false;
+                });
+            }
+            
+            // Reorder category via AJAX
+            function reorderCategory(categoryPk, newOrder) {
+                $.ajax({
+                    url: '/reorder_category/' + window.currentTenderProject.pk + '/' + categoryPk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        new_order: newOrder
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Reload all data to reflect new order
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var errorMessage = 'Failed to reorder category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+            
+            // Reorder item via AJAX
+            function reorderItem(itemPk, newOrder) {
+                $.ajax({
+                    url: '/reorder_item/' + window.currentTenderProject.pk + '/' + itemPk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        new_order: newOrder
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Reload all data to reflect new order
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var errorMessage = 'Failed to reorder item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+            
+            // Validation for Add Category button
+            function validateCategoryForm() {
+                // Use scoped selectors to only target elements within tenderContentArea
+                var categoryName = $('#tenderContentArea #categoryNameInput').val();
+                if (categoryName) categoryName = categoryName.trim();
+                var orderInList = $('#tenderContentArea #categoryOrderSelect').val();
+                
+                var isValid = categoryName && categoryName.length > 0 && orderInList !== '';
+                
+                var btn = $('#tenderContentArea #addCategoryBtn');
+                
+                if (isValid) {
+                    btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+                } else {
+                    btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+                }
+            }
+            
+            // Validation for Add Item button
+            function validateItemForm() {
+                // Use scoped selectors to only target elements within tenderContentArea
+                var itemName = $('#tenderContentArea #itemNameInput').val();
+                if (itemName) itemName = itemName.trim();
+                var categoryPk = $('#tenderContentArea #itemCategorySelect').val();
+                var orderInList = $('#tenderContentArea #itemOrderSelect').val();
+                
+                var isValid = itemName && itemName.length > 0 && categoryPk !== '' && orderInList !== '';
+                
+                var btn = $('#tenderContentArea #addItemBtn');
+                if (isValid) {
+                    btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+                } else {
+                    btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+                }
+            }
+            
+            // Event listeners for validation (scoped to tenderContentArea)
+            $('#tenderContentArea').on('input change', '#categoryNameInput, #categoryOrderSelect', function(e) {
+                validateCategoryForm();
+            });
+            $('#tenderContentArea').on('input change', '#itemNameInput, #itemCategorySelect, #itemOrderSelect', function(e) {
+                validateItemForm();
+            });
+            
+            // Event listener for item category selection
+            $('#tenderContentArea').on('change', '#itemCategorySelect', function() {
+                var categoryPk = $(this).val();
+                updateItemOrderDropdown(categoryPk);
+                validateItemForm();
+            });
+            
+            // Trigger validation on page load to set initial button states
+            setTimeout(function() {
+                validateCategoryForm();
+                validateItemForm();
+            }, 100);
+            
+            // Add Category button click (scoped to tenderContentArea)
+            $('#tenderContentArea').on('click', '#addCategoryBtn', function() {
+                if ($(this).hasClass('disabled')) return;
+                
+                var categoryName = $('#tenderContentArea #categoryNameInput').val().trim();
+                var orderInList = $('#tenderContentArea #categoryOrderSelect').val();
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/create_category/' + window.currentTenderProject.pk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        category: categoryName,
+                        order_in_list: parseInt(orderInList)
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            console.log('Category created:', response.category);
+                            
+                            // Reload all categories since order may have changed
+                            loadProjectItems(window.currentTenderProject.pk);
+                            
+                            // Clear form
+                            $('#tenderContentArea #categoryNameInput').val('');
+                            $('#tenderContentArea #categoryOrderSelect').val('');
+                            validateCategoryForm();
+                            
+                            alert('Category added successfully!');
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to create category:', error);
+                        var errorMessage = 'Failed to create category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage = 'Failed to create category: ' + error;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+            
+            // Add Item button click (scoped to tenderContentArea)
+            $('#tenderContentArea').on('click', '#addItemBtn', function() {
+                if ($(this).hasClass('disabled')) return;
+                
+                var itemName = $('#tenderContentArea #itemNameInput').val().trim();
+                var categoryPk = $('#tenderContentArea #itemCategorySelect').val();
+                var orderInList = $('#tenderContentArea #itemOrderSelect').val();
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/create_item/' + window.currentTenderProject.pk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        item: itemName,
+                        category_pk: parseInt(categoryPk),
+                        order_in_list: parseInt(orderInList)
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            console.log('Item created:', response.item);
+                            
+                            // Reload all items since order may have changed
+                            loadProjectItems(window.currentTenderProject.pk);
+                            
+                            // Clear form
+                            $('#tenderContentArea #itemNameInput').val('');
+                            $('#tenderContentArea #itemOrderSelect').val('');
+                            
+                            // Keep category selected for convenience
+                            // (user might want to add more items to same category)
+                            updateItemOrderDropdown(categoryPk);
+                            validateItemForm();
+                            
+                            alert('Item added successfully!');
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to create item:', error);
+                        var errorMessage = 'Failed to create item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage = 'Failed to create item: ' + error;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+        }
+    });
+</script>

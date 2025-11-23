@@ -4,6 +4,8 @@ from .views import commit_data, update_quote, create_contacts, delete_quote, del
 from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, get_xero_accounts_by_instance, create_invoice_allocation, update_invoice_allocation, delete_invoice_allocation, update_invoice, null_allocation_xero_fields
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive
+from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes
+from .views.documents import get_project_folders, create_folder, rename_folder, delete_folder, upload_files, download_file, delete_file
 from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
@@ -70,6 +72,9 @@ urlpatterns = [
     path('get_claim_table/<int:claim_id>/', get_claim_table, name='get_claim_table'),
     path('get_invoices_by_supplier/', get_invoices_by_supplier, name='get_invoices_by_supplier'),
     path('get_quotes_by_supplier/', views.get_quotes_by_supplier, name='get_quotes_by_supplier'),
+    path('get_project_contacts/<int:project_pk>/', get_project_contacts, name='get_project_contacts'),
+    path('save_project_quote/', save_project_quote, name='save_project_quote'),
+    path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
     path('get_invoice_allocations/<int:invoice_id>/', get_invoice_allocations, name='get_invoice_allocations'),
     path('post_progress_claim_data/', views.post_progress_claim_data, name='post_progress_claim_data'),
     path('post_direct_cost_data/', views.post_direct_cost_data, name='post_direct_cost_data'),
@@ -117,6 +122,15 @@ urlpatterns = [
     path('api/receive_email/', receive_email, name='receive_email'),
     path('api/emails/', email_list, name='email_list'),
     path('api/diagnostics/', api_diagnostics, name='api_diagnostics'),
+    
+    # Document management endpoints
+    path('get_project_folders/<int:project_pk>/', get_project_folders, name='get_project_folders'),
+    path('create_folder/', create_folder, name='create_folder'),
+    path('rename_folder/', rename_folder, name='rename_folder'),
+    path('delete_folder/', delete_folder, name='delete_folder'),
+    path('upload_files/', upload_files, name='upload_files'),
+    path('download_file/<int:file_pk>/', download_file, name='download_file'),
+    path('delete_file/', delete_file, name='delete_file'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
