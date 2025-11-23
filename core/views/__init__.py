@@ -55,4 +55,8 @@ from .main import (
     upload_letterhead, update_contacts, xeroapi, make_api_request,
     mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines
 )
+
+# Database management views
+from .database_wipe import wipe_database
+
 # DEPRECATED: get_xero_token, get_xero_contacts - use OAuth2 in xero_oauth.py instead
