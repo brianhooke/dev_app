@@ -6,7 +6,7 @@ from .views.project_type import switch_project_type, switch_project, get_current
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive
 from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes, get_project_committed_amounts
 from .views.documents import get_project_folders, create_folder, rename_folder, delete_folder, upload_files, download_file, delete_file
-from .views.xero import get_xero_instances, create_xero_instance, delete_xero_instance, test_xero_connection
+from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
 from .views.database_diagnostics import database_diagnostics
@@ -96,6 +96,7 @@ urlpatterns = [
     # Xero management endpoints (contact endpoints moved to dashboard app)
     path('get_xero_instances/', get_xero_instances, name='get_xero_instances'),
     path('create_xero_instance/', create_xero_instance, name='create_xero_instance'),
+    path('update_xero_instance/<int:instance_pk>/', update_xero_instance, name='update_xero_instance'),
     path('delete_xero_instance/<int:instance_pk>/', delete_xero_instance, name='delete_xero_instance'),
     path('test_xero_connection/<int:instance_pk>/', test_xero_connection, name='test_xero_connection'),
     

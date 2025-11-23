@@ -58,6 +58,7 @@ Note: OAuth flow handled separately via /core/xero_oauth/authorize/{instance_pk}
                                 <th>Xero Instance</th>
                                 <th>Test</th>
                                 <th>Authorise</th>
+                                <th>Edit</th>
                                 <th>Delete</th>
                             </tr>
                         </thead>
@@ -105,6 +106,45 @@ Note: OAuth flow handled separately via /core/xero_oauth/authorize/{instance_pk}
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="submitXeroInstanceBtn">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Level 2 Modal: Edit Xero Instance -->
+<div class="modal fade" id="editXeroInstanceModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 500px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Edit Xero Instance</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editXeroInstanceForm" class="reusable-form">
+                    <input type="hidden" id="editXeroInstancePk">
+                    <div class="form-group">
+                        <label for="editXeroNameInput">Xero Name</label>
+                        <input type="text" class="form-control" id="editXeroNameInput" placeholder="e.g., Mason Build" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editXeroClientIdInput">Xero Client ID</label>
+                        <input type="text" class="form-control" id="editXeroClientIdInput" placeholder="e.g., ABC123..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editXeroClientSecretInput">Xero Client Secret</label>
+                        <input type="password" class="form-control" id="editXeroClientSecretInput" placeholder="Leave blank to keep current secret">
+                        <small class="form-text text-muted">Leave blank to keep existing secret, or enter new secret to update</small>
+                    </div>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Note:</strong> If you update credentials, you'll need to click "Authorise" again to re-authenticate with Xero.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitEditXeroInstanceBtn">Update</button>
             </div>
         </div>
     </div>

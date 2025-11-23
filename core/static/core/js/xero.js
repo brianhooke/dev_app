@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
         
         if (instances.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
             return;
         }
         
@@ -61,6 +61,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td style="text-align: center;">
                     <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
                         <i class="fas fa-key"></i> Authorize
+                    </button>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-warning edit-xero-btn" 
+                        data-instance-pk="${instance.xero_instance_pk}" 
+                        data-instance-name="${instance.xero_name}"
+                        data-client-id="${instance.xero_client_id}">
+                        <i class="fas fa-edit"></i> Edit
                     </button>
                 </td>
                 <td style="text-align: center;">
@@ -218,6 +226,76 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Edit Xero Instance
+    $(document).on('click', '.edit-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        const clientId = $(this).data('client-id');
+        
+        // Populate the edit form
+        document.getElementById('editXeroInstancePk').value = instancePk;
+        document.getElementById('editXeroNameInput').value = instanceName;
+        document.getElementById('editXeroClientIdInput').value = clientId;
+        document.getElementById('editXeroClientSecretInput').value = ''; // Always empty for security
+        
+        // Show edit modal
+        $('#editXeroInstanceModal').modal('show');
+    });
+    
+    // Submit Edit Xero Instance
+    $(document).on('click', '#submitEditXeroInstanceBtn', function() {
+        const instancePk = document.getElementById('editXeroInstancePk').value;
+        const xeroName = document.getElementById('editXeroNameInput').value.trim();
+        const xeroClientId = document.getElementById('editXeroClientIdInput').value.trim();
+        const xeroClientSecret = document.getElementById('editXeroClientSecretInput').value.trim();
+        
+        if (!xeroName || !xeroClientId) {
+            alert('Xero Name and Client ID are required');
+            return;
+        }
+        
+        // Get CSRF token
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        const payload = {
+            xero_name: xeroName,
+            xero_client_id: xeroClientId
+        };
+        
+        // Only include client secret if provided
+        if (xeroClientSecret) {
+            payload.xero_client_secret = xeroClientSecret;
+        }
+        
+        fetch(`/core/update_xero_instance/${instancePk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                let message = 'Xero instance updated successfully';
+                if (data.xero_instance && data.xero_instance.needs_reauth) {
+                    message += '\n\nCredentials were changed. Please click "Authorize" to re-authenticate with Xero.';
+                }
+                alert(message);
+                $('#editXeroInstanceModal').modal('hide');
+                // Reload the main modal
+                loadXeroInstances();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating Xero instance:', error);
+            alert('Failed to update Xero instance');
+        });
+    });
+    
     // Clean up modals when closed
     $('#xeroInstancesModal').on('hidden.bs.modal', function () {
         // Don't remove the modal, just hide it
@@ -228,5 +306,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('xeroNameInput').value = '';
         document.getElementById('xeroClientIdInput').value = '';
         document.getElementById('xeroClientSecretInput').value = '';
+    });
+    
+    $('#editXeroInstanceModal').on('hidden.bs.modal', function () {
+        // Clear form when closed
+        document.getElementById('editXeroInstancePk').value = '';
+        document.getElementById('editXeroNameInput').value = '';
+        document.getElementById('editXeroClientIdInput').value = '';
+        document.getElementById('editXeroClientSecretInput').value = '';
     });
 });

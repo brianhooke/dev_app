@@ -218,6 +218,71 @@ def create_xero_instance(request):
 
 
 @csrf_exempt
+def update_xero_instance(request, instance_pk):
+    """
+    Update an existing Xero instance.
+    Client secret is optional - only updates if provided.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            xero_name = data.get('xero_name')
+            xero_client_id = data.get('xero_client_id')
+            xero_client_secret = data.get('xero_client_secret')  # Optional
+            
+            # Get the instance
+            try:
+                xero_instance = XeroInstances.objects.get(pk=instance_pk)
+            except XeroInstances.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Xero instance not found'
+                }, status=404)
+            
+            # Update fields
+            if xero_name:
+                xero_instance.xero_name = xero_name
+            
+            if xero_client_id:
+                xero_instance.xero_client_id = xero_client_id
+            
+            # Only update secret if provided
+            if xero_client_secret:
+                xero_instance.set_client_secret(xero_client_secret)
+                # Clear OAuth tokens since credentials changed
+                xero_instance.oauth_access_token_encrypted = None
+                xero_instance.oauth_refresh_token_encrypted = None
+                xero_instance.oauth_token_expires_at = None
+                xero_instance.oauth_tenant_id = None
+                logger.info(f"Credentials updated for instance {instance_pk}. OAuth tokens cleared.")
+            
+            xero_instance.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Xero instance updated successfully',
+                'xero_instance': {
+                    'xero_instance_pk': xero_instance.xero_instance_pk,
+                    'xero_name': xero_instance.xero_name,
+                    'xero_client_id': xero_instance.xero_client_id,
+                    'has_secret': bool(xero_instance.xero_client_secret_encrypted),
+                    'needs_reauth': bool(xero_client_secret)  # True if credentials changed
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error updating Xero instance {instance_pk}: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
 def delete_xero_instance(request, instance_pk):
     """
     Delete a Xero instance.
