@@ -238,8 +238,23 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('editXeroClientIdInput').value = clientId;
         document.getElementById('editXeroClientSecretInput').value = ''; // Always empty for security
         
-        // Show edit modal
-        $('#editXeroInstanceModal').modal('show');
+        // Hide the first modal and remove all backdrops
+        $('#xeroInstancesModal').modal('hide');
+        
+        // Remove any lingering backdrops
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        
+        // Small delay to allow first modal to close, then show edit modal
+        setTimeout(function() {
+            $('#editXeroInstanceModal').modal('show');
+            
+            // Force the backdrop z-index after modal opens
+            setTimeout(function() {
+                $('.modal-backdrop').last().css('z-index', '1059');
+                $('#editXeroInstanceModal').css('z-index', '1060');
+            }, 100);
+        }, 350);
     });
     
     // Submit Edit Xero Instance
@@ -284,8 +299,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 alert(message);
                 $('#editXeroInstanceModal').modal('hide');
-                // Reload the main modal
-                loadXeroInstances();
+                
+                // After edit modal is hidden, reopen the main modal
+                setTimeout(function() {
+                    loadXeroInstances();
+                    $('#xeroInstancesModal').modal('show');
+                }, 300);
             } else {
                 alert('Error: ' + data.message);
             }
@@ -308,11 +327,22 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('xeroClientSecretInput').value = '';
     });
     
-    $('#editXeroInstanceModal').on('hidden.bs.modal', function () {
+    $('#editXeroInstanceModal').on('hidden.bs.modal', function (e) {
         // Clear form when closed
         document.getElementById('editXeroInstancePk').value = '';
         document.getElementById('editXeroNameInput').value = '';
         document.getElementById('editXeroClientIdInput').value = '';
         document.getElementById('editXeroClientSecretInput').value = '';
+        
+        // Clean up any lingering backdrops
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        
+        // Small delay then check if we need to reopen main modal (e.g., user clicked Cancel)
+        setTimeout(function() {
+            if (!$('#xeroInstancesModal').hasClass('show')) {
+                $('#xeroInstancesModal').modal('show');
+            }
+        }, 150);
     });
 });
