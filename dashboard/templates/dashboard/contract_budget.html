@@ -5,113 +5,54 @@
         display: flex;
         flex-direction: column;
         padding: 20px;
-    }
-    
-    .contract-budget-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-    
-    .contract-budget-table thead {
-        display: block;
-        width: 100%;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-    
-    .contract-budget-table thead tr {
-        display: table;
-        width: 100%;
-        table-layout: fixed;
-        background: var(--gradient-primary);
-        color: white;
-    }
-    
-    .contract-budget-table th {
-        padding: 12px 8px;
-        text-align: left;
-        font-weight: bold;
-        background: var(--gradient-primary);
-    }
-    
-    .contract-budget-table tbody {
-        display: block;
-        width: 100%;
         overflow-y: auto;
-        flex: 1;
     }
     
-    .contract-budget-table tbody tr {
-        display: table;
-        width: 100%;
-        table-layout: fixed;
-    }
-    
-    .contract-budget-table tbody tr {
-        border-bottom: 1px solid #e0e0e0;
-        transition: background-color 0.2s;
-    }
-    
-    .contract-budget-table tbody tr:hover {
-        background-color: #f5f5f5;
-    }
-    
-    .contract-budget-table tbody tr.category-row {
+    /* Category row styling */
+    .contract-budget-container .reusable-table tr.category-row {
         background-color: #f9f9f9;
         font-weight: 600;
         color: #495057;
     }
     
-    .contract-budget-table tbody tr.category-row:hover {
+    .contract-budget-container .reusable-table tr.category-row:hover {
         background-color: #ececec;
     }
     
-    .contract-budget-table tbody tr.item-row {
-        background-color: #ffffff;
-    }
-    
-    .contract-budget-table td {
-        padding: 10px 8px;
-        border-bottom: 1px solid #e0e0e0;
-    }
-    
-    .contract-budget-table td.indent {
+    /* Item row indent */
+    .contract-budget-container .reusable-table td.indent {
         padding-left: 30px;
     }
     
-    .contract-budget-table input[type="number"] {
+    /* Compact inputs for contract budget */
+    .contract-budget-container .reusable-table input[type="number"] {
         width: 100%;
-        padding: 6px 8px;
+        padding: 3px 5px;
         border: 1px solid #ced4da;
         border-radius: 4px;
-        font-size: 14px;
+        font-size: 11px;
         text-align: right;
     }
     
-    .contract-budget-table input[type="number"]:focus {
+    .contract-budget-container .reusable-table input[type="number"]:focus {
         outline: none;
         border-color: #007bff;
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
     }
     
-    .contract-budget-table .budget-amount {
+    .contract-budget-container .reusable-table .budget-amount {
         text-align: right;
         font-weight: 500;
     }
     
-    .contract-budget-table .committed-amount {
+    .contract-budget-container .reusable-table .committed-amount {
         text-align: right;
         color: #6c757d;
     }
 </style>
 
 <div class="contract-budget-container">
-    <table class="contract-budget-table">
+    <table class="reusable-table">
         <thead>
             <tr>
                 <th style="width: 40%;">Category / Item</th>

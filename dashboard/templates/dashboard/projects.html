@@ -13,14 +13,81 @@
     {% include 'dashboard/contract_budget.html' %}
 </div>
 
+<style>
+    /* Compact Projects Table Styling */
+    #projectsTable .form-control-sm {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+        height: 26px !important;
+        min-height: 26px !important;
+    }
+    
+    #projectsTable select.form-control-sm {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+    }
+    
+    #projectsTable input[type="text"],
+    #projectsTable input[type="file"] {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+        height: 26px !important;
+    }
+    
+    #projectsTable .btn-sm {
+        padding: 3px 8px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        min-height: 26px !important;
+        height: 26px !important;
+    }
+    
+    #projectsTable .btn-sm i {
+        font-size: 12px !important;
+    }
+    
+    #projectsTable .btn {
+        padding: 3px 8px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        min-height: 26px !important;
+        height: 26px !important;
+    }
+    
+    /* Keep update button at normal height for better UX */
+    #projectsTable .update-project-btn,
+    #projectsTable .save-new-project-btn,
+    #projectsTable .cancel-add-project-btn {
+        height: auto !important;
+        min-height: 28px !important;
+        padding: 4px 10px !important;
+    }
+    
+    /* Compact background images */
+    #projectsTable img {
+        max-width: 50px !important;
+        max-height: 28px !important;
+    }
+    
+    /* Override Bootstrap table cell padding */
+    #projectsTable td {
+        padding: 5px 6px !important;
+        vertical-align: middle !important;
+    }
+    
+    #projectsTable th {
+        padding: 6px 6px !important;
+    }
+</style>
+
 <!-- Projects Section (hidden initially, shown when Projects clicked) -->
 <div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
     
     <!-- Projects Table (scrollable with fixed header) -->
     <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow: hidden; display: flex; flex-direction: column;">
         <div style="overflow-y: auto; flex: 1;">
-            <table class="table table-bordered table-hover" id="projectsTable" style="margin-bottom: 0;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+            <table class="reusable-table" id="projectsTable" style="margin-bottom: 0;">
+                <thead>
                     <tr>
                         <th>Project</th>
                         <th>Status</th>
@@ -812,8 +879,8 @@
                     <!-- Left side: Quotes Table (60%) -->
                     <div style="width: 60%; height: 100%;">
                         <div style="height: 100%; overflow-y: auto; border: 1px solid #ddd;">
-                            <table id="tenderCommittedQuotesTable" class="table table-bordered table-hover" style="margin-bottom: 0; font-size: 12px;">
-                                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                            <table id="tenderCommittedQuotesTable" class="reusable-table" style="margin-bottom: 0;">
+                                <thead>
                                     <tr>
                                         <th style="width: 20%;">Quote #</th>
                                         <th style="width: 30%;">Supplier</th>
@@ -1486,15 +1553,17 @@
             }
             
             // Event listeners for validation (scoped to tenderContentArea)
-            $('#tenderContentArea').on('input change', '#categoryNameInput, #categoryOrderSelect', function(e) {
+            // Remove old handlers first to prevent duplicates
+            $('#tenderContentArea').off('input change', '#categoryNameInput, #categoryOrderSelect').on('input change', '#categoryNameInput, #categoryOrderSelect', function(e) {
                 validateCategoryForm();
             });
-            $('#tenderContentArea').on('input change', '#itemNameInput, #itemCategorySelect, #itemOrderSelect', function(e) {
+            $('#tenderContentArea').off('input change', '#itemNameInput, #itemCategorySelect, #itemOrderSelect').on('input change', '#itemNameInput, #itemCategorySelect, #itemOrderSelect', function(e) {
                 validateItemForm();
             });
             
             // Event listener for item category selection
-            $('#tenderContentArea').on('change', '#itemCategorySelect', function() {
+            // Remove old handler first to prevent duplicates
+            $('#tenderContentArea').off('change', '#itemCategorySelect').on('change', '#itemCategorySelect', function() {
                 var categoryPk = $(this).val();
                 updateItemOrderDropdown(categoryPk);
                 validateItemForm();
@@ -1507,7 +1576,8 @@
             }, 100);
             
             // Add Category button click (scoped to tenderContentArea)
-            $('#tenderContentArea').on('click', '#addCategoryBtn', function() {
+            // Remove old handler first to prevent duplicate submissions
+            $('#tenderContentArea').off('click', '#addCategoryBtn').on('click', '#addCategoryBtn', function() {
                 if ($(this).hasClass('disabled')) return;
                 
                 var categoryName = $('#tenderContentArea #categoryNameInput').val().trim();
@@ -1557,7 +1627,8 @@
             });
             
             // Add Item button click (scoped to tenderContentArea)
-            $('#tenderContentArea').on('click', '#addItemBtn', function() {
+            // Remove old handler first to prevent duplicate submissions
+            $('#tenderContentArea').off('click', '#addItemBtn').on('click', '#addItemBtn', function() {
                 if ($(this).hasClass('disabled')) return;
                 
                 var itemName = $('#tenderContentArea #itemNameInput').val().trim();

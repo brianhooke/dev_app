@@ -127,9 +127,13 @@ Version: v58 (displayed in header)
             cursor: pointer;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
             transition: all 0.3s ease;
-            display: flex;
+            display: none; /* Hidden by default - show with SHIFT+B */
             align-items: center;
             justify-content: center;
+        }
+        
+        #wipeDbBtn.visible {
+            display: flex;
         }
         
         #wipeDbBtn:hover {
@@ -140,6 +144,31 @@ Version: v58 (displayed in header)
         
         #wipeDbBtn:active {
             transform: scale(0.95);
+        }
+        
+        /* Spaceship Animation */
+        #spaceship {
+            position: fixed;
+            top: 20%;
+            left: -100px;
+            font-size: 48px;
+            z-index: 10000;
+            animation: flyAcross 4s ease-in-out forwards;
+            pointer-events: none;
+        }
+        
+        @keyframes flyAcross {
+            0% {
+                left: -100px;
+                transform: rotate(0deg);
+            }
+            50% {
+                top: 15%;
+            }
+            100% {
+                left: calc(100% + 100px);
+                transform: rotate(10deg);
+            }
         }
         
         /* Bills table row selection styling - applies to BOTH Inbox and Direct modals */
@@ -226,10 +255,13 @@ Version: v58 (displayed in header)
     </style>
 </head>
 
+<!-- Spaceship Element -->
+<div id="spaceship">🚀</div>
+
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
     <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v61
+        v62
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
         {% else %}
@@ -425,6 +457,20 @@ Version: v58 (displayed in header)
             const instancePk = $(this).val();
             if (instancePk && typeof loadContacts === 'function') {
                 loadContacts(instancePk);
+            }
+        });
+        
+        // Spaceship animation - remove after completion
+        setTimeout(function() {
+            $('#spaceship').remove();
+        }, 4000);
+        
+        // Toggle Database Wipe Button visibility with SHIFT+B
+        $(document).on('keydown', function(e) {
+            // SHIFT+B (keyCode 66 is 'B')
+            if (e.shiftKey && e.keyCode === 66) {
+                e.preventDefault();
+                $('#wipeDbBtn').toggleClass('visible');
             }
         });
         

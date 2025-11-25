@@ -30,34 +30,12 @@
         color: #333;
     }
     
-    .items-form-table {
+    /* Compact form inputs for items tables */
+    .items-left-panel .reusable-table input[type="text"],
+    .items-left-panel .reusable-table select {
         width: 100%;
-        border-collapse: collapse;
-    }
-    
-    .items-form-table th {
-        background-color: #f8f9fa;
-        padding: 10px;
-        text-align: left;
-        border: 1px solid #dee2e6;
-        font-weight: 600;
-    }
-    
-    .items-form-table td {
-        padding: 10px;
-        border: 1px solid #dee2e6;
-    }
-    
-    .items-form-table input[type="text"] {
-        width: 100%;
-        padding: 5px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-    }
-    
-    .items-form-table select {
-        width: 100%;
-        padding: 5px;
+        padding: 3px 5px;
+        font-size: 11px;
         border: 1px solid #ced4da;
         border-radius: 4px;
     }
@@ -86,34 +64,9 @@
         background-color: #218838;
     }
     
-    .items-display-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-    }
-    
-    .items-display-table th {
-        background-color: #f8f9fa;
-        padding: 10px;
-        text-align: left;
-        border: 1px solid #dee2e6;
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-    
-    .items-display-table td {
-        padding: 8px 10px;
-        border: 1px solid #dee2e6;
-    }
-    
-    .items-display-table tbody tr:hover {
-        background-color: #f8f9fa;
-    }
-    
-    .items-display-table .category-group-header {
-        background-color: #f8f9fa;
+    /* Category group header styling for items display table */
+    .items-right-panel .reusable-table .category-group-header {
+        background-color: #f9f9f9;
         font-weight: 600;
         color: #495057;
     }
@@ -136,7 +89,7 @@
         <!-- Add Category Section -->
         <div class="items-section">
             <h5>Add Category</h5>
-            <table class="items-form-table">
+            <table class="reusable-table">
                 <thead>
                     <tr>
                         <th>Category</th>
@@ -163,7 +116,7 @@
         <!-- Add Item Section -->
         <div class="items-section">
             <h5>Add Item</h5>
-            <table class="items-form-table">
+            <table class="reusable-table">
                 <thead>
                     <tr>
                         <th>Item</th>
@@ -194,7 +147,7 @@
     
     <!-- Right Panel: Category / Item Display Table -->
     <div class="items-right-panel">
-        <table class="items-display-table">
+        <table class="reusable-table">
             <thead>
                 <tr>
                     <th>Category / Item</th>
