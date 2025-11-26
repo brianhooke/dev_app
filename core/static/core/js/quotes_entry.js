@@ -119,26 +119,26 @@ var QuotesEntry = (function() {
             <div style="display: flex; height: 100%; gap: 15px;">
                 <!-- Left side: Quote Entry Form (60%) -->
                 <div style="width: 60%; height: 100%; overflow-y: auto; padding: 20px; border: 1px solid #ddd;">
-                    <h4>Enter Quote</h4>
+                    <h5 style="margin-bottom: 15px;">Enter Quote</h5>
                     
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label for="quoteSupplier">Supplier:</label>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="quoteSupplier" style="font-size: 13px; margin-bottom: 4px;">Supplier:</label>
                         ${selectHTML}
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label for="quoteTotalCost">Total Cost:</label>
-                        <input type="number" id="quoteTotalCost" class="form-control" step="0.01" min="0" placeholder="0.00" value="0.00">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="quoteTotalCost" style="font-size: 13px; margin-bottom: 4px;">Total Cost:</label>
+                        <input type="number" id="quoteTotalCost" class="form-control form-control-sm" step="0.01" min="0" placeholder="0.00" value="0.00">
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label for="quoteNumber">Quote #:</label>
-                        <input type="text" id="quoteNumber" class="form-control" maxlength="255">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="quoteNumber" style="font-size: 13px; margin-bottom: 4px;">Quote #:</label>
+                        <input type="text" id="quoteNumber" class="form-control form-control-sm" maxlength="255">
                     </div>
                     
-                    <h5 style="margin-top: 20px;">Line Items</h5>
+                    <h6 style="margin-top: 15px; margin-bottom: 10px;">Line Items</h6>
                     <div style="overflow-x: auto;">
-                        <table id="quoteLineItemsTable" class="table table-bordered" style="font-size: 12px;">
+                        <table id="quoteLineItemsTable" class="reusable-table">
                             <thead>
                                 <tr>
                                     <th style="width: 40%;">Item</th>
@@ -153,20 +153,20 @@ var QuotesEntry = (function() {
                         </table>
                     </div>
                     
-                    <div style="margin-top: 10px; margin-bottom: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                    <div style="margin-top: 10px; margin-bottom: 10px; padding: 8px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong>Still to Allocate:</strong>
-                            <span id="quoteStillToAllocate" style="font-weight: bold; font-size: 1.1em;">$0.00</span>
+                            <strong style="font-size: 13px;">Still to Allocate:</strong>
+                            <span id="quoteStillToAllocate" style="font-weight: bold; font-size: 14px;">$0.00</span>
                         </div>
                     </div>
                     
-                    <button id="quoteAddLineItemBtn" class="btn btn-secondary btn-sm" style="margin-bottom: 15px;">
+                    <button id="quoteAddLineItemBtn" class="btn btn-secondary btn-sm" style="margin-bottom: 10px;">
                         <i class="fas fa-plus"></i> Add Line Item
                     </button>
                     
-                    <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                        <button id="quoteCancelBtn" class="btn btn-secondary">Cancel</button>
-                        <button id="quoteSaveBtn" class="btn btn-secondary" disabled>${isUpdateMode ? 'Update Quote' : 'Save Quote'}</button>
+                    <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="quoteCancelBtn" class="btn btn-secondary btn-sm">Cancel</button>
+                        <button id="quoteSaveBtn" class="btn btn-secondary btn-sm" disabled>${isUpdateMode ? 'Update Quote' : 'Save Quote'}</button>
                     </div>
                 </div>
                 

@@ -143,6 +143,33 @@
                 </tbody>
             </table>
         </div>
+        
+        <!-- Bulk Upload via CSV Section -->
+        <div class="items-section">
+            <h5>Bulk Upload via CSV</h5>
+            <div style="padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                <p style="margin-bottom: 10px; font-size: 12px; color: #6c757d;">
+                    Upload categories and items in bulk using a CSV file. Download the example template below to see the required format.
+                </p>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button id="downloadExampleCsvBtn" class="btn btn-sm btn-info">
+                        <i class="fas fa-download"></i> Download Example CSV
+                    </button>
+                    
+                    <button id="uploadCsvBtn" class="btn btn-sm btn-success">
+                        <i class="fas fa-upload"></i> Upload CSV
+                    </button>
+                </div>
+                
+                <!-- Hidden file input -->
+                <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                
+                <p style="margin-top: 10px; margin-bottom: 0; font-size: 11px; color: #dc3545;">
+                    <strong>Note:</strong> Upload will add to existing categories/items, not replace them.
+                </p>
+            </div>
+        </div>
     </div>
     
     <!-- Right Panel: Category / Item Display Table -->

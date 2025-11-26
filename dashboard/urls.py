@@ -35,4 +35,6 @@ urlpatterns = [
     path('create_item/<int:project_pk>/', views.create_item, name='create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', views.reorder_category, name='reorder_category'),
     path('reorder_item/<int:project_pk>/<int:item_pk>/', views.reorder_item, name='reorder_item'),
+    path('download_items_csv_template/', views.download_items_csv_template, name='download_items_csv_template'),
+    path('upload_items_csv/<int:project_pk>/', views.upload_items_csv, name='upload_items_csv'),
 ]

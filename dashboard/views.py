@@ -32,15 +32,17 @@ Dependencies:
 import json
 import logging
 import requests
+import csv
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations
+from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing
 from decimal import Decimal
 from datetime import date
+from io import StringIO, TextIOWrapper
 # Import helpers from core.views.xero
 from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
 # Import validators
@@ -1322,4 +1324,282 @@ def reorder_item(request, project_pk, item_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error reordering item: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def download_items_csv_template(request):
+    """
+    Download an example CSV template for bulk category and item upload.
+    
+    Format:
+    Category,Item,Category Order,Item Order
+    Preliminaries,Site Establishment,1,1
+    Preliminaries,Temp Fencing,1,2
+    Excavation,Bulk Excavation,2,1
+    """
+    try:
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="items_upload_template.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow(['Category', 'Item', 'Category Order', 'Item Order'])
+        
+        # Write example data
+        writer.writerow(['Preliminaries', 'Site Establishment', '1', '1'])
+        writer.writerow(['Preliminaries', 'Temp Fencing', '1', '2'])
+        writer.writerow(['Preliminaries', 'Site Signage', '1', '3'])
+        writer.writerow(['Excavation', 'Bulk Excavation', '2', '1'])
+        writer.writerow(['Excavation', 'Trench Excavation', '2', '2'])
+        writer.writerow(['Concrete', 'Footings', '3', '1'])
+        writer.writerow(['Concrete', 'Slab', '3', '2'])
+        writer.writerow(['Concrete', 'Walls', '3', '3'])
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error generating CSV template: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error generating template: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def upload_items_csv(request, project_pk):
+    """
+    Upload and process CSV file to create categories and items in bulk.
+    
+    Expected CSV format:
+    Category,Item,Category Order,Item Order
+    Preliminaries,Site Establishment,1,1
+    
+    - Adds to existing categories/items (does not replace)
+    - Creates categories if they don't exist
+    - Handles duplicate category names within same project
+    - Validates order numbers
+    """
+    try:
+        # Get project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get CSV file from request
+        if 'csv_file' not in request.FILES:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No CSV file provided'
+            }, status=400)
+        
+        csv_file = request.FILES['csv_file']
+        
+        # Validate file type
+        if not csv_file.name.endswith('.csv'):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File must be a CSV'
+            }, status=400)
+        
+        # Read and parse CSV with robust encoding handling
+        try:
+            # Try to decode with multiple encodings (handles Excel, Google Sheets, etc.)
+            file_bytes = csv_file.read()
+            file_data = None
+            
+            # Try UTF-8 with BOM first (Excel on Windows)
+            try:
+                file_data = file_bytes.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                pass
+            
+            # Try UTF-8 without BOM
+            if file_data is None:
+                try:
+                    file_data = file_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    pass
+            
+            # Try Latin-1 / ISO-8859-1 (fallback, rarely fails)
+            if file_data is None:
+                try:
+                    file_data = file_bytes.decode('latin-1')
+                except UnicodeDecodeError:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Unable to decode CSV file. Please ensure it is saved as UTF-8.'
+                    }, status=400)
+            
+            # Normalize line endings (handles Windows, Mac, Unix)
+            file_data = file_data.replace('\r\n', '\n').replace('\r', '\n')
+            
+            # Parse CSV
+            csv_reader = csv.DictReader(StringIO(file_data))
+            
+            # Validate headers exist
+            if not csv_reader.fieldnames:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'CSV file appears to be empty or has no headers'
+                }, status=400)
+            
+            # Normalize header names (strip whitespace, case-insensitive)
+            # Map common variations to expected names
+            header_map = {}
+            for field in csv_reader.fieldnames:
+                field_lower = field.strip().lower()
+                if field_lower in ['category', 'category name']:
+                    header_map[field] = 'Category'
+                elif field_lower in ['item', 'item name']:
+                    header_map[field] = 'Item'
+                elif field_lower in ['category order', 'categoryorder', 'cat order']:
+                    header_map[field] = 'Category Order'
+                elif field_lower in ['item order', 'itemorder']:
+                    header_map[field] = 'Item Order'
+            
+            # Check if we have all required headers
+            required = {'Category', 'Item', 'Category Order', 'Item Order'}
+            if not required.issubset(set(header_map.values())):
+                missing = required - set(header_map.values())
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'CSV missing required columns: {", ".join(missing)}'
+                }, status=400)
+            
+            # Track created items
+            categories_created = 0
+            items_created = 0
+            category_cache = {}  # Cache created/existing categories {name: category_obj}
+            errors = []
+            
+            # Create reverse map for easy lookup
+            reverse_map = {v: k for k, v in header_map.items()}
+            
+            # Process each row
+            for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 to account for header
+                try:
+                    # Skip completely empty rows
+                    if not any(row.values()):
+                        continue
+                    
+                    # Validate required fields using mapped headers
+                    category_name = row.get(reverse_map['Category'], '').strip()
+                    item_name = row.get(reverse_map['Item'], '').strip()
+                    category_order = row.get(reverse_map['Category Order'], '').strip()
+                    item_order = row.get(reverse_map['Item Order'], '').strip()
+                    
+                    if not category_name:
+                        errors.append(f"Row {row_num}: Missing category name")
+                        continue
+                    
+                    if not item_name:
+                        errors.append(f"Row {row_num}: Missing item name")
+                        continue
+                    
+                    if not category_order or not category_order.isdigit():
+                        errors.append(f"Row {row_num}: Invalid category order")
+                        continue
+                    
+                    if not item_order or not item_order.isdigit():
+                        errors.append(f"Row {row_num}: Invalid item order")
+                        continue
+                    
+                    category_order_int = int(category_order)
+                    item_order_int = int(item_order)
+                    
+                    # Get or create category
+                    if category_name in category_cache:
+                        category = category_cache[category_name]
+                    else:
+                        # Check if category already exists for this project
+                        existing_category = Categories.objects.filter(
+                            project=project,
+                            category=category_name
+                        ).first()
+                        
+                        if existing_category:
+                            category = existing_category
+                        else:
+                            # Create new category (division is required, set to 0 as default)
+                            category = Categories.objects.create(
+                                project=project,
+                                category=category_name,
+                                division=0,
+                                invoice_category='',
+                                order_in_list=category_order_int
+                            )
+                            categories_created += 1
+                        
+                        category_cache[category_name] = category
+                    
+                    # Check if item already exists
+                    existing_item = Costing.objects.filter(
+                        project=project,
+                        category=category,
+                        item=item_name
+                    ).first()
+                    
+                    if existing_item:
+                        # Skip if item already exists
+                        errors.append(f"Row {row_num}: Item '{item_name}' already exists in category '{category_name}'")
+                        continue
+                    
+                    # Create item with required fields set to defaults
+                    Costing.objects.create(
+                        project=project,
+                        category=category,
+                        item=item_name,
+                        order_in_list=item_order_int,
+                        xero_account_code='',
+                        contract_budget=0,
+                        uncommitted=0,
+                        fixed_on_site=0,
+                        sc_invoiced=0,
+                        sc_paid=0
+                    )
+                    items_created += 1
+                    
+                except Exception as row_error:
+                    errors.append(f"Row {row_num}: {str(row_error)}")
+                    continue
+            
+            # Prepare response
+            response_data = {
+                'status': 'success',
+                'categories_created': categories_created,
+                'items_created': items_created
+            }
+            
+            if errors:
+                response_data['warnings'] = errors
+                response_data['message'] = f"Processed with {len(errors)} warning(s)"
+            
+            return JsonResponse(response_data)
+            
+        except csv.Error as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'CSV parsing error: {str(e)}'
+            }, status=400)
+        except Exception as e:
+            logger.error(f"Error processing CSV: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Error processing CSV: {str(e)}'
+            }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Error uploading CSV: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error uploading CSV: {str(e)}'
         }, status=500)
