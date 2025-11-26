@@ -433,8 +433,12 @@
                     salesAccountSelect.append('<option value="">Select Sales Account</option>');
                     
                     if (response.accounts && response.accounts.length > 0) {
-                        // Filter for REVENUE accounts
-                        const revenueAccounts = response.accounts.filter(acc => acc.account_type === 'REVENUE');
+                        // Filter for REVENUE, SALES, and OTHERINCOME accounts
+                        const revenueAccounts = response.accounts.filter(acc => 
+                            acc.account_type === 'REVENUE' || 
+                            acc.account_type === 'SALES' || 
+                            acc.account_type === 'OTHERINCOME'
+                        );
                         
                         revenueAccounts.forEach(account => {
                             salesAccountSelect.append(
@@ -640,8 +644,12 @@
                             salesAccountSelect.append('<option value="">Select Sales Account</option>');
                             
                             if (response.accounts && response.accounts.length > 0) {
-                                // Filter for REVENUE accounts
-                                const revenueAccounts = response.accounts.filter(acc => acc.account_type === 'REVENUE');
+                                // Filter for REVENUE, SALES, and OTHERINCOME accounts
+                                const revenueAccounts = response.accounts.filter(acc => 
+                                    acc.account_type === 'REVENUE' || 
+                                    acc.account_type === 'SALES' || 
+                                    acc.account_type === 'OTHERINCOME'
+                                );
                                 
                                 revenueAccounts.forEach(account => {
                                     const isSelected = account.account_code === currentSalesAccountCode ? 'selected' : '';
@@ -650,7 +658,7 @@
                                     );
                                 });
                             } else {
-                                salesAccountSelect.append('<option value="">No revenue accounts found</option>');
+                                salesAccountSelect.append('<option value="">No sales accounts found</option>');
                             }
                         },
                         error: function() {

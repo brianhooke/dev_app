@@ -147,13 +147,11 @@ Version: v58 (displayed in header)
         }
         
         /* Spaceship Animation */
-        #spaceship {
+        .spaceship {
             position: fixed;
-            top: 20%;
             left: -100px;
             font-size: 48px;
             z-index: 10000;
-            animation: flyAcross 4s ease-in-out forwards;
             pointer-events: none;
         }
         
@@ -161,9 +159,6 @@ Version: v58 (displayed in header)
             0% {
                 left: -100px;
                 transform: rotate(0deg);
-            }
-            50% {
-                top: 15%;
             }
             100% {
                 left: calc(100% + 100px);
@@ -255,13 +250,13 @@ Version: v58 (displayed in header)
     </style>
 </head>
 
-<!-- Spaceship Element -->
-<div id="spaceship">🚀</div>
+<!-- Spaceships will be added dynamically via JavaScript -->
+<div id="spaceship-container"></div>
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
     <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v62
+        v63
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
         {% else %}
@@ -460,10 +455,31 @@ Version: v58 (displayed in header)
             }
         });
         
-        // Spaceship animation - remove after completion
+        // Create 20 spaceships with different positions and timing
+        for (let i = 0; i < 20; i++) {
+            // Random vertical position between 5% and 85% of screen height
+            const topPosition = 5 + (i * 4); // Spread them out vertically
+            
+            // Stagger animation start times
+            const delay = i * 0.15; // Each spaceship starts 0.15s after the previous
+            
+            // Random duration between 3-5 seconds
+            const duration = 3 + Math.random() * 2;
+            
+            // Create spaceship element
+            const spaceship = $('<div class="spaceship">🚀</div>');
+            spaceship.css({
+                'top': topPosition + '%',
+                'animation': `flyAcross ${duration}s ease-in-out ${delay}s forwards`
+            });
+            
+            $('#spaceship-container').append(spaceship);
+        }
+        
+        // Remove all spaceships after animation completes (longest duration + delay)
         setTimeout(function() {
-            $('#spaceship').remove();
-        }, 4000);
+            $('#spaceship-container').remove();
+        }, 8000);
         
         // Toggle Database Wipe Button visibility with SHIFT+B
         $(document).on('keydown', function(e) {
