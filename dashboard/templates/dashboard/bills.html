@@ -83,55 +83,82 @@
             padding: 2px 3px;
             height: 24px;
         }
+        
+        /* Sticky header for allocations table */
+        #allocationsTable tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+        
+        #allocationsTable tbody td {
+            display: table-cell;
+        }
+        
+        #allocationsTable tbody td:nth-child(1) {
+            width: 28%;
+        }
+        
+        #allocationsTable tbody td:nth-child(2) {
+            width: 15%;
+        }
+        
+        #allocationsTable tbody td:nth-child(3) {
+            width: 15%;
+        }
+        
+        #allocationsTable tbody td:nth-child(4) {
+            width: 42%;
+        }
     </style>
 
     <!-- Bills - Inbox Section (hidden initially, shown when Bills - Inbox clicked) -->
-    <div id="billsInboxSection" style="display: none; height: calc(100% - 50px); flex-direction: column;">
+    <div id="billsInboxSection" style="display: none; height: 100%; flex-direction: column;">
         <div style="display: flex; height: 100%;">
-            <!-- Left side: Bills Table (60%) -->
-            <div style="width: 60%; padding-right: 15px; overflow-y: auto; border-right: 2px solid #ddd;">
-                <table class="table table-bordered table-hover" id="billsTable">
-                    <thead>
-                        <tr>
-                            <th>Xero Instance / Project</th>
-                            <th>Supplier</th>
-                            <th>Invoice #</th>
-                            <th>$ Net</th>
-                            <th>$ GST</th>
-                            <th>Email</th>
-                            <th id="sendColumnHeader">Send to Xero</th>
-                            <th id="lastColumnHeader">Archive</th>
-                        </tr>
-                    </thead>
-                    <tbody id="billsTableBody">
-                        <!-- Bills will be populated here via JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Right side: Allocations table (1/3) and PDF Viewer (2/3) (40%) -->
-            <div style="width: 40%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
-                <!-- Allocations section (hidden for Bills - Inbox) -->
-                <div id="allocationsSection" style="height: 33%; display: none; flex-direction: column; margin-bottom: 15px;">
-                    <div style="text-align: center; margin-bottom: 10px;">
+            <!-- Left side: Bills Table (top 2/3) and Allocations (bottom 1/3) (50%) -->
+            <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column; border-right: 2px solid #ddd;">
+                <!-- Bills Table (top 2/3) -->
+                <div style="height: 67%; overflow-y: auto; margin-bottom: 15px;">
+                    <table class="table table-bordered table-hover" id="billsTable">
+                        <thead>
+                            <tr>
+                                <th>Xero Instance / Project</th>
+                                <th>Supplier</th>
+                                <th>Invoice #</th>
+                                <th>$ Net</th>
+                                <th>$ GST</th>
+                                <th>Email</th>
+                                <th id="sendColumnHeader">Send to Xero</th>
+                                <th id="lastColumnHeader">Archive</th>
+                            </tr>
+                        </thead>
+                        <tbody id="billsTableBody">
+                            <!-- Bills will be populated here via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Allocations section (bottom 1/3 - hidden for Bills - Inbox) -->
+                <div id="allocationsSection" style="height: 33%; display: none; flex-direction: column;">
+                    <div style="text-align: center; margin-bottom: 5px; flex-shrink: 0;">
                         <h6 id="allocationsTitle">Bill Allocations</h6>
                     </div>
-                    <div style="flex: 1; overflow-y: auto; border: 2px solid #ddd;">
-                        <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0;">
-                            <thead>
-                                <tr>
+                    <div style="flex: 1; border: 2px solid #ddd; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+                        <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
+                            <thead style="flex-shrink: 0; display: block; position: sticky; top: 0; z-index: 10; background: white;">
+                                <tr style="display: table; width: 100%; table-layout: fixed;">
                                     <th style="width: 28%;">Xero Account</th>
                                     <th style="width: 15%;">$ Net</th>
                                     <th style="width: 15%;">$ GST</th>
                                     <th style="width: 42%;">Description</th>
                                 </tr>
                             </thead>
-                            <tbody id="allocationsTableBody">
+                            <tbody id="allocationsTableBody" style="flex: 1; display: block; overflow-y: auto;">
                                 <!-- Allocations will be populated here via JavaScript -->
                             </tbody>
                         </table>
                     </div>
-                    <div style="margin-top: 5px; display: flex; align-items: center; gap: 10px;">
+                    <div style="margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                         <div style="flex: 0 0 28%; padding-left: 5px;">
                             <strong>Still to allocate:</strong>
                         </div>
@@ -142,13 +169,18 @@
                             $0.00
                         </div>
                         <div style="flex: 1;"></div>
+                        <button type="button" class="btn btn-sm btn-info" id="pullXeroAccountsBtn" style="display: none;">
+                            <i class="fas fa-download"></i> Pull Accounts
+                        </button>
                         <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
                             <i class="fas fa-plus"></i> Add Row
                         </button>
                     </div>
                 </div>
-                
-                <!-- PDF Viewer (bottom 2/3) -->
+            </div>
+            
+            <!-- Right side: PDF Viewer (50% - full height) -->
+            <div style="width: 50%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
                 <div id="viewerSection" style="flex: 1; display: flex; flex-direction: column;">
                     <div style="flex: 1; border: 2px solid #ddd; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
                         <iframe 
@@ -164,11 +196,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Footer Buttons -->
-        <div style="display: flex; justify-content: flex-end; flex-shrink: 0; padding-top: 15px;">
-            <button type="button" class="btn btn-info" id="pullXeroAccountsBtn" style="display: none;">Pull Xero Accounts</button>
         </div>
     </div>
 
@@ -234,9 +261,9 @@
                 $('#billsModalTitle').text('Bills - Direct');
                 $('#sendColumnHeader').text('Send to Xero');
                 $('#lastColumnHeader').text('Return to Inbox');
-                // Show allocations section for Direct
+                // Show allocations section for Direct (on LHS, doesn't affect RHS viewer height)
                 $('#allocationsSection').css('display', 'flex');
-                $('#viewerSection').css('flex', '0 0 66%');
+                $('#viewerSection').css('flex', '1');
                 // Show Pull Xero button in Direct mode
                 $('#pullXeroAccountsBtn').show();
             }
@@ -1597,21 +1624,21 @@
                         // Add class to tbody to trigger dimming effect
                         $('#billsTableBody').addClass('has-selection');
                         
-                        // Always load PDF when clicking on a row (even if same row)
-                        var pdfUrl = clickedRow.attr('data-pdf-url');
-                        var filename = clickedRow.attr('data-filename');
-                        
-                        if (pdfUrl) {
-                            // Update viewer title
-                            $('#viewerTitle').text(filename);
-                            
-                            // Load PDF in iframe
-                            $('#billViewer').attr('src', pdfUrl).show();
-                            $('#viewerPlaceholder').hide();
-                        }
-                        
-                        // Only update data if switching to a different row
+                        // Only load PDF if switching to a different row (prevent unnecessary reloads)
                         if (!isSameRow) {
+                            var pdfUrl = clickedRow.attr('data-pdf-url');
+                            var filename = clickedRow.attr('data-filename');
+                            
+                            if (pdfUrl) {
+                                // Update viewer title
+                                $('#viewerTitle').text(filename);
+                                
+                                // Load PDF in iframe
+                                $('#billViewer').attr('src', pdfUrl).show();
+                                $('#viewerPlaceholder').hide();
+                            }
+                            
+                            // Update data when switching to a different row
                             // Update current selection
                             currentSelectedInvoicePk = invoicePk;
                             

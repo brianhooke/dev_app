@@ -4,8 +4,14 @@
         height: 100%;
         display: flex;
         flex-direction: column;
-        padding: 20px;
+        padding: 20px 20px 0 20px;
+        position: relative;
+    }
+    
+    .contract-budget-container .table-wrapper {
+        flex: 1;
         overflow-y: auto;
+        position: relative;
     }
     
     /* Category row styling */
@@ -49,26 +55,62 @@
         text-align: right;
         color: #6c757d;
     }
+    
+    /* Totals row styling - fixed at bottom */
+    .contract-budget-container .totals-row {
+        display: flex;
+        background: var(--gradient-primary);
+        color: white;
+        font-weight: bold;
+        border-top: 2px solid #dee2e6;
+        border-radius: 0 0 8px 8px;
+        flex-shrink: 0;
+    }
+    
+    .contract-budget-container .totals-row > div {
+        padding: 6px 6px;
+        text-align: right;
+        font-size: 12px;
+    }
+    
+    .contract-budget-container .totals-row > div:first-child {
+        width: 40%;
+        text-align: left;
+    }
+    
+    .contract-budget-container .totals-row > div:nth-child(2),
+    .contract-budget-container .totals-row > div:nth-child(3),
+    .contract-budget-container .totals-row > div:nth-child(4) {
+        width: 20%;
+    }
 </style>
 
 <div class="contract-budget-container">
-    <table class="reusable-table">
-        <thead>
-            <tr>
-                <th style="width: 40%;">Category / Item</th>
-                <th style="width: 20%;">Contract Budget</th>
-                <th style="width: 20%;">Uncommitted</th>
-                <th style="width: 20%;">Committed</th>
-            </tr>
-        </thead>
-        <tbody id="contractBudgetTableBody">
-            <tr>
-                <td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">
-                    Loading...
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+        <table class="reusable-table">
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Category / Item</th>
+                    <th style="width: 20%;">Contract Budget</th>
+                    <th style="width: 20%;">Uncommitted</th>
+                    <th style="width: 20%;">Committed</th>
+                </tr>
+            </thead>
+            <tbody id="contractBudgetTableBody">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">
+                        Loading...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="totals-row">
+        <div><strong>TOTALS</strong></div>
+        <div id="totalContractBudget">$0.00</div>
+        <div id="totalUncommitted">$0.00</div>
+        <div id="totalCommitted">$0.00</div>
+    </div>
 </div>
 
 <script>
@@ -212,8 +254,9 @@
                             $(this).val(parseFloat(value).toFixed(2));
                         }
                     }
-                    // Update Contract Budget
+                    // Update Contract Budget and totals
                     updateContractBudget(item.costing_pk);
+                    updateTotals();
                 });
                 uncommittedCell.append(uncommittedInput);
                 itemRow.append(uncommittedCell);
@@ -232,6 +275,9 @@
                 updateContractBudget(item.costing_pk);
             });
         });
+        
+        // Calculate initial totals
+        updateTotals();
     }
     
     function updateContractBudget(itemPk) {
@@ -249,6 +295,39 @@
         // Update Contract Budget cell
         var budgetCell = $('td.budget-amount[data-item-pk="' + itemPk + '"]');
         budgetCell.text('$' + contractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+    }
+    
+    function updateTotals() {
+        var totalContractBudget = 0;
+        var totalUncommitted = 0;
+        var totalCommitted = 0;
+        
+        // Sum up only item rows (not category rows) - target the one in tenderContentArea
+        var itemRows = $('#tenderContentArea #contractBudgetTableBody tr.item-row');
+        console.log('updateTotals: found', itemRows.length, 'item rows');
+        
+        itemRows.each(function() {
+            // Contract Budget - parse from text content
+            var budgetText = $(this).find('.budget-amount').text().replace(/[$,]/g, '');
+            var budgetAmount = parseFloat(budgetText) || 0;
+            totalContractBudget += budgetAmount;
+            
+            // Uncommitted - get from input value
+            var uncommittedValue = $(this).find('input[type="number"]').val();
+            var uncommittedAmount = parseFloat(uncommittedValue) || 0;
+            totalUncommitted += uncommittedAmount;
+            
+            // Committed - parse from data attribute
+            var committedAmount = parseFloat($(this).find('.committed-amount').attr('data-committed-amount')) || 0;
+            totalCommitted += committedAmount;
+        });
+        
+        console.log('Totals - Budget:', totalContractBudget, 'Uncommitted:', totalUncommitted, 'Committed:', totalCommitted);
+        
+        // Update totals row (in tenderContentArea)
+        $('#tenderContentArea #totalContractBudget').text('$' + totalContractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        $('#tenderContentArea #totalUncommitted').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        $('#tenderContentArea #totalCommitted').text('$' + totalCommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
     }
     
     function escapeHtml(text) {

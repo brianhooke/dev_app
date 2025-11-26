@@ -161,9 +161,9 @@ Backend Endpoints Used:
         
         // Insert dropdown before the table when modal is shown
         $('#contactsModal').on('show.bs.modal', function() {
-            const modalBody = $(this).find('.modal-body > div[style*="overflow-x"]');
+            const modalBody = $(this).find('.modal-body');
             if (!$(this).find('#xeroInstanceSelect').length) {
-                modalBody.before(xeroDropdown);
+                modalBody.prepend(xeroDropdown);
             }
             
             // Add Delete button after Archive button if not already present

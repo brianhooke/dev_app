@@ -759,14 +759,34 @@
             const row = $(this).closest('tr');
             const projectPk = row.data('project-pk');
             const projectName = row.find('.project-name').text();
+            const backgroundUrl = row.data('background-url');
             
             console.log(`Opening tender view for project: ${projectName} (pk=${projectPk})`);
+            console.log(`Background URL: ${backgroundUrl}`);
             
             // Store current project info globally
             window.currentTenderProject = {
                 pk: projectPk,
-                name: projectName
+                name: projectName,
+                backgroundUrl: backgroundUrl
             };
+            
+            // Apply background image to workspace if it exists
+            if (backgroundUrl) {
+                $('#dynamicContentArea').css({
+                    'background-image': `url(${backgroundUrl})`,
+                    'background-size': 'cover',
+                    'background-position': 'center',
+                    'background-repeat': 'no-repeat',
+                    'background-attachment': 'fixed',
+                    'position': 'relative'
+                });
+                
+                // Add overlay to darken/fade the background
+                if ($('#dynamicContentArea').find('.workspace-background-overlay').length === 0) {
+                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.7); pointer-events: none; z-index: 0;"></div>');
+                }
+            }
             
             // Hide projects table and footer buttons
             $('#projectsTable').closest('div').parent().hide();
@@ -783,6 +803,14 @@
             
             // Reset tender view state
             resetTenderViewState();
+            
+            // Remove background image from workspace
+            $('#dynamicContentArea').css({
+                'background-image': 'none'
+            });
+            
+            // Remove overlay
+            $('.workspace-background-overlay').remove();
             
             // Hide tender view
             $('#tenderView').hide();

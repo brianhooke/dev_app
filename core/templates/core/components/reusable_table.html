@@ -4,15 +4,18 @@
 <style>
   .reusable-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 12px;
+    border-radius: 8px;
+    overflow: hidden;
   }
   
   .reusable-table th {
     padding: 6px 6px;
     text-align: left;
     font-weight: bold;
-    font-size: 11px;
+    font-size: 14px;
     background: var(--gradient-primary);
     color: white;
     white-space: nowrap;
@@ -20,6 +23,14 @@
     position: sticky;
     top: 0;
     z-index: 10;
+  }
+  
+  .reusable-table thead tr:first-child th:first-child {
+    border-top-left-radius: 8px;
+  }
+  
+  .reusable-table thead tr:first-child th:last-child {
+    border-top-right-radius: 8px;
   }
   
   .reusable-table tbody tr {
@@ -42,9 +53,23 @@
   }
   
   .reusable-table td {
-    padding: 5px 6px;
+    padding: 4px 6px;
     border-bottom: 1px solid #e0e0e0;
     line-height: 1.3;
+    vertical-align: middle;
+  }
+  
+  /* Compact buttons in reusable tables */
+  .reusable-table .btn-sm {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    min-height: 26px !important;
+    height: 26px !important;
+  }
+  
+  .reusable-table .btn-sm i {
+    font-size: 12px;
   }
   
   .reusable-table .dropdown-arrow {

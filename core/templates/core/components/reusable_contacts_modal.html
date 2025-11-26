@@ -10,11 +10,9 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto;">
+            <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; position: relative;">
                 {% block contacts_modal_body %}
-                <div style="overflow-x: auto; position: relative;">
-                    {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
-                </div>
+                {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
                 {% endblock %}
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
@@ -211,6 +209,29 @@ $(document).ready(function() {
     $('#contactsModal').on('shown.bs.modal', function() {
         const instancePk = $('#xeroInstanceSelect').val();
         loadContacts(instancePk);
+        
+        // Debug scrolling
+        setTimeout(() => {
+            const modalBody = $('#contactsModal .modal-body');
+            const table = $('#contactsModal .reusable-table');
+            const tbody = $('#contactsModal tbody');
+            console.log('=== CONTACTS MODAL DEBUG ===');
+            console.log('Modal Body Height:', modalBody.height());
+            console.log('Modal Body Scroll Height:', modalBody[0].scrollHeight);
+            console.log('Modal Body Overflow-Y:', modalBody.css('overflow-y'));
+            console.log('Modal Body Max-Height:', modalBody.css('max-height'));
+            console.log('Table Height:', table.height());
+            console.log('TBody Height:', tbody.height());
+            console.log('TBody Row Count:', tbody.find('tr').length);
+            console.log('Can Scroll:', modalBody[0].scrollHeight > modalBody.height());
+            console.log('Modal Body scrollTop:', modalBody[0].scrollTop);
+            console.log('Modal Body clientHeight:', modalBody[0].clientHeight);
+            
+            // Try to scroll programmatically
+            console.log('Attempting scroll...');
+            modalBody[0].scrollTop = 100;
+            console.log('ScrollTop after attempt:', modalBody[0].scrollTop);
+        }, 1000);
     });
     
     // Reload contacts when dropdown changes
