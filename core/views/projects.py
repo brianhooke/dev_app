@@ -6,7 +6,7 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from core.models import Projects, XeroInstances, XeroAccounts
+from core.models import Projects, XeroInstances, XeroAccounts, Categories, Costing
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,31 @@ def create_project(request):
         project.save()
         
         logger.info(f"Created project: {project.project} (pk={project.projects_pk})")
+        
+        # Auto-create "Internal" category with order_in_list=0
+        internal_category = Categories.objects.create(
+            project=project,
+            category='Internal',
+            invoice_category='Internal',
+            order_in_list=0,
+            division=0
+        )
+        logger.info(f"Created Internal category for project {project.projects_pk}")
+        
+        # Auto-create "Margin" item within Internal category with order_in_list=1
+        margin_item = Costing.objects.create(
+            project=project,
+            category=internal_category,
+            item='Margin',
+            order_in_list=1,
+            xero_account_code='',
+            contract_budget=0,
+            uncommitted=0,
+            fixed_on_site=0,
+            sc_invoiced=0,
+            sc_paid=0
+        )
+        logger.info(f"Created Margin item in Internal category for project {project.projects_pk}")
         
         # Generate background URL - use relative URL for media files
         background_url = ''
@@ -320,4 +345,201 @@ def toggle_project_archive(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error toggling archive status: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_category(request, project_pk, category_pk):
+    """
+    Delete a category and all its items (cascade delete).
+    Cannot delete the "Internal" category.
+    
+    Returns:
+    - status: success/error
+    - message: description
+    - items_deleted: count of items deleted with the category
+    """
+    try:
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the category
+        try:
+            category = Categories.objects.get(categories_pk=category_pk, project=project)
+        except Categories.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Category not found'
+            }, status=404)
+        
+        # Prevent deletion of "Internal" category
+        if category.category == 'Internal':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The Internal category cannot be deleted'
+            }, status=400)
+        
+        # Count items to be deleted
+        items_count = Costing.objects.filter(category=category).count()
+        
+        # Delete the category (Django will cascade delete related items)
+        category_name = category.category
+        category.delete()
+        
+        logger.info(f"Deleted category '{category_name}' and {items_count} items for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Category "{category_name}" and {items_count} item(s) deleted successfully',
+            'items_deleted': items_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting category: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error deleting category: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_item(request, project_pk, item_pk):
+    """
+    Delete an item (costing).
+    Items within "Internal" category can be deleted.
+    
+    Returns:
+    - status: success/error
+    - message: description
+    """
+    try:
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the item
+        try:
+            item = Costing.objects.get(costing_pk=item_pk, project=project)
+        except Costing.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Item not found'
+            }, status=404)
+        
+        # Delete the item
+        item_name = item.item
+        category_name = item.category.category
+        item.delete()
+        
+        logger.info(f"Deleted item '{item_name}' from category '{category_name}' for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Item "{item_name}" deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting item: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error deleting item: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_internal_committed(request):
+    """
+    Update the committed amount for Internal category items.
+    This is a special case where Internal items update committed directly,
+    not uncommitted like regular items.
+    
+    Expected POST data:
+    - project_pk: Project primary key
+    - item_pk: Costing item primary key
+    - committed_amount: New committed amount
+    
+    Returns:
+    - status: success/error
+    - message: description
+    """
+    try:
+        # Get POST data
+        project_pk = request.POST.get('project_pk')
+        item_pk = request.POST.get('item_pk')
+        committed_amount = request.POST.get('committed_amount', '0')
+        
+        # Validate inputs
+        if not project_pk or not item_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing required parameters'
+            }, status=400)
+        
+        # Get the project
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project not found'
+            }, status=404)
+        
+        # Get the item
+        try:
+            item = Costing.objects.get(costing_pk=item_pk, project=project)
+        except Costing.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Item not found'
+            }, status=404)
+        
+        # Verify this is an Internal category item
+        if item.category.category != 'Internal':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'This endpoint is only for Internal category items'
+            }, status=400)
+        
+        # Parse and update committed amount
+        try:
+            committed_value = float(committed_amount)
+        except ValueError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid committed amount'
+            }, status=400)
+        
+        # For Internal items, we store the committed amount in contract_budget
+        # since they don't use uncommitted
+        item.contract_budget = committed_value
+        item.save()
+        
+        logger.info(f"Updated Internal item '{item.item}' committed amount to {committed_value} for project {project_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Committed amount updated successfully',
+            'item_pk': item.costing_pk,
+            'committed_amount': committed_value
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating internal committed: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error updating committed amount: {str(e)}'
         }, status=500)

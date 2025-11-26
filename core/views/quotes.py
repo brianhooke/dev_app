@@ -497,6 +497,7 @@ def get_project_quotes(request, project_pk):
 def get_project_committed_amounts(request, project_pk):
     """
     Get committed amounts (sum of quote allocations) per item for a project.
+    For Internal category items, use contract_budget as committed amount.
     Returns a dictionary of {costing_pk: total_committed_amount}
     """
     try:
@@ -517,6 +518,16 @@ def get_project_committed_amounts(request, project_pk):
             item['item__costing_pk']: float(item['total_committed'])
             for item in committed_amounts
         }
+        
+        # For Internal category items, use contract_budget as committed amount
+        # (since they don't use uncommitted or quote allocations)
+        internal_items = Costing.objects.filter(
+            project=project,
+            category__category='Internal'
+        )
+        
+        for item in internal_items:
+            committed_dict[item.costing_pk] = float(item.contract_budget or 0)
         
         return JsonResponse({
             'status': 'success',

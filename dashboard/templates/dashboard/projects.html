@@ -78,6 +78,15 @@
     #projectsTable th {
         padding: 6px 6px !important;
     }
+    
+    /* Sticky header for Tender Quotes table */
+    #tenderCommittedQuotesTable thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 10;
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+    }
 </style>
 
 <!-- Projects Section (hidden initially, shown when Projects clicked) -->
@@ -1327,7 +1336,7 @@
                 tbody.empty();
                 
                 if (window.itemsItems.length === 0) {
-                    tbody.append('<tr><td style="text-align: center; color: #6c757d; padding: 20px;">No items yet. Add a category and items to get started.</td></tr>');
+                    tbody.append('<tr><td colspan="2" style="text-align: center; color: #6c757d; padding: 20px;">No items yet. Add a category and items to get started.</td></tr>');
                     return;
                 }
                 
@@ -1355,19 +1364,44 @@
                         return (a.order_in_list || 0) - (b.order_in_list || 0);
                     });
                     
-                    // Render category header row (draggable)
+                    // Render category header row (draggable unless Internal)
+                    var isInternal = category.category === 'Internal';
                     var categoryRow = $('<tr></tr>')
                         .addClass('category-row')
-                        .attr('draggable', 'true')
                         .attr('data-category-pk', category.categories_pk)
-                        .attr('data-category-order', category.order_in_list)
-                        .css({
-                            'background-color': '#f0f0f0',
-                            'font-weight': 'bold',
-                            'cursor': 'move'
-                        });
+                        .attr('data-category-order', category.order_in_list);
                     
+                    if (isInternal) {
+                        // Internal category: purple, not draggable, can't be deleted
+                        categoryRow.addClass('internal-category');
+                    } else {
+                        // Regular category: draggable, can be deleted
+                        categoryRow.attr('draggable', 'true')
+                            .css({
+                                'background-color': '#f0f0f0',
+                                'font-weight': 'bold',
+                                'cursor': 'move'
+                            });
+                    }
+                    
+                    // Add category name cell
                     categoryRow.append('<td>📁 ' + category.category + '</td>');
+                    
+                    // Add delete button cell
+                    var deleteCell = $('<td style="text-align: center;"></td>');
+                    if (isInternal) {
+                        // Internal category cannot be deleted
+                        deleteCell.append('<button class="delete-btn" disabled title="Internal category cannot be deleted">✕</button>');
+                    } else {
+                        // Regular category can be deleted
+                        var deleteBtn = $('<button class="delete-btn delete-category-btn" title="Delete category and all items"></button>')
+                            .attr('data-category-pk', category.categories_pk)
+                            .attr('data-category-name', category.category)
+                            .text('✕');
+                        deleteCell.append(deleteBtn);
+                    }
+                    categoryRow.append(deleteCell);
+                    
                     tbody.append(categoryRow);
                     
                     // Render items under this category (draggable within category)
@@ -1383,7 +1417,23 @@
                                 'padding-left': '20px'
                             });
                         
+                        // Apply purple styling if item is in Internal category
+                        if (isInternal) {
+                            itemRow.addClass('internal-item');
+                        }
+                        
+                        // Add item name cell
                         itemRow.append('<td style="padding-left: 30px;">└─ ' + item.item + '</td>');
+                        
+                        // Add delete button cell for items
+                        var itemDeleteCell = $('<td style="text-align: center;"></td>');
+                        var itemDeleteBtn = $('<button class="delete-btn delete-item-btn" title="Delete item"></button>')
+                            .attr('data-item-pk', item.costing_pk)
+                            .attr('data-item-name', item.item)
+                            .text('✕');
+                        itemDeleteCell.append(itemDeleteBtn);
+                        itemRow.append(itemDeleteCell);
+                        
                         tbody.append(itemRow);
                     });
                 });
@@ -1397,8 +1447,8 @@
             var draggedType = null; // 'category' or 'item'
             
             function attachDragHandlers() {
-                // Category rows - can drag anywhere
-                $('.category-row').on('dragstart', function(e) {
+                // Category rows - can drag anywhere (except Internal)
+                $('.category-row:not(.internal-category)').on('dragstart', function(e) {
                     draggedElement = this;
                     draggedType = 'category';
                     $(this).css('opacity', '0.4');
@@ -1818,6 +1868,97 @@
                         alert(errorMessage);
                         uploadBtn.prop('disabled', false).html(originalText);
                         fileInput.value = '';
+                    }
+                });
+            });
+            
+            // Delete Category button handler
+            $('#tenderContentArea').off('click', '.delete-category-btn').on('click', '.delete-category-btn', function(e) {
+                e.stopPropagation(); // Prevent drag events
+                
+                var categoryPk = $(this).attr('data-category-pk');
+                var categoryName = $(this).attr('data-category-name');
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Confirmation dialog
+                var itemCount = window.itemsItems.filter(function(item) {
+                    return item.category__category === categoryName;
+                }).length;
+                
+                var message = `Are you sure you want to delete the category "${categoryName}"?`;
+                if (itemCount > 0) {
+                    message += `\n\nThis will also delete ${itemCount} item(s) in this category.`;
+                }
+                
+                if (!confirm(message)) {
+                    return;
+                }
+                
+                // Make AJAX call to delete category
+                $.ajax({
+                    url: `/core/delete_category/${window.currentTenderProject.pk}/${categoryPk}/`,
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            // Reload items to reflect deletion
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to delete category:', error);
+                        var errorMessage = 'Failed to delete category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+            
+            // Delete Item button handler
+            $('#tenderContentArea').off('click', '.delete-item-btn').on('click', '.delete-item-btn', function(e) {
+                e.stopPropagation(); // Prevent drag events
+                
+                var itemPk = $(this).attr('data-item-pk');
+                var itemName = $(this).attr('data-item-name');
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Confirmation dialog
+                if (!confirm(`Are you sure you want to delete the item "${itemName}"?`)) {
+                    return;
+                }
+                
+                // Make AJAX call to delete item
+                $.ajax({
+                    url: `/core/delete_item/${window.currentTenderProject.pk}/${itemPk}/`,
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            // Reload items to reflect deletion
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to delete item:', error);
+                        var errorMessage = 'Failed to delete item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
                     }
                 });
             });

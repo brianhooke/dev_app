@@ -315,11 +315,37 @@ var DocumentsManager = (function() {
         
         var fileIcon = $('<i></i>').addClass('fa ' + icon + ' file-icon');
         var fileName = $('<span></span>').text(file.file_name);
+        
+        // Delete button for file
+        var deleteBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-danger')
+            .html('<i class="fa fa-trash"></i>')
+            .attr('title', 'Delete file')
+            .css({
+                'float': 'right',
+                'padding': '0 5px',
+                'font-size': '12px',
+                'margin-left': '5px',
+                'opacity': '0',
+                'transition': 'opacity 0.2s'
+            })
+            .on('click', function(e) {
+                e.stopPropagation();
+                deleteFile(file.file_pk);
+            });
+        
         var fileSize = $('<span></span>')
             .addClass('file-size')
             .text(formatFileSize(file.file_size));
         
-        fileDiv.append(fileIcon).append(fileName).append(fileSize);
+        fileDiv.append(fileIcon).append(fileName).append(deleteBtn).append(fileSize);
+        
+        // Show delete button on hover
+        fileDiv.on('mouseenter', function() {
+            deleteBtn.css('opacity', '1');
+        }).on('mouseleave', function() {
+            deleteBtn.css('opacity', '0');
+        });
         
         // Click handler to view file
         fileDiv.on('click', function() {
@@ -705,6 +731,88 @@ var DocumentsManager = (function() {
      */
     function downloadFile(fileId) {
         window.open('/core/download_file/' + fileId + '/', '_blank');
+    }
+    
+    /**
+     * Prompt to delete a folder and all its contents
+     */
+    function deleteFolderPrompt(folderId) {
+        // Find the folder to get its name and check for contents
+        var folder = folders.find(f => f.folder_pk === folderId);
+        if (!folder) {
+            alert('Folder not found');
+            return;
+        }
+        
+        // Count subfolders and files
+        var subfolders = folders.filter(f => f.parent_folder_id === folderId);
+        var fileCount = (folder.files && folder.files.length) || 0;
+        
+        // Build confirmation message
+        var message = `Are you sure you want to delete the folder "${folder.folder_name}"?`;
+        
+        if (subfolders.length > 0 || fileCount > 0) {
+            message += '\n\nThis will also delete:';
+            if (fileCount > 0) {
+                message += `\n• ${fileCount} file(s)`;
+            }
+            if (subfolders.length > 0) {
+                message += `\n• ${subfolders.length} subfolder(s) and all their contents`;
+            }
+        }
+        
+        if (!confirm(message)) {
+            return;
+        }
+        
+        // Call backend to delete
+        $.ajax({
+            url: '/core/delete_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                folder_pk: folderId
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Folder deleted successfully');
+                    
+                    // If the deleted folder was selected, clear selection
+                    if (selectedFolderId === folderId) {
+                        selectedFolderId = null;
+                    }
+                    
+                    // If a file from this folder was being viewed, clear viewer
+                    if (currentFileId) {
+                        var currentFile = null;
+                        // Find if current file belonged to deleted folder
+                        folders.forEach(function(f) {
+                            if (f.files) {
+                                var file = f.files.find(file => file.file_pk === currentFileId);
+                                if (file) currentFile = file;
+                            }
+                        });
+                        
+                        if (currentFile && folder.files && folder.files.find(f => f.file_pk === currentFileId)) {
+                            clearFileViewer();
+                        }
+                    }
+                    
+                    // Reload folder structure
+                    loadFolderStructure();
+                } else {
+                    alert('Error deleting folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error deleting folder:', error);
+                var errorMessage = 'Error deleting folder. Please try again.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
     }
     
     /**

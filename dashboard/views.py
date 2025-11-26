@@ -902,7 +902,7 @@ def get_project_items(request, project_pk):
         items = Costing.objects.filter(
             project_id=project_pk
         ).select_related('category').order_by('category__order_in_list', 'order_in_list').values(
-            'costing_pk', 'item', 'order_in_list', 'category__category', 'category__order_in_list'
+            'costing_pk', 'item', 'order_in_list', 'category__category', 'category__order_in_list', 'uncommitted'
         )
         
         items_list = list(items)

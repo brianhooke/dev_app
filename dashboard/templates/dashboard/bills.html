@@ -10,6 +10,11 @@
             white-space: nowrap;
             vertical-align: middle;
             line-height: 1.2;
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 10;
+            box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
         }
         
         #billsTable td {
@@ -117,8 +122,8 @@
         <div style="display: flex; height: 100%;">
             <!-- Left side: Bills Table (top 2/3) and Allocations (bottom 1/3) (50%) -->
             <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column; border-right: 2px solid #ddd;">
-                <!-- Bills Table (top 2/3) -->
-                <div style="height: 67%; overflow-y: auto; margin-bottom: 15px;">
+                <!-- Bills Table (flex to fill available space) -->
+                <div id="billsTableContainer" style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
                     <table class="table table-bordered table-hover" id="billsTable">
                         <thead>
                             <tr>
@@ -229,6 +234,10 @@
                     // Show Bills Inbox section and add has-content class to hide background
                     $('#billsInboxSection').show();
                     $('#dynamicContentArea').addClass('has-content');
+                    
+                    // Hide allocations section for Inbox mode and let bills table fill space
+                    $('#allocationsSection').hide();
+                    $('#billsTableContainer').css('flex', '1');
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load bills:', error);
@@ -583,8 +592,9 @@
                     $('#billsInboxSection').show();
                     $('#dynamicContentArea').addClass('has-content');
                     
-                    // Show allocations section for Direct
+                    // Show allocations section for Direct and adjust bills table to 67% height
                     $('#allocationsSection').css('display', 'flex');
+                    $('#billsTableContainer').css('flex', '0 0 67%');
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load bills:', error);

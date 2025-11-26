@@ -92,7 +92,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
 
-Version: v65 (displayed in header)
+Version: v66 (displayed in header)
 -->
 
 {% block title %}
@@ -146,13 +146,21 @@ Version: v65 (displayed in header)
             transform: scale(0.95);
         }
         
-        /* Spaceship Animation */
+        /* UFO Animation */
         .spaceship {
             position: fixed;
             left: -100px;
             font-size: 48px;
             z-index: 10000;
             pointer-events: none;
+        }
+        
+        .spaceship.green {
+            filter: hue-rotate(100deg) saturate(1.5);
+        }
+        
+        .spaceship.purple {
+            filter: hue-rotate(260deg) saturate(1.5);
         }
         
         @keyframes flyAcross {
@@ -250,13 +258,13 @@ Version: v65 (displayed in header)
     </style>
 </head>
 
-<!-- Spaceships will be added dynamically via JavaScript -->
+<!-- UFOs will be added dynamically via JavaScript -->
 <div id="spaceship-container"></div>
 
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
     <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v65
+        v66
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
         {% else %}
@@ -461,19 +469,22 @@ Version: v65 (displayed in header)
             }
         });
         
-        // Create 20 spaceships with different positions and timing
+        // Create 20 UFOs (green and purple) with different positions and timing
         for (let i = 0; i < 20; i++) {
             // Random vertical position between 5% and 85% of screen height
             const topPosition = 5 + (i * 4); // Spread them out vertically
             
             // Stagger animation start times
-            const delay = i * 0.15; // Each spaceship starts 0.15s after the previous
+            const delay = i * 0.15; // Each UFO starts 0.15s after the previous
             
             // Random duration between 3-5 seconds
             const duration = 3 + Math.random() * 2;
             
-            // Create spaceship element
-            const spaceship = $('<div class="spaceship">🚀</div>');
+            // Alternate between green and purple UFOs
+            const colorClass = i % 2 === 0 ? 'green' : 'purple';
+            
+            // Create UFO element
+            const spaceship = $('<div class="spaceship ' + colorClass + '">🛸</div>');
             spaceship.css({
                 'top': topPosition + '%',
                 'animation': `flyAcross ${duration}s ease-in-out ${delay}s forwards`
@@ -482,7 +493,7 @@ Version: v65 (displayed in header)
             $('#spaceship-container').append(spaceship);
         }
         
-        // Remove all spaceships after animation completes (longest duration + delay)
+        // Remove all UFOs after animation completes (longest duration + delay)
         setTimeout(function() {
             $('#spaceship-container').remove();
         }, 8000);

@@ -25,6 +25,24 @@
         background-color: #ececec;
     }
     
+    /* Internal category styling - purple */
+    .contract-budget-container .reusable-table tr.category-row.internal-category {
+        background-color: #e6d5f5;
+        color: #6f2da8;
+    }
+    
+    .contract-budget-container .reusable-table tr.category-row.internal-category:hover {
+        background-color: #d9c5ed;
+    }
+    
+    .contract-budget-container .reusable-table tr.item-row.internal-item {
+        color: #6f2da8;
+    }
+    
+    .contract-budget-container .reusable-table tr.item-row.internal-item td {
+        color: #6f2da8;
+    }
+    
     /* Item row indent */
     .contract-budget-container .reusable-table td.indent {
         padding-left: 30px;
@@ -210,8 +228,14 @@
         
         // Render each category and its items
         categories.forEach(function(category) {
+            // Check if this is the Internal category
+            var isInternal = category.category === 'Internal';
+            
             // Render category row
             var categoryRow = $('<tr class="category-row"></tr>');
+            if (isInternal) {
+                categoryRow.addClass('internal-category');
+            }
             categoryRow.append('<td><strong>' + escapeHtml(category.category) + '</strong></td>');
             categoryRow.append('<td class="budget-amount">-</td>');
             categoryRow.append('<td>-</td>');
@@ -232,6 +256,12 @@
             categoryItems.forEach(function(item) {
                 var itemRow = $('<tr class="item-row"></tr>');
                 
+                // Add internal-item class if this is an Internal category item
+                if (isInternal) {
+                    itemRow.addClass('internal-item');
+                    itemRow.attr('data-is-internal', 'true');
+                }
+                
                 // Category / Item column with indent
                 itemRow.append('<td class="indent">' + escapeHtml(item.item) + '</td>');
                 
@@ -241,32 +271,86 @@
                 budgetCell.text('$0.00');
                 itemRow.append(budgetCell);
                 
-                // Uncommitted column (editable input)
+                // Uncommitted column
                 var uncommittedCell = $('<td></td>');
-                var uncommittedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00">');
-                uncommittedInput.attr('data-item-pk', item.costing_pk);
-                uncommittedInput.on('input', function() {
-                    // Enforce 2 decimal places
-                    var value = $(this).val();
-                    if (value && value.indexOf('.') !== -1) {
-                        var parts = value.split('.');
-                        if (parts[1].length > 2) {
-                            $(this).val(parseFloat(value).toFixed(2));
-                        }
+                if (isInternal) {
+                    // For Internal items, show '-' (not editable)
+                    uncommittedCell.text('-');
+                    uncommittedCell.attr('data-item-pk', item.costing_pk);
+                } else {
+                    // For regular items, editable input
+                    var uncommittedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00">');
+                    uncommittedInput.attr('data-item-pk', item.costing_pk);
+                    
+                    // Set initial value from database (if exists, including 0)
+                    if (item.uncommitted !== undefined && item.uncommitted !== null) {
+                        uncommittedInput.val(parseFloat(item.uncommitted).toFixed(2));
                     }
-                    // Update Contract Budget and totals
-                    updateContractBudget(item.costing_pk);
-                    updateTotals();
-                });
-                uncommittedCell.append(uncommittedInput);
+                    
+                    uncommittedInput.on('input', function() {
+                        // Enforce 2 decimal places
+                        var value = $(this).val();
+                        if (value && value.indexOf('.') !== -1) {
+                            var parts = value.split('.');
+                            if (parts[1].length > 2) {
+                                $(this).val(parseFloat(value).toFixed(2));
+                            }
+                        }
+                        // Update Contract Budget and totals
+                        updateContractBudget(item.costing_pk);
+                        updateTotals();
+                    });
+                    
+                    // Blur event to save to backend
+                    uncommittedInput.on('blur', function() {
+                        var newUncommitted = parseFloat($(this).val()) || 0;
+                        saveUncommitted(item.costing_pk, newUncommitted);
+                    });
+                    
+                    uncommittedCell.append(uncommittedInput);
+                }
                 itemRow.append(uncommittedCell);
                 
-                // Committed column (read-only, from quote allocations)
+                // Committed column
                 var committedAmount = committedAmounts[item.costing_pk] || 0;
                 var committedCell = $('<td class="committed-amount"></td>');
                 committedCell.attr('data-item-pk', item.costing_pk);
                 committedCell.attr('data-committed-amount', committedAmount);
-                committedCell.text('$' + committedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                
+                if (isInternal) {
+                    // For Internal items, committed is editable via input
+                    var committedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="committed-input">');
+                    committedInput.attr('data-item-pk', item.costing_pk);
+                    committedInput.val(committedAmount > 0 ? committedAmount.toFixed(2) : '');
+                    committedInput.on('input', function() {
+                        // Enforce 2 decimal places
+                        var value = $(this).val();
+                        if (value && value.indexOf('.') !== -1) {
+                            var parts = value.split('.');
+                            if (parts[1].length > 2) {
+                                $(this).val(parseFloat(value).toFixed(2));
+                            }
+                        }
+                        // Update committed amount in data attribute
+                        var newCommitted = parseFloat($(this).val()) || 0;
+                        committedCell.attr('data-committed-amount', newCommitted);
+                        // Update Contract Budget and totals
+                        updateContractBudget(item.costing_pk);
+                        updateTotals();
+                    });
+                    
+                    // Blur event to save to backend
+                    committedInput.on('blur', function() {
+                        var newCommitted = parseFloat($(this).val()) || 0;
+                        saveInternalCommitted(item.costing_pk, newCommitted);
+                    });
+                    
+                    committedCell.append(committedInput);
+                } else {
+                    // For regular items, committed is read-only
+                    committedCell.text('$' + committedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                }
+                
                 itemRow.append(committedCell);
                 
                 tbody.append(itemRow);
@@ -281,13 +365,27 @@
     }
     
     function updateContractBudget(itemPk) {
-        // Get uncommitted value
-        var uncommittedInput = $('input[data-item-pk="' + itemPk + '"]');
-        var uncommitted = parseFloat(uncommittedInput.val()) || 0;
+        // Check if this is an Internal item
+        var itemRow = $('tr.item-row').filter(function() {
+            return $(this).find('[data-item-pk="' + itemPk + '"]').length > 0;
+        });
+        var isInternal = itemRow.attr('data-is-internal') === 'true';
         
-        // Get committed value from data attribute
-        var committedCell = $('td.committed-amount[data-item-pk="' + itemPk + '"]');
-        var committed = parseFloat(committedCell.attr('data-committed-amount')) || 0;
+        var uncommitted = 0;
+        var committed = 0;
+        
+        if (isInternal) {
+            // For Internal items: uncommitted is always 0, get committed from input value
+            var committedInput = $('input.committed-input[data-item-pk="' + itemPk + '"]');
+            committed = parseFloat(committedInput.val()) || 0;
+        } else {
+            // For regular items: get uncommitted from input, committed from data attribute
+            var uncommittedInput = $('input[type="number"][data-item-pk="' + itemPk + '"]').not('.committed-input');
+            uncommitted = parseFloat(uncommittedInput.val()) || 0;
+            
+            var committedCell = $('td.committed-amount[data-item-pk="' + itemPk + '"]');
+            committed = parseFloat(committedCell.attr('data-committed-amount')) || 0;
+        }
         
         // Calculate contract budget
         var contractBudget = uncommitted + committed;
@@ -307,14 +405,23 @@
         console.log('updateTotals: found', itemRows.length, 'item rows');
         
         itemRows.each(function() {
+            var isInternal = $(this).attr('data-is-internal') === 'true';
+            
             // Contract Budget - parse from text content
             var budgetText = $(this).find('.budget-amount').text().replace(/[$,]/g, '');
             var budgetAmount = parseFloat(budgetText) || 0;
             totalContractBudget += budgetAmount;
             
-            // Uncommitted - get from input value
-            var uncommittedValue = $(this).find('input[type="number"]').val();
-            var uncommittedAmount = parseFloat(uncommittedValue) || 0;
+            // Uncommitted - handle '-' as 0 for Internal items
+            var uncommittedAmount = 0;
+            if (isInternal) {
+                // Internal items show '-' in uncommitted, treat as 0
+                uncommittedAmount = 0;
+            } else {
+                // Regular items have input field
+                var uncommittedValue = $(this).find('input[type="number"]').val();
+                uncommittedAmount = parseFloat(uncommittedValue) || 0;
+            }
             totalUncommitted += uncommittedAmount;
             
             // Committed - parse from data attribute
@@ -328,6 +435,77 @@
         $('#tenderContentArea #totalContractBudget').text('$' + totalContractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
         $('#tenderContentArea #totalUncommitted').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
         $('#tenderContentArea #totalCommitted').text('$' + totalCommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+    }
+    
+    function saveUncommitted(itemPk, uncommittedAmount) {
+        if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+            console.error('No project selected');
+            return;
+        }
+        
+        console.log('Saving uncommitted amount:', itemPk, uncommittedAmount);
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                costing_pk: itemPk,
+                uncommitted: uncommittedAmount,
+                notes: ''
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Uncommitted amount saved successfully');
+                } else {
+                    console.error('Error saving uncommitted amount:', response.message);
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save uncommitted amount:', error);
+                var errorMessage = 'Failed to save uncommitted amount';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    function saveInternalCommitted(itemPk, committedAmount) {
+        if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+            console.error('No project selected');
+            return;
+        }
+        
+        console.log('Saving Internal item committed:', itemPk, committedAmount);
+        
+        $.ajax({
+            url: '/core/update_internal_committed/',
+            type: 'POST',
+            data: {
+                project_pk: window.currentTenderProject.pk,
+                item_pk: itemPk,
+                committed_amount: committedAmount
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Internal committed amount saved successfully');
+                } else {
+                    console.error('Error saving committed amount:', response.message);
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save committed amount:', error);
+                var errorMessage = 'Failed to save committed amount';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
     }
     
     function escapeHtml(text) {
