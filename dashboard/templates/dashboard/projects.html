@@ -793,7 +793,7 @@
                 
                 // Add overlay to darken/fade the background
                 if ($('#dynamicContentArea').find('.workspace-background-overlay').length === 0) {
-                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.7); pointer-events: none; z-index: 0;"></div>');
+                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.95); pointer-events: none; z-index: 0;"></div>');
                 }
             }
             
@@ -1153,8 +1153,31 @@
         
         // Delete a quote
         function deleteProjectQuote(quotePk) {
-            // TODO: Implement delete endpoint
-            alert('Delete functionality to be implemented');
+            $.ajax({
+                url: '/core/delete_quote/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    quote_pk: quotePk
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        console.log('Quote deleted successfully');
+                        // Reload quotes list
+                        loadProjectQuotes();
+                    } else {
+                        alert('Error deleting quote: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error deleting quote:', error);
+                    var errorMessage = 'Error deleting quote. Please try again.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    alert(errorMessage);
+                }
+            });
         }
         
         // Load the documents section view

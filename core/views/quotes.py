@@ -179,19 +179,32 @@ def update_quote(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 @csrf_exempt
 def delete_quote(request):
-    if request.method == 'DELETE':
+    if request.method in ['DELETE', 'POST']:
         data = json.loads(request.body)
+        
+        # Support both quote_pk and supplier_quote_number for backwards compatibility
+        quote_pk = data.get('quote_pk')
         supplier_quote_number = data.get('supplier_quote_number')
-        if not supplier_quote_number:
-            return JsonResponse({'status': 'fail', 'message': 'Supplier quote number is required'}, status=400)
+        
+        if not quote_pk and not supplier_quote_number:
+            return JsonResponse({'status': 'error', 'message': 'Quote PK or supplier quote number is required'}, status=400)
+        
         try:
-            quote = Quotes.objects.get(supplier_quote_number=supplier_quote_number)
+            if quote_pk:
+                quote = Quotes.objects.get(quotes_pk=quote_pk)
+            else:
+                quote = Quotes.objects.get(supplier_quote_number=supplier_quote_number)
         except Quotes.DoesNotExist:
-            return JsonResponse({'status': 'fail', 'message': 'Quote not found'}, status=404)
+            return JsonResponse({'status': 'error', 'message': 'Quote not found'}, status=404)
+        
+        quote_number = quote.supplier_quote_number
         quote.delete()
-        return JsonResponse({'status': 'success', 'message': 'Quote deleted successfully'})
+        
+        logger.info(f"Deleted quote {quote_number} (pk={quote_pk})")
+        
+        return JsonResponse({'status': 'success', 'message': f'Quote {quote_number} deleted successfully'})
     else:
-        return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 def get_quote_allocations(request, supplier_id):
     quote_allocations = Quote_allocations.objects.filter(
         quotes_pk__contact_pk_id=supplier_id
