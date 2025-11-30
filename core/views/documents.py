@@ -434,6 +434,58 @@ def rename_folder(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def rename_file(request):
+    """
+    Rename a file
+    
+    Expected POST data:
+    {
+        "file_pk": int,
+        "new_name": string
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        file_pk = data.get('file_pk')
+        new_name = data.get('new_name', '').strip()
+        
+        if not file_pk or not new_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File PK and new name are required'
+            }, status=400)
+        
+        # Get file
+        try:
+            doc_file = Document_files.objects.get(file_pk=file_pk)
+        except Document_files.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File not found'
+            }, status=404)
+        
+        old_name = doc_file.file_name
+        doc_file.file_name = new_name
+        doc_file.save()
+        
+        logger.info(f"Renamed file from '{old_name}' to '{new_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'File renamed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error renaming file: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error renaming file: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def delete_folder(request):
     """
     Delete a folder and all its contents

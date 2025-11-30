@@ -94,7 +94,7 @@ def commit_data(request):
                 amount = '0'
             Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)  
             uncommitted = allocation['uncommitted']
-            item.uncommitted = uncommitted
+            item.uncommitted_amount = uncommitted
             item.save()
         return JsonResponse({'status': 'success'})
 @csrf_exempt
@@ -142,9 +142,11 @@ def update_quote(request):
             # Delete existing allocations and create new ones
             Quote_allocations.objects.filter(quotes_pk=quote).delete()
             
+            # Check if construction project
+            is_construction = (quote.project and quote.project.project_type == 'construction')
+            
             for line_item in line_items:
                 item_pk = line_item.get('item')
-                amount = line_item.get('amount', 0)
                 notes = line_item.get('notes', '')
                 
                 if not item_pk:
@@ -152,13 +154,37 @@ def update_quote(request):
                 
                 try:
                     costing = Costing.objects.get(pk=item_pk)
-                    Quote_allocations.objects.create(
-                        quotes_pk=quote,
-                        item=costing,
-                        amount=amount,
-                        notes=notes
-                    )
-                    logger.info(f"Created allocation: Item {item_pk}, Amount {amount}")
+                    
+                    # Handle construction vs non-construction
+                    if is_construction:
+                        # Construction: save qty, unit, rate and calculate amount
+                        qty = Decimal(str(line_item.get('qty', 0)))
+                        unit = line_item.get('unit', '')
+                        rate = Decimal(str(line_item.get('rate', 0)))
+                        amount = qty * rate
+                        
+                        Quote_allocations.objects.create(
+                            quotes_pk=quote,
+                            item=costing,
+                            qty=qty,
+                            unit=unit,
+                            rate=rate,
+                            amount=amount,
+                            notes=notes
+                        )
+                        logger.info(f"Created construction allocation: Item {item_pk}, Qty {qty}, Rate {rate}, Amount {amount}")
+                    else:
+                        # Non-construction: use provided amount
+                        amount = line_item.get('amount', 0)
+                        
+                        Quote_allocations.objects.create(
+                            quotes_pk=quote,
+                            item=costing,
+                            amount=amount,
+                            notes=notes
+                        )
+                        logger.info(f"Created allocation: Item {item_pk}, Amount {amount}")
+                        
                 except Costing.DoesNotExist:
                     logger.error(f"Costing {item_pk} not found, skipping allocation")
                     continue
@@ -227,11 +253,21 @@ def update_uncommitted(request):
         data = json.loads(request.body)
         costing_pk = data.get('costing_pk')
         uncommitted = data.get('uncommitted')
-        notes = data.get('notes')  
+        notes = data.get('notes')
+        uncommitted_qty = data.get('uncommitted_qty')
+        uncommitted_rate = data.get('uncommitted_rate')
+        
         try:
             costing = Costing.objects.get(costing_pk=costing_pk)
-            costing.uncommitted = uncommitted
-            costing.uncommitted_notes = notes  
+            costing.uncommitted_amount = uncommitted
+            costing.uncommitted_notes = notes
+            
+            # Update qty and rate if provided (for construction projects)
+            if uncommitted_qty is not None:
+                costing.uncommitted_qty = uncommitted_qty
+            if uncommitted_rate is not None:
+                costing.uncommitted_rate = uncommitted_rate
+            
             costing.save()
             return JsonResponse({'status': 'success'})
         except Costing.DoesNotExist:
@@ -403,9 +439,10 @@ def save_project_quote(request):
             )
             
             # Create quote allocations
+            is_construction = (project.project_type == 'construction')
+            
             for item_data in line_items:
                 item_pk = item_data.get('item')
-                amount = item_data.get('amount')
                 notes = item_data.get('notes', '')
                 
                 try:
@@ -413,12 +450,33 @@ def save_project_quote(request):
                 except Costing.DoesNotExist:
                     raise Exception(f'Costing item with pk {item_pk} not found')
                 
-                Quote_allocations.objects.create(
-                    quotes_pk=quote,
-                    item=item,
-                    amount=amount,
-                    notes=notes
-                )
+                # Handle construction vs non-construction projects
+                if is_construction:
+                    # Construction: save qty, unit, rate and calculate amount
+                    qty = Decimal(str(item_data.get('qty', 0)))
+                    unit = item_data.get('unit', '')
+                    rate = Decimal(str(item_data.get('rate', 0)))
+                    amount = qty * rate
+                    
+                    Quote_allocations.objects.create(
+                        quotes_pk=quote,
+                        item=item,
+                        qty=qty,
+                        unit=unit,
+                        rate=rate,
+                        amount=amount,
+                        notes=notes
+                    )
+                else:
+                    # Non-construction: use provided amount
+                    amount = item_data.get('amount')
+                    
+                    Quote_allocations.objects.create(
+                        quotes_pk=quote,
+                        item=item,
+                        amount=amount,
+                        notes=notes
+                    )
             
             logger.info(f"Quote {quote.quotes_pk} created for project {project.project} with {len(line_items)} allocations")
             
@@ -470,14 +528,25 @@ def get_project_quotes(request, project_pk):
             # Get allocations
             allocations = []
             for allocation in quote.quote_allocations.all():
-                allocations.append({
+                alloc_data = {
                     'quote_allocations_pk': allocation.quote_allocations_pk,
                     'item_pk': allocation.item.costing_pk,
+                    'costing_pk': allocation.item.costing_pk,
                     'item_name': allocation.item.item,
                     'category': allocation.item.category.category if allocation.item.category else None,
                     'amount': str(allocation.amount),
                     'notes': allocation.notes or ''
-                })
+                }
+                
+                # Add construction-specific fields if they exist
+                if hasattr(allocation, 'qty') and allocation.qty is not None:
+                    alloc_data['qty'] = str(allocation.qty)
+                if hasattr(allocation, 'unit') and allocation.unit:
+                    alloc_data['unit'] = allocation.unit
+                if hasattr(allocation, 'rate') and allocation.rate is not None:
+                    alloc_data['rate'] = str(allocation.rate)
+                    
+                allocations.append(alloc_data)
             
             quote_info = {
                 'quotes_pk': quote.quotes_pk,
@@ -485,6 +554,10 @@ def get_project_quotes(request, project_pk):
                 'total_cost': str(quote.total_cost),
                 'supplier_name': quote.contact_pk.name if quote.contact_pk else 'Unknown',
                 'supplier_pk': quote.contact_pk.contact_pk if quote.contact_pk else None,
+                'supplier_email': quote.contact_pk.email if quote.contact_pk else '',
+                'supplier_first_name': quote.contact_pk.first_name if quote.contact_pk else '',
+                'supplier_last_name': quote.contact_pk.last_name if quote.contact_pk else '',
+                'supplier_contact_person': quote.contact_pk.contact_person if quote.contact_pk else '',
                 'pdf_url': quote.pdf.url if quote.pdf else None,
                 'allocations': allocations
             }
@@ -503,6 +576,86 @@ def get_project_quotes(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting quotes: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def get_quote_allocations_by_quotes(request):
+    """
+    Get all allocations for given quote IDs
+    
+    Expected POST data:
+    {
+        "quote_ids": [1, 2, 3, ...]
+    }
+    
+    Returns:
+    {
+        "status": "success",
+        "allocations": [
+            {
+                "quote_pk": int,
+                "item_pk": int,
+                "item_name": string,
+                "amount": decimal,
+                "notes": string
+            }
+        ]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        quote_ids = data.get('quote_ids', [])
+        
+        if not quote_ids:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No quote IDs provided'
+            }, status=400)
+        
+        # Fetch allocations for these quotes
+        allocations = Quote_allocations.objects.filter(
+            quotes_pk_id__in=quote_ids
+        ).select_related('item', 'quotes_pk').values(
+            'quote_allocations_pk',
+            'quotes_pk_id',
+            'item__costing_pk',
+            'item__item',
+            'amount',
+            'notes'
+        )
+        
+        # Format response
+        allocations_list = []
+        for alloc in allocations:
+            allocations_list.append({
+                'quote_allocation_pk': alloc['quote_allocations_pk'],
+                'quote_pk': alloc['quotes_pk_id'],
+                'item_pk': alloc['item__costing_pk'],
+                'item_name': alloc['item__item'],
+                'amount': str(alloc['amount']),
+                'notes': alloc['notes'] or ''
+            })
+        
+        logger.info(f"Retrieved {len(allocations_list)} allocations for {len(quote_ids)} quotes")
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocations': allocations_list
+        })
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in get_quote_allocations_by_quotes: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error getting quote allocations: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting allocations: {str(e)}'
         }, status=500)
 
 

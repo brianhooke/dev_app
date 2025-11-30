@@ -1,0 +1,421 @@
+<!-- Settings Section -->
+<div id="settingsSection" style="display: none; flex-direction: column; height: 100%;">
+<style>
+    .settings-container {
+        padding: 20px;
+        height: 100%;
+        overflow-y: auto;
+    }
+    
+    .settings-section {
+        margin-bottom: 30px;
+    }
+    
+    .settings-section h5 {
+        margin-bottom: 15px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    /* Compact form inputs for settings tables */
+    .settings-container .reusable-table input[type="text"],
+    .settings-container .reusable-table select {
+        width: 100%;
+        padding: 3px 5px;
+        font-size: 11px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .settings-add-btn {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    
+    .settings-add-btn.disabled {
+        background-color: #6c757d;
+        color: white;
+        cursor: not-allowed;
+    }
+    
+    .settings-add-btn.enabled {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .settings-add-btn.enabled:hover {
+        background-color: #218838;
+    }
+    
+    /* Units display table styling */
+    .settings-container .reusable-table tr.unit-row {
+        cursor: move;
+    }
+    
+    .settings-container .reusable-table tr.unit-row:hover {
+        background-color: #f5f5f5;
+    }
+    
+    /* Drag-and-drop styles */
+    .drag-over {
+        border-top: 3px solid #007bff !important;
+        background-color: #e3f2fd !important;
+    }
+    
+    /* Delete button styling */
+    .delete-unit-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 5px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .delete-unit-btn:hover {
+        opacity: 1;
+    }
+    
+    .delete-unit-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+</style>
+
+<div class="settings-container">
+    <!-- Add Unit Section -->
+    <div class="settings-section">
+        <h5>Add Unit</h5>
+        <table class="reusable-table">
+            <thead>
+                <tr>
+                    <th>Unit</th>
+                    <th>Order in List</th>
+                    <th>Add</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <input type="text" id="unitNameInput" maxlength="50" placeholder="Enter unit name">
+                    </td>
+                    <td>
+                        <select id="unitOrderSelect"></select>
+                    </td>
+                    <td>
+                        <button id="addUnitBtn" class="settings-add-btn disabled" disabled>Add</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Units Display Table -->
+    <div class="settings-section">
+        <h5>Existing Units</h5>
+        <table class="reusable-table" id="unitsDisplayTable">
+            <thead>
+                <tr>
+                    <th style="width: 70%;">Unit</th>
+                    <th style="width: 15%;">Order</th>
+                    <th style="width: 15%; text-align: center;">Delete</th>
+                </tr>
+            </thead>
+            <tbody id="unitsDisplayTableBody">
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">
+                        Loading units...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    console.log('Settings script loaded');
+    
+    var units = [];
+    
+    // Load units on page load
+    $(document).ready(function() {
+        loadUnits();
+    });
+    
+    // Enable/disable add button based on input
+    $('#unitNameInput').on('input', function() {
+        toggleAddButton();
+    });
+    
+    $('#unitOrderSelect').on('change', function() {
+        toggleAddButton();
+    });
+    
+    function toggleAddButton() {
+        var unitName = $('#unitNameInput').val().trim();
+        var orderSelected = $('#unitOrderSelect').val();
+        
+        if (unitName && orderSelected) {
+            $('#addUnitBtn').removeClass('disabled').addClass('enabled').prop('disabled', false);
+        } else {
+            $('#addUnitBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
+        }
+    }
+    
+    // Add unit button click
+    $('#addUnitBtn').on('click', function() {
+        if ($(this).hasClass('disabled')) return;
+        
+        var unitName = $('#unitNameInput').val().trim();
+        var orderInList = parseInt($('#unitOrderSelect').val());
+        
+        if (!unitName || !orderInList) {
+            alert('Please enter a unit name and select an order.');
+            return;
+        }
+        
+        // Send AJAX request to add unit
+        $.ajax({
+            url: '/add_unit/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                unit_name: unitName,
+                order_in_list: orderInList
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Clear inputs
+                    $('#unitNameInput').val('');
+                    $('#addUnitBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
+                    
+                    // Reload units
+                    loadUnits();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error adding unit:', error);
+                alert('Error adding unit. Please try again.');
+            }
+        });
+    });
+    
+    // Load units from backend
+    function loadUnits() {
+        $.ajax({
+            url: '/get_units/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    units = response.units;
+                    console.log('Loaded units:', units);
+                    renderUnitsTable();
+                    populateOrderDropdown();
+                } else {
+                    console.error('Error loading units:', response.message);
+                    // Still populate dropdown even on error
+                    units = [];
+                    renderUnitsTable();
+                    populateOrderDropdown();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading units:', error);
+                // Still populate dropdown even on error
+                units = [];
+                renderUnitsTable();
+                populateOrderDropdown();
+            }
+        });
+    }
+    
+    // Render units display table
+    function renderUnitsTable() {
+        var tbody = $('#unitsDisplayTableBody');
+        tbody.empty();
+        
+        if (units.length === 0) {
+            tbody.append('<tr><td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">No units yet. Add a unit to get started.</td></tr>');
+            return;
+        }
+        
+        // Sort by order_in_list
+        units.sort(function(a, b) {
+            return a.order_in_list - b.order_in_list;
+        });
+        
+        units.forEach(function(unit) {
+            var row = $('<tr class="unit-row"></tr>');
+            row.attr('data-unit-pk', unit.unit_pk);
+            row.attr('data-unit-order', unit.order_in_list);
+            row.attr('draggable', 'true');
+            
+            // Unit name
+            row.append('<td>' + escapeHtml(unit.unit_name) + '</td>');
+            
+            // Order
+            row.append('<td>' + unit.order_in_list + '</td>');
+            
+            // Delete button
+            var deleteCell = $('<td style="text-align: center;"></td>');
+            var deleteBtn = $('<button class="delete-unit-btn" title="Delete unit"></button>')
+                .attr('data-unit-pk', unit.unit_pk)
+                .attr('data-unit-name', unit.unit_name)
+                .text('✕');
+            deleteCell.append(deleteBtn);
+            row.append(deleteCell);
+            
+            tbody.append(row);
+        });
+        
+        // Attach drag-and-drop handlers
+        attachDragHandlers();
+    }
+    
+    // Populate order dropdown (1 to max+1)
+    function populateOrderDropdown() {
+        var select = $('#unitOrderSelect');
+        select.empty();
+        
+        var maxOrder = units.length;
+        
+        for (var i = 1; i <= maxOrder + 1; i++) {
+            select.append('<option value="' + i + '">' + i + '</option>');
+        }
+        
+        // Select last position by default
+        select.val(maxOrder + 1);
+    }
+    
+    // Drag-and-drop event handlers
+    var draggedElement = null;
+    
+    function attachDragHandlers() {
+        // Unit rows - draggable
+        $('.unit-row').on('dragstart', function(e) {
+            draggedElement = this;
+            $(this).css('opacity', '0.4');
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+        });
+        
+        $('.unit-row').on('dragend', function(e) {
+            $(this).css('opacity', '1');
+            $('.drag-over').removeClass('drag-over');
+        });
+        
+        $('.unit-row').on('dragover', function(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.originalEvent.dataTransfer.dropEffect = 'move';
+            
+            if ($(this)[0] !== draggedElement) {
+                $(this).addClass('drag-over');
+            }
+            return false;
+        });
+        
+        $('.unit-row').on('dragleave', function(e) {
+            $(this).removeClass('drag-over');
+        });
+        
+        $('.unit-row').on('drop', function(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            $(this).removeClass('drag-over');
+            
+            if (draggedElement !== this) {
+                var draggedUnitPk = $(draggedElement).attr('data-unit-pk');
+                var targetUnitOrder = parseInt($(this).attr('data-unit-order'));
+                
+                reorderUnit(draggedUnitPk, targetUnitOrder);
+            }
+            
+            return false;
+        });
+    }
+    
+    // Reorder unit via AJAX
+    function reorderUnit(unitPk, newOrder) {
+        $.ajax({
+            url: '/reorder_unit/' + unitPk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                new_order: newOrder
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Reload units to reflect new order
+                    loadUnits();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                var errorMessage = 'Failed to reorder unit';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    // Delete unit button click (using event delegation)
+    $(document).on('click', '.delete-unit-btn', function() {
+        var unitPk = $(this).data('unit-pk');
+        var unitName = $(this).data('unit-name');
+        
+        if (!confirm('Are you sure you want to delete the unit "' + unitName + '"?')) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/delete_unit/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                unit_pk: unitPk
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadUnits();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error deleting unit:', error);
+                alert('Error deleting unit. Please try again.');
+            }
+        });
+    });
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+})();
+</script>
+</div> <!-- End Settings Section -->

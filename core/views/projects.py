@@ -188,6 +188,9 @@ def get_projects(request):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
+                'manager': project.manager or '',
+                'manager_email': project.manager_email or '',
+                'contracts_admin_emails': project.contracts_admin_emails or '',
                 'background_url': background_url,
                 'project_status': project.project_status
             })
@@ -214,6 +217,9 @@ def update_project(request, project_pk):
     Expected POST data:
     - project_name: str (optional)
     - xero_sales_account: str (optional)
+    - manager: str (optional)
+    - manager_email: str (optional)
+    - contracts_admin_emails: str (optional)
     - background: file (optional)
     """
     try:
@@ -238,6 +244,25 @@ def update_project(request, project_pk):
         elif 'xero_sales_account' in request.POST:
             # Empty string provided, clear the field
             project.xero_sales_account = None
+        
+        # Update manager fields if provided
+        manager = request.POST.get('manager', '').strip()
+        if manager:
+            project.manager = manager
+        elif 'manager' in request.POST:
+            project.manager = None
+        
+        manager_email = request.POST.get('manager_email', '').strip()
+        if manager_email:
+            project.manager_email = manager_email
+        elif 'manager_email' in request.POST:
+            project.manager_email = None
+        
+        contracts_admin_emails = request.POST.get('contracts_admin_emails', '').strip()
+        if contracts_admin_emails:
+            project.contracts_admin_emails = contracts_admin_emails
+        elif 'contracts_admin_emails' in request.POST:
+            project.contracts_admin_emails = None
         
         # Handle background image upload if provided
         if 'background' in request.FILES:
@@ -294,6 +319,9 @@ def update_project(request, project_pk):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
+                'manager': project.manager or '',
+                'manager_email': project.manager_email or '',
+                'contracts_admin_emails': project.contracts_admin_emails or '',
                 'background_url': background_url,
                 'project_status': project.project_status
             }

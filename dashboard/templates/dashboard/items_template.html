@@ -64,11 +64,21 @@
         background-color: #218838;
     }
     
-    /* Category group header styling for items display table */
-    .items-right-panel .reusable-table .category-group-header {
+    
+    /* Category row styling (match Contract Budget) */
+    .items-right-panel .reusable-table tr.category-row {
         background-color: #f9f9f9;
         font-weight: 600;
         color: #495057;
+    }
+    
+    .items-right-panel .reusable-table tr.category-row:hover {
+        background-color: #ececec;
+    }
+    
+    /* Item row indent (match Contract Budget) */
+    .items-right-panel .reusable-table td.indent {
+        padding-left: 30px;
     }
     
     /* Drag-and-drop styles */
@@ -77,21 +87,27 @@
         background-color: #e3f2fd !important;
     }
     
-    .category-row:hover,
-    .item-row:hover {
+    .items-right-panel .reusable-table tr.item-row:hover {
         background-color: #f5f5f5;
     }
     
-    /* Internal category styling - purple */
-    .category-row.internal-category {
-        background-color: #e6d5f5 !important;
-        color: #6f2da8 !important;
-        cursor: default !important;
+    /* Internal category styling - purple (match Contract Budget) */
+    .items-right-panel .reusable-table tr.category-row.internal-category {
+        background-color: #e6d5f5;
+        color: #6f2da8;
+        cursor: default;
     }
     
-    .item-row.internal-item {
-        background-color: #f3ebf9 !important;
-        color: #6f2da8 !important;
+    .items-right-panel .reusable-table tr.category-row.internal-category:hover {
+        background-color: #d9c5ed;
+    }
+    
+    .items-right-panel .reusable-table tr.item-row.internal-item {
+        color: #6f2da8;
+    }
+    
+    .items-right-panel .reusable-table tr.item-row.internal-item td {
+        color: #6f2da8;
     }
     
     /* Delete button styling */
@@ -154,6 +170,7 @@
                 <thead>
                     <tr>
                         <th>Item</th>
+                        <th>Unit</th>
                         <th>Category</th>
                         <th>Order in List</th>
                         <th>Add</th>
@@ -163,6 +180,12 @@
                     <tr>
                         <td>
                             <input type="text" id="itemNameInput" maxlength="20" placeholder="Enter item name">
+                        </td>
+                        <td>
+                            <select id="itemUnitSelect">
+                                <option value="">Select unit...</option>
+                                <!-- Units will be loaded dynamically from database -->
+                            </select>
                         </td>
                         <td>
                             <select id="itemCategorySelect"></select>
@@ -211,13 +234,14 @@
         <table class="reusable-table">
             <thead>
                 <tr>
-                    <th style="width: 85%;">Category / Item</th>
+                    <th style="width: 70%;">Category / Item</th>
+                    <th style="width: 15%;">Unit</th>
                     <th style="width: 15%; text-align: center;">Delete</th>
                 </tr>
             </thead>
             <tbody id="itemsDisplayTableBody">
                 <tr>
-                    <td colspan="2" style="text-align: center; color: #6c757d; padding: 20px;">
+                    <td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">
                         No items yet. Add a category and items to get started.
                     </td>
                 </tr>

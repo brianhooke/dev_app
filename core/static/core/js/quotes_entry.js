@@ -19,9 +19,11 @@ var QuotesEntry = (function() {
     var onSaveCallback = null;
     var onCancelCallback = null;
     var projectPk = null;
+    var projectType = null;  // NEW: Track project type
     var isUpdateMode = false;
     var quoteId = null;
     var existingData = null;
+    var isConstructionProject = false;  // NEW: Flag for construction-specific behavior
     
     /**
      * Initialize quote entry form
@@ -34,6 +36,7 @@ var QuotesEntry = (function() {
      * @param {Array} options.suppliers - Array of supplier contacts
      * @param {Array} options.items - Array of project items
      * @param {number} options.projectPk - Project primary key for loading items if needed
+     * @param {string} options.projectType - Project type (NEW: for construction-specific behavior)
      */
     function init(options) {
         currentPdfUrl = options.pdfUrl;
@@ -42,10 +45,14 @@ var QuotesEntry = (function() {
         onSaveCallback = options.onSave || null;
         onCancelCallback = options.onCancel || null;
         projectPk = options.projectPk || null;
+        projectType = options.projectType || null;  // NEW
+        isConstructionProject = (projectType === 'construction');  // NEW
         isUpdateMode = options.isUpdate || false;
         quoteId = options.quoteId || null;
         existingData = options.existingData || null;
         
+        console.log('QuotesEntry init - Project Type:', projectType);
+        console.log('QuotesEntry init - Is Construction:', isConstructionProject);
         console.log('QuotesEntry init - Update mode:', isUpdateMode);
         if (isUpdateMode) {
             console.log('Existing data:', existingData);
@@ -103,6 +110,9 @@ var QuotesEntry = (function() {
      * Render the quote entry form
      */
     function renderQuoteForm() {
+        console.log('renderQuoteForm - isConstructionProject:', isConstructionProject);
+        console.log('renderQuoteForm - projectType:', projectType);
+        
         // Generate supplier dropdown options
         var selectHTML = '<select id="quoteSupplier" class="form-control">';
         if (typeof window.projectContacts !== 'undefined' && window.projectContacts.length > 0) {
@@ -121,29 +131,36 @@ var QuotesEntry = (function() {
                 <div style="width: 60%; height: 100%; overflow-y: auto; padding: 20px; border: 1px solid #ddd;">
                     <h5 style="margin-bottom: 15px;">Enter Quote</h5>
                     
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="quoteSupplier" style="font-size: 13px; margin-bottom: 4px;">Supplier:</label>
+                    <div class="form-group" style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                        <label for="quoteSupplier" style="font-size: 13px; margin: 0; min-width: 80px;">Supplier:</label>
                         ${selectHTML}
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="quoteTotalCost" style="font-size: 13px; margin-bottom: 4px;">Total Cost:</label>
+                    <div class="form-group" style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                        <label for="quoteTotalCost" style="font-size: 13px; margin: 0; min-width: 80px;">Total Cost:</label>
                         <input type="number" id="quoteTotalCost" class="form-control form-control-sm" step="0.01" min="0" placeholder="0.00" value="0.00">
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="quoteNumber" style="font-size: 13px; margin-bottom: 4px;">Quote #:</label>
+                    <div class="form-group" style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                        <label for="quoteNumber" style="font-size: 13px; margin: 0; min-width: 80px;">Quote #:</label>
                         <input type="text" id="quoteNumber" class="form-control form-control-sm" maxlength="255">
                     </div>
                     
                     <h6 style="margin-top: 15px; margin-bottom: 10px;">Line Items</h6>
                     <div style="overflow-x: auto;">
-                        <table id="quoteLineItemsTable" class="reusable-table">
+                        <table id="quoteLineItemsTable" class="reusable-table" style="font-size: 12px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 40%;">Item</th>
-                                    <th style="width: 20%;">Amount</th>
-                                    <th style="width: 35%;">Notes</th>
+                                    <th style="width: ${isConstructionProject ? '30%' : '40%'};">Item</th>
+                                    ${isConstructionProject ? `
+                                        <th style="width: 8%;">Unit</th>
+                                        <th style="width: 12%;">Qty</th>
+                                        <th style="width: 12%;">Rate</th>
+                                        <th style="width: 12%;">Amount</th>
+                                    ` : `
+                                        <th style="width: 20%;">Amount</th>
+                                    `}
+                                    <th style="width: ${isConstructionProject ? '21%' : '35%'};">Notes</th>
                                     <th style="width: 5%;"></th>
                                 </tr>
                             </thead>
@@ -166,7 +183,7 @@ var QuotesEntry = (function() {
                     
                     <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
                         <button id="quoteCancelBtn" class="btn btn-secondary btn-sm">Cancel</button>
-                        <button id="quoteSaveBtn" class="btn btn-secondary btn-sm" disabled>${isUpdateMode ? 'Update Quote' : 'Save Quote'}</button>
+                        <button id="quoteSaveBtn" class="btn ${isUpdateMode ? 'btn-warning' : 'btn-secondary'} btn-sm" disabled>${isUpdateMode ? 'Update Quote' : 'Save Quote'}</button>
                     </div>
                 </div>
                 
@@ -223,7 +240,11 @@ var QuotesEntry = (function() {
                 // Add line items
                 if (existingData.allocations && existingData.allocations.length > 0) {
                     existingData.allocations.forEach(function(alloc) {
-                        addLineItem(alloc.item, alloc.amount, alloc.notes || '');
+                        if (isConstructionProject) {
+                            addLineItem(alloc.item, alloc.qty || '', alloc.unit || '', alloc.rate || '', alloc.notes || '');
+                        } else {
+                            addLineItem(alloc.item, alloc.amount, alloc.notes || '');
+                        }
                     });
                 }
                 
@@ -288,10 +309,25 @@ var QuotesEntry = (function() {
     
     /**
      * Add a new line item row
+     * For construction projects: addLineItem(item, qty, unit, rate, notes)
+     * For other projects: addLineItem(item, amount, notes)
+     * Note: unit is auto-populated from Costing.unit and displayed as read-only
      */
-    function addLineItem(item = '', amount = '', notes = '') {
+    function addLineItem(item = '', arg2 = '', arg3 = '', arg4 = '', arg5 = '') {
         var tableBody = $('#quoteLineItemsTable tbody');
         var newRow = $('<tr></tr>');
+        
+        // Parse arguments based on project type
+        var qty, unit, rate, amount, notes;
+        if (isConstructionProject) {
+            qty = arg2;
+            unit = arg3;  // Stored hidden, auto-populated from item selection
+            rate = arg4;
+            notes = arg5;
+        } else {
+            amount = arg2;
+            notes = arg3;
+        }
         
         // Cell 0: Item dropdown
         var itemCell = $('<td></td>');
@@ -305,56 +341,138 @@ var QuotesEntry = (function() {
         if (window.itemsItems && window.itemsItems.length > 0) {
             window.itemsItems.forEach(function(costing) {
                 var selected = item === costing.item ? 'selected' : '';
+                var unitAttr = costing.unit ? 'data-unit="' + costing.unit + '"' : '';
                 itemSelect.append(
-                    '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '" ' + selected + '>' + costing.item + '</option>'
+                    '<option value="' + costing.item + '" data-costing-id="' + costing.costing_pk + '" ' + unitAttr + ' ' + selected + '>' + costing.item + '</option>'
                 );
             });
         }
         
-        // Validate on item selection change
-        itemSelect.on('change', validateQuote);
+        // Auto-populate unit on item selection (construction only)
+        if (isConstructionProject) {
+            itemSelect.on('change', function() {
+                var selectedOption = $(this).find('option:selected');
+                var costingUnit = selectedOption.attr('data-unit') || '';
+                var row = $(this).closest('tr');
+                
+                // Update both hidden input and visible display
+                row.find('.unit-input').val(costingUnit);
+                row.find('.unit-display').text(costingUnit || '-');
+                
+                validateQuote();
+            });
+        } else {
+            itemSelect.on('change', validateQuote);
+        }
         
         itemCell.append(itemSelect);
         newRow.append(itemCell);
         
-        // Cell 1: Amount input with 2dp validation
-        var amountCell = $('<td></td>');
-        var amountInput = $('<input>')
-            .attr('type', 'number')
-            .attr('step', '0.01')
-            .attr('placeholder', '0.00')
-            .addClass('form-control form-control-sm')
-            .css('width', '100%')
-            .val(amount ? parseFloat(amount).toFixed(2) : '');
-        
-        // Validate decimal places on input
-        amountInput.on('input', function(e) {
-            var value = e.target.value;
-            if (value.includes('.')) {
-                var parts = value.split('.');
-                if (parts[1].length > 2) {
-                    e.target.value = parseFloat(value).toFixed(2);
+        if (isConstructionProject) {
+            // CONSTRUCTION: Unit, Qty, Rate, Amount columns
+            
+            // Cell 1: Unit (read-only display)
+            var unitCell = $('<td></td>');
+            var unitDisplay = $('<span></span>')
+                .addClass('unit-display')
+                .css({'font-size': '13px', 'color': '#495057'})
+                .text(unit || '-');
+            unitCell.append(unitDisplay);
+            
+            // Hidden unit input (stores unit from Costing for backend)
+            var unitInput = $('<input>')
+                .attr('type', 'hidden')
+                .addClass('unit-input')
+                .val(unit || '');
+            unitCell.append(unitInput);
+            newRow.append(unitCell);
+            
+            // Cell 2: Qty input
+            var qtyCell = $('<td></td>');
+            var qtyInput = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .attr('placeholder', '0.00')
+                .addClass('form-control form-control-sm qty-input')
+                .css('width', '100%')
+                .val(qty ? parseFloat(qty).toFixed(2) : '');
+            qtyInput.on('input', function() {
+                updateRowAmount($(this).closest('tr'));
+                updateStillToAllocate();
+                validateQuote();
+            });
+            qtyCell.append(qtyInput);
+            newRow.append(qtyCell);
+            
+            // Cell 3: Rate input
+            var rateCell = $('<td></td>');
+            var rateInput = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .attr('placeholder', '0.00')
+                .addClass('form-control form-control-sm rate-input')
+                .css('width', '100%')
+                .val(rate ? parseFloat(rate).toFixed(2) : '');
+            rateInput.on('input', function() {
+                updateRowAmount($(this).closest('tr'));
+                updateStillToAllocate();
+                validateQuote();
+            });
+            rateCell.append(rateInput);
+            newRow.append(rateCell);
+            
+            // Cell 4: Amount (calculated, read-only)
+            var amountCell = $('<td></td>');
+            var amountDisplay = $('<input>')
+                .attr('type', 'text')
+                .attr('readonly', 'readonly')
+                .addClass('form-control form-control-sm amount-display')
+                .css({'width': '100%', 'background-color': '#e9ecef', 'cursor': 'not-allowed'})
+                .val('0.00');
+            amountCell.append(amountDisplay);
+            newRow.append(amountCell);
+            
+        } else {
+            // NON-CONSTRUCTION: Amount column only
+            
+            // Cell 1: Amount input with 2dp validation
+            var amountCell = $('<td></td>');
+            var amountInput = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .attr('placeholder', '0.00')
+                .addClass('form-control form-control-sm amount-input')
+                .css('width', '100%')
+                .val(amount ? parseFloat(amount).toFixed(2) : '');
+            
+            amountInput.on('input', function(e) {
+                var value = e.target.value;
+                if (value.includes('.')) {
+                    var parts = value.split('.');
+                    if (parts[1].length > 2) {
+                        e.target.value = parseFloat(value).toFixed(2);
+                    }
                 }
-            }
-            updateStillToAllocate();
-            validateQuote();
-        });
-        amountCell.append(amountInput);
-        newRow.append(amountCell);
+                updateStillToAllocate();
+                validateQuote();
+            });
+            amountCell.append(amountInput);
+            newRow.append(amountCell);
+        }
         
-        // Cell 2: Notes input with character limit
+        // Notes cell (all project types)
         var notesCell = $('<td></td>');
         var notesInput = $('<input>')
             .attr('type', 'text')
             .attr('maxlength', '100')
             .attr('placeholder', 'Notes (max 100 chars)')
-            .addClass('form-control form-control-sm')
+            .addClass('form-control form-control-sm notes-input')
             .css('width', '100%')
-            .val(notes);
+            .val(notes || '');
         notesCell.append(notesInput);
         newRow.append(notesCell);
         
-        // Cell 3: Delete button
+        // Delete button cell (all project types)
         var deleteCell = $('<td></td>').css('text-align', 'center');
         var deleteButton = $('<button></button>')
             .addClass('btn btn-sm btn-danger')
@@ -368,21 +486,43 @@ var QuotesEntry = (function() {
         newRow.append(deleteCell);
         
         tableBody.append(newRow);
+        
+        // Calculate initial amount for construction projects
+        if (isConstructionProject) {
+            updateRowAmount(newRow);
+        }
+        
         updateStillToAllocate();
         validateQuote();
     }
     
     /**
-     * Update still to allocate display
+     * Update calculated amount for a construction project line item
      */
+    function updateRowAmount(row) {
+        var qty = parseFloat(row.find('.qty-input').val()) || 0;
+        var rate = parseFloat(row.find('.rate-input').val()) || 0;
+        var amount = qty * rate;
+        var formattedAmount = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        row.find('.amount-display').val(formattedAmount);
+    }
+    
     function updateStillToAllocate() {
         var totalCost = parseFloat($('#quoteTotalCost').val()) || 0;
         var allocated = 0;
         
         $('#quoteLineItemsTable tbody tr').each(function() {
-            var amountInput = $(this).find('td:eq(1) input');
-            var amount = parseFloat(amountInput.val()) || 0;
-            allocated += amount;
+            if (isConstructionProject) {
+                // For construction: use calculated amount (qty * rate)
+                var amountDisplay = $(this).find('.amount-display');
+                var amount = parseFloat(amountDisplay.val().replace(/,/g, '')) || 0;
+                allocated += amount;
+            } else {
+                // For non-construction: use entered amount
+                var amountInput = $(this).find('.amount-input');
+                var amount = parseFloat(amountInput.val()) || 0;
+                allocated += amount;
+            }
         });
         
         var stillToAllocate = totalCost - allocated;
@@ -440,11 +580,8 @@ var QuotesEntry = (function() {
         var lineItemsValid = true;
         $('#quoteLineItemsTable tbody tr').each(function() {
             var itemSelect = $(this).find('td:eq(0) select');
-            var amountInput = $(this).find('td:eq(1) input');
-            
             var selectedOption = itemSelect.find('option:selected');
             var costingId = selectedOption.attr('data-costing-id');
-            var amount = parseFloat(amountInput.val()) || 0;
             
             // Check item selected
             if (!costingId || costingId === '') {
@@ -452,10 +589,26 @@ var QuotesEntry = (function() {
                 errors.push('All line items must have an item selected');
             }
             
-            // Check amount > 0
-            if (amount <= 0) {
-                lineItemsValid = false;
-                errors.push('All line items must have amount > 0');
+            // Check amount based on project type
+            var amount = 0;
+            if (isConstructionProject) {
+                var qty = parseFloat($(this).find('.qty-input').val()) || 0;
+                var rate = parseFloat($(this).find('.rate-input').val()) || 0;
+                amount = qty * rate;
+                
+                // Check qty > 0 and rate > 0
+                if (qty <= 0 || rate <= 0) {
+                    lineItemsValid = false;
+                    errors.push('All line items must have qty > 0 and rate > 0');
+                }
+            } else {
+                amount = parseFloat($(this).find('.amount-input').val()) || 0;
+                
+                // Check amount > 0
+                if (amount <= 0) {
+                    lineItemsValid = false;
+                    errors.push('All line items must have amount > 0');
+                }
             }
             
             // Track for duplicate check
@@ -478,9 +631,13 @@ var QuotesEntry = (function() {
         // Check still to allocate = 0
         var allocated = 0;
         $('#quoteLineItemsTable tbody tr').each(function() {
-            var amountInput = $(this).find('td:eq(1) input');
-            var amount = parseFloat(amountInput.val()) || 0;
-            allocated += amount;
+            if (isConstructionProject) {
+                var amount = parseFloat($(this).find('.amount-display').val()) || 0;
+                allocated += amount;
+            } else {
+                var amount = parseFloat($(this).find('.amount-input').val()) || 0;
+                allocated += amount;
+            }
         });
         var stillToAllocate = totalCost - allocated;
         if (Math.abs(stillToAllocate) >= 0.01) {
@@ -530,20 +687,29 @@ var QuotesEntry = (function() {
         var lineItems = [];
         $('#quoteLineItemsTable tbody tr').each(function() {
             var itemSelect = $(this).find('td:eq(0) select');
-            var amountInput = $(this).find('td:eq(1) input');
-            var notesInput = $(this).find('td:eq(2) input');
-            
             var selectedOption = itemSelect.find('option:selected');
             var costingId = selectedOption.attr('data-costing-id');
-            var amount = parseFloat(amountInput.val()) || 0;
+            var notesInput = $(this).find('.notes-input');
             var notes = notesInput.val();
             
             if (costingId) {
-                lineItems.push({
+                var lineItem = {
                     item: parseInt(costingId),
-                    amount: amount,
                     notes: notes
-                });
+                };
+                
+                if (isConstructionProject) {
+                    // For construction: send qty, unit, rate
+                    lineItem.qty = parseFloat($(this).find('.qty-input').val()) || 0;
+                    lineItem.unit = $(this).find('.unit-input').val() || '';
+                    lineItem.rate = parseFloat($(this).find('.rate-input').val()) || 0;
+                    // Amount will be calculated on backend as qty * rate
+                } else {
+                    // For non-construction: send amount
+                    lineItem.amount = parseFloat($(this).find('.amount-input').val()) || 0;
+                }
+                
+                lineItems.push(lineItem);
             }
         });
         

@@ -12,28 +12,30 @@ var DocumentsManager = (function() {
     var currentFolderId = null;
     var currentFileId = null;
     var selectedFolderId = null;
+    var containerSelector = null; // Container to scope all selectors
     
     /**
      * Initialize the documents manager
      */
     function init(options) {
         projectPk = options.projectPk;
+        containerSelector = options.containerSelector || '#tenderContentArea'; // Default to tender for backward compatibility
         
         if (!projectPk) {
             console.error('Project PK is required for Documents Manager');
             return;
         }
         
-        console.log('DocumentsManager initializing for project:', projectPk);
+        console.log('DocumentsManager initializing for project:', projectPk, 'in container:', containerSelector);
         
         // Wait for DOM to be ready
         setTimeout(function() {
             // Move modals to body level so Bootstrap can display them properly
-            // They're currently nested in #tenderContentArea which breaks modal display
-            if ($('#newFolderModal').length && !$('body > #newFolderModal').length) {
-                console.log('Moving modals to body level...');
-                var newFolderModal = $('#newFolderModal').detach();
-                var renameFolderModal = $('#renameFolderModal').detach();
+            // They're currently nested in the content area which breaks modal display
+            if ($(containerSelector + ' #newFolderModal').length && !$('body > #newFolderModal').length) {
+                console.log('Moving modals to body level from container:', containerSelector);
+                var newFolderModal = $(containerSelector + ' #newFolderModal').detach();
+                var renameFolderModal = $(containerSelector + ' #renameFolderModal').detach();
                 $('body').append(newFolderModal);
                 $('body').append(renameFolderModal);
                 
@@ -50,7 +52,7 @@ var DocumentsManager = (function() {
             // Attach event handlers
             attachEventHandlers();
             
-            console.log('DocumentsManager initialized');
+            console.log('DocumentsManager initialized for container:', containerSelector);
         }, 100);
     }
     
@@ -58,50 +60,49 @@ var DocumentsManager = (function() {
      * Attach all event handlers
      */
     function attachEventHandlers() {
-        console.log('Attaching event handlers...');
+        console.log('Attaching event handlers for container:', containerSelector);
         
-        // Check if button exists
-        var newFolderBtn = $('#newFolderBtn');
-        console.log('Found #newFolderBtn:', newFolderBtn.length > 0);
-        console.log('Button element:', newFolderBtn[0]);
+        // Check if button exists in this container
+        var newFolderBtn = $(containerSelector + ' #newFolderBtn');
+        console.log('Found #newFolderBtn in', containerSelector, ':', newFolderBtn.length > 0);
         
-        // Use event delegation from tenderContentArea to handle dynamically loaded content
-        // New Folder button
-        $(document).off('click', '#newFolderBtn').on('click', '#newFolderBtn', function(e) {
+        // Use event delegation from the specific container to handle dynamically loaded content
+        // New Folder button - scope to this container
+        $(containerSelector).off('click', '#newFolderBtn').on('click', '#newFolderBtn', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('New Folder button clicked');
+            console.log('New Folder button clicked in container:', containerSelector);
             showNewFolderModal();
         });
         
-        // Create Folder button in modal
+        // Create Folder button in modal (these are at body level, so no scoping needed)
         $(document).off('click', '#createFolderBtn').on('click', '#createFolderBtn', function() {
             createFolder();
         });
         
-        // Upload File button
-        $(document).off('click', '#uploadFileBtn').on('click', '#uploadFileBtn', function() {
+        // Upload File button - scope to container
+        $(containerSelector).off('click', '#uploadFileBtn').on('click', '#uploadFileBtn', function() {
             if (!selectedFolderId) {
                 alert('Please select a folder first');
                 return;
             }
-            $('#fileUploadInput').click();
+            $(containerSelector + ' #fileUploadInput').click();
         });
         
         // File input change - use direct binding since it's a file input
-        $(document).off('change', '#fileUploadInput').on('change', '#fileUploadInput', function(e) {
+        $(containerSelector).off('change', '#fileUploadInput').on('change', '#fileUploadInput', function(e) {
             uploadFiles(e.target.files);
         });
         
-        // Download file button
-        $(document).off('click', '#downloadFileBtn').on('click', '#downloadFileBtn', function() {
+        // Download file button - scope to container
+        $(containerSelector).off('click', '#downloadFileBtn').on('click', '#downloadFileBtn', function() {
             if (currentFileId) {
                 downloadFile(currentFileId);
             }
         });
         
-        // Delete file button
-        $(document).off('click', '#deleteFileBtn').on('click', '#deleteFileBtn', function() {
+        // Delete file button - scope to container
+        $(containerSelector).off('click', '#deleteFileBtn').on('click', '#deleteFileBtn', function() {
             if (currentFileId) {
                 deleteFile(currentFileId);
             }
@@ -158,11 +159,11 @@ var DocumentsManager = (function() {
      * Render the folder tree
      */
     function renderFolderTree() {
-        console.log('renderFolderTree called with', folders.length, 'folders');
+        console.log('renderFolderTree called with', folders.length, 'folders for container:', containerSelector);
         
-        // CRITICAL: Target the #folderTree that's in #tenderContentArea, not template storage
-        var treeContainer = $('#tenderContentArea #folderTree');
-        console.log('Found #folderTree container in tenderContentArea:', treeContainer.length > 0);
+        // CRITICAL: Target the #folderTree that's in the current container, not template storage
+        var treeContainer = $(containerSelector + ' #folderTree');
+        console.log('Found #folderTree container in', containerSelector, ':', treeContainer.length > 0);
         console.log('#folderTree is visible:', treeContainer.is(':visible'));
         console.log('#folderTree parent:', treeContainer.parent().attr('id'));
         console.log('#folderTree parent is visible:', treeContainer.parent().is(':visible'));
@@ -171,8 +172,8 @@ var DocumentsManager = (function() {
         
         // CRITICAL FIX: Ensure containers are visible
         // Need to force display with CSS, not just .show()
-        $('#tenderContentArea #documentsContainer').css('display', 'flex');
-        $('#tenderContentArea #folderTreeContainer').css('display', 'block');
+        $(containerSelector + ' #documentsContainer').css('display', 'flex');
+        $(containerSelector + ' #folderTreeContainer').css('display', 'block');
         treeContainer.css('display', 'block');
         
         // Also ensure all parents are visible (but NOT the template storage!)
@@ -314,7 +315,34 @@ var DocumentsManager = (function() {
         }
         
         var fileIcon = $('<i></i>').addClass('fa ' + icon + ' file-icon');
-        var fileName = $('<span></span>').text(file.file_name);
+        
+        // File name span (editable on double-click)
+        var fileName = $('<span></span>')
+            .addClass('file-name-text')
+            .text(file.file_name)
+            .attr('data-original-name', file.file_name)
+            .on('dblclick', function(e) {
+                e.stopPropagation();
+                makeFileNameEditable($(this), file.file_pk);
+            });
+        
+        // File actions container
+        var fileActions = $('<span></span>').addClass('file-actions');
+        
+        // Edit/Rename button for file
+        var editBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-warning')
+            .html('<i class="fa fa-edit"></i>')
+            .attr('title', 'Rename file')
+            .css({
+                'padding': '0 5px',
+                'font-size': '12px',
+                'margin-left': '3px'
+            })
+            .on('click', function(e) {
+                e.stopPropagation();
+                makeFileNameEditable(fileName, file.file_pk);
+            });
         
         // Delete button for file
         var deleteBtn = $('<button></button>')
@@ -322,30 +350,22 @@ var DocumentsManager = (function() {
             .html('<i class="fa fa-trash"></i>')
             .attr('title', 'Delete file')
             .css({
-                'float': 'right',
                 'padding': '0 5px',
                 'font-size': '12px',
-                'margin-left': '5px',
-                'opacity': '0',
-                'transition': 'opacity 0.2s'
+                'margin-left': '3px'
             })
             .on('click', function(e) {
                 e.stopPropagation();
                 deleteFile(file.file_pk);
             });
         
+        fileActions.append(editBtn).append(deleteBtn);
+        
         var fileSize = $('<span></span>')
             .addClass('file-size')
             .text(formatFileSize(file.file_size));
         
-        fileDiv.append(fileIcon).append(fileName).append(deleteBtn).append(fileSize);
-        
-        // Show delete button on hover
-        fileDiv.on('mouseenter', function() {
-            deleteBtn.css('opacity', '1');
-        }).on('mouseleave', function() {
-            deleteBtn.css('opacity', '0');
-        });
+        fileDiv.append(fileIcon).append(fileName).append(fileActions).append(fileSize);
         
         // Click handler to view file
         fileDiv.on('click', function() {
@@ -591,6 +611,88 @@ var DocumentsManager = (function() {
     }
     
     /**
+     * Make file name editable inline
+     */
+    function makeFileNameEditable(fileNameSpan, filePk) {
+        // If already editing, ignore
+        if (fileNameSpan.find('input').length > 0) {
+            return;
+        }
+        
+        var originalName = fileNameSpan.text();
+        var input = $('<input type="text">')
+            .val(originalName)
+            .css({
+                'width': '200px',
+                'font-size': '13px',
+                'padding': '2px 5px',
+                'border': '1px solid #007bff',
+                'border-radius': '3px'
+            })
+            .on('click', function(e) {
+                e.stopPropagation();
+            })
+            .on('blur', function() {
+                saveFileNameInline(fileNameSpan, filePk, originalName);
+            })
+            .on('keydown', function(e) {
+                if (e.which === 13) { // Enter
+                    e.preventDefault();
+                    $(this).blur();
+                } else if (e.which === 27) { // Escape
+                    e.preventDefault();
+                    fileNameSpan.text(originalName);
+                }
+            });
+        
+        fileNameSpan.empty().append(input);
+        input.focus().select();
+    }
+    
+    /**
+     * Save inline file name edit
+     */
+    function saveFileNameInline(fileNameSpan, filePk, originalName) {
+        var input = fileNameSpan.find('input');
+        if (input.length === 0) return;
+        
+        var newName = input.val().trim();
+        
+        // If empty or unchanged, revert
+        if (!newName || newName === originalName) {
+            fileNameSpan.text(originalName);
+            return;
+        }
+        
+        // Show saving indicator
+        fileNameSpan.text('Saving...');
+        
+        $.ajax({
+            url: '/core/rename_file/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                file_pk: filePk,
+                new_name: newName
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    fileNameSpan.text(newName);
+                    fileNameSpan.attr('data-original-name', newName);
+                } else {
+                    alert('Error renaming file: ' + response.message);
+                    fileNameSpan.text(originalName);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error renaming file:', error);
+                alert('Error renaming file. Please try again.');
+                fileNameSpan.text(originalName);
+            }
+        });
+    }
+    
+    /**
      * Delete folder prompt
      */
     function deleteFolderPrompt(folderId) {
@@ -689,12 +791,12 @@ var DocumentsManager = (function() {
         $('.file-item').removeClass('selected');
         $('.file-item[data-file-id="' + file.file_pk + '"]').addClass('selected');
         
-        // Update file info bar - target within tenderContentArea
-        var fileInfoBar = $('#tenderContentArea #fileInfoBar');
-        var currentFileName = $('#tenderContentArea #currentFileName');
-        var currentFileInfo = $('#tenderContentArea #currentFileInfo');
+        // Update file info bar - target within current container
+        var fileInfoBar = $(containerSelector + ' #fileInfoBar');
+        var currentFileName = $(containerSelector + ' #currentFileName');
+        var currentFileInfo = $(containerSelector + ' #currentFileInfo');
         
-        console.log('Found fileInfoBar:', fileInfoBar.length > 0);
+        console.log('Found fileInfoBar in', containerSelector, ':', fileInfoBar.length > 0);
         console.log('Found currentFileName:', currentFileName.length > 0);
         
         currentFileName.text(file.file_name);
@@ -705,9 +807,9 @@ var DocumentsManager = (function() {
         );
         fileInfoBar.show();
         
-        // Clear viewer - target within tenderContentArea
-        var viewer = $('#tenderContentArea #fileViewer');
-        console.log('Found fileViewer:', viewer.length > 0);
+        // Clear viewer - target within current container
+        var viewer = $(containerSelector + ' #fileViewer');
+        console.log('Found fileViewer in', containerSelector, ':', viewer.length > 0);
         viewer.empty();
         
         // Render based on file type

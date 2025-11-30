@@ -1,11 +1,12 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations, wipe_database
+from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations, wipe_database, view_po_by_unique_id
 from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, get_xero_accounts_by_instance, create_invoice_allocation, update_invoice_allocation, delete_invoice_allocation, update_invoice, null_allocation_xero_fields
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes, get_project_committed_amounts
-from .views.documents import get_project_folders, create_folder, rename_folder, delete_folder, upload_files, download_file, delete_file
+from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file
 from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
@@ -47,6 +48,7 @@ urlpatterns = [
     path('create_variation/', create_variation, name='create_variation'),
     path('send_test_email/', send_test_email_view, name='send_test_email'),
     path('get_quote_allocations/<int:supplier_id>/', views.get_quote_allocations, name='get_quote_allocations'),
+    path('get_quote_allocations/', views.get_quote_allocations_by_quotes, name='get_quote_allocations_by_quotes'),
     path('create_po_order/', create_po_order, name='create_po_order'),
     path('generate_po_pdf/<int:po_order_pk>/', generate_po_pdf, name='generate_po_pdf'),
     path('view_po_pdf/<int:po_order_pk>/', view_po_pdf, name='view_po_pdf'),
@@ -133,10 +135,15 @@ urlpatterns = [
     path('get_project_folders/<int:project_pk>/', get_project_folders, name='get_project_folders'),
     path('create_folder/', create_folder, name='create_folder'),
     path('rename_folder/', rename_folder, name='rename_folder'),
+    path('rename_file/', rename_file, name='rename_file'),
     path('delete_folder/', delete_folder, name='delete_folder'),
     path('upload_files/', upload_files, name='upload_files'),
     path('download_file/<int:file_pk>/', download_file, name='download_file'),
     path('delete_file/', delete_file, name='delete_file'),
+    
+    # PO public view - REDIRECT to top-level URL (backwards compatibility)
+    # Development can continue in core/views/pos.py with the view function
+    path('po/<str:unique_id>/', RedirectView.as_view(url='/po/%(unique_id)s/', permanent=True), name='view_po_by_unique_id_redirect'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

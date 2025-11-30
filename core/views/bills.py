@@ -376,7 +376,7 @@ def upload_invoice_allocations(request):
                         gst_amount=gst_amount,  
                         notes=notes
                     )
-                    item.uncommitted = uncommitted  
+                    item.uncommitted_amount = uncommitted  
                     item.save()
             invoice.invoice_status = 1
             invoice.save()

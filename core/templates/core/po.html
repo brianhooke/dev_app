@@ -1,0 +1,208 @@
+<!-- Purchase Orders Template -->
+{% load static %}
+
+<style>
+    .po-container {
+        height: 100%;
+        display: flex;
+        gap: 15px;
+    }
+    
+    .po-left-panel {
+        width: 50%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ddd;
+        overflow-y: auto;
+    }
+    
+    .po-suppliers-table {
+        width: 100%;
+    }
+    
+    .po-suppliers-table tbody tr {
+        cursor: pointer;
+    }
+    
+    .po-suppliers-table tbody tr:hover {
+        background-color: #f0f8ff;
+    }
+    
+    .po-suppliers-table tbody tr.selected {
+        background-color: #e3f2fd;
+    }
+    
+    .po-email-btn {
+        padding: 4px 8px;
+        font-size: 14px;
+    }
+    
+    .po-right-panel {
+        width: 50%;
+        height: 100%;
+        border: 1px solid #ddd;
+        background-color: #fff;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .po-viewer-footer {
+        display: none;
+        padding: 15px 30px;
+        background-color: #f8f9fa;
+        border-top: 1px solid #ddd;
+        flex-shrink: 0;
+        text-align: center;
+    }
+    
+    .po-viewer-footer.visible {
+        display: block;
+    }
+    
+    .po-viewer-content {
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    .po-document {
+        padding: 30px;
+        font-family: Arial, sans-serif;
+    }
+    
+    .po-document h2 {
+        text-align: center;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    
+    .po-document h3 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #666;
+        font-weight: normal;
+    }
+    
+    .po-placeholder {
+        width: 100%;
+        min-height: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        color: #6c757d;
+    }
+    
+    .po-viewer-content {
+        position: relative;
+    }
+    
+    .po-placeholder i {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+    
+    /* Reusable table styles - inline for PO section */
+    .reusable-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 12px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .reusable-table th {
+        padding: 6px 6px;
+        text-align: left;
+        font-weight: bold;
+        font-size: 14px;
+        background: var(--gradient-primary);
+        color: white;
+        white-space: nowrap;
+        line-height: 1.2;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .reusable-table thead tr:first-child th:first-child {
+        border-top-left-radius: 8px;
+    }
+    
+    .reusable-table thead tr:first-child th:last-child {
+        border-top-right-radius: 8px;
+    }
+    
+    .reusable-table tbody tr {
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s;
+    }
+    
+    .reusable-table tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .reusable-table td {
+        padding: 4px 6px;
+        border-bottom: 1px solid #e0e0e0;
+        line-height: 1.3;
+        vertical-align: middle;
+    }
+    
+    .reusable-table .btn-sm {
+        padding: 3px 8px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        min-height: 26px !important;
+        height: 26px !important;
+    }
+</style>
+
+<div class="po-container">
+    <!-- Left Panel: Suppliers Table -->
+    <div class="po-left-panel">
+        <table class="reusable-table po-suppliers-table">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Supplier</th>
+                    <th style="width: 13%;">First Name</th>
+                    <th style="width: 13%;">Last Name</th>
+                    <th style="width: 30%;">Email Address</th>
+                    <th style="width: 12%;">Update</th>
+                    <th style="width: 12%;">Email</th>
+                </tr>
+            </thead>
+            <tbody id="poSuppliersTableBody">
+                <tr>
+                    <td colspan="6" style="text-align: center; color: #6c757d; padding: 20px;">
+                        Loading suppliers...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Right Panel: PO Document Viewer -->
+    <div class="po-right-panel">
+        <!-- Viewer content area -->
+        <div class="po-viewer-content">
+            <div class="po-placeholder" id="poPlaceholder">
+                <i class="fa fa-file-invoice"></i>
+                <p>Click on a supplier to view purchase order</p>
+            </div>
+            <div id="poDocument" class="po-document" style="display: none;">
+                <!-- PO content will be generated here -->
+            </div>
+        </div>
+        
+        <!-- Footer with download button -->
+        <div class="po-viewer-footer" id="poViewerFooter">
+            <button class="btn btn-primary" id="downloadPOBtn">
+                <i class="fa fa-download"></i> Download PDF
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- No inline script needed - all logic handled in projects.html -->

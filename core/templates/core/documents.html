@@ -27,24 +27,6 @@
     
     <!-- Right side: File Viewer (60%) -->
     <div style="width: 60%; height: 100%; display: flex; flex-direction: column;">
-        <!-- File Info Bar -->
-        <div id="fileInfoBar" style="margin-bottom: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong id="currentFileName">No file selected</strong>
-                    <div id="currentFileInfo" style="font-size: 12px; color: #6c757d; margin-top: 5px;"></div>
-                </div>
-                <div>
-                    <button id="downloadFileBtn" class="btn btn-sm btn-primary" title="Download file">
-                        <i class="fa fa-download"></i> Download
-                    </button>
-                    <button id="deleteFileBtn" class="btn btn-sm btn-danger" title="Delete file">
-                        <i class="fa fa-trash"></i> Delete
-                    </button>
-                </div>
-            </div>
-        </div>
-        
         <!-- File Viewer -->
         <div id="fileViewer" style="flex: 1; border: 1px solid #ddd; background-color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             <div style="text-align: center; color: #6c757d;">
@@ -186,6 +168,31 @@
 
 .file-item.selected .file-size {
     color: #fff;
+}
+
+.file-item .file-actions {
+    float: right;
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-right: 5px;
+}
+
+.file-item:hover .file-actions {
+    opacity: 1;
+}
+
+.file-item .file-actions button {
+    padding: 0 5px;
+    font-size: 12px;
+    margin-left: 3px;
+}
+
+.file-item .file-name-text {
+    cursor: pointer;
+}
+
+.file-item .file-name-text:hover {
+    text-decoration: underline;
 }
 
 /* Ensure modals appear above backdrop */

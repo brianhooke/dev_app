@@ -124,6 +124,9 @@ class Projects(models.Model):
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
     project_status = models.IntegerField(default=0)  # 0=tender, 1=won_not_started, 2=started, 3=finished
+    manager = models.CharField(max_length=255, null=True, blank=True)
+    manager_email = models.CharField(max_length=255, null=True, blank=True)
+    contracts_admin_emails = models.CharField(max_length=500, null=True, blank=True)
     
     def __str__(self):
         return self.project
@@ -207,6 +210,19 @@ class Categories(models.Model):
     def __str__(self):
         return self.category
 
+# SERVICE: units
+class Units(models.Model):
+    unit_pk = models.AutoField(primary_key=True)
+    unit_name = models.CharField(max_length=50, unique=True)
+    order_in_list = models.IntegerField(unique=True)
+    
+    class Meta:
+        ordering = ['order_in_list']
+        verbose_name_plural = "Units"
+    
+    def __str__(self):
+        return self.unit_name
+
 # SERVICE: costings
 class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
@@ -216,7 +232,10 @@ class Costing(models.Model):
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0, default=1)
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
-    uncommitted = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.ForeignKey(Units, on_delete=models.SET_NULL, null=True, blank=True)
+    uncommitted_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    uncommitted_qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    uncommitted_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     uncommitted_notes = models.CharField(max_length=1000, null=True)
     fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
@@ -241,6 +260,9 @@ class Quote_allocations(models.Model):
     quotes_pk = models.ForeignKey(Quotes, on_delete=models.CASCADE, related_name='quote_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     notes = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
@@ -284,7 +306,7 @@ class Invoices(models.Model):
     # Replaced invoice_division with FK to Projects
     project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid.
+    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved but no invoice uploaded, 102 is approved and invoice uploaded.
     invoice_xero_id = models.CharField(max_length=255, null=True, blank=True)
     supplier_invoice_number = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
@@ -311,6 +333,9 @@ class Invoice_allocations(models.Model):
     invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE, related_name='invoice_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE, null=True, blank=True)  # Make nullable since we're using Xero accounts now
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.CharField(max_length=1000, null=True, blank=True)
     allocation_type = models.IntegerField(default=0, choices=[
@@ -378,6 +403,9 @@ class Hc_variation_allocations(models.Model):
     hc_variation = models.ForeignKey(Hc_variation, on_delete=models.CASCADE)
     costing = models.ForeignKey(Costing, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     notes = models.CharField(max_length=200, blank=True, null=True)
     
     def __str__(self):
@@ -395,6 +423,9 @@ class Contacts(models.Model):
     name = models.CharField(max_length=200)
     email = models.EmailField(max_length=254)
     status = models.CharField(max_length=200)
+    contact_person = models.CharField(max_length=200, blank=True, null=True)  # Legacy field - will be deprecated
+    first_name = models.CharField(max_length=100, blank=True, null=True)  # From Xero top-level FirstName
+    last_name = models.CharField(max_length=100, blank=True, null=True)  # From Xero top-level LastName
     bank_details = models.TextField(blank=True, null=True)  # Legacy field - keeping for reference
     bank_bsb = models.CharField(max_length=20, blank=True, null=True)
     bank_account_number = models.CharField(max_length=50, blank=True, null=True)
@@ -448,12 +479,14 @@ class Contacts(models.Model):
 class Po_orders(models.Model):
     po_order_pk = models.AutoField(primary_key=True)
     po_supplier = models.ForeignKey(Contacts, on_delete=models.CASCADE)
+    project = models.ForeignKey(Projects, on_delete=models.CASCADE, null=True, blank=True)
+    unique_id = models.CharField(max_length=64, unique=True, db_index=True, null=True, blank=True)  # UUID for shareable URL
+    pdf = models.FileField(upload_to='po_pdfs/', null=True, blank=True)  # Stored PDF for record keeping
     po_sent = models.BooleanField(default=False)
-    po_note_1 = models.CharField(max_length=1000)
-    po_note_2 = models.CharField(max_length=1000)
-    po_note_3 = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    
     def __str__(self):
-        return f"PO Order - PK: {self.pk}, PO Note 1: {self.po_note_1}, PO Note 2: {self.po_note_2}, PO Note 3: {self.po_note_3}"
+        return f"PO Order #{self.po_order_pk} - {self.po_supplier.name}" + (f" ({self.unique_id})" if self.unique_id else "")
 
 # SERVICE: pos
 class Po_order_detail(models.Model):
@@ -463,6 +496,9 @@ class Po_order_detail(models.Model):
     costing = models.ForeignKey(Costing, on_delete=models.CASCADE)
     quote = models.ForeignKey(Quotes, on_delete=models.CASCADE, null=True) #if quote is null, then it is a variation.
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=50, null=True, blank=True)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     variation_note = models.CharField(max_length=1000, null=True)
     def __str__(self):
         return f"PO Order Detail - PK: {self.po_order_detail_pk}, Date: {self.date}, Amount: {self.amount}, Variation_note: {self.variation_note}"

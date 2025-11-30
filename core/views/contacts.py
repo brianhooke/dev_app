@@ -178,25 +178,42 @@ def pull_xero_contacts(request, instance_pk):
         
         logger.info(f"Using tenant_id: {tenant_id} for instance: {xero_instance.xero_name}")
         
-        # Step 3: Fetch contacts from Xero API (includes archived contacts)
-        contacts_response = requests.get(
-            'https://api.xero.com/api.xro/2.0/Contacts?includeArchived=true',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            timeout=30
-        )
+        # Step 3: Fetch contacts from Xero API (includes archived contacts and contact persons)
+        # IMPORTANT: Using paging ensures ContactPersons field is populated
+        xero_contacts = []
+        page = 1
         
-        if contacts_response.status_code != 200:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
-            }, status=400)
+        while True:
+            logger.info(f"Fetching page {page} of contacts...")
+            contacts_response = requests.get(
+                f'https://api.xero.com/api.xro/2.0/Contacts?includeArchived=true&page={page}',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json',
+                    'Xero-tenant-id': tenant_id
+                },
+                timeout=30
+            )
+            
+            logger.info(f"Xero API request status: {contacts_response.status_code}")
+            
+            if contacts_response.status_code != 200:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
+                }, status=400)
+            
+            contacts_data = contacts_response.json()
+            page_contacts = contacts_data.get('Contacts', [])
+            
+            if not page_contacts:
+                break
+            
+            xero_contacts.extend(page_contacts)
+            logger.info(f"Fetched {len(page_contacts)} contacts from page {page}. Total so far: {len(xero_contacts)}")
+            page += 1
         
-        contacts_data = contacts_response.json()
-        xero_contacts = contacts_data.get('Contacts', [])
+        logger.info(f"Received {len(xero_contacts)} contacts from Xero API")
         
         # Step 4: Process contacts - insert new ones and update existing ones
         new_contacts_count = 0
@@ -210,6 +227,13 @@ def pull_xero_contacts(request, instance_pk):
             name = xero_contact.get('Name', '')
             email = xero_contact.get('EmailAddress', '')
             status = xero_contact.get('ContactStatus', '')
+            
+            # Extract first and last name from top-level fields
+            first_name = xero_contact.get('FirstName', '')
+            last_name = xero_contact.get('LastName', '')
+            
+            if first_name or last_name:
+                logger.info(f"Contact '{name}' - FirstName: '{first_name}', LastName: '{last_name}'")
             
             # Parse bank account details
             bank_account_details = xero_contact.get('BankAccountDetails', '')
@@ -247,6 +271,12 @@ def pull_xero_contacts(request, instance_pk):
                 if existing_contact.status != status:
                     existing_contact.status = status
                     updated = True
+                if existing_contact.first_name != first_name:
+                    existing_contact.first_name = first_name
+                    updated = True
+                if existing_contact.last_name != last_name:
+                    existing_contact.last_name = last_name
+                    updated = True
                 if existing_contact.bank_details != bank_details:
                     existing_contact.bank_details = bank_details
                     updated = True
@@ -275,6 +305,8 @@ def pull_xero_contacts(request, instance_pk):
                     name=name,
                     email=email,
                     status=status,
+                    first_name=first_name,
+                    last_name=last_name,
                     bank_details=bank_details,
                     bank_bsb=bank_bsb,
                     bank_account_number=bank_account_number,

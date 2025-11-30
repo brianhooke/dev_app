@@ -32,7 +32,7 @@ from io import BytesIO
 from django.core.files.storage import default_storage
 from datetime import datetime, date, timedelta
 import re
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.db import connection
 from collections import defaultdict
 from reportlab.lib.pagesizes import A4
@@ -306,3 +306,646 @@ def send_po_email_view(request):
             logger.error(f'Error in send_po_email_view: {e}')
             return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'Error', 'message': 'Invalid request method.'}, status=400)
+
+
+def view_po_by_unique_id(request, unique_id):
+    """
+    Public view for suppliers to access their PO via unique URL.
+    Displays payment schedule table for supplier to fill out.
+    """
+    try:
+        po_order = Po_orders.objects.get(unique_id=unique_id)
+        supplier = po_order.po_supplier
+        project = po_order.project
+        
+        # Check if construction project
+        is_construction = project.project_type == 'construction'
+        
+        # Get all quotes for this project and supplier
+        quotes = Quotes.objects.filter(
+            project=project,
+            contact_pk=supplier
+        ).prefetch_related('quote_allocations')
+        
+        # Group allocations by item
+        from collections import defaultdict
+        if is_construction:
+            # For construction: store unit separately
+            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None, 'unit': None})
+        else:
+            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None})
+        
+        for quote in quotes:
+            for allocation in quote.quote_allocations.all():
+                item_name = allocation.item.item
+                items_map[item_name]['amount'] += allocation.amount
+                items_map[item_name]['costing_pk'] = allocation.item.costing_pk
+                
+                # For construction projects, get unit from Costing
+                if is_construction and items_map[item_name]['unit'] is None:
+                    items_map[item_name]['unit'] = allocation.item.unit or '-'
+                
+                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+        
+        # Get previous approved claims (invoice_status = 102, approved AND invoice uploaded)
+        from core.models import Invoice_allocations, Invoices
+        completed_invoices = Invoices.objects.filter(
+            project=project,
+            contact_pk=supplier,
+            invoice_status=102
+        )
+        
+        # Calculate previous claims by item (only status 102)
+        previous_claims_by_item = defaultdict(Decimal)
+        for invoice in completed_invoices:
+            allocations = Invoice_allocations.objects.filter(invoice_pk=invoice)
+            for alloc in allocations:
+                if alloc.item:
+                    item_name = alloc.item.item
+                    # For construction: use amount if available, else qty * rate
+                    if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
+                        claim_amount = alloc.qty * alloc.rate
+                    else:
+                        claim_amount = alloc.amount or Decimal('0')
+                    previous_claims_by_item[item_name] += claim_amount
+        
+        # Check for pending claim (invoice_status = 100)
+        pending_invoice = Invoices.objects.filter(
+            project=project,
+            contact_pk=supplier,
+            invoice_status=100
+        ).first()
+        
+        # Check for approved claim awaiting invoice upload (invoice_status = 101)
+        approved_invoice = Invoices.objects.filter(
+            project=project,
+            contact_pk=supplier,
+            invoice_status=101
+        ).first()
+        
+        pending_claims_by_item = {}
+        approved_claims_by_item = {}
+        
+        if pending_invoice:
+            allocations = Invoice_allocations.objects.filter(invoice_pk=pending_invoice)
+            for alloc in allocations:
+                if alloc.item:
+                    item_name = alloc.item.item
+                    pending_claims_by_item[item_name] = float(alloc.amount)
+        
+        if approved_invoice:
+            allocations = Invoice_allocations.objects.filter(invoice_pk=approved_invoice)
+            for alloc in allocations:
+                if alloc.item:
+                    item_name = alloc.item.item
+                    approved_claims_by_item[item_name] = float(alloc.amount)
+        
+        # Convert to list
+        items = []
+        for item_name, data in items_map.items():
+            contract_sum = float(data['amount'])
+            previous_claims = float(previous_claims_by_item.get(item_name, Decimal('0')))
+            this_claim = pending_claims_by_item.get(item_name, 0.0) or approved_claims_by_item.get(item_name, 0.0)
+            still_to_claim = contract_sum - previous_claims - this_claim
+            
+            item_data = {
+                'description': item_name,
+                'costing_pk': data['costing_pk'],
+                'contract_sum': contract_sum,
+                'quote_numbers': ', '.join(data['quote_numbers']),
+                'complete_percent': 0.0,
+                'previous_claims': previous_claims,
+                'this_claim': this_claim,
+                'still_to_claim': still_to_claim,
+            }
+            
+            # Add unit for construction projects
+            if is_construction:
+                item_data['unit'] = data.get('unit', '-')
+            
+            items.append(item_data)
+        
+        context = {
+            'po_order': po_order,
+            'supplier': supplier,
+            'project': project,
+            'items': items,
+            'is_construction': is_construction,
+            'pending_invoice_pk': pending_invoice.invoice_pk if pending_invoice else None,
+            'approved_invoice_pk': approved_invoice.invoice_pk if approved_invoice else None,
+            'has_pending_claim': pending_invoice is not None,
+            'has_approved_claim': approved_invoice is not None,
+        }
+        
+        return render(request, 'core/po_public.html', context)
+        
+    except Po_orders.DoesNotExist:
+        return HttpResponse('Purchase Order not found', status=404)
+
+
+@csrf_exempt
+def approve_po_claim(request, unique_id):
+    """
+    Approve a pending progress claim for a PO.
+    Updates invoice_status from 100 to 101.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        import json
+        from core.models import Invoices
+        
+        po_order = Po_orders.objects.get(unique_id=unique_id)
+        supplier = po_order.po_supplier
+        project = po_order.project
+        
+        data = json.loads(request.body)
+        pending_invoice_pk = data.get('pending_invoice_pk')
+        
+        if not pending_invoice_pk:
+            return JsonResponse({'status': 'error', 'message': 'No pending invoice specified'}, status=400)
+        
+        # Get the pending invoice
+        try:
+            invoice = Invoices.objects.get(
+                invoice_pk=pending_invoice_pk,
+                project=project,
+                contact_pk=supplier,
+                invoice_status=100
+            )
+        except Invoices.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Pending invoice not found'}, status=404)
+        
+        # Update status to approved (but no invoice uploaded yet)
+        invoice.invoice_status = 101
+        invoice.save()
+        
+        logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.invoice_pk}")
+        
+        # Send notification email to supplier
+        if supplier.email:
+            # Build PO URL
+            po_url = request.build_absolute_uri(f'/po/{unique_id}/')
+            
+            # Get supplier contact details
+            first_name = supplier.first_name or ''
+            last_name = supplier.last_name or ''
+            
+            # Get project manager name
+            project_manager = project.manager or 'The Project Team'
+            
+            # Email subject
+            subject = f"Progress Claim Approved - {project.project}"
+            
+            # Plain text message
+            text_message = f"""
+Dear {first_name} {last_name},
+
+Your claim for {project.project} has been approved.
+
+Please upload your invoice promptly at the link below to ensure it is processed on time.
+
+{po_url}
+
+Regards,
+{project_manager}
+            """.strip()
+            
+            # HTML message
+            html_message = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #27ae60 0%, #229954 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .button {{ display: inline-block; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        .footer {{ text-align: center; margin-top: 20px; color: #999; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">✓ Progress Claim Approved</h2>
+        </div>
+        <div class="content">
+            <p>Dear {first_name} {last_name},</p>
+            
+            <p>Your claim for <strong>{project.project}</strong> has been approved.</p>
+            
+            <p>Please upload your invoice promptly to ensure it is processed on time.</p>
+            
+            <a href="{po_url}" class="button">Upload Invoice Now</a>
+            
+            <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                Or copy and paste this link into your browser:<br>
+                <a href="{po_url}">{po_url}</a>
+            </p>
+            
+            <p style="margin-top: 30px;">
+                Regards,<br>
+                <strong>{project_manager}</strong>
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from Mason Build</p>
+        </div>
+    </div>
+</body>
+</html>
+            """.strip()
+            
+            # Send email
+            try:
+                from_email = 'purchase_orders@mason.build'
+                email = EmailMultiAlternatives(subject, text_message, from_email, [supplier.email])
+                email.attach_alternative(html_message, "text/html")
+                email.send()
+                logger.info(f"Sent claim approval notification to: {supplier.email}")
+            except Exception as e:
+                logger.error(f"Error sending claim approval notification: {e}", exc_info=True)
+                # Don't fail the request if email fails
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Claim approved successfully',
+            'invoice_pk': invoice.invoice_pk
+        })
+        
+    except Po_orders.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error approving claim: {e}', exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def submit_po_claim(request, unique_id):
+    """
+    Submit or update a progress claim for a PO.
+    Creates/updates Invoice with status=100 and Invoice_allocations.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        import json
+        from datetime import date
+        from core.models import Invoice_allocations, Invoices, Costing
+        
+        po_order = Po_orders.objects.get(unique_id=unique_id)
+        supplier = po_order.po_supplier
+        project = po_order.project
+        
+        data = json.loads(request.body)
+        claims = data.get('claims', [])
+        pending_invoice_pk = data.get('pending_invoice_pk')
+        
+        if not claims:
+            return JsonResponse({'status': 'error', 'message': 'No claims provided'}, status=400)
+        
+        # Track if this is a resubmission
+        is_resubmission = False
+        
+        # Check if updating existing pending invoice or creating new
+        if pending_invoice_pk:
+            try:
+                invoice = Invoices.objects.get(
+                    invoice_pk=pending_invoice_pk,
+                    project=project,
+                    contact_pk=supplier,
+                    invoice_status=100
+                )
+                # This is a resubmission
+                is_resubmission = True
+                # Delete existing allocations to replace with new ones
+                Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
+            except Invoices.DoesNotExist:
+                # Pending invoice not found, create new
+                invoice = None
+        else:
+            invoice = None
+        
+        # Create new invoice if needed
+        if not invoice:
+            invoice = Invoices.objects.create(
+                project=project,
+                contact_pk=supplier,
+                invoice_status=100,  # Submitted awaiting approval
+                invoice_type=2,  # Progress Claim
+                invoice_date=date.today(),
+                total_net=Decimal('0'),
+                total_gst=Decimal('0')
+            )
+        
+        # Create invoice allocations
+        total_net = Decimal('0')
+        for claim in claims:
+            costing_pk = claim.get('costing_pk')
+            amount = Decimal(str(claim.get('amount', 0)))
+            
+            if amount > 0 and costing_pk:
+                try:
+                    costing = Costing.objects.get(costing_pk=costing_pk)
+                    Invoice_allocations.objects.create(
+                        invoice_pk=invoice,
+                        item=costing,
+                        amount=amount,
+                        gst_amount=Decimal('0.00'),
+                        allocation_type=0,
+                        notes='Payment claim submitted by contractor'
+                    )
+                    total_net += amount
+                except Costing.DoesNotExist:
+                    logger.warning(f"Costing {costing_pk} not found")
+                    continue
+        
+        # Update invoice totals
+        invoice.total_net = total_net
+        invoice.total_gst = Decimal('0.00')
+        invoice.save()
+        
+        logger.info(f"Progress claim submitted for PO {unique_id}, Invoice {invoice.invoice_pk}")
+        
+        # Send notification emails to contracts admin team
+        if project.contracts_admin_emails:
+            # Parse email addresses (semicolon-separated)
+            admin_emails = [email.strip() for email in project.contracts_admin_emails.split(';') if email.strip()]
+            
+            if admin_emails:
+                # Build PO URL
+                po_url = request.build_absolute_uri(f'/po/{unique_id}/')
+                
+                # Determine action text
+                action = "Resubmitted" if is_resubmission else "Submitted"
+                
+                # Email subject
+                subject = f"Progress Claim {action} - {supplier.name} - {project.project}"
+                
+                # Plain text message
+                text_message = f"""
+{supplier.name} has {action} a Progress Claim for Approval.
+
+Project: {project.project}
+Supplier: {supplier.name}
+Total Amount: ${total_net:,.2f}
+
+View and approve the claim here:
+{po_url}
+
+This is an automated notification from the Mason Build platform.
+                """.strip()
+                
+                # HTML message
+                html_message = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .button {{ display: inline-block; background: linear-gradient(135deg, #27ae60 0%, #229954 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        .details {{ background: white; padding: 15px; border-left: 4px solid #667eea; margin: 15px 0; }}
+        .footer {{ text-align: center; margin-top: 20px; color: #999; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">Progress Claim {action}</h2>
+        </div>
+        <div class="content">
+            <p><strong>{supplier.name}</strong> has {action.lower()} a progress claim for approval.</p>
+            
+            <div class="details">
+                <p><strong>Project:</strong> {project.project}</p>
+                <p><strong>Supplier:</strong> {supplier.name}</p>
+                <p><strong>Total Amount:</strong> ${total_net:,.2f}</p>
+            </div>
+            
+            <p>Click the button below to view and approve the claim:</p>
+            
+            <a href="{po_url}" class="button">View & Approve Claim</a>
+            
+            <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                Or copy and paste this link into your browser:<br>
+                <a href="{po_url}">{po_url}</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from Mason Build</p>
+        </div>
+    </div>
+</body>
+</html>
+                """.strip()
+                
+                # Send email
+                try:
+                    from_email = 'purchase_orders@mason.build'
+                    email = EmailMultiAlternatives(subject, text_message, from_email, admin_emails)
+                    email.attach_alternative(html_message, "text/html")
+                    email.send()
+                    logger.info(f"Sent progress claim notification to: {', '.join(admin_emails)}")
+                except Exception as e:
+                    logger.error(f"Error sending progress claim notification: {e}", exc_info=True)
+                    # Don't fail the request if email fails
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Claim submitted for approval',
+            'invoice_pk': invoice.invoice_pk
+        })
+        
+    except Po_orders.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error submitting claim: {e}', exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def upload_invoice_pdf(request, unique_id):
+    """
+    Upload invoice PDF for an approved claim.
+    Updates invoice_status from 101 to 102.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        from core.models import Invoices
+        
+        po_order = Po_orders.objects.get(unique_id=unique_id)
+        supplier = po_order.po_supplier
+        project = po_order.project
+        
+        # Get the approved invoice (status 101)
+        try:
+            invoice = Invoices.objects.get(
+                project=project,
+                contact_pk=supplier,
+                invoice_status=101
+            )
+        except Invoices.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'No approved claim awaiting invoice upload'}, status=404)
+        
+        # Check if PDF file was uploaded
+        if 'invoice_pdf' not in request.FILES:
+            return JsonResponse({'status': 'error', 'message': 'No PDF file provided'}, status=400)
+        
+        pdf_file = request.FILES['invoice_pdf']
+        
+        # Validate file type
+        if not pdf_file.name.lower().endswith('.pdf'):
+            return JsonResponse({'status': 'error', 'message': 'Only PDF files are allowed'}, status=400)
+        
+        # Save the PDF
+        invoice.pdf = pdf_file
+        invoice.invoice_status = 102  # Approved and invoice uploaded
+        invoice.save()
+        
+        logger.info(f"Invoice PDF uploaded for PO {unique_id}, Invoice {invoice.invoice_pk}, status updated to 102")
+        
+        # Send notification emails to contracts admin team
+        if project.contracts_admin_emails:
+            # Parse email addresses (semicolon-separated)
+            admin_emails = [email.strip() for email in project.contracts_admin_emails.split(';') if email.strip()]
+            
+            if admin_emails:
+                # Build PO URL
+                po_url = request.build_absolute_uri(f'/po/{unique_id}/')
+                
+                # Email subject
+                subject = f"Invoice Uploaded - {supplier.name} - {project.project}"
+                
+                # Plain text message
+                text_message = f"""
+Invoice Uploaded for Progress Claim
+
+{supplier.name} has uploaded their invoice for the approved progress claim.
+
+Project: {project.project}
+Supplier: {supplier.name}
+Invoice Amount: ${invoice.total_net:,.2f}
+
+You can review the invoice and claim details here:
+{po_url}
+
+This is an automated notification from the Mason Build platform.
+                """.strip()
+                
+                # HTML message
+                html_message = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .button {{ display: inline-block; background: linear-gradient(135deg, #27ae60 0%, #229954 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        .details {{ background: white; padding: 15px; border-left: 4px solid #3498db; margin: 15px 0; }}
+        .footer {{ text-align: center; margin-top: 20px; color: #999; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">📄 Invoice Uploaded</h2>
+        </div>
+        <div class="content">
+            <p><strong>{supplier.name}</strong> has uploaded their invoice for the approved progress claim.</p>
+            
+            <div class="details">
+                <p><strong>Project:</strong> {project.project}</p>
+                <p><strong>Supplier:</strong> {supplier.name}</p>
+                <p><strong>Invoice Amount:</strong> ${invoice.total_net:,.2f}</p>
+            </div>
+            
+            <p>You can review the invoice and claim details by clicking the button below:</p>
+            
+            <a href="{po_url}" class="button">Review Invoice & Claim</a>
+            
+            <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                Or copy and paste this link into your browser:<br>
+                <a href="{po_url}">{po_url}</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from Mason Build</p>
+        </div>
+    </div>
+</body>
+</html>
+                """.strip()
+                
+                # Send email
+                try:
+                    from_email = 'purchase_orders@mason.build'
+                    email = EmailMultiAlternatives(subject, text_message, from_email, admin_emails)
+                    email.attach_alternative(html_message, "text/html")
+                    email.send()
+                    logger.info(f"Sent invoice upload notification to: {', '.join(admin_emails)}")
+                except Exception as e:
+                    logger.error(f"Error sending invoice upload notification: {e}", exc_info=True)
+                    # Don't fail the request if email fails
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Invoice uploaded successfully',
+            'invoice_pk': invoice.invoice_pk
+        })
+        
+    except Po_orders.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error uploading invoice PDF: {e}', exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def view_po_pdf_by_unique_id(request, unique_id):
+    """
+    Serve the saved PDF for a PO by unique_id.
+    Used in iframe on the public landing page.
+    Returns the most recent PDF (by created_at) for this supplier/project.
+    """
+    try:
+        po_order = Po_orders.objects.get(unique_id=unique_id)
+        supplier = po_order.po_supplier
+        project = po_order.project
+        
+        # Get the most recent Po_orders for this supplier and project
+        most_recent_po = Po_orders.objects.filter(
+            po_supplier=supplier,
+            project=project,
+            pdf__isnull=False
+        ).order_by('-created_at').first()
+        
+        if not most_recent_po or not most_recent_po.pdf:
+            return HttpResponse('PDF not found', status=404)
+        
+        # Serve the saved PDF file
+        try:
+            # Open and read the file
+            pdf_file = most_recent_po.pdf.open('rb')
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{most_recent_po.pdf.name.split("/")[-1]}"'
+            pdf_file.close()
+            return response
+        except Exception as e:
+            logger.error(f'Error reading PDF file: {e}', exc_info=True)
+            return HttpResponse('Error reading PDF file', status=500)
+        
+    except Po_orders.DoesNotExist:
+        return HttpResponse('Purchase Order not found', status=404)
+    except Exception as e:
+        logger.error(f'Error serving PO PDF: {e}', exc_info=True)
+        return HttpResponse(f'Error: {str(e)}', status=500)

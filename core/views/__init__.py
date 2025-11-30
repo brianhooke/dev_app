@@ -11,7 +11,7 @@ from .main import main, homepage_view, build_view
 # Quote views
 from .quotes import (
     commit_data, update_quote, delete_quote, get_quote_allocations,
-    update_uncommitted, get_quotes_by_supplier
+    update_uncommitted, get_quotes_by_supplier, get_quote_allocations_by_quotes
 )
 
 # Bill/Invoice views
@@ -24,7 +24,7 @@ from .bills import (
 # PO views
 from .pos import (
     create_po_order, generate_po_pdf, view_po_pdf, wrap_text,
-    send_po_email, generate_po_pdf_bytes, send_po_email_view
+    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_invoice_pdf
 )
 
 # Claims views

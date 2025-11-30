@@ -421,7 +421,7 @@ def post_direct_cost_data(request):
                 continue
             costing_obj = Costing.objects.get(pk=item_pk)
             if uncommitted_new is not None:
-                costing_obj.uncommitted = uncommitted_new
+                costing_obj.uncommitted_amount = uncommitted_new
                 costing_obj.save()
             new_alloc = Invoice_allocations.objects.create(
                 invoice_pk=invoice,

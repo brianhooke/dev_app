@@ -33,16 +33,25 @@ import json
 import logging
 import requests
 import csv
+import uuid
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing
+from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing, Quotes, Quote_allocations, Po_orders
 from decimal import Decimal
 from datetime import date
-from io import StringIO, TextIOWrapper
+from io import StringIO, TextIOWrapper, BytesIO
+from django.core.files.base import ContentFile
+from django.core.mail import EmailMessage, EmailMultiAlternatives
+from django.template.loader import render_to_string
+from xhtml2pdf import pisa
+try:
+    from PyPDF2 import PdfMerger, PdfReader
+except ImportError:
+    from pypdf import PdfMerger, PdfReader
 # Import helpers from core.views.xero
 from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
 # Import validators
@@ -84,10 +93,12 @@ def dashboard_view(request):
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True},
         {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
         {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
+        {'divider': True},
+        {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings'},
     ]
     
     # Contacts table configuration
-    contacts_columns = ["Name", "Email Address", "BSB", "Account Number", "ABN", "Verify", "Update"]
+    contacts_columns = ["Name", "First Name", "Last Name", "Email Address", "BSB", "Account Number", "ABN", "Verify", "Update"]
     contacts_rows = []  # No data for now
     
     # Get XeroInstances for dropdown
@@ -197,29 +208,46 @@ def pull_xero_contacts(request, instance_pk):
         logger.info(f"Using tenant_id: {tenant_id} for instance: {xero_instance.xero_name}")
         
         # Step 3: Fetch contacts from Xero API (includes archived contacts)
-        contacts_response = requests.get(
-            'https://api.xero.com/api.xro/2.0/Contacts?includeArchived=true',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            timeout=30
-        )
+        # IMPORTANT: Using paging ensures ContactPersons field is populated
+        # Without paging, Xero only returns subset of fields
+        xero_contacts = []
+        page = 1
         
-        if contacts_response.status_code != 200:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
-            }, status=400)
+        while True:
+            logger.info(f"Fetching page {page} of contacts...")
+            contacts_response = requests.get(
+                f'https://api.xero.com/api.xro/2.0/Contacts?includeArchived=true&page={page}',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json',
+                    'Xero-tenant-id': tenant_id
+                },
+                timeout=30
+            )
+            
+            if contacts_response.status_code != 200:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Failed to fetch contacts from Xero: {contacts_response.status_code}'
+                }, status=400)
+            
+            contacts_data = contacts_response.json()
+            page_contacts = contacts_data.get('Contacts', [])
+            
+            if not page_contacts:
+                break  # No more contacts
+            
+            xero_contacts.extend(page_contacts)
+            logger.info(f"Fetched {len(page_contacts)} contacts from page {page}. Total so far: {len(xero_contacts)}")
+            page += 1
         
-        contacts_data = contacts_response.json()
-        xero_contacts = contacts_data.get('Contacts', [])
+        logger.info(f"Received {len(xero_contacts)} contacts from Xero API")
         
         # Step 4: Process contacts - insert new ones and update existing ones
         new_contacts_count = 0
         updated_contacts_count = 0
         unchanged_contacts_count = 0
+        contact_person_updates = 0  # Track contact_person field updates
         
         for xero_contact in xero_contacts:
             contact_id = xero_contact.get('ContactID')
@@ -228,6 +256,17 @@ def pull_xero_contacts(request, instance_pk):
             name = xero_contact.get('Name', '')
             email = xero_contact.get('EmailAddress', '')
             status = xero_contact.get('ContactStatus', '')
+            
+            # Extract first and last name from top-level fields
+            first_name = xero_contact.get('FirstName', '')
+            last_name = xero_contact.get('LastName', '')
+            
+            # Special logging for the specific contact the user mentioned
+            if contact_id == '8be41fd0-1cd9-46a9-9904-6bd765130e07':
+                logger.info(f"🔍 TARGET CONTACT '{name}' - FirstName: '{first_name}', LastName: '{last_name}'")
+            
+            if first_name or last_name:
+                logger.info(f"Contact '{name}' (ID: {contact_id[:8]}...) - FirstName: '{first_name}', LastName: '{last_name}'")
             
             # Parse bank account details
             bank_account_details = xero_contact.get('BankAccountDetails', '')
@@ -254,11 +293,19 @@ def pull_xero_contacts(request, instance_pk):
             try:
                 existing_contact = Contacts.objects.get(xero_contact_id=contact_id)
                 
+                # Log existing first/last name for target contact
+                if contact_id == '8be41fd0-1cd9-46a9-9904-6bd765130e07':
+                    logger.info(f"🔍 TARGET CONTACT - DB first_name before: '{existing_contact.first_name}'")
+                    logger.info(f"🔍 TARGET CONTACT - DB last_name before: '{existing_contact.last_name}'")
+                    logger.info(f"🔍 TARGET CONTACT - New first_name: '{first_name}', last_name: '{last_name}'")
+                
                 # Compare and update if any field has changed
                 fields_to_update = {
                     'name': name,
                     'email': email,
                     'status': status,
+                    'first_name': first_name,
+                    'last_name': last_name,
                     'bank_details': bank_details,
                     'bank_bsb': bank_bsb,
                     'bank_account_number': bank_account_number,
@@ -266,10 +313,19 @@ def pull_xero_contacts(request, instance_pk):
                 }
                 
                 updated = False
+                changed_fields = []
                 for field, value in fields_to_update.items():
-                    if getattr(existing_contact, field) != value:
+                    current_value = getattr(existing_contact, field)
+                    if current_value != value:
                         setattr(existing_contact, field, value)
                         updated = True
+                        changed_fields.append(field)
+                        
+                        # Special logging for first_name/last_name changes
+                        if field in ['first_name', 'last_name']:
+                            logger.info(f"✅ Contact '{name}' - {field} UPDATED from '{current_value}' to '{value}'")
+                            if field == 'first_name' or field == 'last_name':
+                                contact_person_updates += 1
                 
                 if updated:
                     existing_contact.save()
@@ -286,6 +342,8 @@ def pull_xero_contacts(request, instance_pk):
                     name=name,
                     email=email,
                     status=status,
+                    first_name=first_name,
+                    last_name=last_name,
                     bank_details=bank_details,
                     bank_bsb=bank_bsb,
                     bank_account_number=bank_account_number,
@@ -295,6 +353,8 @@ def pull_xero_contacts(request, instance_pk):
                 new_contacts_count += 1
                 logger.info(f"Created new contact: {name} (ID: {contact_id})")
         
+        logger.info(f"📊 CONTACT NAME SUMMARY: {contact_person_updates} first_name/last_name fields updated")
+        
         return JsonResponse({
             'status': 'success',
             'message': f'Successfully pulled contacts from Xero',
@@ -302,7 +362,8 @@ def pull_xero_contacts(request, instance_pk):
                 'total_xero_contacts': len(xero_contacts),
                 'new_contacts_added': new_contacts_count,
                 'contacts_updated': updated_contacts_count,
-                'contacts_unchanged': unchanged_contacts_count
+                'contacts_unchanged': unchanged_contacts_count,
+                'contact_person_updates': contact_person_updates
             }
         })
     
@@ -332,6 +393,8 @@ def get_contacts_by_instance(request, instance_pk):
                     'xero_instance_id': contact.xero_instance_id,
                     'xero_contact_id': contact.xero_contact_id,
                     'name': contact.name,
+                    'first_name': contact.first_name or '',
+                    'last_name': contact.last_name or '',
                     'email': contact.email,
                     'status': contact.status,
                     'bank_bsb': contact.bank_bsb,
@@ -475,14 +538,19 @@ def create_contact(request, instance_pk):
 @handle_xero_request_errors
 def update_contact_details(request, instance_pk, contact_pk):
     """
-    Update a contact's bank details and tax number in Xero using OAuth2 tokens.
+    Update a contact's details in Xero using OAuth2 tokens.
+    Accepts flexible data - can update just name/first_name/last_name/email (from PO table)
+    or full contact details including bank info (from Contacts modal).
     """
     if request.method == 'POST':
         data = json.loads(request.body)
+        name = data.get('name', '')  # Optional: Supplier name (used by PO table)
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
         email = data.get('email', '')
-        bsb = data.get('bsb', '')
-        account_number = data.get('account_number', '')
-        tax_number = data.get('tax_number', '')
+        bsb = data.get('bsb', '')  # Optional
+        account_number = data.get('account_number', '')  # Optional
+        tax_number = data.get('tax_number', '')  # Optional
         
         # Get the contact
         contact = Contacts.objects.get(contact_pk=contact_pk, xero_instance_id=instance_pk)
@@ -492,19 +560,39 @@ def update_contact_details(request, instance_pk, contact_pk):
         if not xero_instance:
             return access_token  # This is the error response
         
-        # Prepare update data for Xero
-        bank_account_details = format_bank_details(bsb, account_number)
-        
-        update_data = {
-            'Contacts': [{
-                'ContactID': contact.xero_contact_id,
-                'EmailAddress': email,
-                'BankAccountDetails': bank_account_details,
-                'TaxNumber': tax_number.replace(' ', '') if tax_number else ''
-            }]
+        # Prepare update data for Xero - only include provided fields
+        xero_contact_data = {
+            'ContactID': contact.xero_contact_id
         }
         
-        logger.info(f"Updating contact {contact.xero_contact_id} - Email: {email}, BSB: {bsb}, Account: {account_number}, Tax: {tax_number}")
+        # Add name if provided (from PO table)
+        if name:
+            xero_contact_data['Name'] = name
+        
+        # Add first/last name if provided
+        if first_name:
+            xero_contact_data['FirstName'] = first_name
+        if last_name:
+            xero_contact_data['LastName'] = last_name
+        
+        # Add email if provided
+        if email:
+            xero_contact_data['EmailAddress'] = email
+        
+        # Add bank details if provided (from Contacts modal)
+        if bsb or account_number:
+            bank_account_details = format_bank_details(bsb, account_number)
+            xero_contact_data['BankAccountDetails'] = bank_account_details
+        
+        # Add tax number if provided (from Contacts modal)
+        if tax_number:
+            xero_contact_data['TaxNumber'] = tax_number.replace(' ', '')
+        
+        update_data = {
+            'Contacts': [xero_contact_data]
+        }
+        
+        logger.info(f"Updating contact {contact.xero_contact_id} - Fields: {list(xero_contact_data.keys())}")
         
         update_response = requests.post(
             'https://api.xero.com/api.xro/2.0/Contacts',
@@ -530,26 +618,44 @@ def update_contact_details(request, instance_pk, contact_pk):
                 'message': error_message
             }, status=400)
         
-        # Update local database
-        contact.email = email
-        contact.bank_bsb = bsb.replace('-', '')
-        contact.bank_account_number = account_number
-        contact.tax_number = tax_number.replace(' ', '')
-        contact.bank_details = bank_account_details
+        # Update local database - only update provided fields
+        if name:
+            contact.name = name
+        if first_name:
+            contact.first_name = first_name
+        if last_name:
+            contact.last_name = last_name
+        if email:
+            contact.email = email
+        if bsb:
+            contact.bank_bsb = bsb.replace('-', '')
+        if account_number:
+            contact.bank_account_number = account_number
+        if tax_number:
+            contact.tax_number = tax_number.replace(' ', '')
+        if bsb or account_number:
+            contact.bank_details = bank_account_details
+        
         contact.save()
         
         logger.info(f"Successfully updated contact {contact.name} in database")
         
-        return JsonResponse({
+        # Return updated contact data
+        response_data = {
             'status': 'success',
             'message': 'Contact updated successfully',
             'contact': {
+                'name': contact.name,
+                'first_name': contact.first_name,
+                'last_name': contact.last_name,
                 'email': contact.email,
                 'bank_bsb': contact.bank_bsb,
                 'bank_account_number': contact.bank_account_number,
                 'tax_number': contact.tax_number
             }
-        })
+        }
+        
+        return JsonResponse(response_data)
     
     return JsonResponse({
         'status': 'error',
@@ -901,11 +1007,22 @@ def get_project_items(request, project_pk):
         
         items = Costing.objects.filter(
             project_id=project_pk
-        ).select_related('category').order_by('category__order_in_list', 'order_in_list').values(
-            'costing_pk', 'item', 'order_in_list', 'category__category', 'category__order_in_list', 'uncommitted'
-        )
+        ).select_related('category', 'unit').order_by('category__order_in_list', 'order_in_list')
         
-        items_list = list(items)
+        items_list = []
+        for item in items:
+            items_list.append({
+                'costing_pk': item.costing_pk,
+                'item': item.item,
+                'unit': item.unit.unit_name if item.unit else None,
+                'unit_pk': item.unit.unit_pk if item.unit else None,
+                'order_in_list': int(item.order_in_list),
+                'category__category': item.category.category,
+                'category__order_in_list': int(item.category.order_in_list),
+                'uncommitted_amount': float(item.uncommitted_amount) if item.uncommitted_amount else 0,
+                'uncommitted_qty': float(item.uncommitted_qty) if item.uncommitted_qty else None,
+                'uncommitted_rate': float(item.uncommitted_rate) if item.uncommitted_rate else None,
+            })
         
         logger.info(f"Retrieved {len(items_list)} items for project {project_pk}")
         
@@ -1035,16 +1152,18 @@ def create_item(request, project_pk):
     
     Expected POST data:
     - item: str (max 20 chars)
+    - unit: int (unit_pk, optional)
     - category_pk: int
     - order_in_list: int
     """
     try:
-        from core.models import Costing, Categories, Projects
+        from core.models import Costing, Categories, Projects, Units
         
         data = json.loads(request.body)
         
         # Validate required fields
         item_name = data.get('item', '').strip()
+        unit_pk = data.get('unit')  # Now expecting unit_pk instead of unit name
         category_pk = data.get('category_pk')
         order_in_list = data.get('order_in_list')
         
@@ -1053,6 +1172,17 @@ def create_item(request, project_pk):
                 'status': 'error',
                 'message': 'Item name is required'
             }, status=400)
+        
+        # Validate unit if provided
+        unit_obj = None
+        if unit_pk:
+            try:
+                unit_obj = Units.objects.get(unit_pk=unit_pk)
+            except Units.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid unit selected'
+                }, status=400)
         
         if len(item_name) > 20:
             return JsonResponse({
@@ -1109,10 +1239,11 @@ def create_item(request, project_pk):
             project=project,
             category=category,
             item=item_name,
+            unit=unit_obj,  # Now using the Units ForeignKey object
             order_in_list=order_in_list,
             xero_account_code='',  # Default empty
             contract_budget=0,
-            uncommitted=0,
+            uncommitted_amount=0,
             fixed_on_site=0,
             sc_invoiced=0,
             sc_paid=0
@@ -1334,10 +1465,12 @@ def download_items_csv_template(request):
     Download an example CSV template for bulk category and item upload.
     
     Format:
-    Category,Item,Category Order,Item Order
-    Preliminaries,Site Establishment,1,1
-    Preliminaries,Temp Fencing,1,2
-    Excavation,Bulk Excavation,2,1
+    Category,Item,Unit,Category Order,Item Order
+    Preliminaries,Site Establishment,item,1,1
+    Preliminaries,Temp Fencing,m,1,2
+    Excavation,Bulk Excavation,m3,2,1
+    
+    Valid units: item, each, m, m2, m3, ton
     """
     try:
         # Create CSV response
@@ -1347,17 +1480,17 @@ def download_items_csv_template(request):
         writer = csv.writer(response)
         
         # Write header
-        writer.writerow(['Category', 'Item', 'Category Order', 'Item Order'])
+        writer.writerow(['Category', 'Item', 'Unit', 'Category Order', 'Item Order'])
         
-        # Write example data
-        writer.writerow(['Preliminaries', 'Site Establishment', '1', '1'])
-        writer.writerow(['Preliminaries', 'Temp Fencing', '1', '2'])
-        writer.writerow(['Preliminaries', 'Site Signage', '1', '3'])
-        writer.writerow(['Excavation', 'Bulk Excavation', '2', '1'])
-        writer.writerow(['Excavation', 'Trench Excavation', '2', '2'])
-        writer.writerow(['Concrete', 'Footings', '3', '1'])
-        writer.writerow(['Concrete', 'Slab', '3', '2'])
-        writer.writerow(['Concrete', 'Walls', '3', '3'])
+        # Write example data with various units
+        writer.writerow(['Preliminaries', 'Site Establishment', 'item', '1', '1'])
+        writer.writerow(['Preliminaries', 'Temp Fencing', 'm', '1', '2'])
+        writer.writerow(['Preliminaries', 'Site Signage', 'each', '1', '3'])
+        writer.writerow(['Excavation', 'Bulk Excavation', 'm3', '2', '1'])
+        writer.writerow(['Excavation', 'Trench Excavation', 'm3', '2', '2'])
+        writer.writerow(['Concrete', 'Footings', 'm3', '3', '1'])
+        writer.writerow(['Concrete', 'Slab', 'm2', '3', '2'])
+        writer.writerow(['Concrete', 'Walls', 'm2', '3', '3'])
         
         return response
         
@@ -1376,13 +1509,14 @@ def upload_items_csv(request, project_pk):
     Upload and process CSV file to create categories and items in bulk.
     
     Expected CSV format:
-    Category,Item,Category Order,Item Order
-    Preliminaries,Site Establishment,1,1
+    Category,Item,Unit,Category Order,Item Order
+    Preliminaries,Site Establishment,item,1,1
     
     - Adds to existing categories/items (does not replace)
     - Creates categories if they don't exist
     - Handles duplicate category names within same project
     - Validates order numbers
+    - Validates units: item, each, m, m2, m3, ton
     """
     try:
         # Get project
@@ -1461,12 +1595,14 @@ def upload_items_csv(request, project_pk):
                     header_map[field] = 'Category'
                 elif field_lower in ['item', 'item name']:
                     header_map[field] = 'Item'
+                elif field_lower in ['unit', 'units']:
+                    header_map[field] = 'Unit'
                 elif field_lower in ['category order', 'categoryorder', 'cat order']:
                     header_map[field] = 'Category Order'
                 elif field_lower in ['item order', 'itemorder']:
                     header_map[field] = 'Item Order'
             
-            # Check if we have all required headers
+            # Check if we have all required headers (Unit is optional for backward compatibility)
             required = {'Category', 'Item', 'Category Order', 'Item Order'}
             if not required.issubset(set(header_map.values())):
                 missing = required - set(header_map.values())
@@ -1494,6 +1630,7 @@ def upload_items_csv(request, project_pk):
                     # Validate required fields using mapped headers
                     category_name = row.get(reverse_map['Category'], '').strip()
                     item_name = row.get(reverse_map['Item'], '').strip()
+                    item_unit = row.get(reverse_map.get('Unit', ''), '').strip() if 'Unit' in reverse_map else ''
                     category_order = row.get(reverse_map['Category Order'], '').strip()
                     item_order = row.get(reverse_map['Item Order'], '').strip()
                     
@@ -1503,6 +1640,12 @@ def upload_items_csv(request, project_pk):
                     
                     if not item_name:
                         errors.append(f"Row {row_num}: Missing item name")
+                        continue
+                    
+                    # Validate unit if provided
+                    allowed_units = ['item', 'each', 'm', 'm2', 'm3', 'ton']
+                    if item_unit and item_unit not in allowed_units:
+                        errors.append(f"Row {row_num}: Invalid unit '{item_unit}'. Must be one of: {', '.join(allowed_units)}")
                         continue
                     
                     if not category_order or not category_order.isdigit():
@@ -1558,10 +1701,11 @@ def upload_items_csv(request, project_pk):
                         project=project,
                         category=category,
                         item=item_name,
+                        unit=item_unit if item_unit else None,
                         order_in_list=item_order_int,
                         xero_account_code='',
                         contract_budget=0,
-                        uncommitted=0,
+                        uncommitted_amount=0,
                         fixed_on_site=0,
                         sc_invoiced=0,
                         sc_paid=0
@@ -1602,4 +1746,800 @@ def upload_items_csv(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error uploading CSV: {str(e)}'
+        }, status=500)
+
+
+def generate_po_html(project, supplier, items, total_amount, po_url=None):
+    """
+    Generate HTML for PO PDF with professional formatting.
+    Shared between email and download endpoints.
+    Dynamically scales row height based on number of items.
+    """
+    # Dynamic scaling based on number of items to fit on one A4 page
+    # 1-10 items: Full padding (12px), large font (12px) - comfortable spacing
+    # 11-20 items: Medium padding (8px), medium font (11px) - balanced
+    # 21-30 items: Tight padding (6px), small font (10px) - maximum density
+    num_items = len(items)
+    if num_items <= 10:
+        td_padding = "12px"
+        font_size = "12px"
+        header_padding = "14px 12px"
+    elif num_items <= 20:
+        td_padding = "8px"
+        font_size = "11px"
+        header_padding = "10px 12px"
+    else:  # 21-30 items
+        td_padding = "6px"
+        font_size = "10px"
+        header_padding = "8px 12px"
+    
+    html_content = f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                size: A4;
+                margin: 2cm;
+            }}
+            body {{
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                margin: 0;
+                padding: 0;
+                color: #333;
+                position: relative;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: {f'15px' if num_items > 20 else '20px'};
+                position: relative;
+            }}
+            h1 {{
+                color: #2c3e50;
+                font-size: {f'24px' if num_items > 20 else '28px'};
+                margin: 0 0 8px 0;
+                font-weight: bold;
+            }}
+            .subheading-container {{
+                position: relative;
+            }}
+            h2 {{
+                color: #7f8c8d;
+                font-size: {f'16px' if num_items > 20 else '18px'};
+                margin: 0;
+                font-weight: normal;
+                display: inline-block;
+            }}
+            .date-inline {{
+                position: absolute;
+                right: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #95a5a6;
+                font-size: {f'10px' if num_items > 20 else '11px'};
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: {f'10px' if num_items > 20 else '15px'};
+                border: 1px solid #ddd;
+            }}
+            thead th {{
+                background-color: #34495e;
+                color: white;
+                padding: {f'8px 6px' if num_items > 20 else '10px 8px'};
+                text-align: left;
+                font-weight: bold;
+                font-size: {f'13px' if num_items > 20 else '14px'};
+                border-bottom: 2px solid #2c3e50;
+            }}
+            thead th.amount {{
+                text-align: right;
+            }}
+            tbody td {{
+                padding: {f'6px' if num_items > 20 else '8px'};
+                border-bottom: 1px solid #ecf0f1;
+                font-size: {f'12px' if num_items > 20 else '13px'};
+                vertical-align: top;
+            }}
+            tbody td.amount {{
+                text-align: right;
+                font-weight: 500;
+            }}
+            tfoot td {{
+                background-color: #ecf0f1;
+                font-weight: bold;
+                padding: {f'8px 6px' if num_items > 20 else '10px 8px'};
+                border-top: 2px solid #34495e;
+                border-bottom: none;
+                font-size: {f'13px' if num_items > 20 else '14px'};
+            }}
+            tfoot td.amount {{
+                text-align: right;
+            }}
+            .footer {{
+                margin-top: {f'12px' if num_items > 20 else '18px'};
+                text-align: left;
+            }}
+            .po-url {{
+                margin-top: {f'10px' if num_items > 20 else '15px'};
+                margin-bottom: {f'10px' if num_items > 20 else '15px'};
+                padding: {f'12px' if num_items > 20 else '15px'};
+                background-color: #fff3cd;
+                border: 2px solid #ffc107;
+                border-radius: 8px;
+            }}
+            .po-url-title {{
+                color: #2c3e50;
+                font-weight: bold;
+                font-size: {f'13px' if num_items > 20 else '15px'};
+                margin-bottom: 10px;
+            }}
+            .po-url a {{
+                color: #0066cc;
+                text-decoration: underline;
+                font-weight: 600;
+                font-size: {f'12px' if num_items > 20 else '14px'};
+                word-break: break-all;
+            }}
+            .claims-process {{
+                margin-top: {f'10px' if num_items > 20 else '15px'};
+                padding: {f'10px' if num_items > 20 else '12px'};
+                background-color: #f8f9fa;
+                border-left: 4px solid #34495e;
+            }}
+            .claims-heading {{
+                color: #2c3e50;
+                font-size: {f'12px' if num_items > 20 else '13px'};
+                font-weight: bold;
+                margin-bottom: {f'6px' if num_items > 20 else '8px'};
+            }}
+            .claims-text {{
+                color: #555;
+                font-size: {f'10px' if num_items > 20 else '11px'};
+                line-height: 1.5;
+                margin: 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Purchase Order</h1>
+            <div class="subheading-container">
+                <h2>{project.project} - {supplier.name}</h2>
+                <div class="date-inline">Generated on {date.today().strftime('%B %d, %Y')}</div>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50%;">Description</th>
+                    <th class="amount" style="width: 25%;">Amount</th>
+                    <th style="width: 25%;">Quote #</th>
+                </tr>
+            </thead>
+            <tbody>
+    '''
+    
+    for item in items:
+        html_content += f'''
+                <tr>
+                    <td style="width: 50%;">{item['description']}</td>
+                    <td class="amount" style="width: 25%;">${item['amount']:,.2f}</td>
+                    <td style="width: 25%;">{item['quote_numbers']}</td>
+                </tr>
+        '''
+    
+    html_content += f'''
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td style="width: 50%;">TOTAL</td>
+                    <td class="amount" style="width: 25%;">${total_amount:,.2f}</td>
+                    <td style="width: 25%;"></td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <div class="footer">
+    '''
+    
+    if po_url:
+        html_content += f'''
+            <div class="po-url">
+                <div class="po-url-title">Your Unique Payment Processing Link For All Claims:</div>
+                <a href="{po_url}">{po_url}</a>
+            </div>
+            
+            <div class="claims-process">
+                <div class="claims-heading">Claims Process</div>
+                <p class="claims-text">
+                    1) Click your unique url above to submit your claim for approval by the 25th of the month.<br><br>
+                    2) You will receive an email when your claim is approved or rejected by the end of the month.<br><br>
+                    3) Once approved, click your unique url and upload your invoice matching the approved claim amount.
+                </p>
+            </div>
+        '''
+    
+    html_content += '''
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html_content
+
+
+@csrf_exempt
+def send_po_email(request, project_pk, supplier_pk):
+    """
+    Generate PO PDF and send email to supplier.
+    Reuses existing email configuration (invoices@mason.build).
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        # Get project and supplier details
+        project = Projects.objects.get(projects_pk=project_pk)
+        supplier = Contacts.objects.get(contact_pk=supplier_pk)
+        
+        # Get all quotes for this project and supplier
+        quotes = Quotes.objects.filter(
+            project=project,
+            contact_pk=supplier
+        ).prefetch_related('quote_allocations')
+        
+        if not quotes.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No quotes found for this supplier'
+            }, status=404)
+        
+        # Group allocations by item
+        from collections import defaultdict
+        items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+        
+        for quote in quotes:
+            for allocation in quote.quote_allocations.all():
+                item_name = allocation.item.item
+                items_map[item_name]['amount'] += allocation.amount
+                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+        
+        # Convert to list
+        items = [
+            {
+                'description': item_name,
+                'amount': float(data['amount']),
+                'quote_numbers': ', '.join(data['quote_numbers'])
+            }
+            for item_name, data in items_map.items()
+        ]
+        
+        # Calculate total
+        total_amount = sum(item['amount'] for item in items)
+        
+        # Create Po_orders entry with unique URL (before PDF generation)
+        unique_id = str(uuid.uuid4())
+        po_order = Po_orders.objects.create(
+            po_supplier=supplier,
+            project=project,
+            unique_id=unique_id,
+            po_sent=True
+        )
+        
+        # Generate URL based on environment (local vs production)
+        if settings.DEBUG:
+            # Local development
+            base_url = 'http://127.0.0.1:8000'
+        else:
+            # Production
+            base_url = 'https://app.mason.build'
+        
+        po_url = f"{base_url}/po/{unique_id}/"
+        
+        # Generate HTML for PDF using shared function with clickable URL
+        html_content = generate_po_html(project, supplier, items, total_amount, po_url)
+        
+        # Convert HTML to PDF
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=pdf_buffer)
+        
+        if pisa_status.err:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to generate PDF'
+            }, status=500)
+        
+        pdf_buffer.seek(0)
+        pdf_content = pdf_buffer.read()
+        
+        # Collect unique quote numbers from items (in order of appearance)
+        quote_numbers_in_order = []
+        for item in items:
+            for qn in item['quote_numbers'].split(', '):
+                qn = qn.strip()
+                if qn and qn not in quote_numbers_in_order:
+                    quote_numbers_in_order.append(qn)
+        
+        # Fetch quote PDFs in order of appearance
+        quote_pdfs_to_attach = []
+        for quote_num in quote_numbers_in_order:
+            try:
+                quote = Quotes.objects.get(
+                    supplier_quote_number=quote_num,
+                    project=project,
+                    contact_pk=supplier
+                )
+                if quote.pdf:
+                    quote_pdfs_to_attach.append(quote.pdf)
+            except Quotes.DoesNotExist:
+                logger.warning(f"Quote {quote_num} not found for supplier {supplier.name}")
+                continue
+        
+        # Merge PO PDF with quote PDFs
+        if quote_pdfs_to_attach:
+            try:
+                merger = PdfMerger()
+                
+                # Add the PO PDF first
+                po_pdf_buffer = BytesIO(pdf_content)
+                merger.append(po_pdf_buffer)
+                
+                # Add each quote PDF in order
+                for quote_pdf in quote_pdfs_to_attach:
+                    quote_pdf.open('rb')
+                    merger.append(quote_pdf)
+                    quote_pdf.close()
+                
+                # Write merged PDF to buffer
+                merged_buffer = BytesIO()
+                merger.write(merged_buffer)
+                merger.close()
+                
+                # Use merged PDF as the final content
+                merged_buffer.seek(0)
+                final_pdf_content = merged_buffer.read()
+                logger.info(f"Merged PO PDF with {len(quote_pdfs_to_attach)} quote PDFs")
+            except Exception as e:
+                logger.error(f"Error merging PDFs: {e}", exc_info=True)
+                # Fall back to PO PDF only if merge fails
+                final_pdf_content = pdf_content
+        else:
+            # No quote PDFs to attach, use PO PDF only
+            final_pdf_content = pdf_content
+        
+        # Save combined PDF to Po_orders model for record keeping
+        pdf_filename = f'PO_{project.project}_{supplier.name}_{unique_id[:8]}.pdf'
+        po_order.pdf.save(pdf_filename, ContentFile(final_pdf_content), save=True)
+        
+        # Prepare email
+        supplier_name = supplier.first_name or supplier.name.split()[0] if supplier.name else 'there'
+        supplier_last_name = supplier.last_name or ''
+        full_name = f"{supplier_name} {supplier_last_name}".strip()
+        
+        subject = 'Purchase Order'
+        
+        # Plain text version (fallback)
+        text_message = f'''Dear {full_name},
+
+Please see attached purchase order with payment claim instructions.
+
+Please read the payment claim instructions carefully to ensure your claim is processed and paid on time.
+
+View payment claim instructions: {po_url}
+
+Regards,
+Mason'''
+        
+        # HTML version with hyperlink
+        html_message = f'''
+        <html>
+        <body>
+            <p>Dear {full_name},</p>
+            
+            <p>Please see attached purchase order with <a href="{po_url}">payment claim instructions</a>.</p>
+            
+            <p>Please read the payment claim instructions carefully to ensure your claim is processed and paid on time.</p>
+            
+            <p>Regards,<br>
+            Mason</p>
+        </body>
+        </html>
+        '''
+        
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [supplier.email] if supplier.email else []
+        
+        if not recipient_list:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Supplier has no email address'
+            }, status=400)
+        
+        # Create email with attachment (combined PO + Quotes PDF)
+        email = EmailMultiAlternatives(subject, text_message, from_email, recipient_list)
+        email.attach_alternative(html_message, "text/html")
+        email.attach(f'PO_{project.project}.pdf', final_pdf_content, 'application/pdf')
+        
+        # Add CC if configured
+        if hasattr(settings, 'EMAIL_CC') and settings.EMAIL_CC:
+            cc_addresses = settings.EMAIL_CC.split(';')
+            email.cc = cc_addresses
+        
+        # Send email
+        email.send()
+        
+        logger.info(f"PO email sent to {supplier.email} for project {project.project}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Purchase order sent to {supplier.email}'
+        })
+        
+    except Projects.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Project not found'
+        }, status=404)
+    except Contacts.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Supplier not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error sending PO email: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to send email: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def download_po_pdf(request, project_pk, supplier_pk):
+    """
+    Generate PO PDF and return as download.
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        # Get project and supplier details
+        project = Projects.objects.get(projects_pk=project_pk)
+        supplier = Contacts.objects.get(contact_pk=supplier_pk)
+        
+        # Get all quotes for this project and supplier
+        quotes = Quotes.objects.filter(
+            project=project,
+            contact_pk=supplier
+        ).prefetch_related('quote_allocations')
+        
+        if not quotes.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No quotes found for this supplier'
+            }, status=404)
+        
+        # Group allocations by item
+        from collections import defaultdict
+        items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+        
+        for quote in quotes:
+            for allocation in quote.quote_allocations.all():
+                item_name = allocation.item.item
+                items_map[item_name]['amount'] += allocation.amount
+                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+        
+        # Convert to list
+        items = [
+            {
+                'description': item_name,
+                'amount': float(data['amount']),
+                'quote_numbers': ', '.join(data['quote_numbers'])
+            }
+            for item_name, data in items_map.items()
+        ]
+        
+        # Calculate total
+        total_amount = sum(item['amount'] for item in items)
+        
+        # Generate HTML for PDF using shared function
+        html_content = generate_po_html(project, supplier, items, total_amount)
+        
+        # Convert HTML to PDF
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=pdf_buffer)
+        
+        if pisa_status.err:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to generate PDF'
+            }, status=500)
+        
+        pdf_buffer.seek(0)
+        
+        # Return PDF as download
+        response = HttpResponse(pdf_buffer.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="PO_{project.project}_{supplier.name}.pdf"'
+        
+        logger.info(f"PO PDF downloaded for project {project.project}, supplier {supplier.name}")
+        
+        return response
+        
+    except Projects.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Project not found'
+        }, status=404)
+    except Contacts.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Supplier not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error generating PO PDF: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to generate PDF: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def get_units(request):
+    """
+    Get all units ordered by order_in_list
+    """
+    try:
+        from core.models import Units
+        
+        units = Units.objects.all().order_by('order_in_list')
+        
+        units_data = [{
+            'unit_pk': unit.unit_pk,
+            'unit_name': unit.unit_name,
+            'order_in_list': unit.order_in_list
+        } for unit in units]
+        
+        return JsonResponse({
+            'status': 'success',
+            'units': units_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting units: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting units: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def add_unit(request):
+    """
+    Add a new unit
+    
+    Expected POST data:
+    {
+        "unit_name": string,
+        "order_in_list": int
+    }
+    """
+    try:
+        from core.models import Units
+        
+        data = json.loads(request.body)
+        
+        unit_name = data.get('unit_name', '').strip()
+        order_in_list = data.get('order_in_list')
+        
+        if not unit_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Unit name is required'
+            }, status=400)
+        
+        if order_in_list is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Order in list is required'
+            }, status=400)
+        
+        # Check if unit name already exists
+        if Units.objects.filter(unit_name=unit_name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unit "{unit_name}" already exists'
+            }, status=400)
+        
+        # Get all units and adjust their order if needed
+        existing_units = Units.objects.filter(order_in_list__gte=order_in_list).order_by('-order_in_list')
+        
+        # Shift existing units down
+        for unit in existing_units:
+            unit.order_in_list += 1
+            unit.save()
+        
+        # Create new unit
+        new_unit = Units.objects.create(
+            unit_name=unit_name,
+            order_in_list=order_in_list
+        )
+        
+        logger.info(f"Added new unit: {unit_name} at position {order_in_list}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Unit added successfully',
+            'unit': {
+                'unit_pk': new_unit.unit_pk,
+                'unit_name': new_unit.unit_name,
+                'order_in_list': new_unit.order_in_list
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding unit: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error adding unit: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def reorder_unit(request, unit_pk):
+    """
+    Reorder a unit by updating its order_in_list
+    
+    Expected POST data:
+    {
+        "new_order": int
+    }
+    """
+    try:
+        from core.models import Units
+        from django.db import transaction
+        
+        data = json.loads(request.body)
+        new_order = data.get('new_order')
+        
+        if new_order is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New order is required'
+            }, status=400)
+        
+        # Get the unit to reorder
+        try:
+            unit = Units.objects.get(unit_pk=unit_pk)
+        except Units.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Unit not found'
+            }, status=404)
+        
+        old_order = unit.order_in_list
+        
+        # If order hasn't changed, no need to do anything
+        if old_order == new_order:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Unit order unchanged'
+            })
+        
+        # Use transaction to ensure all updates happen together
+        with transaction.atomic():
+            # First, move the dragged unit to a temporary position (9999) to free up its current position
+            unit.order_in_list = 9999
+            unit.save()
+            
+            if new_order < old_order:
+                # Moving up: shift items down between new_order and old_order
+                units_to_shift = Units.objects.filter(
+                    order_in_list__gte=new_order,
+                    order_in_list__lt=old_order
+                ).order_by('-order_in_list')  # Update in reverse order to avoid conflicts
+                
+                for u in units_to_shift:
+                    u.order_in_list += 1
+                    u.save()
+                
+            else:
+                # Moving down: shift items up between old_order and new_order
+                units_to_shift = Units.objects.filter(
+                    order_in_list__gt=old_order,
+                    order_in_list__lte=new_order
+                ).order_by('order_in_list')  # Update in forward order to avoid conflicts
+                
+                for u in units_to_shift:
+                    u.order_in_list -= 1
+                    u.save()
+            
+            # Finally, update the dragged unit to its final position
+            unit.order_in_list = new_order
+            unit.save()
+        
+        logger.info(f"Reordered unit '{unit.unit_name}' from position {old_order} to {new_order}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Unit reordered successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error reordering unit: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error reordering unit: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_unit(request):
+    """
+    Delete a unit
+    
+    Expected POST data:
+    {
+        "unit_pk": int
+    }
+    """
+    try:
+        from core.models import Units
+        
+        data = json.loads(request.body)
+        
+        unit_pk = data.get('unit_pk')
+        
+        if not unit_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Unit PK is required'
+            }, status=400)
+        
+        # Get the unit
+        try:
+            unit = Units.objects.get(unit_pk=unit_pk)
+        except Units.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Unit not found'
+            }, status=404)
+        
+        unit_name = unit.unit_name
+        order = unit.order_in_list
+        
+        # Delete the unit
+        unit.delete()
+        
+        # Adjust order of remaining units
+        remaining_units = Units.objects.filter(order_in_list__gt=order).order_by('order_in_list')
+        for remaining_unit in remaining_units:
+            remaining_unit.order_in_list -= 1
+            remaining_unit.save()
+        
+        logger.info(f"Deleted unit: {unit_name}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Unit deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting unit: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error deleting unit: {str(e)}'
         }, status=500)

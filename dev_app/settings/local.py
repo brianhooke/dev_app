@@ -1,8 +1,11 @@
 from .base import *
-# import environ
+import environ
 
-# env = environ.Env()
-# environ.Env.read_env()
+# Read .env file (if it exists)
+env = environ.Env()
+env_file = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_file):
+    environ.Env.read_env(env_file)
 
 DEBUG = True
 
@@ -63,9 +66,11 @@ LOGGING = {
     },
 }
 
-EMAIL_HOST_USER = 'invoices@mason.build'
-# EMAIL_HOST_PASSWORD = 'password'
-DEFAULT_FROM_EMAIL = 'invoices@mason.build'
+# Email Configuration - Read from environment variables or .env file
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'purchase_orders@mason.build')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # MUST be set in .env file
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'purchase_orders@mason.build')
+EMAIL_CC = os.environ.get('EMAIL_CC', 'brian.hooke@mason.build')
 
 # fake xero settings
 XERO_CLIENT_ID=''

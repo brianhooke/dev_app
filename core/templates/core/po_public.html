@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Schedule - {{ project.project }}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .main-layout {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .left-panel {
+            width: 60%;
+            overflow-y: auto;
+            padding: 40px;
+            background: white;
+        }
+        
+        .right-panel {
+            width: 40%;
+            background: #2c3e50;
+            display: flex;
+            flex-direction: column;
+            border-left: 2px solid #e0e0e0;
+        }
+        
+        .pdf-header {
+            background: #34495e;
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 1px solid #2c3e50;
+        }
+        
+        .pdf-viewer {
+            flex: 1;
+            background: white;
+            overflow: auto;
+        }
+        
+        .pdf-viewer iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .container {
+            max-width: 100%;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 20px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .subheading {
+            color: #7f8c8d;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .subheading strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        /* Reusable table styles */
+        .reusable-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 30px 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border-radius: 8px;
+        }
+        
+        .reusable-table th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 13px;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .reusable-table th.align-right {
+            text-align: right;
+        }
+        
+        .reusable-table th.this-claim-header,
+        .reusable-table td.this-claim-cell {
+            border: 3px solid #27ae60;
+            background-color: rgba(39, 174, 96, 0.05);
+        }
+        
+        .reusable-table th.this-claim-header {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+        }
+        
+        .reusable-table tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+        
+        .reusable-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .reusable-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #e0e0e0;
+            line-height: 1.3;
+            vertical-align: middle;
+        }
+        
+        .reusable-table td.align-right {
+            text-align: right;
+        }
+        
+        .reusable-table input[type="number"] {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: right;
+        }
+        
+        /* Remove increment/decrement buttons */
+        .reusable-table input[type="number"]::-webkit-inner-spin-button,
+        .reusable-table input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        .reusable-table input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        
+        .reusable-table input[type="number"].pending {
+            background-color: #ffe5cc;
+            border-color: #ff9933;
+            color: #cc6600;
+            font-weight: 600;
+            pointer-events: none;
+        }
+        
+        .reusable-table input[type="number"].approved {
+            background-color: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+            font-weight: 600;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+        
+        .reusable-table input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        
+        .reusable-table input[type="number"].error {
+            border-color: #e74c3c;
+            background-color: #fde8e8;
+        }
+        
+        .still-to-claim {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            margin-bottom: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.4) 0%, rgba(34, 153, 84, 0.4) 100%);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .btn-primary.pending {
+            background: linear-gradient(135deg, #ff9933 0%, #cc6600 100%);
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #ecf0f1;
+            color: #2c3e50;
+            display: none;
+        }
+        
+        .btn-secondary.show {
+            display: inline-flex;
+        }
+        
+        .btn-secondary.active {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #bdc3c7;
+        }
+        
+        .btn-approve {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            color: white;
+            display: none;
+        }
+        
+        .btn-approve.show {
+            display: inline-flex;
+        }
+        
+        .btn-approve:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4);
+        }
+        
+        .total-row {
+            font-weight: 700;
+            background-color: #f8f9fa;
+            border-top: 2px solid #34495e !important;
+        }
+        
+        .total-row td {
+            border-top: 2px solid #34495e !important;
+            padding: 14px 8px !important;
+            font-size: 15px;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #95a5a6;
+            font-size: 14px;
+        }
+        
+        /* Alien Animation */
+        .alien-container {
+            position: fixed;
+            bottom: 20px;
+            left: -150px;
+            z-index: 9999;
+            animation: walkAcross 8s ease-in-out forwards;
+            pointer-events: none;
+        }
+        
+        @keyframes walkAcross {
+            0% {
+                left: -150px;
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            85% {
+                opacity: 1;
+            }
+            100% {
+                left: 110%;
+                opacity: 0;
+            }
+        }
+        
+        .alien {
+            font-size: 60px;
+            animation: bounce 0.5s infinite alternate;
+            display: inline-block;
+        }
+        
+        @keyframes bounce {
+            0% {
+                transform: translateY(0px);
+            }
+            100% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .alien-shadow {
+            width: 40px;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+            margin: 5px auto 0;
+            animation: shadowPulse 0.5s infinite alternate;
+        }
+        
+        @keyframes shadowPulse {
+            0% {
+                transform: scaleX(1);
+                opacity: 0.3;
+            }
+            100% {
+                transform: scaleX(0.8);
+                opacity: 0.2;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Alien Animation -->
+    <div class="alien-container">
+        <div class="alien">👽</div>
+        <div class="alien-shadow"></div>
+    </div>
+    
+    <div class="main-layout">
+        <!-- Left Panel: Payment Schedule -->
+        <div class="left-panel">
+            <div class="container">
+                <div class="header">
+                    <h1>Payment Schedule - {{ project.project }}</h1>
+                    <div class="subheading"><strong>Project:</strong> {{ project.project }}</div>
+                    <div class="subheading"><strong>Supplier:</strong> {{ supplier.name }}</div>
+                </div>
+                
+                <table class="reusable-table">
+                    <thead>
+                        <tr>
+                            <th style="width: {% if is_construction %}25%{% else %}30%{% endif %};">Description</th>
+                            {% if is_construction %}
+                            <th style="width: 8%;">Unit</th>
+                            {% endif %}
+                            <th class="align-right" style="width: 12%;">Contract Sum ($)</th>
+                            <th class="align-right" style="width: 10%;">Complete (%)</th>
+                            <th class="align-right" style="width: 14%;">Previous Claims ($)</th>
+                            <th class="align-right this-claim-header" style="width: 14%;">This Claim ($)</th>
+                            <th class="align-right" style="width: {% if is_construction %}11%{% else %}14%{% endif %};">Still to Claim ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr data-item-index="{{ forloop.counter0 }}" data-costing-pk="{{ item.costing_pk }}">
+                            <td>{{ item.description }}</td>
+                            {% if is_construction %}
+                            <td>{{ item.unit }}</td>
+                            {% endif %}
+                            <td class="align-right contract-sum" data-value="{{ item.contract_sum }}">{{ item.contract_sum|floatformat:2 }}</td>
+                            <td class="align-right complete-percent" data-value="0">0.00</td>
+                            <td class="align-right previous-claims" data-value="{{ item.previous_claims }}">{{ item.previous_claims|floatformat:2 }}</td>
+                            <td class="align-right this-claim-cell">
+                                <input 
+                                    type="number" 
+                                    class="this-claim-input{% if has_pending_claim %} pending{% elif has_approved_claim %} approved{% endif %}" 
+                                    value="{{ item.this_claim|floatformat:2 }}"
+                                    step="0.01"
+                                    min="0"
+                                    data-index="{{ forloop.counter0 }}"
+                                    {% if has_pending_claim or has_approved_claim %}disabled{% endif %}
+                                >
+                            </td>
+                            <td class="align-right still-to-claim" data-value="{{ item.still_to_claim }}">{{ item.still_to_claim|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="total-row">
+                            <td><strong>TOTAL</strong></td>
+                            {% if is_construction %}
+                            <td></td>
+                            {% endif %}
+                            <td class="align-right" id="totalContractSum">0.00</td>
+                            <td class="align-right" id="totalCompletePercent">0.00</td>
+                            <td class="align-right" id="totalPreviousClaims">0.00</td>
+                            <td class="align-right this-claim-cell" id="totalThisClaim">0.00</td>
+                            <td class="align-right" id="totalStillToClaim">0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="actions">
+                    <button class="btn btn-secondary" id="editUnapprovedBtn">
+                        <i class="fas fa-edit"></i> Edit Unapproved
+                    </button>
+                    <button class="btn btn-approve" id="approveBtn">
+                        <i class="fas fa-check-circle"></i> Approve
+                    </button>
+                    <button class="btn btn-primary" id="submitForApprovalBtn">
+                        <i class="fas fa-check"></i> Submit for Approval
+                    </button>
+                </div>
+                
+                <!-- Upload Invoice Section (shown when claim approved but invoice not uploaded) -->
+                <div class="upload-invoice-section" id="uploadInvoiceSection" style="display: none; margin-top: 20px; padding: 20px; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
+                    <div style="text-align: center;">
+                        <p style="margin: 0 0 15px 0; color: #155724; font-weight: 600; font-size: 16px;">
+                            <i class="fas fa-check-circle"></i> Your claim has been approved!
+                        </p>
+                        <p style="margin: 0 0 20px 0; color: #155724;">
+                            Please upload your invoice PDF to complete the process.
+                        </p>
+                        <input type="file" id="invoicePdfInput" accept=".pdf" style="display: none;">
+                        <button class="btn btn-success" id="uploadInvoiceBtn" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%);">
+                            <i class="fas fa-upload"></i> Upload Invoice PDF
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    If you have any questions, please contact us directly.
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel: PDF Viewer -->
+        <div class="right-panel">
+            <div class="pdf-header">
+                <i class="fas fa-file-pdf"></i> Original Purchase Order
+            </div>
+            <div class="pdf-viewer">
+                <iframe src="/po/{{ po_order.unique_id }}/pdf/" title="Purchase Order PDF"></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const hasPendingClaim = {{ has_pending_claim|yesno:"true,false" }};
+        const hasApprovedClaim = {{ has_approved_claim|yesno:"true,false" }};
+        const pendingInvoicePk = {{ pending_invoice_pk|default:"null" }};
+        const approvedInvoicePk = {{ approved_invoice_pk|default:"null" }};
+        const uniqueId = '{{ po_order.unique_id }}';
+        let isEditMode = false;  // Track if user clicked "Edit Unapproved"
+        
+        // Format number with commas
+        function formatWithCommas(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        // Parse number removing commas
+        function parseNumber(str) {
+            return parseFloat(str.replace(/,/g, ''));
+        }
+        
+        // Calculate complete % for a row
+        function calculateCompletePercent(row) {
+            const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value) || 0;
+            const stillToClaim = parseFloat(row.querySelector('.still-to-claim').dataset.value) || 0;
+            
+            if (contractSum === 0) return 0;
+            
+            const completePercent = ((contractSum - stillToClaim) / contractSum) * 100;
+            return completePercent;
+        }
+        
+        // Calculate totals for all columns
+        function calculateTotals() {
+            let totalContractSum = 0;
+            let totalPreviousClaims = 0;
+            let totalThisClaim = 0;
+            let totalStillToClaim = 0;
+            
+            document.querySelectorAll('tbody tr:not(.total-row)').forEach(row => {
+                const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value) || 0;
+                const previousClaims = parseFloat(row.querySelector('.previous-claims').dataset.value) || 0;
+                const thisClaimInput = row.querySelector('.this-claim-input');
+                const thisClaim = parseFloat(thisClaimInput.value) || 0;
+                const stillToClaim = parseFloat(row.querySelector('.still-to-claim').dataset.value) || 0;
+                
+                // Calculate and update complete %
+                const completePercent = calculateCompletePercent(row);
+                const completePercentCell = row.querySelector('.complete-percent');
+                completePercentCell.dataset.value = completePercent;
+                completePercentCell.textContent = completePercent.toFixed(2);
+                
+                totalContractSum += contractSum;
+                totalPreviousClaims += previousClaims;
+                totalThisClaim += thisClaim;
+                totalStillToClaim += stillToClaim;
+            });
+            
+            document.getElementById('totalContractSum').textContent = formatWithCommas(totalContractSum.toFixed(2));
+            document.getElementById('totalPreviousClaims').textContent = formatWithCommas(totalPreviousClaims.toFixed(2));
+            document.getElementById('totalThisClaim').textContent = formatWithCommas(totalThisClaim.toFixed(2));
+            document.getElementById('totalStillToClaim').textContent = formatWithCommas(totalStillToClaim.toFixed(2));
+            
+            // Calculate total complete %
+            if (totalContractSum > 0) {
+                const totalCompletePercent = ((totalContractSum - totalStillToClaim) / totalContractSum) * 100;
+                document.getElementById('totalCompletePercent').textContent = totalCompletePercent.toFixed(2);
+            } else {
+                document.getElementById('totalCompletePercent').textContent = '0.00';
+            }
+            
+            return totalThisClaim;
+        }
+        
+        // Validate submit button state
+        function validateSubmitButton() {
+            const totalThisClaim = calculateTotals();
+            const submitBtn = document.getElementById('submitForApprovalBtn');
+            
+            if (hasPendingClaim && !isEditMode) {
+                // Pending claim, not in edit mode
+                submitBtn.textContent = 'Awaiting Approval';
+                submitBtn.disabled = true;
+                submitBtn.classList.add('pending');
+                submitBtn.innerHTML = '<i class="fas fa-clock"></i> Awaiting Approval';
+            } else if (isEditMode) {
+                // In edit mode (resubmit)
+                submitBtn.innerHTML = '<i class="fas fa-check"></i> Resubmit for Approval';
+                submitBtn.classList.remove('pending');
+                if (totalThisClaim > 0) {
+                    submitBtn.disabled = false;
+                } else {
+                    submitBtn.disabled = true;
+                }
+            } else {
+                // Normal mode (first submit)
+                submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit for Approval';
+                submitBtn.classList.remove('pending');
+                if (totalThisClaim > 0) {
+                    submitBtn.disabled = false;
+                } else {
+                    submitBtn.disabled = true;
+                }
+            }
+        }
+        
+        // Format all static number fields with commas on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.contract-sum, .previous-claims, .still-to-claim').forEach(cell => {
+                const value = parseFloat(cell.dataset.value || cell.textContent);
+                if (!isNaN(value)) {
+                    cell.textContent = formatWithCommas(value.toFixed(2));
+                }
+            });
+            
+            // Initial calculations
+            calculateTotals();
+            validateSubmitButton();
+            
+            // Show/hide buttons based on claim status
+            if (hasPendingClaim) {
+                // Pending claim: show edit and approve buttons
+                document.getElementById('editUnapprovedBtn').classList.add('show', 'active');
+                document.getElementById('approveBtn').classList.add('show');
+                document.getElementById('submitForApprovalBtn').style.display = 'inline-block';
+            } else if (hasApprovedClaim) {
+                // Approved claim: show upload section, hide all other buttons
+                document.getElementById('uploadInvoiceSection').style.display = 'block';
+                document.getElementById('submitForApprovalBtn').style.display = 'none';
+                document.getElementById('editUnapprovedBtn').style.display = 'none';
+                document.getElementById('approveBtn').style.display = 'none';
+            }
+        });
+        
+        // Validate and calculate on input
+        document.querySelectorAll('.this-claim-input').forEach(input => {
+            input.addEventListener('input', function() {
+                validateAndCalculate(this);
+            });
+            
+            input.addEventListener('blur', function() {
+                // Format to 2 decimal places on blur
+                const value = parseFloat(this.value) || 0;
+                this.value = value.toFixed(2);
+                validateAndCalculate(this);
+            });
+        });
+        
+        function validateAndCalculate(input) {
+            const row = input.closest('tr');
+            const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value);
+            const previousClaims = parseFloat(row.querySelector('.previous-claims').dataset.value);
+            let thisClaim = parseFloat(input.value) || 0;
+            
+            // Validate: no more than 2 decimal places
+            const decimalPlaces = (input.value.split('.')[1] || '').length;
+            if (decimalPlaces > 2) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: must be a number
+            if (isNaN(thisClaim)) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: cannot exceed contract sum minus previous claims
+            const maxClaim = contractSum - previousClaims;
+            if (thisClaim > maxClaim) {
+                thisClaim = maxClaim;
+                input.value = thisClaim.toFixed(2);
+            }
+            
+            // Remove error class if valid
+            input.classList.remove('error');
+            
+            // Calculate still to claim and format with commas
+            const stillToClaim = contractSum - (previousClaims + thisClaim);
+            const stillToClaimCell = row.querySelector('.still-to-claim');
+            stillToClaimCell.dataset.value = stillToClaim;
+            stillToClaimCell.textContent = formatWithCommas(stillToClaim.toFixed(2));
+            
+            // Recalculate totals and validate submit button
+            validateSubmitButton();
+        }
+        
+        // Submit for approval button
+        document.getElementById('submitForApprovalBtn').addEventListener('click', async function() {
+            if (this.disabled) return;
+            
+            // Gather claim data
+            const claims = [];
+            document.querySelectorAll('tbody tr:not(.total-row)').forEach(row => {
+                const costingPk = row.dataset.costingPk;
+                const thisClaimInput = row.querySelector('.this-claim-input');
+                const amount = parseFloat(thisClaimInput.value) || 0;
+                
+                if (amount > 0 && costingPk) {
+                    claims.push({
+                        costing_pk: costingPk,
+                        amount: amount
+                    });
+                }
+            });
+            
+            if (claims.length === 0) {
+                alert('Please enter at least one claim amount.');
+                return;
+            }
+            
+            // Submit to backend
+            try {
+                const response = await fetch(`/po/${uniqueId}/submit/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        claims: claims,
+                        pending_invoice_pk: pendingInvoicePk
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('Claim submitted for approval successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error submitting claim:', error);
+                alert('Error submitting claim. Please try again.');
+            }
+        });
+        
+        // Edit unapproved button
+        document.getElementById('editUnapprovedBtn').addEventListener('click', function() {
+            // Set edit mode flag
+            isEditMode = true;
+            
+            // Enable all inputs
+            document.querySelectorAll('.this-claim-input').forEach(input => {
+                input.disabled = false;
+                input.classList.remove('pending');
+            });
+            
+            // Update submit button state
+            validateSubmitButton();
+            
+            // Hide edit and approve buttons
+            this.classList.remove('show');
+            document.getElementById('approveBtn').classList.remove('show');
+        });
+        
+        // Approve button
+        document.getElementById('approveBtn').addEventListener('click', async function() {
+            if (!pendingInvoicePk) {
+                alert('No pending claim to approve');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to approve this claim?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/po/${uniqueId}/approve/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        pending_invoice_pk: pendingInvoicePk
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('Claim approved successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error approving claim:', error);
+                alert('Error approving claim. Please try again.');
+            }
+        });
+        
+        // Upload Invoice button handler
+        document.getElementById('uploadInvoiceBtn').addEventListener('click', function() {
+            document.getElementById('invoicePdfInput').click();
+        });
+        
+        // Handle file selection
+        document.getElementById('invoicePdfInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Validate file type
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                alert('Please select a PDF file');
+                this.value = '';
+                return;
+            }
+            
+            // Confirm upload
+            if (!confirm(`Upload invoice: ${file.name}?`)) {
+                this.value = '';
+                return;
+            }
+            
+            // Show uploading state
+            const uploadBtn = document.getElementById('uploadInvoiceBtn');
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('invoice_pdf', file);
+                
+                const response = await fetch(`/po/${uniqueId}/upload-invoice/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('Invoice uploaded successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Invoice PDF';
+                }
+            } catch (error) {
+                console.error('Error uploading invoice:', error);
+                alert('Error uploading invoice. Please try again.');
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Invoice PDF';
+            }
+            
+            // Clear file input
+            this.value = '';
+        });
+    </script>
+</body>
+</html>

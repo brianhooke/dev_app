@@ -92,7 +92,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
 
-Version: v67 (displayed in header)
+Version: v68 (displayed in header)
 -->
 
 {% block title %}
@@ -264,7 +264,7 @@ Version: v67 (displayed in header)
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
     <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v67
+        v68
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
         {% else %}
@@ -354,6 +354,9 @@ Version: v67 (displayed in header)
 
     <!-- Bills Section -->
     {% include 'dashboard/bills.html' %}
+    
+    <!-- Settings Section -->
+    {% include 'dashboard/settings.html' %}
     </div>
 </div>
 
@@ -383,6 +386,7 @@ Version: v67 (displayed in header)
             $('#contactsSection').hide();
             $('#projectsSection').hide();
             $('#xeroSection').hide();
+            $('#settingsSection').hide();
             
             // Remove tender view background image and overlay
             $('#dynamicContentArea').css({
@@ -456,6 +460,30 @@ Version: v67 (displayed in header)
             if (instancePk && typeof loadContacts === 'function') {
                 loadContacts(instancePk);
             }
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Settings controller - shows inline in workspace
+        $('#settingsLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            window.hideAllSections();
+            
+            // Reset tender view state
+            if (typeof window.resetTenderViewState === 'function') {
+                window.resetTenderViewState();
+            }
+            
+            // Show settings section and add has-content class to hide background
+            $('#settingsSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
             
             // Scroll to top
             $('html, body').animate({ scrollTop: 0 }, 300);

@@ -4,7 +4,7 @@ from .models import (
     Categories, Projects, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
-    Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment
+    Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units
 )
 
 # Helper function to set nullable fields as not required
@@ -87,6 +87,9 @@ class HcVariationAllocationsForm(forms.ModelForm):
 class CategoriesAdmin(admin.ModelAdmin):
     list_display = ("categories_pk", "division", "category", "invoice_category", "order_in_list")
 
+class UnitsAdmin(admin.ModelAdmin):
+    list_display = ("unit_pk", "unit_name", "order_in_list")
+
 class XeroInstancesAdmin(admin.ModelAdmin):
     list_display = ("xero_instance_pk", "xero_name", "xero_client_id")
 
@@ -101,7 +104,7 @@ class ProjectsAdmin(admin.ModelAdmin):
     list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived")
 
 class ContactsAdmin(admin.ModelAdmin):
-    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "email", "status", "bank_details_verified", "division", "checked")
+    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_details_verified", "division", "checked")
 
 class QuotesAdmin(admin.ModelAdmin):
     form = QuotesForm
@@ -109,7 +112,7 @@ class QuotesAdmin(admin.ModelAdmin):
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted_amount", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
     form = QuoteAllocationsForm
@@ -134,7 +137,8 @@ class Po_globalsAdmin(admin.ModelAdmin):
     list_display = ("reference", "invoicee", "address", "project_address", "ABN", "email", "note1", "note2", "note3")
 
 class Po_ordersAdmin(admin.ModelAdmin):
-    list_display = ("po_order_pk", "po_supplier", "po_sent", "po_note_1", "po_note_2", "po_note_3")
+    list_display = ("po_order_pk", "po_supplier", "project", "unique_id", "pdf", "po_sent", "created_at")
+    readonly_fields = ("unique_id", "created_at", "pdf")
 
 class PoOrderDetailAdmin(admin.ModelAdmin):
     form = PoOrderDetailForm
@@ -175,6 +179,7 @@ class HcVariationAllocationsAdmin(admin.ModelAdmin):
 
 # Register models with custom admin classes
 admin.site.register(Categories, CategoriesAdmin)
+admin.site.register(Units, UnitsAdmin)
 admin.site.register(XeroInstances, XeroInstancesAdmin)
 admin.site.register(XeroAccounts, XeroAccountsAdmin)
 admin.site.register(Projects, ProjectsAdmin)

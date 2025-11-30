@@ -138,7 +138,7 @@ $(document).ready(function() {
     window.loadContacts = function(instancePk) {
         if (!instancePk) {
             const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
-            tbody.html(`<tr><td colspan="7" style="text-align: center;">Please select a Xero instance</td></tr>`);
+            tbody.html(`<tr><td colspan="9" style="text-align: center;">Please select a Xero instance</td></tr>`);
             return;
         }
         
@@ -150,7 +150,7 @@ $(document).ready(function() {
                 tbody.empty();
                 
                 if (contacts.length === 0) {
-                    tbody.html(`<tr><td colspan="7" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
+                    tbody.html(`<tr><td colspan="9" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
                 } else {
                     contacts.forEach(contact => {
                         // Create row element and attach data using jQuery
@@ -186,6 +186,8 @@ $(document).ready(function() {
                         
                         row.append(`
                             <td class="contact-name">${contact.name || ''}${verifiedBadge}</td>
+                            <td class="contact-first-name">${contact.first_name || ''}</td>
+                            <td class="contact-last-name">${contact.last_name || ''}</td>
                             <td class="contact-email">${contact.email || ''}</td>
                             <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
                             <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
@@ -201,7 +203,7 @@ $(document).ready(function() {
             .catch(error => {
                 console.error('Error loading contacts:', error);
                 const tbody = $('#contactsSection:visible tbody, #contactsModal tbody');
-                tbody.html(`<tr><td colspan="7" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
+                tbody.html(`<tr><td colspan="9" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
             });
     };
     
@@ -246,11 +248,15 @@ $(document).ready(function() {
         const row = button.closest('tr');
         
         // Get current values
+        const firstNameCell = row.find('.contact-first-name');
+        const lastNameCell = row.find('.contact-last-name');
         const emailCell = row.find('.contact-email');
         const bsbCell = row.find('.contact-bsb');
         const accountCell = row.find('.contact-account');
         const abnCell = row.find('.contact-abn');
         
+        const firstName = firstNameCell.text().trim();
+        const lastName = lastNameCell.text().trim();
         const email = emailCell.text().trim();
         const bsb = String(bsbCell.data('bsb') || '');
         const account = String(accountCell.data('account') || '');
@@ -276,6 +282,8 @@ $(document).ready(function() {
         }
         
         // Replace cells with input fields
+        firstNameCell.html(`<input type="text" class="form-control form-control-sm first-name-input" value="${firstName}" style="width: 100px;">`);
+        lastNameCell.html(`<input type="text" class="form-control form-control-sm last-name-input" value="${lastName}" style="width: 100px;">`);
         emailCell.html(`<input type="text" class="form-control form-control-sm email-input" value="${email}" style="width: 180px;">`);
         bsbCell.html(`<input type="text" class="form-control form-control-sm bsb-input" value="${bsbFormatted}" maxlength="7" style="width: 80px;">`);
         accountCell.html(`<input type="text" class="form-control form-control-sm account-input" value="${account}" style="width: 120px;">`);
@@ -283,7 +291,7 @@ $(document).ready(function() {
         
         // Change button to Save/Cancel
         button.replaceWith(`
-            <button class="btn btn-sm btn-success save-contact-btn">Save</button>
+            <button class="btn btn-sm btn-warning save-contact-btn">Update</button>
             <button class="btn btn-sm btn-secondary cancel-contact-btn">Cancel</button>
         `);
     });
@@ -359,6 +367,10 @@ $(document).ready(function() {
         
         const { email, bsbDigits, accountDigits, abnDigits } = validation.values;
         
+        // Get first_name and last_name from inputs
+        const firstName = row.find('.first-name-input').val().trim();
+        const lastName = row.find('.last-name-input').val().trim();
+        
         // Show processing state
         const inputs = row.find('input');
         inputs.prop('disabled', true).css('background-color', '#e9ecef');
@@ -373,6 +385,8 @@ $(document).ready(function() {
                 'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
             },
             body: JSON.stringify({
+                first_name: firstName,
+                last_name: lastName,
                 email: email,
                 bsb: bsbDigits,
                 account_number: accountDigits,
@@ -432,8 +446,11 @@ $(document).ready(function() {
     
     // Pull Xero Contacts button handler
     $(document).on('click', '#pullXeroContactsBtn', function() {
+        console.log('[Contacts] Pull Xero Contacts button clicked');
+        
         // Check workspace dropdown first, then modal dropdown
         const xeroInstancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        console.log('[Contacts] Selected Xero instance PK:', xeroInstancePk);
         
         if (!xeroInstancePk) {
             alert('Please select a Xero instance');
@@ -444,6 +461,8 @@ $(document).ready(function() {
         const button = $(this);
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
         
+        console.log('[Contacts] Sending request to /pull_xero_contacts/' + xeroInstancePk + '/');
+        
         fetch(`/pull_xero_contacts/${xeroInstancePk}/`, {
             method: 'POST',
             headers: {
@@ -453,6 +472,8 @@ $(document).ready(function() {
         })
         .then(response => response.json().then(data => ({status: response.status, body: data})))
         .then(({status, body}) => {
+            console.log('[Contacts] Response received:', {status, body});
+            
             // Handle OAuth authorization needed
             if (status === 401 && body.needs_auth) {
                 button.prop('disabled', false).html('Pull/Update Xero Contacts');
@@ -463,11 +484,15 @@ $(document).ready(function() {
             }
             
             if (body.status === 'success') {
-                alert(`Success! ${body.details.new_contacts_added} new contacts added, ${body.details.contacts_updated} contacts updated, ${body.details.contacts_unchanged} contacts unchanged.`);
+                console.log('[Contacts] Success! Details:', body.details);
+                const contactPersonMsg = body.details.contact_person_updates !== undefined ? 
+                    `\n📧 ${body.details.contact_person_updates} contact person fields updated` : '';
+                alert(`Success! ${body.details.new_contacts_added} new contacts added, ${body.details.contacts_updated} contacts updated, ${body.details.contacts_unchanged} contacts unchanged.${contactPersonMsg}`);
                 // Reload contacts table
                 loadContacts(xeroInstancePk);
                 button.prop('disabled', false).html('Pull/Update Xero Contacts');
             } else {
+                console.error('[Contacts] Error:', body.message);
                 alert(`Error: ${body.message}`);
                 button.prop('disabled', false).html('Pull/Update Xero Contacts');
             }
