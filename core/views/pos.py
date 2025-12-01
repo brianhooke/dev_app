@@ -1022,11 +1022,17 @@ def view_po_pdf_by_unique_id(request, unique_id):
         
         if not most_recent_po or not most_recent_po.pdf or not most_recent_po.pdf.name:
             logger.warning(f'PDF not found for PO unique_id={unique_id}, supplier={supplier}, project={project}')
-            return HttpResponse('PDF not found', status=404)
+            return HttpResponse('PDF not found. Please re-send the PO email to generate a new PDF.', status=404)
         
         # Serve the saved PDF file
         try:
             logger.info(f'Serving PDF: {most_recent_po.pdf.name}')
+            
+            # Check if file exists in storage before trying to open
+            if not most_recent_po.pdf.storage.exists(most_recent_po.pdf.name):
+                logger.warning(f'PDF file does not exist in storage: {most_recent_po.pdf.name}')
+                return HttpResponse('PDF file not found in storage. Please re-send the PO email to regenerate.', status=404)
+            
             # Open the file explicitly before reading (required for S3)
             most_recent_po.pdf.open('rb')
             pdf_content = most_recent_po.pdf.read()
@@ -1035,9 +1041,12 @@ def view_po_pdf_by_unique_id(request, unique_id):
             # Close the file after reading
             most_recent_po.pdf.close()
             return response
+        except FileNotFoundError as e:
+            logger.error(f'PDF file not found: {most_recent_po.pdf.name}. This may be a legacy record from before S3 storage was configured.')
+            return HttpResponse('PDF file not found. Please re-send the PO email to regenerate.', status=404)
         except Exception as e:
             logger.error(f'Error reading PDF file {most_recent_po.pdf.name}: {e}', exc_info=True)
-            return HttpResponse(f'Error reading PDF file: {str(e)}', status=500)
+            return HttpResponse(f'Error reading PDF file. Please re-send the PO email to regenerate.', status=500)
         
     except Po_orders.DoesNotExist:
         return HttpResponse('Purchase Order not found', status=404)
