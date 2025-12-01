@@ -525,6 +525,8 @@ $(document).ready(function() {
         const addRow = $(`<tr class="add-contact-row" style="background-color: #f8f9fa;"></tr>`);
         addRow.append(`
             <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 150px;"></td>
+            <td><input type="text" class="form-control form-control-sm first-name-input" placeholder="First Name" style="width: 100px;"></td>
+            <td><input type="text" class="form-control form-control-sm last-name-input" placeholder="Last Name" style="width: 100px;"></td>
             <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 180px;"></td>
             <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
             <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 120px;"></td>
@@ -565,6 +567,10 @@ $(document).ready(function() {
         
         const { name, email, bsbDigits, accountDigits, abnDigits } = validation.values;
         
+        // Get first_name and last_name from inputs
+        const firstName = row.find('.first-name-input').val().trim();
+        const lastName = row.find('.last-name-input').val().trim();
+        
         // Show processing state
         const inputs = row.find('input');
         inputs.prop('disabled', true).css('background-color', '#e9ecef');
@@ -580,6 +586,8 @@ $(document).ready(function() {
             },
             body: JSON.stringify({
                 name: name,
+                first_name: firstName,
+                last_name: lastName,
                 email: email,
                 bsb: bsbDigits,
                 account_number: accountDigits,
@@ -629,10 +637,13 @@ $(document).ready(function() {
                 
                 newRow.append(`
                     <td class="contact-name">${contact.name || ''}</td>
+                    <td class="contact-first-name">${contact.first_name || ''}</td>
+                    <td class="contact-last-name">${contact.last_name || ''}</td>
                     <td class="contact-email">${contact.email || ''}</td>
                     <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${contact.bank_bsb || ''}">${formattedBsb}</td>
                     <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
                     <td class="contact-abn" style="white-space: nowrap;" data-abn="${contact.tax_number || ''}">${formattedAbn}</td>
+                    <td><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>
                     <td><button class="btn btn-sm btn-primary update-contact-btn">Update</button></td>
                 `);
                 

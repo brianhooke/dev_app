@@ -431,6 +431,8 @@ def create_contact(request, instance_pk):
     if request.method == 'POST':
         data = json.loads(request.body)
         name = data.get('name', '').strip()
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
         email = data.get('email', '').strip()
         bsb = data.get('bsb', '')
         account_number = data.get('account_number', '')
@@ -460,13 +462,15 @@ def create_contact(request, instance_pk):
         contact_data = {
             'Contacts': [{
                 'Name': name,
+                'FirstName': first_name if first_name else '',
+                'LastName': last_name if last_name else '',
                 'EmailAddress': email,
                 'BankAccountDetails': bank_account_details,
                 'TaxNumber': tax_number.replace(' ', '') if tax_number else ''
             }]
         }
         
-        logger.info(f"Creating contact - Name: {name}, Email: {email}, BSB: {bsb}, Account: {account_number}, Tax: {tax_number}")
+        logger.info(f"Creating contact - Name: {name}, First: {first_name}, Last: {last_name}, Email: {email}, BSB: {bsb}, Account: {account_number}, Tax: {tax_number}")
         
         create_response = requests.post(
             'https://api.xero.com/api.xro/2.0/Contacts',
@@ -503,6 +507,8 @@ def create_contact(request, instance_pk):
             xero_instance=xero_instance,
             xero_contact_id=xero_contact_id,
             name=name,
+            first_name=first_name if first_name else None,
+            last_name=last_name if last_name else None,
             email=email,
             status=contact_status,
             bank_bsb=bsb.replace('-', '') if bsb else '',
@@ -521,6 +527,8 @@ def create_contact(request, instance_pk):
             'contact': {
                 'contact_pk': new_contact.contact_pk,
                 'name': new_contact.name,
+                'first_name': new_contact.first_name,
+                'last_name': new_contact.last_name,
                 'email': new_contact.email,
                 'bank_bsb': new_contact.bank_bsb,
                 'bank_account_number': new_contact.bank_account_number,

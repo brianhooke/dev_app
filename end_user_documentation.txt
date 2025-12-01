@@ -1,0 +1,174 @@
+================================================================================
+                    PROJECT MANAGEMENT APP - USER GUIDE
+================================================================================
+
+This guide explains what you can do in each section of the app.
+
+
+================================================================================
+DASHBOARD
+================================================================================
+The main landing page showing your Xero instances table. From here you can:
+- See all connected Xero organisations
+- Access all other sections via the navigation menu on the left
+
+
+================================================================================
+BILLS
+================================================================================
+Manage supplier invoices/bills that come in via email or are entered directly.
+
+BILLS → INBOX
+-------------
+Bills that have arrived via email and need processing.
+- View unprocessed bills in a table (Xero Instance, Supplier, Invoice #, Net, GST)
+- Click a bill to view its PDF attachment
+- Edit bill details (supplier, invoice number, amounts)
+- "Send" button: Moves the bill to Direct for allocation
+- "Archive" button: Archives the bill (removes from active view)
+
+BILLS → DIRECT
+--------------
+Bills ready to be allocated to expense accounts and sent to Xero.
+- View bills awaiting allocation
+- Click a bill to see its details and PDF
+- Allocate amounts to Xero accounts (right-hand table)
+- "Still to allocate" shows remaining Net/GST (must reach $0.00)
+- "Send to Xero" button: Posts the bill as a DRAFT in Xero
+- Mail icon: Returns bill to Inbox (clears allocations)
+- "Archive" button: Archives the bill
+
+
+================================================================================
+PROJECTS
+================================================================================
+Manage all your projects. Click a project row to expand and see more options.
+
+PROJECT TABLE COLUMNS:
+- Project name, type, Xero instance, status
+- Background image upload
+- Update/Delete buttons
+
+EXPANDED PROJECT VIEW (click a project row):
+When you click on a project, you'll see tabs for different functions:
+
+Tender Mode is early stage set up & has a different set of options to Construction Mode.
+
+    ITEMS TAB ("Tender" mode only)
+    ---------
+    Manage the line items/cost codes for this project.
+    - View all items with their categories
+    - Add new items manually or via CSV upload
+    - Edit item details (name, category, unit)
+    - Delete items
+
+    DOCUMENTS TAB
+    -------------
+    Store and manage project documents.
+    - Upload documents (contracts, drawings, etc.)
+    - View/download uploaded documents
+    - Delete documents
+
+    CONTRACT BUDGET TAB
+    ------------------------------------------------
+    View the budget breakdown for construction projects.
+    - See committed amounts (from approved quotes)
+    - See uncommitted amounts (Qty, Rate, Amount)
+    - Track budget vs actual spending
+
+    QUOTES TAB
+    ----------------------------
+    Manage supplier quotes for tender projects.
+    - View quotes from different suppliers
+    - Compare pricing
+    - Accept/reject quotes
+
+    POs TAB (Construction projects)
+    -------------------------------
+    Manage Purchase Orders for construction projects.
+    - View POs by supplier
+    - See PO details (items, quantities, rates, amounts)
+    - Send PO emails to suppliers
+    - Track PO status
+
+
+================================================================================
+CONTACTS
+================================================================================
+Manage your supplier/contact database synced with Xero.
+
+- Select a Xero instance from the dropdown
+- View all contacts for that instance
+- "Pull Contacts" button: Sync contacts from Xero to the app
+- Create new contacts (adds to both app and Xero)
+- Edit contact details (name, email, bank details, ABN)
+- Archive/unarchive contacts
+- Verify contact details (compare app vs Xero data)
+  - Green checkmark: Verified and matches
+  - Orange warning: Verified but has changes
+
+
+================================================================================
+XERO
+================================================================================
+Manage your Xero organisation connections.
+
+- View all connected Xero instances in a table
+- "Pull Contacts" button: Sync contacts from Xero
+- "Pull Accounts" button: Sync chart of accounts from Xero
+- "Test Connection" button: Verify the Xero API connection is working
+- Add new Xero instances (requires OAuth2 authentication)
+- Delete Xero instances
+
+
+================================================================================
+SETTINGS
+================================================================================
+Configure app-wide settings.
+
+- Manage SPV (Special Purpose Vehicle) data
+- Configure default values
+- Other administrative settings
+
+
+================================================================================
+DISABLED SECTIONS (Coming Soon)
+================================================================================
+
+STOCKTAKE
+---------
+(Not yet available) - Will be used for inventory management.
+
+STAFF HOURS
+-----------
+(Not yet available) - Will be used for timesheet tracking.
+
+
+================================================================================
+TIPS & COMMON WORKFLOWS
+================================================================================
+
+PROCESSING A NEW BILL:
+1. Go to Bills → Inbox
+2. Click on the bill to view it
+3. Check/edit supplier, invoice number, amounts
+4. Click "Send" to move to Direct
+5. Go to Bills → Direct
+6. Click the bill and allocate to accounts
+7. Ensure "Still to allocate" shows $0.00
+8. Click "Send to Xero"
+
+SENDING A PURCHASE ORDER:
+1. Go to Projects
+2. Click on your construction project
+3. Go to the POs tab
+4. Select a supplier
+5. Click "Send Email" to generate and send the PO
+
+SYNCING WITH XERO:
+1. Go to Xero section
+2. Click "Pull Contacts" to sync contacts
+3. Click "Pull Accounts" to sync chart of accounts
+4. Use "Test Connection" if you're having issues
+
+================================================================================

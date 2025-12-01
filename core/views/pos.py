@@ -537,13 +537,15 @@ def approve_po_claim(request, unique_id):
     """
     Approve a pending progress claim for a PO.
     Updates invoice_status from 100 to 101.
+    If claim was edited before approval, updates allocations and sends comparison email.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
     
     try:
         import json
-        from core.models import Invoices
+        from core.models import Invoices, Invoice_allocations, Costing
+        from decimal import Decimal
         
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
@@ -551,6 +553,8 @@ def approve_po_claim(request, unique_id):
         
         data = json.loads(request.body)
         pending_invoice_pk = data.get('pending_invoice_pk')
+        is_edit_claim_mode = data.get('is_edit_claim_mode', False)
+        approved_claims = data.get('approved_claims', [])
         
         if not pending_invoice_pk:
             return JsonResponse({'status': 'error', 'message': 'No pending invoice specified'}, status=400)
@@ -566,11 +570,52 @@ def approve_po_claim(request, unique_id):
         except Invoices.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Pending invoice not found'}, status=404)
         
+        # Track if any values were modified
+        has_modifications = False
+        comparison_data = []
+        
+        # If we have approved_claims data, update the allocations if modified
+        if approved_claims:
+            for claim in approved_claims:
+                costing_pk = claim.get('costing_pk')
+                submitted_amount = Decimal(str(claim.get('submitted_amount', 0)))
+                approved_amount = Decimal(str(claim.get('approved_amount', 0)))
+                
+                # Check if there's a difference
+                if abs(submitted_amount - approved_amount) > Decimal('0.01'):
+                    has_modifications = True
+                
+                comparison_data.append({
+                    'description': claim.get('description', ''),
+                    'contract_sum': claim.get('contract_sum', 0),
+                    'submitted_percent': claim.get('submitted_percent', 0),
+                    'submitted_amount': float(submitted_amount),
+                    'approved_percent': claim.get('approved_percent', 0),
+                    'approved_amount': float(approved_amount),
+                    'difference': float(approved_amount - submitted_amount)
+                })
+                
+                # Update the allocation if modified
+                if costing_pk and abs(submitted_amount - approved_amount) > Decimal('0.01'):
+                    try:
+                        costing = Costing.objects.get(costing_pk=costing_pk)
+                        allocation = Invoice_allocations.objects.filter(
+                            invoice_pk=invoice,
+                            item=costing
+                        ).first()
+                        
+                        if allocation:
+                            allocation.amount = approved_amount
+                            allocation.save()
+                            logger.info(f"Updated allocation for costing {costing_pk}: {submitted_amount} -> {approved_amount}")
+                    except Costing.DoesNotExist:
+                        logger.warning(f"Costing {costing_pk} not found when updating allocation")
+        
         # Update status to approved (but no invoice uploaded yet)
         invoice.invoice_status = 101
         invoice.save()
         
-        logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.invoice_pk}")
+        logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.invoice_pk}, modifications: {has_modifications}")
         
         # Send notification email to supplier
         if supplier.email:
@@ -584,15 +629,94 @@ def approve_po_claim(request, unique_id):
             # Get project manager name
             project_manager = project.manager or 'The Project Team'
             
-            # Email subject
-            subject = f"Progress Claim Approved - {project.project}"
+            # Build comparison table if there were modifications
+            comparison_table_html = ''
+            comparison_table_text = ''
+            
+            if has_modifications and comparison_data:
+                # Calculate totals
+                total_submitted = sum(item['submitted_amount'] for item in comparison_data)
+                total_approved = sum(item['approved_amount'] for item in comparison_data)
+                total_difference = sum(item['difference'] for item in comparison_data)
+                
+                # Build HTML table
+                comparison_rows_html = ''
+                for item in comparison_data:
+                    diff_color = '#28a745' if item['difference'] >= 0 else '#dc3545'
+                    diff_sign = '+' if item['difference'] >= 0 else ''
+                    comparison_rows_html += f'''
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{item['description']}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{item['submitted_percent']:.2f}%</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${item['submitted_amount']:,.2f}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{item['approved_percent']:.2f}%</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${item['approved_amount']:,.2f}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right; color: {diff_color};">{diff_sign}${item['difference']:,.2f}</td>
+                    </tr>'''
+                
+                total_diff_color = '#28a745' if total_difference >= 0 else '#dc3545'
+                total_diff_sign = '+' if total_difference >= 0 else ''
+                
+                comparison_table_html = f'''
+                <div style="margin: 20px 0;">
+                    <h3 style="color: #333; margin-bottom: 10px;">Claim Comparison</h3>
+                    <p style="color: #666; margin-bottom: 15px;">Your submitted claim was adjusted before approval. Please see the comparison below:</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background-color: #f8f9fa;">
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: left;">Item</th>
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">Submitted %</th>
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">Submitted $</th>
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">Approved %</th>
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">Approved $</th>
+                                <th style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {comparison_rows_html}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background-color: #f8f9fa; font-weight: bold;">
+                                <td style="padding: 10px 8px; border: 1px solid #ddd;">TOTAL</td>
+                                <td style="padding: 10px 8px; border: 1px solid #ddd;"></td>
+                                <td style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">${total_submitted:,.2f}</td>
+                                <td style="padding: 10px 8px; border: 1px solid #ddd;"></td>
+                                <td style="padding: 10px 8px; border: 1px solid #ddd; text-align: right;">${total_approved:,.2f}</td>
+                                <td style="padding: 10px 8px; border: 1px solid #ddd; text-align: right; color: {total_diff_color};">{total_diff_sign}${total_difference:,.2f}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                '''
+                
+                # Build plain text comparison
+                comparison_table_text = '\n\nCLAIM COMPARISON\n' + '='*50 + '\n'
+                comparison_table_text += 'Your submitted claim was adjusted before approval:\n\n'
+                for item in comparison_data:
+                    diff_sign = '+' if item['difference'] >= 0 else ''
+                    comparison_table_text += f"{item['description']}:\n"
+                    comparison_table_text += f"  Submitted: {item['submitted_percent']:.2f}% (${item['submitted_amount']:,.2f})\n"
+                    comparison_table_text += f"  Approved:  {item['approved_percent']:.2f}% (${item['approved_amount']:,.2f})\n"
+                    comparison_table_text += f"  Difference: {diff_sign}${item['difference']:,.2f}\n\n"
+                
+                total_diff_sign = '+' if total_difference >= 0 else ''
+                comparison_table_text += f"\nTOTAL:\n"
+                comparison_table_text += f"  Submitted: ${total_submitted:,.2f}\n"
+                comparison_table_text += f"  Approved:  ${total_approved:,.2f}\n"
+                comparison_table_text += f"  Difference: {total_diff_sign}${total_difference:,.2f}\n"
+            
+            # Email subject - indicate if modified
+            if has_modifications:
+                subject = f"Progress Claim Approved (with adjustments) - {project.project}"
+            else:
+                subject = f"Progress Claim Approved - {project.project}"
             
             # Plain text message
             text_message = f"""
 Dear {first_name} {last_name},
 
 Your claim for {project.project} has been approved.
-
+{comparison_table_text}
 Please upload your invoice promptly at the link below to ensure it is processed on time.
 
 {po_url}
@@ -608,7 +732,7 @@ Regards,
 <head>
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .container {{ max-width: 700px; margin: 0 auto; padding: 20px; }}
         .header {{ background: linear-gradient(135deg, #27ae60 0%, #229954 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
         .content {{ background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }}
         .button {{ display: inline-block; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
@@ -624,6 +748,8 @@ Regards,
             <p>Dear {first_name} {last_name},</p>
             
             <p>Your claim for <strong>{project.project}</strong> has been approved.</p>
+            
+            {comparison_table_html}
             
             <p>Please upload your invoice promptly to ensure it is processed on time.</p>
             
@@ -653,7 +779,7 @@ Regards,
                 email = EmailMultiAlternatives(subject, text_message, from_email, [supplier.email])
                 email.attach_alternative(html_message, "text/html")
                 email.send()
-                logger.info(f"Sent claim approval notification to: {supplier.email}")
+                logger.info(f"Sent claim approval notification to: {supplier.email}, has_modifications: {has_modifications}")
             except Exception as e:
                 logger.error(f"Error sending claim approval notification: {e}", exc_info=True)
                 # Don't fail the request if email fails

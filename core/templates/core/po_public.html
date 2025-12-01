@@ -217,6 +217,13 @@
             border-radius: 4px;
             font-size: 11px;
             text-align: right;
+            background-color: #fff;
+        }
+        
+        /* Debug: make dollar input visually distinct */
+        .reusable-table input.this-claim-dollar-input {
+            background-color: #e8f4e8;
+            border: 1px solid #4CAF50;
         }
         
         /* Remove increment/decrement buttons */
@@ -336,7 +343,42 @@
             display: inline-flex;
         }
         
-        .btn-approve:hover {
+        .btn-approve:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4);
+        }
+        
+        .btn-approve:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-cancel {
+            background: #e74c3c;
+            color: white;
+            display: none;
+        }
+        
+        .btn-cancel.show {
+            display: inline-flex;
+        }
+        
+        .btn-cancel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+        }
+        
+        .btn-edit-claim {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            color: white;
+            display: none;
+        }
+        
+        .btn-edit-claim.show {
+            display: inline-flex;
+        }
+        
+        .btn-edit-claim:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4);
         }
@@ -579,7 +621,17 @@
                                     {% if has_pending_claim or has_approved_claim %}disabled{% endif %}
                                 >
                             </td>
-                            <td class="align-right this-claim-cell this-claim-amount" data-value="{{ item.this_claim }}">{{ item.this_claim|floatformat:2 }}</td>
+                            <td class="align-right this-claim-cell this-claim-amount" data-value="{{ item.this_claim }}">
+                                <input 
+                                    type="number" 
+                                    class="this-claim-dollar-input{% if has_pending_claim %} pending{% elif has_approved_claim %} approved{% endif %}" 
+                                    value="{{ item.this_claim|floatformat:2 }}"
+                                    step="0.01"
+                                    min="0"
+                                    data-index="{{ forloop.counter0 }}"
+                                    {% if has_pending_claim or has_approved_claim %}disabled{% endif %}
+                                >
+                            </td>
                             <td class="align-right still-to-claim-percent" data-value="{{ item.still_to_claim_percent }}">{{ item.still_to_claim_percent|floatformat:2 }}</td>
                             <td class="align-right still-to-claim" data-value="{{ item.still_to_claim }}">{{ item.still_to_claim|floatformat:2 }}</td>
                             {% else %}
@@ -669,8 +721,14 @@
                     <button class="btn btn-secondary" id="editUnapprovedBtn">
                         <i class="fas fa-edit"></i> Edit Unapproved
                     </button>
+                    <button class="btn btn-edit-claim" id="editClaimBtn">
+                        <i class="fas fa-edit"></i> Edit Claim
+                    </button>
                     <button class="btn btn-approve" id="approveBtn">
                         <i class="fas fa-check-circle"></i> Approve
+                    </button>
+                    <button class="btn btn-cancel" id="cancelEditBtn">
+                        <i class="fas fa-times"></i> Cancel
                     </button>
                     <button class="btn btn-primary" id="submitForApprovalBtn">
                         <i class="fas fa-check"></i> Submit for Approval
@@ -720,8 +778,10 @@
         const previousClaimsCount = {{ previous_claims_count|default:"0" }};
         const poUrl = '/po/{{ po_order.unique_id }}/pdf/';
         let isEditMode = false;  // Track if user clicked "Edit Unapproved"
+        let isEditClaimMode = false;  // Track if user clicked "Edit Claim"
         let claimsExpanded = false;  // Track if individual claims are expanded
         let currentDocType = 'po';  // Track which document is currently shown
+        let savedClaimValues = [];  // Store original claim values for cancel/restore
         
         // Show Purchase Order in the viewer
         function showPurchaseOrder() {
@@ -951,8 +1011,8 @@
         
         // Format all static number fields with commas on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Format money fields
-            document.querySelectorAll('.contract-sum, .previous-claims, .still-to-claim, .this-claim-amount, .contract-rate, .individual-claim-col').forEach(cell => {
+            // Format money fields (excluding .this-claim-amount which now contains an input)
+            document.querySelectorAll('.contract-sum, .previous-claims, .still-to-claim, .contract-rate, .individual-claim-col').forEach(cell => {
                 const value = parseFloat(cell.dataset.value || cell.textContent);
                 if (!isNaN(value)) {
                     cell.textContent = formatWithCommas(value.toFixed(2));
@@ -976,44 +1036,184 @@
             
             // Show/hide buttons based on claim status
             if (hasPendingClaim) {
-                // Pending claim: show edit and approve buttons
+                // Pending claim: show Edit Unapproved, Edit Claim, and Approve buttons
                 document.getElementById('editUnapprovedBtn').classList.add('show', 'active');
+                document.getElementById('editClaimBtn').classList.add('show');
                 document.getElementById('approveBtn').classList.add('show');
                 document.getElementById('submitForApprovalBtn').style.display = 'inline-block';
+                
+                // Save current claim values for potential restore
+                saveCurrentClaimValues();
             } else if (hasApprovedClaim) {
                 // Approved claim: show upload section, hide all other buttons
                 document.getElementById('uploadInvoiceSection').style.display = 'block';
                 document.getElementById('submitForApprovalBtn').style.display = 'none';
                 document.getElementById('editUnapprovedBtn').style.display = 'none';
+                document.getElementById('editClaimBtn').style.display = 'none';
                 document.getElementById('approveBtn').style.display = 'none';
+                document.getElementById('cancelEditBtn').style.display = 'none';
             }
         });
         
+        // Save current claim values for restore on cancel
+        // Dollar is the source of truth - we save dollar and recalculate percent from it
+        function saveCurrentClaimValues() {
+            savedClaimValues = [];
+            document.querySelectorAll('tbody tr:not(.total-row):not(.doc-buttons-row)').forEach(row => {
+                const costingPk = row.dataset.costingPk;
+                if (!costingPk) return;
+                
+                if (isConstruction) {
+                    // Use the data-value from the amount cell as source of truth (more precise)
+                    const amountCell = row.querySelector('.this-claim-amount');
+                    const dollarValue = amountCell ? parseFloat(amountCell.dataset.value) || 0 : 0;
+                    savedClaimValues.push({
+                        costingPk: costingPk,
+                        dollar: dollarValue.toFixed(2)
+                    });
+                } else {
+                    const dollarInput = row.querySelector('.this-claim-input');
+                    savedClaimValues.push({
+                        costingPk: costingPk,
+                        dollar: dollarInput ? dollarInput.value : '0.00'
+                    });
+                }
+            });
+            console.log('[PO Public] Saved claim values (dollar as source of truth):', savedClaimValues);
+        }
+        
+        // Restore saved claim values
+        // Dollar is the source of truth - restore dollar first, then recalculate percent from it
+        function restoreClaimValues() {
+            savedClaimValues.forEach(saved => {
+                const row = document.querySelector(`tr[data-costing-pk="${saved.costingPk}"]`);
+                if (!row) return;
+                
+                if (isConstruction) {
+                    const percentInput = row.querySelector('.this-claim-percent-input');
+                    const dollarInput = row.querySelector('.this-claim-dollar-input');
+                    const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value);
+                    const previousClaimsPercent = parseFloat(row.querySelector('.previous-claims-percent').dataset.value) || 0;
+                    
+                    // Restore dollar value (source of truth)
+                    const dollarValue = parseFloat(saved.dollar) || 0;
+                    if (dollarInput) dollarInput.value = dollarValue.toFixed(2);
+                    
+                    // Recalculate percent from dollar (to avoid precision issues)
+                    const calculatedPercent = contractSum > 0 ? (dollarValue / contractSum) * 100 : 0;
+                    if (percentInput) percentInput.value = calculatedPercent.toFixed(2);
+                    
+                    // Update data-value on amount cell
+                    const amountCell = row.querySelector('.this-claim-amount');
+                    if (amountCell) amountCell.dataset.value = dollarValue;
+                    
+                    // Update still to claim cells
+                    const stillToClaimPercent = 100 - previousClaimsPercent - calculatedPercent;
+                    const stillToClaim = contractSum * (stillToClaimPercent / 100);
+                    
+                    const stillToClaimPercentCell = row.querySelector('.still-to-claim-percent');
+                    if (stillToClaimPercentCell) {
+                        stillToClaimPercentCell.dataset.value = stillToClaimPercent;
+                        stillToClaimPercentCell.textContent = stillToClaimPercent.toFixed(2);
+                    }
+                    
+                    const stillToClaimCell = row.querySelector('.still-to-claim');
+                    if (stillToClaimCell) {
+                        stillToClaimCell.dataset.value = stillToClaim;
+                        stillToClaimCell.textContent = formatWithCommas(stillToClaim.toFixed(2));
+                    }
+                } else {
+                    const dollarInput = row.querySelector('.this-claim-input');
+                    if (dollarInput) {
+                        dollarInput.value = saved.dollar;
+                        validateAndCalculate(dollarInput);
+                    }
+                }
+            });
+            
+            calculateTotals();
+            validateSubmitButton();
+        }
+        
         // For construction projects: percentage-based input
-        document.querySelectorAll('.this-claim-percent-input').forEach(input => {
+        // Only recalculate when the value actually changes, not on focus/blur
+        const percentInputs = document.querySelectorAll('.this-claim-percent-input');
+        percentInputs.forEach(input => {
+            // Store original value on focus to detect actual changes
+            input.addEventListener('focus', function() {
+                this.dataset.originalValue = this.value;
+            });
+            
             input.addEventListener('input', function() {
+                // Mark that user is editing percentage (dollar will be recalculated)
+                this.dataset.userEditing = 'true';
                 validateAndCalculatePercent(this);
             });
             
             input.addEventListener('blur', function() {
-                // Format to 2 decimal places on blur
-                const value = parseFloat(this.value) || 0;
-                this.value = value.toFixed(2);
-                validateAndCalculatePercent(this);
+                // Only format and recalculate if value actually changed
+                const originalValue = parseFloat(this.dataset.originalValue) || 0;
+                const currentValue = parseFloat(this.value) || 0;
+                
+                // Format to 2 decimal places
+                this.value = currentValue.toFixed(2);
+                
+                // Only recalculate if value changed
+                if (Math.abs(originalValue - currentValue) > 0.001) {
+                    validateAndCalculatePercent(this);
+                }
+                
+                delete this.dataset.userEditing;
             });
         });
         
         // For non-construction projects: dollar-based input
-        document.querySelectorAll('.this-claim-input').forEach(input => {
+        const nonConstructionInputs = document.querySelectorAll('.this-claim-input');
+        nonConstructionInputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.dataset.originalValue = this.value;
+            });
+            
             input.addEventListener('input', function() {
                 validateAndCalculate(this);
             });
             
             input.addEventListener('blur', function() {
-                // Format to 2 decimal places on blur
-                const value = parseFloat(this.value) || 0;
-                this.value = value.toFixed(2);
-                validateAndCalculate(this);
+                const originalValue = parseFloat(this.dataset.originalValue) || 0;
+                const currentValue = parseFloat(this.value) || 0;
+                this.value = currentValue.toFixed(2);
+                
+                if (Math.abs(originalValue - currentValue) > 0.001) {
+                    validateAndCalculate(this);
+                }
+            });
+        });
+        
+        // For construction projects: dollar-based input (calculates percentage)
+        // Dollar is the source of truth - percentage is derived from it
+        const dollarInputs = document.querySelectorAll('.this-claim-dollar-input');
+        dollarInputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.dataset.originalValue = this.value;
+            });
+            
+            input.addEventListener('input', function() {
+                // Mark that user is editing dollar (percentage will be recalculated)
+                this.dataset.userEditing = 'true';
+                validateAndCalculateDollar(this);
+            });
+            
+            input.addEventListener('blur', function() {
+                const originalValue = parseFloat(this.dataset.originalValue) || 0;
+                const currentValue = parseFloat(this.value) || 0;
+                this.value = currentValue.toFixed(2);
+                
+                // Only recalculate if value changed
+                if (Math.abs(originalValue - currentValue) > 0.001) {
+                    validateAndCalculateDollar(this);
+                }
+                
+                delete this.dataset.userEditing;
             });
         });
         
@@ -1057,7 +1257,84 @@
             const thisClaimAmount = contractSum * (thisClaimPercent / 100);
             const thisClaimAmountCell = row.querySelector('.this-claim-amount');
             thisClaimAmountCell.dataset.value = thisClaimAmount;
-            thisClaimAmountCell.textContent = formatWithCommas(thisClaimAmount.toFixed(2));
+            
+            // Update the dollar input field
+            const dollarInput = row.querySelector('.this-claim-dollar-input');
+            console.log('[PO Public] validateAndCalculatePercent - dollarInput:', dollarInput, 'thisClaimAmount:', thisClaimAmount);
+            if (dollarInput) {
+                dollarInput.value = thisClaimAmount.toFixed(2);
+                console.log('[PO Public] Set dollar input value to:', dollarInput.value);
+            } else {
+                console.log('[PO Public] ERROR: dollarInput not found in row!');
+            }
+            
+            // Calculate Still to Claim % and $
+            const stillToClaimPercent = 100 - previousClaimsPercent - thisClaimPercent;
+            const stillToClaim = contractSum * (stillToClaimPercent / 100);
+            
+            const stillToClaimPercentCell = row.querySelector('.still-to-claim-percent');
+            stillToClaimPercentCell.dataset.value = stillToClaimPercent;
+            stillToClaimPercentCell.textContent = stillToClaimPercent.toFixed(2);
+            
+            const stillToClaimCell = row.querySelector('.still-to-claim');
+            stillToClaimCell.dataset.value = stillToClaim;
+            stillToClaimCell.textContent = formatWithCommas(stillToClaim.toFixed(2));
+            
+            // Recalculate totals and validate submit button
+            validateSubmitButton();
+        }
+        
+        // Validate and calculate for dollar input (construction) - calculates percentage from dollar
+        function validateAndCalculateDollar(input) {
+            const row = input.closest('tr');
+            const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value);
+            const previousClaimsPercent = parseFloat(row.querySelector('.previous-claims-percent').dataset.value) || 0;
+            let thisClaimAmount = parseFloat(input.value) || 0;
+            
+            // Validate: no more than 2 decimal places
+            const decimalPlaces = (input.value.split('.')[1] || '').length;
+            if (decimalPlaces > 2) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: must be a number
+            if (isNaN(thisClaimAmount)) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: min 0
+            if (thisClaimAmount < 0) {
+                thisClaimAmount = 0;
+                input.value = '0.00';
+            }
+            
+            // Calculate max amount based on remaining percentage
+            const maxPercent = 100 - previousClaimsPercent;
+            const maxAmount = contractSum * (maxPercent / 100);
+            
+            // Validate: cannot exceed max amount
+            if (thisClaimAmount > maxAmount) {
+                thisClaimAmount = maxAmount;
+                input.value = thisClaimAmount.toFixed(2);
+            }
+            
+            // Remove error class if valid
+            input.classList.remove('error');
+            
+            // Calculate This Claim % from dollar amount
+            const thisClaimPercent = contractSum > 0 ? (thisClaimAmount / contractSum) * 100 : 0;
+            
+            // Update the percentage input field
+            const percentInput = row.querySelector('.this-claim-percent-input');
+            if (percentInput) {
+                percentInput.value = thisClaimPercent.toFixed(2);
+            }
+            
+            // Update the data-value on the amount cell
+            const thisClaimAmountCell = row.querySelector('.this-claim-amount');
+            thisClaimAmountCell.dataset.value = thisClaimAmount;
             
             // Calculate Still to Claim % and $
             const stillToClaimPercent = 100 - previousClaimsPercent - thisClaimPercent;
@@ -1184,13 +1461,17 @@
             }
         });
         
-        // Edit unapproved button
+        // Edit unapproved button - allows editing before re-submitting
         document.getElementById('editUnapprovedBtn').addEventListener('click', function() {
             // Set edit mode flag
             isEditMode = true;
+            isEditClaimMode = false;
             
-            // Enable all inputs (both percent and dollar)
-            document.querySelectorAll('.this-claim-input, .this-claim-percent-input').forEach(input => {
+            // Save current values before editing
+            saveCurrentClaimValues();
+            
+            // Enable all inputs (percent, dollar for construction, and dollar for non-construction)
+            document.querySelectorAll('.this-claim-input, .this-claim-percent-input, .this-claim-dollar-input').forEach(input => {
                 input.disabled = false;
                 input.classList.remove('pending');
             });
@@ -1198,13 +1479,68 @@
             // Update submit button state
             validateSubmitButton();
             
-            // Hide edit and approve buttons
+            // Hide edit buttons, show cancel, keep submit visible
             this.classList.remove('show');
+            document.getElementById('editClaimBtn').classList.remove('show');
             document.getElementById('approveBtn').classList.remove('show');
+            document.getElementById('cancelEditBtn').classList.add('show');
+        });
+        
+        // Edit Claim button - allows principal to modify claim before approving
+        document.getElementById('editClaimBtn').addEventListener('click', function() {
+            // Set edit claim mode flag
+            isEditClaimMode = true;
+            isEditMode = false;
+            
+            // Save current values before editing (these are the submitted values)
+            saveCurrentClaimValues();
+            
+            // Enable all inputs
+            document.querySelectorAll('.this-claim-input, .this-claim-percent-input, .this-claim-dollar-input').forEach(input => {
+                input.disabled = false;
+                input.classList.remove('pending');
+            });
+            
+            // Hide all buttons except Approve and Cancel
+            document.getElementById('editUnapprovedBtn').classList.remove('show');
+            this.classList.remove('show');
+            document.getElementById('submitForApprovalBtn').style.display = 'none';
+            
+            // Show only Approve and Cancel
+            document.getElementById('approveBtn').classList.add('show');
+            document.getElementById('cancelEditBtn').classList.add('show');
+        });
+        
+        // Cancel button - restores original values
+        document.getElementById('cancelEditBtn').addEventListener('click', function() {
+            // Restore saved values
+            restoreClaimValues();
+            
+            // Disable inputs again and add pending class back
+            document.querySelectorAll('.this-claim-input, .this-claim-percent-input, .this-claim-dollar-input').forEach(input => {
+                input.disabled = true;
+                input.classList.add('pending');
+            });
+            
+            // Reset mode flags
+            isEditMode = false;
+            isEditClaimMode = false;
+            
+            // Restore button visibility to pending claim state
+            document.getElementById('editUnapprovedBtn').classList.add('show', 'active');
+            document.getElementById('editClaimBtn').classList.add('show');
+            document.getElementById('approveBtn').classList.add('show');
+            document.getElementById('cancelEditBtn').classList.remove('show');
+            document.getElementById('submitForApprovalBtn').style.display = 'inline-block';
+            
+            // Disable submit button since we're back to pending state
+            document.getElementById('submitForApprovalBtn').disabled = true;
         });
         
         // Approve button
         document.getElementById('approveBtn').addEventListener('click', async function() {
+            if (this.disabled) return;
+            
             if (!pendingInvoicePk) {
                 alert('No pending claim to approve');
                 return;
@@ -1214,6 +1550,53 @@
                 return;
             }
             
+            // Disable button immediately to prevent double-clicks
+            this.disabled = true;
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Approving...';
+            
+            // Gather current (approved) values and compare with submitted values
+            // Dollar is the source of truth - use data-value from amount cell
+            const approvedClaims = [];
+            document.querySelectorAll('tbody tr:not(.total-row):not(.doc-buttons-row)').forEach(row => {
+                const costingPk = row.dataset.costingPk;
+                if (!costingPk) return;
+                
+                const description = row.querySelector('td:first-child').textContent.trim();
+                const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value) || 0;
+                
+                let approvedPercent = 0;
+                let approvedAmount = 0;
+                
+                if (isConstruction) {
+                    // Use data-value from amount cell as source of truth
+                    const amountCell = row.querySelector('.this-claim-amount');
+                    approvedAmount = amountCell ? parseFloat(amountCell.dataset.value) || 0 : 0;
+                    // Calculate percent from dollar amount
+                    approvedPercent = contractSum > 0 ? (approvedAmount / contractSum) * 100 : 0;
+                } else {
+                    const dollarInput = row.querySelector('.this-claim-input');
+                    approvedAmount = parseFloat(dollarInput?.value) || 0;
+                    approvedPercent = contractSum > 0 ? (approvedAmount / contractSum) * 100 : 0;
+                }
+                
+                // Find the original submitted value from savedClaimValues (dollar only)
+                const submitted = savedClaimValues.find(s => s.costingPk === costingPk);
+                const submittedAmount = submitted ? parseFloat(submitted.dollar) || 0 : approvedAmount;
+                // Calculate submitted percent from submitted dollar
+                const submittedPercent = contractSum > 0 ? (submittedAmount / contractSum) * 100 : 0;
+                
+                approvedClaims.push({
+                    costing_pk: costingPk,
+                    description: description,
+                    contract_sum: contractSum,
+                    submitted_percent: submittedPercent,
+                    submitted_amount: submittedAmount,
+                    approved_percent: approvedPercent,
+                    approved_amount: approvedAmount
+                });
+            });
+            
             try {
                 const response = await fetch(`/po/${uniqueId}/approve/`, {
                     method: 'POST',
@@ -1221,7 +1604,9 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        pending_invoice_pk: pendingInvoicePk
+                        pending_invoice_pk: pendingInvoicePk,
+                        is_edit_claim_mode: isEditClaimMode,
+                        approved_claims: approvedClaims
                     })
                 });
                 
@@ -1232,10 +1617,14 @@
                     window.location.reload();
                 } else {
                     alert('Error: ' + data.message);
+                    this.disabled = false;
+                    this.innerHTML = originalText;
                 }
             } catch (error) {
                 console.error('Error approving claim:', error);
                 alert('Error approving claim. Please try again.');
+                this.disabled = false;
+                this.innerHTML = originalText;
             }
         });
         
