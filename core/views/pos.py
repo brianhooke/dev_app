@@ -1010,19 +1010,25 @@ def view_po_pdf_by_unique_id(request, unique_id):
         supplier = po_order.po_supplier
         project = po_order.project
         
-        # Get the most recent Po_orders for this supplier and project
+        # Get the most recent Po_orders for this supplier and project that has a PDF
+        # Exclude both null and empty string values
+        from django.db.models import Q
         most_recent_po = Po_orders.objects.filter(
             po_supplier=supplier,
-            project=project,
-            pdf__isnull=False
+            project=project
+        ).exclude(
+            Q(pdf__isnull=True) | Q(pdf='')
         ).order_by('-created_at').first()
         
-        if not most_recent_po or not most_recent_po.pdf:
+        if not most_recent_po or not most_recent_po.pdf or not most_recent_po.pdf.name:
+            logger.warning(f'PDF not found for PO unique_id={unique_id}, supplier={supplier}, project={project}')
             return HttpResponse('PDF not found', status=404)
         
         # Serve the saved PDF file
         try:
-            # Use the file field's read() method which works with both local and S3 storage
+            logger.info(f'Serving PDF: {most_recent_po.pdf.name}')
+            # Open the file explicitly before reading (required for S3)
+            most_recent_po.pdf.open('rb')
             pdf_content = most_recent_po.pdf.read()
             response = HttpResponse(pdf_content, content_type='application/pdf')
             response['Content-Disposition'] = f'inline; filename="{most_recent_po.pdf.name.split("/")[-1]}"'
@@ -1030,8 +1036,8 @@ def view_po_pdf_by_unique_id(request, unique_id):
             most_recent_po.pdf.close()
             return response
         except Exception as e:
-            logger.error(f'Error reading PDF file: {e}', exc_info=True)
-            return HttpResponse('Error reading PDF file', status=500)
+            logger.error(f'Error reading PDF file {most_recent_po.pdf.name}: {e}', exc_info=True)
+            return HttpResponse(f'Error reading PDF file: {str(e)}', status=500)
         
     except Po_orders.DoesNotExist:
         return HttpResponse('Purchase Order not found', status=404)
