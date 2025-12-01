@@ -623,6 +623,9 @@ def get_quote_allocations_by_quotes(request):
             'item__costing_pk',
             'item__item',
             'amount',
+            'qty',
+            'unit',
+            'rate',
             'notes'
         )
         
@@ -635,6 +638,9 @@ def get_quote_allocations_by_quotes(request):
                 'item_pk': alloc['item__costing_pk'],
                 'item_name': alloc['item__item'],
                 'amount': str(alloc['amount']),
+                'qty': str(alloc['qty']) if alloc['qty'] else '0',
+                'unit': alloc['unit'] or '',
+                'rate': str(alloc['rate']) if alloc['rate'] else '0',
                 'notes': alloc['notes'] or ''
             })
         
