@@ -27,14 +27,14 @@
         }
         
         .left-panel {
-            width: 60%;
+            width: 65%;
             overflow-y: auto;
             padding: 40px;
             background: white;
         }
         
         .right-panel {
-            width: 40%;
+            width: 35%;
             background: #2c3e50;
             display: flex;
             flex-direction: column;
@@ -102,10 +102,10 @@
         }
         
         .reusable-table th {
-            padding: 12px 8px;
-            text-align: left;
+            padding: 8px 4px;
+            text-align: center;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 11px;
             color: white;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             position: sticky;
@@ -115,6 +115,68 @@
         
         .reusable-table th.align-right {
             text-align: right;
+        }
+        
+        .reusable-table th.align-center {
+            text-align: center;
+        }
+        
+        .reusable-table th.sub-header {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 6px 3px;
+        }
+        
+        /* Expandable claims styles */
+        .expand-toggle {
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
+            color: #2c3e50;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .expand-toggle:hover {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            transform: scale(1.1);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .expand-toggle i {
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        .collapse-btn-header {
+            background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%) !important;
+            vertical-align: middle;
+        }
+        
+        .individual-claim-col {
+            display: none;
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        
+        .individual-claim-col.expanded {
+            display: table-cell;
+        }
+        
+        .individual-claim-header {
+            background: linear-gradient(135deg, #5a6fd6 0%, #6b5b95 100%) !important;
+        }
+        
+        .summary-claim-col {
+            display: table-cell;
+        }
+        
+        .summary-claim-col.collapsed {
+            display: none;
         }
         
         .reusable-table th.this-claim-header,
@@ -137,9 +199,10 @@
         }
         
         .reusable-table td {
-            padding: 12px 8px;
+            padding: 6px 4px;
             border-bottom: 1px solid #e0e0e0;
-            line-height: 1.3;
+            font-size: 12px;
+            line-height: 1.2;
             vertical-align: middle;
         }
         
@@ -149,10 +212,10 @@
         
         .reusable-table input[type="number"] {
             width: 100%;
-            padding: 6px 8px;
+            padding: 4px 6px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 11px;
             text-align: right;
         }
         
@@ -286,8 +349,55 @@
         
         .total-row td {
             border-top: 2px solid #34495e !important;
-            padding: 14px 8px !important;
-            font-size: 15px;
+            padding: 8px 4px !important;
+            font-size: 12px;
+        }
+        
+        /* Document buttons row */
+        .doc-buttons-row td {
+            padding: 8px 4px !important;
+            background-color: #f8f9fa;
+        }
+        
+        .doc-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .doc-btn-po {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+        }
+        
+        .doc-btn-po:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 6px rgba(52, 152, 219, 0.4);
+        }
+        
+        .doc-btn-po.active {
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.5);
+        }
+        
+        .doc-btn-invoice {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            color: white;
+        }
+        
+        .doc-btn-invoice:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 6px rgba(155, 89, 182, 0.4);
+        }
+        
+        .doc-btn-invoice.active {
+            box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.5);
         }
         
         .footer {
@@ -377,29 +487,102 @@
                     <div class="subheading"><strong>Supplier:</strong> {{ supplier.name }}</div>
                 </div>
                 
-                <table class="reusable-table">
+                <table class="reusable-table" id="claimsTable">
                     <thead>
+                        {% if is_construction %}
                         <tr>
-                            <th style="width: {% if is_construction %}25%{% else %}30%{% endif %};">Description</th>
-                            {% if is_construction %}
-                            <th style="width: 8%;">Unit</th>
-                            {% endif %}
+                            <th rowspan="2" style="width: 15%;">Description</th>
+                            <th rowspan="2" style="width: 8%;">Contract Sum ($)</th>
+                            <th rowspan="2" style="width: 6%;">Units</th>
+                            <th rowspan="2" style="width: 7%;">Contract Qty</th>
+                            <th rowspan="2" style="width: 8%;">Contract Rate ($/unit)</th>
+                            <th rowspan="2" style="width: 6%;">Complete (%)</th>
+                            <!-- Individual claim headers (hidden by default) -->
+                            {% for i in previous_claims_range %}
+                            <th colspan="2" class="align-center individual-claim-col individual-claim-header" data-claim="{{ i }}">Claim {{ i }}</th>
+                            {% endfor %}
+                            <!-- Collapse button (hidden by default) -->
+                            <th rowspan="2" class="individual-claim-col collapse-btn-header" style="width: 20px; padding: 2px;">
+                                <span class="expand-toggle" id="collapseClaimsBtn" title="Collapse claims">
+                                    <i class="fas fa-chevron-right"></i>
+                                </span>
+                            </th>
+                            <!-- Summary Previous Claim header -->
+                            <th colspan="2" class="align-center summary-claim-col" style="width: 14%;">
+                                {% if previous_claims_count > 0 %}
+                                <span class="expand-toggle" id="expandClaimsBtn" title="Expand individual claims">
+                                    <i class="fas fa-chevron-left"></i>
+                                </span>
+                                {% endif %}
+                                Previous Claim
+                            </th>
+                            <th colspan="2" class="align-center this-claim-header" style="width: 14%;">This Claim</th>
+                            <th colspan="2" class="align-center" style="width: 14%;">Still to Claim</th>
+                        </tr>
+                        <tr>
+                            <!-- Individual claim sub-headers (hidden by default) -->
+                            {% for i in previous_claims_range %}
+                            <th class="align-center sub-header individual-claim-col individual-claim-header" data-claim="{{ i }}">%</th>
+                            <th class="align-center sub-header individual-claim-col individual-claim-header" data-claim="{{ i }}">$</th>
+                            {% endfor %}
+                            <!-- Summary sub-headers -->
+                            <th class="align-center sub-header summary-claim-col" style="width: 7%;">%</th>
+                            <th class="align-center sub-header summary-claim-col" style="width: 7%;">$</th>
+                            <th class="align-center sub-header this-claim-header" style="width: 7%;">%</th>
+                            <th class="align-center sub-header this-claim-header" style="width: 7%;">$</th>
+                            <th class="align-center sub-header" style="width: 7%;">%</th>
+                            <th class="align-center sub-header" style="width: 7%;">$</th>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <th style="width: 30%;">Description</th>
                             <th class="align-right" style="width: 12%;">Contract Sum ($)</th>
                             <th class="align-right" style="width: 10%;">Complete (%)</th>
                             <th class="align-right" style="width: 14%;">Previous Claims ($)</th>
                             <th class="align-right this-claim-header" style="width: 14%;">This Claim ($)</th>
-                            <th class="align-right" style="width: {% if is_construction %}11%{% else %}14%{% endif %};">Still to Claim ($)</th>
+                            <th class="align-right" style="width: 14%;">Still to Claim ($)</th>
                         </tr>
+                        {% endif %}
                     </thead>
                     <tbody>
                         {% for item in items %}
                         <tr data-item-index="{{ forloop.counter0 }}" data-costing-pk="{{ item.costing_pk }}">
                             <td>{{ item.description }}</td>
+                            <td class="align-right contract-sum" data-value="{{ item.contract_sum }}">{{ item.contract_sum|floatformat:2 }}</td>
                             {% if is_construction %}
                             <td>{{ item.unit }}</td>
+                            <td class="align-right contract-qty" data-value="{{ item.contract_qty }}">{{ item.contract_qty|floatformat:2 }}</td>
+                            <td class="align-right contract-rate" data-value="{{ item.contract_rate }}">{{ item.contract_rate|floatformat:2 }}</td>
                             {% endif %}
-                            <td class="align-right contract-sum" data-value="{{ item.contract_sum }}">{{ item.contract_sum|floatformat:2 }}</td>
                             <td class="align-right complete-percent" data-value="0">0.00</td>
+                            {% if is_construction %}
+                            <!-- Individual claim cells (hidden by default) -->
+                            {% for claim in item.individual_claims %}
+                            <td class="align-right individual-claim-col" data-claim="{{ claim.claim_number }}">{{ claim.percent|floatformat:2 }}</td>
+                            <td class="align-right individual-claim-col" data-claim="{{ claim.claim_number }}">{{ claim.amount|floatformat:2 }}</td>
+                            {% endfor %}
+                            <!-- Collapse button spacer cell -->
+                            <td class="individual-claim-col collapse-btn-cell"></td>
+                            <!-- Summary previous claims cells -->
+                            <td class="align-right previous-claims-percent summary-claim-col" data-value="{{ item.previous_claims_percent }}">{{ item.previous_claims_percent|floatformat:2 }}</td>
+                            <td class="align-right previous-claims summary-claim-col" data-value="{{ item.previous_claims }}">{{ item.previous_claims|floatformat:2 }}</td>
+                            <td class="align-right this-claim-cell">
+                                <input 
+                                    type="number" 
+                                    class="this-claim-percent-input{% if has_pending_claim %} pending{% elif has_approved_claim %} approved{% endif %}" 
+                                    value="{{ item.this_claim_percent|floatformat:2 }}"
+                                    step="0.01"
+                                    min="0"
+                                    max="{{ item.still_to_claim_percent|floatformat:2 }}"
+                                    data-index="{{ forloop.counter0 }}"
+                                    data-max-percent="{{ item.still_to_claim_percent }}"
+                                    {% if has_pending_claim or has_approved_claim %}disabled{% endif %}
+                                >
+                            </td>
+                            <td class="align-right this-claim-cell this-claim-amount" data-value="{{ item.this_claim }}">{{ item.this_claim|floatformat:2 }}</td>
+                            <td class="align-right still-to-claim-percent" data-value="{{ item.still_to_claim_percent }}">{{ item.still_to_claim_percent|floatformat:2 }}</td>
+                            <td class="align-right still-to-claim" data-value="{{ item.still_to_claim }}">{{ item.still_to_claim|floatformat:2 }}</td>
+                            {% else %}
                             <td class="align-right previous-claims" data-value="{{ item.previous_claims }}">{{ item.previous_claims|floatformat:2 }}</td>
                             <td class="align-right this-claim-cell">
                                 <input 
@@ -413,19 +596,72 @@
                                 >
                             </td>
                             <td class="align-right still-to-claim" data-value="{{ item.still_to_claim }}">{{ item.still_to_claim|floatformat:2 }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                         <tr class="total-row">
                             <td><strong>TOTAL</strong></td>
+                            <td class="align-right" id="totalContractSum">0.00</td>
                             {% if is_construction %}
                             <td></td>
+                            <td></td>
+                            <td></td>
                             {% endif %}
-                            <td class="align-right" id="totalContractSum">0.00</td>
                             <td class="align-right" id="totalCompletePercent">0.00</td>
+                            {% if is_construction %}
+                            <!-- Individual claim total cells (hidden by default) -->
+                            {% for i in previous_claims_range %}
+                            <td class="align-right individual-claim-col" data-claim="{{ i }}" id="totalClaim{{ i }}Percent">0.00</td>
+                            <td class="align-right individual-claim-col" data-claim="{{ i }}" id="totalClaim{{ i }}Amount">0.00</td>
+                            {% endfor %}
+                            <!-- Collapse button spacer cell -->
+                            <td class="individual-claim-col collapse-btn-cell"></td>
+                            <!-- Summary total cells -->
+                            <td class="align-right summary-claim-col" id="totalPreviousClaimsPercent">0.00</td>
+                            <td class="align-right summary-claim-col" id="totalPreviousClaims">0.00</td>
+                            <td class="align-right this-claim-cell" id="totalThisClaimPercent">0.00</td>
+                            <td class="align-right this-claim-cell" id="totalThisClaim">0.00</td>
+                            <td class="align-right" id="totalStillToClaimPercent">0.00</td>
+                            <td class="align-right" id="totalStillToClaim">0.00</td>
+                            {% else %}
                             <td class="align-right" id="totalPreviousClaims">0.00</td>
                             <td class="align-right this-claim-cell" id="totalThisClaim">0.00</td>
                             <td class="align-right" id="totalStillToClaim">0.00</td>
+                            {% endif %}
                         </tr>
+                        <!-- Document buttons row -->
+                        {% if is_construction %}
+                        <tr class="doc-buttons-row">
+                            <td></td>
+                            <td style="text-align: center;">
+                                <button class="doc-btn doc-btn-po active" id="viewPoBtn" onclick="showPurchaseOrder()">
+                                    <i class="fas fa-file-pdf"></i> Purchase Order
+                                </button>
+                            </td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <!-- Individual claim invoice buttons (hidden by default) -->
+                            {% for claim in individual_claims %}
+                            <td colspan="2" class="individual-claim-col" data-claim="{{ claim.claim_number }}" style="text-align: center;">
+                                {% if claim.invoice_pdf_url %}
+                                <button class="doc-btn doc-btn-invoice" onclick="showInvoice('{{ claim.invoice_pdf_url }}', {{ claim.claim_number }})">
+                                    <i class="fas fa-file-invoice"></i> Invoice
+                                </button>
+                                {% else %}
+                                <span style="font-size: 9px; color: #999;">No invoice</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                            <!-- Collapse button spacer cell -->
+                            <td class="individual-claim-col collapse-btn-cell"></td>
+                            <!-- Summary cells (empty) -->
+                            <td colspan="2" class="summary-claim-col"></td>
+                            <td colspan="2"></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
                 
@@ -480,7 +716,83 @@
         const pendingInvoicePk = {{ pending_invoice_pk|default:"null" }};
         const approvedInvoicePk = {{ approved_invoice_pk|default:"null" }};
         const uniqueId = '{{ po_order.unique_id }}';
+        const isConstruction = {{ is_construction|yesno:"true,false" }};
+        const previousClaimsCount = {{ previous_claims_count|default:"0" }};
+        const poUrl = '/po/{{ po_order.unique_id }}/pdf/';
         let isEditMode = false;  // Track if user clicked "Edit Unapproved"
+        let claimsExpanded = false;  // Track if individual claims are expanded
+        let currentDocType = 'po';  // Track which document is currently shown
+        
+        // Show Purchase Order in the viewer
+        function showPurchaseOrder() {
+            const iframe = document.querySelector('.pdf-viewer iframe');
+            iframe.src = poUrl;
+            
+            // Update button states
+            document.querySelectorAll('.doc-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('viewPoBtn').classList.add('active');
+            
+            // Update header
+            document.querySelector('.pdf-header').innerHTML = '<i class="fas fa-file-pdf"></i> Original Purchase Order';
+            currentDocType = 'po';
+        }
+        
+        // Show Invoice in the viewer
+        function showInvoice(invoiceUrl, claimNumber) {
+            const iframe = document.querySelector('.pdf-viewer iframe');
+            iframe.src = invoiceUrl;
+            
+            // Update button states
+            document.querySelectorAll('.doc-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.closest('.doc-btn').classList.add('active');
+            
+            // Update header
+            document.querySelector('.pdf-header').innerHTML = '<i class="fas fa-file-invoice"></i> Claim ' + claimNumber + ' Invoice';
+            currentDocType = 'invoice-' + claimNumber;
+        }
+        
+        // Toggle individual claims expansion
+        function toggleClaimsExpansion() {
+            claimsExpanded = !claimsExpanded;
+            
+            // Toggle individual claim columns
+            document.querySelectorAll('.individual-claim-col').forEach(el => {
+                if (claimsExpanded) {
+                    el.classList.add('expanded');
+                } else {
+                    el.classList.remove('expanded');
+                }
+            });
+            
+            // Toggle summary columns
+            document.querySelectorAll('.summary-claim-col').forEach(el => {
+                if (claimsExpanded) {
+                    el.classList.add('collapsed');
+                } else {
+                    el.classList.remove('collapsed');
+                }
+            });
+        }
+        
+        // Set up expand/collapse button handlers
+        function setupClaimsToggle() {
+            const expandBtn = document.getElementById('expandClaimsBtn');
+            const collapseBtn = document.getElementById('collapseClaimsBtn');
+            
+            if (expandBtn) {
+                expandBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleClaimsExpansion();
+                });
+            }
+            
+            if (collapseBtn) {
+                collapseBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleClaimsExpansion();
+                });
+            }
+        }
         
         // Format number with commas
         function formatWithCommas(num) {
@@ -510,12 +822,26 @@
             let totalThisClaim = 0;
             let totalStillToClaim = 0;
             
-            document.querySelectorAll('tbody tr:not(.total-row)').forEach(row => {
-                const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value) || 0;
-                const previousClaims = parseFloat(row.querySelector('.previous-claims').dataset.value) || 0;
-                const thisClaimInput = row.querySelector('.this-claim-input');
-                const thisClaim = parseFloat(thisClaimInput.value) || 0;
-                const stillToClaim = parseFloat(row.querySelector('.still-to-claim').dataset.value) || 0;
+            document.querySelectorAll('tbody tr:not(.total-row):not(.doc-buttons-row)').forEach(row => {
+                const contractSumEl = row.querySelector('.contract-sum');
+                const previousClaimsEl = row.querySelector('.previous-claims');
+                const stillToClaimEl = row.querySelector('.still-to-claim');
+                
+                // Skip rows that don't have the required elements
+                if (!contractSumEl || !previousClaimsEl || !stillToClaimEl) return;
+                
+                const contractSum = parseFloat(contractSumEl.dataset.value) || 0;
+                const previousClaims = parseFloat(previousClaimsEl.dataset.value) || 0;
+                const stillToClaim = parseFloat(stillToClaimEl.dataset.value) || 0;
+                
+                let thisClaim = 0;
+                if (isConstruction) {
+                    // Get from the calculated $ amount cell
+                    thisClaim = parseFloat(row.querySelector('.this-claim-amount').dataset.value) || 0;
+                } else {
+                    const thisClaimInput = row.querySelector('.this-claim-input');
+                    thisClaim = parseFloat(thisClaimInput.value) || 0;
+                }
                 
                 // Calculate and update complete %
                 const completePercent = calculateCompletePercent(row);
@@ -540,6 +866,52 @@
                 document.getElementById('totalCompletePercent').textContent = totalCompletePercent.toFixed(2);
             } else {
                 document.getElementById('totalCompletePercent').textContent = '0.00';
+            }
+            
+            // For construction: calculate percentage totals
+            if (isConstruction) {
+                // Previous claims %
+                const totalPreviousClaimsPercent = totalContractSum > 0 ? (totalPreviousClaims / totalContractSum * 100) : 0;
+                document.getElementById('totalPreviousClaimsPercent').textContent = totalPreviousClaimsPercent.toFixed(2);
+                
+                // This claim %
+                const totalThisClaimPercent = totalContractSum > 0 ? (totalThisClaim / totalContractSum * 100) : 0;
+                document.getElementById('totalThisClaimPercent').textContent = totalThisClaimPercent.toFixed(2);
+                
+                // Still to claim %
+                const totalStillToClaimPercent = totalContractSum > 0 ? (totalStillToClaim / totalContractSum * 100) : 0;
+                document.getElementById('totalStillToClaimPercent').textContent = totalStillToClaimPercent.toFixed(2);
+                
+                // Calculate individual claim totals
+                for (let claimNum = 1; claimNum <= previousClaimsCount; claimNum++) {
+                    let claimTotalPercent = 0;
+                    let claimTotalAmount = 0;
+                    
+                    // Sum up all cells for this claim number (exclude total-row and doc-buttons-row)
+                    document.querySelectorAll(`tbody tr:not(.total-row):not(.doc-buttons-row) td.individual-claim-col[data-claim="${claimNum}"]`).forEach((cell, index) => {
+                        const value = parseFloat(cell.textContent.replace(/,/g, '')) || 0;
+                        if (index % 2 === 0) {
+                            // Even index = percent column
+                            claimTotalPercent += value;
+                        } else {
+                            // Odd index = amount column
+                            claimTotalAmount += value;
+                        }
+                    });
+                    
+                    // Update total row cells
+                    const percentCell = document.getElementById(`totalClaim${claimNum}Percent`);
+                    const amountCell = document.getElementById(`totalClaim${claimNum}Amount`);
+                    
+                    if (percentCell) {
+                        // For percent, calculate weighted average based on contract sum
+                        const weightedPercent = totalContractSum > 0 ? (claimTotalAmount / totalContractSum * 100) : 0;
+                        percentCell.textContent = weightedPercent.toFixed(2);
+                    }
+                    if (amountCell) {
+                        amountCell.textContent = formatWithCommas(claimTotalAmount.toFixed(2));
+                    }
+                }
             }
             
             return totalThisClaim;
@@ -579,7 +951,16 @@
         
         // Format all static number fields with commas on page load
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.contract-sum, .previous-claims, .still-to-claim').forEach(cell => {
+            // Format money fields
+            document.querySelectorAll('.contract-sum, .previous-claims, .still-to-claim, .this-claim-amount, .contract-rate, .individual-claim-col').forEach(cell => {
+                const value = parseFloat(cell.dataset.value || cell.textContent);
+                if (!isNaN(value)) {
+                    cell.textContent = formatWithCommas(value.toFixed(2));
+                }
+            });
+            
+            // Format qty fields (2dp)
+            document.querySelectorAll('.contract-qty').forEach(cell => {
                 const value = parseFloat(cell.dataset.value || cell.textContent);
                 if (!isNaN(value)) {
                     cell.textContent = formatWithCommas(value.toFixed(2));
@@ -589,6 +970,9 @@
             // Initial calculations
             calculateTotals();
             validateSubmitButton();
+            
+            // Set up claims expand/collapse toggle
+            setupClaimsToggle();
             
             // Show/hide buttons based on claim status
             if (hasPendingClaim) {
@@ -605,7 +989,21 @@
             }
         });
         
-        // Validate and calculate on input
+        // For construction projects: percentage-based input
+        document.querySelectorAll('.this-claim-percent-input').forEach(input => {
+            input.addEventListener('input', function() {
+                validateAndCalculatePercent(this);
+            });
+            
+            input.addEventListener('blur', function() {
+                // Format to 2 decimal places on blur
+                const value = parseFloat(this.value) || 0;
+                this.value = value.toFixed(2);
+                validateAndCalculatePercent(this);
+            });
+        });
+        
+        // For non-construction projects: dollar-based input
         document.querySelectorAll('.this-claim-input').forEach(input => {
             input.addEventListener('input', function() {
                 validateAndCalculate(this);
@@ -619,6 +1017,65 @@
             });
         });
         
+        // Validate and calculate for percentage input (construction)
+        function validateAndCalculatePercent(input) {
+            const row = input.closest('tr');
+            const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value);
+            const previousClaimsPercent = parseFloat(row.querySelector('.previous-claims-percent').dataset.value) || 0;
+            let thisClaimPercent = parseFloat(input.value) || 0;
+            
+            // Validate: no more than 2 decimal places
+            const decimalPlaces = (input.value.split('.')[1] || '').length;
+            if (decimalPlaces > 2) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: must be a number
+            if (isNaN(thisClaimPercent)) {
+                input.classList.add('error');
+                return;
+            }
+            
+            // Validate: min 0
+            if (thisClaimPercent < 0) {
+                thisClaimPercent = 0;
+                input.value = '0.00';
+            }
+            
+            // Validate: cannot exceed 100% - previous claims %
+            const maxPercent = 100 - previousClaimsPercent;
+            if (thisClaimPercent > maxPercent) {
+                thisClaimPercent = maxPercent;
+                input.value = thisClaimPercent.toFixed(2);
+            }
+            
+            // Remove error class if valid
+            input.classList.remove('error');
+            
+            // Calculate This Claim $ = Contract Sum * This Claim %
+            const thisClaimAmount = contractSum * (thisClaimPercent / 100);
+            const thisClaimAmountCell = row.querySelector('.this-claim-amount');
+            thisClaimAmountCell.dataset.value = thisClaimAmount;
+            thisClaimAmountCell.textContent = formatWithCommas(thisClaimAmount.toFixed(2));
+            
+            // Calculate Still to Claim % and $
+            const stillToClaimPercent = 100 - previousClaimsPercent - thisClaimPercent;
+            const stillToClaim = contractSum * (stillToClaimPercent / 100);
+            
+            const stillToClaimPercentCell = row.querySelector('.still-to-claim-percent');
+            stillToClaimPercentCell.dataset.value = stillToClaimPercent;
+            stillToClaimPercentCell.textContent = stillToClaimPercent.toFixed(2);
+            
+            const stillToClaimCell = row.querySelector('.still-to-claim');
+            stillToClaimCell.dataset.value = stillToClaim;
+            stillToClaimCell.textContent = formatWithCommas(stillToClaim.toFixed(2));
+            
+            // Recalculate totals and validate submit button
+            validateSubmitButton();
+        }
+        
+        // Validate and calculate for dollar input (non-construction)
         function validateAndCalculate(input) {
             const row = input.closest('tr');
             const contractSum = parseFloat(row.querySelector('.contract-sum').dataset.value);
@@ -666,8 +1123,15 @@
             const claims = [];
             document.querySelectorAll('tbody tr:not(.total-row)').forEach(row => {
                 const costingPk = row.dataset.costingPk;
-                const thisClaimInput = row.querySelector('.this-claim-input');
-                const amount = parseFloat(thisClaimInput.value) || 0;
+                let amount = 0;
+                
+                if (isConstruction) {
+                    // Get calculated amount from the $ cell
+                    amount = parseFloat(row.querySelector('.this-claim-amount').dataset.value) || 0;
+                } else {
+                    const thisClaimInput = row.querySelector('.this-claim-input');
+                    amount = parseFloat(thisClaimInput.value) || 0;
+                }
                 
                 if (amount > 0 && costingPk) {
                     claims.push({
@@ -714,8 +1178,8 @@
             // Set edit mode flag
             isEditMode = true;
             
-            // Enable all inputs
-            document.querySelectorAll('.this-claim-input').forEach(input => {
+            // Enable all inputs (both percent and dollar)
+            document.querySelectorAll('.this-claim-input, .this-claim-percent-input').forEach(input => {
                 input.disabled = false;
                 input.classList.remove('pending');
             });

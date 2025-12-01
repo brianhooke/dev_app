@@ -318,6 +318,16 @@ def view_po_by_unique_id(request, unique_id):
         supplier = po_order.po_supplier
         project = po_order.project
         
+        # Get the most recent PO for this supplier/project (same as PDF view)
+        # This ensures we show details from the same PO that the PDF displays
+        most_recent_po = Po_orders.objects.filter(
+            po_supplier=supplier,
+            project=project
+        ).order_by('-created_at').first()
+        
+        if most_recent_po:
+            po_order = most_recent_po
+        
         # Check if construction project
         is_construction = project.project_type == 'construction'
         
@@ -329,24 +339,50 @@ def view_po_by_unique_id(request, unique_id):
         
         # Group allocations by item
         from collections import defaultdict
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if is_construction:
-            # For construction: store unit separately
-            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None, 'unit': None})
+            # For construction: aggregate from Po_order_detail
+            items_map = defaultdict(lambda: {
+                'contract_sum': Decimal('0'),
+                'contract_qty': Decimal('0'),
+                'quote_numbers': [],
+                'costing_pk': None,
+                'unit': None
+            })
+            
+            # Get all Po_order_details for this PO
+            po_details = Po_order_detail.objects.filter(po_order_pk=po_order)
+            logger.info(f"PO Public URL - PO pk={po_order.po_order_pk}, found {po_details.count()} Po_order_detail records")
+            
+            for detail in po_details:
+                item_name = detail.costing.item
+                items_map[item_name]['costing_pk'] = detail.costing.costing_pk
+                items_map[item_name]['unit'] = detail.costing.unit or '-'
+                
+                # Sum qty and calculate contract sum (qty * rate)
+                if detail.qty and detail.rate:
+                    items_map[item_name]['contract_sum'] += detail.qty * detail.rate
+                    items_map[item_name]['contract_qty'] += detail.qty
+                elif detail.amount:
+                    items_map[item_name]['contract_sum'] += detail.amount
+                
+                # Track quote numbers
+                if detail.quote and detail.quote.supplier_quote_number:
+                    if detail.quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(detail.quote.supplier_quote_number)
         else:
             items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None})
-        
-        for quote in quotes:
-            for allocation in quote.quote_allocations.all():
-                item_name = allocation.item.item
-                items_map[item_name]['amount'] += allocation.amount
-                items_map[item_name]['costing_pk'] = allocation.item.costing_pk
-                
-                # For construction projects, get unit from Costing
-                if is_construction and items_map[item_name]['unit'] is None:
-                    items_map[item_name]['unit'] = allocation.item.unit or '-'
-                
-                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+            
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    item_name = allocation.item.item
+                    items_map[item_name]['amount'] += allocation.amount
+                    items_map[item_name]['costing_pk'] = allocation.item.costing_pk
+                    
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
         
         # Get previous approved claims (invoice_status = 102, approved AND invoice uploaded)
         from core.models import Invoice_allocations, Invoices
@@ -354,11 +390,26 @@ def view_po_by_unique_id(request, unique_id):
             project=project,
             contact_pk=supplier,
             invoice_status=102
-        )
+        ).order_by('invoice_date', 'invoice_pk')
+        
+        # Build list of individual claims for expandable view
+        individual_claims = []  # List of {claim_number, invoice_pk, allocations_by_item}
+        claim_number = 1
         
         # Calculate previous claims by item (only status 102)
         previous_claims_by_item = defaultdict(Decimal)
         for invoice in completed_invoices:
+            # Get invoice PDF URL if available
+            invoice_pdf_url = None
+            if invoice.pdf and hasattr(invoice.pdf, 'url'):
+                invoice_pdf_url = invoice.pdf.url
+            
+            claim_data = {
+                'claim_number': claim_number,
+                'invoice_pk': invoice.invoice_pk,
+                'invoice_pdf_url': invoice_pdf_url,
+                'allocations': {}  # item_name -> {amount, percent}
+            }
             allocations = Invoice_allocations.objects.filter(invoice_pk=invoice)
             for alloc in allocations:
                 if alloc.item:
@@ -369,6 +420,9 @@ def view_po_by_unique_id(request, unique_id):
                     else:
                         claim_amount = alloc.amount or Decimal('0')
                     previous_claims_by_item[item_name] += claim_amount
+                    claim_data['allocations'][item_name] = float(claim_amount)
+            individual_claims.append(claim_data)
+            claim_number += 1
         
         # Check for pending claim (invoice_status = 100)
         pending_invoice = Invoices.objects.filter(
@@ -404,10 +458,35 @@ def view_po_by_unique_id(request, unique_id):
         # Convert to list
         items = []
         for item_name, data in items_map.items():
-            contract_sum = float(data['amount'])
+            if is_construction:
+                contract_sum = float(data['contract_sum'])
+                contract_qty = float(data['contract_qty'])
+                # Calculate contract rate as contract_sum / contract_qty
+                contract_rate = contract_sum / contract_qty if contract_qty > 0 else 0.0
+            else:
+                contract_sum = float(data['amount'])
+                contract_qty = 0.0
+                contract_rate = 0.0
+                
             previous_claims = float(previous_claims_by_item.get(item_name, Decimal('0')))
             this_claim = pending_claims_by_item.get(item_name, 0.0) or approved_claims_by_item.get(item_name, 0.0)
             still_to_claim = contract_sum - previous_claims - this_claim
+            
+            # Calculate percentages
+            previous_claims_percent = (previous_claims / contract_sum * 100) if contract_sum > 0 else 0.0
+            this_claim_percent = (this_claim / contract_sum * 100) if contract_sum > 0 else 0.0
+            still_to_claim_percent = (still_to_claim / contract_sum * 100) if contract_sum > 0 else 0.0
+            
+            # Build individual claim data for this item
+            item_individual_claims = []
+            for claim in individual_claims:
+                claim_amount = claim['allocations'].get(item_name, 0.0)
+                claim_percent = (claim_amount / contract_sum * 100) if contract_sum > 0 else 0.0
+                item_individual_claims.append({
+                    'claim_number': claim['claim_number'],
+                    'amount': claim_amount,
+                    'percent': claim_percent
+                })
             
             item_data = {
                 'description': item_name,
@@ -416,13 +495,19 @@ def view_po_by_unique_id(request, unique_id):
                 'quote_numbers': ', '.join(data['quote_numbers']),
                 'complete_percent': 0.0,
                 'previous_claims': previous_claims,
+                'previous_claims_percent': previous_claims_percent,
                 'this_claim': this_claim,
+                'this_claim_percent': this_claim_percent,
                 'still_to_claim': still_to_claim,
+                'still_to_claim_percent': still_to_claim_percent,
+                'individual_claims': item_individual_claims,
             }
             
-            # Add unit for construction projects
+            # Add construction-specific fields
             if is_construction:
                 item_data['unit'] = data.get('unit', '-')
+                item_data['contract_qty'] = contract_qty
+                item_data['contract_rate'] = contract_rate
             
             items.append(item_data)
         
@@ -436,6 +521,9 @@ def view_po_by_unique_id(request, unique_id):
             'approved_invoice_pk': approved_invoice.invoice_pk if approved_invoice else None,
             'has_pending_claim': pending_invoice is not None,
             'has_approved_claim': approved_invoice is not None,
+            'previous_claims_count': len(individual_claims),
+            'previous_claims_range': range(1, len(individual_claims) + 1),
+            'individual_claims': individual_claims,
         }
         
         return render(request, 'core/po_public.html', context)

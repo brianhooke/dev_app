@@ -442,6 +442,7 @@
             addRow.html(`
                 <td><input type="text" class="form-control form-control-sm add-project-name" placeholder="Project name *" required></td>
                 <td>-</td>
+                <td>-</td>
                 <td>
                     <select class="form-control form-control-sm add-project-type">
                         <option value="general">General</option>
@@ -461,6 +462,9 @@
                         <option value="">Select Xero Instance first</option>
                     </select>
                 </td>
+                <td><input type="text" class="form-control form-control-sm add-manager" placeholder="Manager name"></td>
+                <td><input type="email" class="form-control form-control-sm add-manager-email" placeholder="Manager email"></td>
+                <td><input type="text" class="form-control form-control-sm add-contracts-admin-emails" placeholder="Emails (semicolon separated)"></td>
                 <td><input type="file" class="form-control form-control-sm add-background-image" accept="image/*"></td>
                 <td>-</td>
                 <td>-</td>
@@ -529,6 +533,9 @@
             const projectType = row.find('.add-project-type').val();
             const xeroInstancePk = row.find('.add-xero-instance').val();
             const salesAccount = row.find('.add-sales-account').val();
+            const manager = row.find('.add-manager').val().trim();
+            const managerEmail = row.find('.add-manager-email').val().trim();
+            const contractsAdminEmails = row.find('.add-contracts-admin-emails').val().trim();
             const backgroundFile = row.find('.add-background-image')[0].files[0];
             
             // Validate required fields
@@ -551,6 +558,15 @@
             formData.append('xero_instance_pk', xeroInstancePk);
             if (salesAccount) {
                 formData.append('xero_sales_account', salesAccount);
+            }
+            if (manager) {
+                formData.append('manager', manager);
+            }
+            if (managerEmail) {
+                formData.append('manager_email', managerEmail);
+            }
+            if (contractsAdminEmails) {
+                formData.append('contracts_admin_emails', contractsAdminEmails);
             }
             if (backgroundFile) {
                 formData.append('background', backgroundFile);

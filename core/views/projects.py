@@ -30,6 +30,9 @@ def create_project(request):
         project_type = request.POST.get('project_type', 'general')
         xero_instance_pk = request.POST.get('xero_instance_pk')
         xero_sales_account = request.POST.get('xero_sales_account')
+        manager = request.POST.get('manager', '').strip() or None
+        manager_email = request.POST.get('manager_email', '').strip() or None
+        contracts_admin_emails = request.POST.get('contracts_admin_emails', '').strip() or None
         
         # Validate required fields
         if not project_name:
@@ -62,7 +65,10 @@ def create_project(request):
             project=project_name,
             project_type=project_type,
             xero_instance=xero_instance,
-            xero_sales_account=xero_sales_account
+            xero_sales_account=xero_sales_account,
+            manager=manager,
+            manager_email=manager_email,
+            contracts_admin_emails=contracts_admin_emails
         )
         
         # Handle background image upload
@@ -102,7 +108,7 @@ def create_project(request):
             order_in_list=1,
             xero_account_code='',
             contract_budget=0,
-            uncommitted=0,
+            uncommitted_amount=0,
             fixed_on_site=0,
             sc_invoiced=0,
             sc_paid=0

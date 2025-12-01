@@ -632,7 +632,9 @@ var QuotesEntry = (function() {
         var allocated = 0;
         $('#quoteLineItemsTable tbody tr').each(function() {
             if (isConstructionProject) {
-                var amount = parseFloat($(this).find('.amount-display').val()) || 0;
+                // Strip commas from formatted amount display (e.g., "1,234.56" -> "1234.56")
+                var amountStr = $(this).find('.amount-display').val() || '0';
+                var amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
                 allocated += amount;
             } else {
                 var amount = parseFloat($(this).find('.amount-input').val()) || 0;

@@ -40,7 +40,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing, Quotes, Quote_allocations, Po_orders
+from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing, Quotes, Quote_allocations, Po_orders, Po_order_detail, Units
 from decimal import Decimal
 from datetime import date
 from io import StringIO, TextIOWrapper, BytesIO
@@ -1642,11 +1642,16 @@ def upload_items_csv(request, project_pk):
                         errors.append(f"Row {row_num}: Missing item name")
                         continue
                     
-                    # Validate unit if provided
-                    allowed_units = ['item', 'each', 'm', 'm2', 'm3', 'ton']
-                    if item_unit and item_unit not in allowed_units:
-                        errors.append(f"Row {row_num}: Invalid unit '{item_unit}'. Must be one of: {', '.join(allowed_units)}")
-                        continue
+                    # Validate and look up unit if provided
+                    unit_obj = None
+                    if item_unit:
+                        # Look up the Units object by unit_name
+                        unit_obj = Units.objects.filter(unit_name__iexact=item_unit).first()
+                        if not unit_obj:
+                            # List valid units from database
+                            valid_units = list(Units.objects.values_list('unit_name', flat=True))
+                            errors.append(f"Row {row_num}: Invalid unit '{item_unit}'. Must be one of: {', '.join(valid_units)}")
+                            continue
                     
                     if not category_order or not category_order.isdigit():
                         errors.append(f"Row {row_num}: Invalid category order")
@@ -1701,7 +1706,7 @@ def upload_items_csv(request, project_pk):
                         project=project,
                         category=category,
                         item=item_name,
-                        unit=item_unit if item_unit else None,
+                        unit=unit_obj,  # ForeignKey to Units model
                         order_in_list=item_order_int,
                         xero_account_code='',
                         contract_budget=0,
@@ -2033,6 +2038,24 @@ def send_po_email(request, project_pk, supplier_pk):
             unique_id=unique_id,
             po_sent=True
         )
+        
+        # Create Po_order_detail records for each quote allocation
+        from datetime import date
+        for quote in quotes:
+            for allocation in quote.quote_allocations.all():
+                Po_order_detail.objects.create(
+                    po_order_pk=po_order,
+                    date=date.today(),
+                    costing=allocation.item,
+                    quote=quote,
+                    amount=allocation.amount,
+                    qty=allocation.qty if hasattr(allocation, 'qty') and allocation.qty else None,
+                    unit=allocation.item.unit if hasattr(allocation.item, 'unit') else None,
+                    rate=allocation.rate if hasattr(allocation, 'rate') and allocation.rate else None,
+                    variation_note=None
+                )
+        
+        logger.info(f"Created Po_order with {Po_order_detail.objects.filter(po_order_pk=po_order).count()} detail records")
         
         # Generate URL based on environment (local vs production)
         if settings.DEBUG:
