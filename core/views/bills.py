@@ -893,6 +893,51 @@ def pull_xero_accounts_and_divisions(request):
 
 
 @csrf_exempt
+def pull_xero_accounts(request, instance_pk):
+    """
+    Pull accounts from Xero API for a single instance.
+    Inserts new records and updates existing ones.
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        # Call the helper function
+        result = _pull_xero_accounts_for_instance(instance_pk)
+        
+        if result.get('status') == 'error':
+            # Check if it's an auth error
+            if 'authorization' in result.get('message', '').lower() or 'auth' in result.get('message', '').lower():
+                return JsonResponse({
+                    'status': 'error',
+                    'message': result.get('message'),
+                    'needs_auth': True
+                }, status=401)
+            return JsonResponse({
+                'status': 'error',
+                'message': result.get('message')
+            }, status=400)
+        
+        return JsonResponse({
+            'status': 'success',
+            'instance_name': result.get('instance_name'),
+            'accounts_added': result.get('accounts_added', 0),
+            'accounts_updated': result.get('accounts_updated', 0),
+            'accounts_unchanged': result.get('accounts_unchanged', 0)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in pull_xero_accounts: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
 def get_xero_accounts_by_instance(request, instance_pk):
     """
     Get all Xero accounts for a specific Xero instance.

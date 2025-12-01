@@ -255,6 +255,7 @@ The XERO_ENCRYPTION_KEY must be the same on AWS as when the data was exported.
 DEPLOYMENT HISTORY
 ------------------
 Recent deployments:
+- v63-xero-persistence: Auto-restore Xero data from XERO_DATA env var on startup
 - v62-fix-environ: Added django-environ to requirements.txt
 - v61-po-public-improvements: PO Public URL expandable claims, document viewer buttons
 - v40-xero-import: Added Xero instances export/import management commands
@@ -269,4 +270,4 @@ AWS CLI EB Reference: https://docs.aws.amazon.com/cli/latest/reference/elasticbe
 Docker Documentation: https://docs.docker.com/
 Django Deployment: https://docs.djangoproject.com/en/5.0/howto/deployment/
 
-Last Updated: 2025-11-14
+Last Updated: 2025-12-01

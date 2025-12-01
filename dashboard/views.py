@@ -2057,15 +2057,16 @@ def send_po_email(request, project_pk, supplier_pk):
         
         logger.info(f"Created Po_order with {Po_order_detail.objects.filter(po_order_pk=po_order).count()} detail records")
         
-        # Generate URL based on environment (local vs production)
-        if settings.DEBUG:
-            # Local development
-            base_url = 'http://127.0.0.1:8000'
-        else:
-            # Production
-            base_url = 'https://app.mason.build'
+        # Generate URL dynamically from the request
+        # This ensures the URL matches the environment (local/AWS) automatically
+        scheme = 'https' if request.is_secure() else 'http'
+        host = request.get_host()
         
-        po_url = f"{base_url}/po/{unique_id}/"
+        # Force HTTPS for production domains (AWS load balancer may terminate SSL)
+        if 'mason.build' in host or 'elasticbeanstalk.com' in host:
+            scheme = 'https'
+        
+        po_url = f"{scheme}://{host}/po/{unique_id}/"
         
         # Generate HTML for PDF using shared function with clickable URL
         html_content = generate_po_html(project, supplier, items, total_amount, po_url)

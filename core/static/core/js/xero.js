@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
         
         if (instances.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #999;">No Xero instances found</td></tr>';
             return;
         }
         
@@ -61,6 +61,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td style="text-align: center;">
                     <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
                         <i class="fas fa-key"></i> Authorize
+                    </button>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-secondary pull-contacts-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
+                        <i class="fas fa-users"></i> Pull
+                    </button>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn btn-sm btn-secondary pull-accounts-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${instance.xero_name}">
+                        <i class="fas fa-list-alt"></i> Pull
                     </button>
                 </td>
                 <td style="text-align: center;">
@@ -89,6 +99,117 @@ document.addEventListener('DOMContentLoaded', function() {
         if (confirm(`Authorize "${instanceName}" with Xero?\n\nThis will redirect you to Xero to grant permissions.`)) {
             window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
         }
+    });
+    
+    // Pull Contacts for a single Xero Instance
+    $(document).on('click', '.pull-contacts-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        const button = $(this);
+        
+        // Disable button and show loading state
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/pull_xero_contacts/${instancePk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('<i class="fas fa-users"></i> Pull');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                // Show success state
+                button.removeClass('btn-secondary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                
+                // Show summary
+                const details = body.details;
+                alert(`✓ Contacts synced for "${instanceName}"\n\n` +
+                    `New: ${details.new_contacts_added}\n` +
+                    `Updated: ${details.contacts_updated}\n` +
+                    `Unchanged: ${details.contacts_unchanged}`);
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    button.removeClass('btn-success').addClass('btn-secondary');
+                    button.html('<i class="fas fa-users"></i> Pull');
+                }, 3000);
+            } else {
+                button.prop('disabled', false).html('<i class="fas fa-users"></i> Pull');
+                alert(`✗ Failed to pull contacts\n\n${body.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('<i class="fas fa-users"></i> Pull');
+            console.error('Error pulling contacts:', error);
+            alert('✗ Failed to pull contacts\n\nConnection error');
+        });
+    });
+    
+    // Pull Accounts for a single Xero Instance
+    $(document).on('click', '.pull-accounts-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        const button = $(this);
+        
+        // Disable button and show loading state
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/core/pull_xero_accounts/${instancePk}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            // Handle OAuth authorization needed
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('<i class="fas fa-list-alt"></i> Pull');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                // Show success state
+                button.removeClass('btn-secondary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                
+                // Show summary
+                alert(`✓ Accounts synced for "${instanceName}"\n\n` +
+                    `New: ${body.accounts_added}\n` +
+                    `Updated: ${body.accounts_updated}\n` +
+                    `Unchanged: ${body.accounts_unchanged}`);
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    button.removeClass('btn-success').addClass('btn-secondary');
+                    button.html('<i class="fas fa-list-alt"></i> Pull');
+                }, 3000);
+            } else {
+                button.prop('disabled', false).html('<i class="fas fa-list-alt"></i> Pull');
+                alert(`✗ Failed to pull accounts\n\n${body.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('<i class="fas fa-list-alt"></i> Pull');
+            console.error('Error pulling accounts:', error);
+            alert('✗ Failed to pull accounts\n\nConnection error');
+        });
     });
     
     // Test Xero Connection
