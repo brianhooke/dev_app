@@ -255,6 +255,7 @@ The XERO_ENCRYPTION_KEY must be the same on AWS as when the data was exported.
 DEPLOYMENT HISTORY
 ------------------
 Recent deployments:
+- v70-po-url-fix: Fix PO URL generation for AWS (use request host instead of hardcoded URL) + Add Pull Contacts/Accounts buttons to Xero table
 - v63-xero-persistence: Auto-restore Xero data from XERO_DATA env var on startup
 - v62-fix-environ: Added django-environ to requirements.txt
 - v61-po-public-improvements: PO Public URL expandable claims, document viewer buttons

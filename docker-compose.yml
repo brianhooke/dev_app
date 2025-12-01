@@ -5,6 +5,9 @@ services:
     build: .
     ports:
       - "80:80"
+    volumes:
+      # Persist SQLite database across deployments
+      - /var/app/db:/app/db
     environment:
       - DJANGO_SETTINGS_MODULE
       - SECRET_KEY
@@ -24,3 +27,5 @@ services:
       - EMAIL_HOST_PASSWORD
       - EMAIL_CC
       - DEFAULT_FROM_EMAIL
+      - XERO_DATA
+      - XERO_ENCRYPTION_KEY

@@ -27,11 +27,20 @@ if os.environ.get('RDS_HOSTNAME'):
         }
     }
 else:
-    # Use SQLite (local development)
+    # Use SQLite
+    # In Docker (AWS): use /app/db/ which is mounted as a volume for persistence
+    # Locally: use the project root directory
+    if os.path.exists('/app/db'):
+        # Running in Docker container - use persistent volume
+        db_path = '/app/db/db.sqlite3'
+    else:
+        # Local development
+        db_path = os.path.join(BASE_DIR, 'db.sqlite3')
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+            'NAME': db_path,
         }
     }
 
