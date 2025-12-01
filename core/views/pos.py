@@ -1022,11 +1022,12 @@ def view_po_pdf_by_unique_id(request, unique_id):
         
         # Serve the saved PDF file
         try:
-            # Open and read the file
-            pdf_file = most_recent_po.pdf.open('rb')
-            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            # Use the file field's read() method which works with both local and S3 storage
+            pdf_content = most_recent_po.pdf.read()
+            response = HttpResponse(pdf_content, content_type='application/pdf')
             response['Content-Disposition'] = f'inline; filename="{most_recent_po.pdf.name.split("/")[-1]}"'
-            pdf_file.close()
+            # Close the file after reading
+            most_recent_po.pdf.close()
             return response
         except Exception as e:
             logger.error(f'Error reading PDF file: {e}', exc_info=True)

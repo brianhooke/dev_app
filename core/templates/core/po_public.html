@@ -1121,7 +1121,7 @@
             
             // Gather claim data
             const claims = [];
-            document.querySelectorAll('tbody tr:not(.total-row)').forEach(row => {
+            document.querySelectorAll('tbody tr:not(.total-row):not(.doc-buttons-row)').forEach(row => {
                 const costingPk = row.dataset.costingPk;
                 let amount = 0;
                 
