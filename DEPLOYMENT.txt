@@ -229,9 +229,34 @@ Alternative: Use AWS Systems Manager Session Manager (no SSH key needed)
 Note: Xero credentials are encrypted using XERO_ENCRYPTION_KEY from settings.
 Ensure the same encryption key is set on both local and AWS environments.
 
+XERO DATA PERSISTENCE
+---------------------
+The Xero credentials are stored in SQLite which can be reset on deployment.
+To persist Xero data across deployments:
+
+1. BACKUP (from AWS - do this BEFORE deploying if Xero is working):
+   - SSH/SSM into the EC2 instance
+   - Run: docker exec $(docker ps -q) python manage.py export_xero_b64
+   - Copy the base64 output
+
+2. SET ENVIRONMENT VARIABLE:
+   aws elasticbeanstalk update-environment \
+       --environment-name dev-app-prod \
+       --option-settings Namespace=aws:elasticbeanstalk:application:environment,OptionName=XERO_DATA,Value='<base64_string>'
+
+3. AUTOMATIC RESTORE:
+   - On startup, start.sh runs: python manage.py import_xero_from_env
+   - This imports Xero data from XERO_DATA environment variable
+   - Data is automatically restored on every deployment
+
+IMPORTANT: The XERO_DATA env var contains encrypted credentials.
+The XERO_ENCRYPTION_KEY must be the same on AWS as when the data was exported.
+
 DEPLOYMENT HISTORY
 ------------------
 Recent deployments:
+- v62-fix-environ: Added django-environ to requirements.txt
+- v61-po-public-improvements: PO Public URL expandable claims, document viewer buttons
 - v40-xero-import: Added Xero instances export/import management commands
 - v39-contacts-update: Added Xero contacts update functionality (BSB, Account, ABN, Email)
 - v38-sqlite: Switched to SQLite database

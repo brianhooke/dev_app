@@ -16,5 +16,8 @@ python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 echo "Creating admin superuser..."
 python manage.py create_admin || echo "Admin creation failed, continuing..."
 
+echo "Importing Xero data from environment..."
+python manage.py import_xero_from_env || echo "Xero import failed, continuing..."
+
 echo "Starting gunicorn on port 80..."
 exec gunicorn dev_app.wsgi:application --bind 0.0.0.0:80 --workers 3 --timeout 120 --access-logfile - --error-logfile - --log-level info
