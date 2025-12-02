@@ -28,9 +28,11 @@ urlpatterns = [
     # Bills management endpoints
     path('send_bill/', views.send_bill, name='send_bill'),
     
-    # PO email and download endpoints
+    # PO email, download, preview, and status endpoints
     path('send_po_email/<int:project_pk>/<int:supplier_pk>/', views.send_po_email, name='send_po_email'),
     path('download_po_pdf/<int:project_pk>/<int:supplier_pk>/', views.download_po_pdf, name='download_po_pdf'),
+    path('preview_po/<int:project_pk>/<int:supplier_pk>/', views.preview_po, name='preview_po'),
+    path('get_po_status/<int:project_pk>/', views.get_po_status, name='get_po_status'),
     
     # Items (Categories & Costings) management endpoints
     path('get_project_categories/<int:project_pk>/', views.get_project_categories, name='get_project_categories'),

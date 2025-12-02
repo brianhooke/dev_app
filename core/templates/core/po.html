@@ -9,11 +9,10 @@
     }
     
     .po-left-panel {
-        width: 50%;
+        width: 55%;
         height: 100%;
         display: flex;
         flex-direction: column;
-        border: 1px solid #ddd;
         overflow-y: auto;
     }
     
@@ -23,14 +22,25 @@
     
     .po-suppliers-table tbody tr {
         cursor: pointer;
+        transition: opacity 0.3s ease, box-shadow 0.3s ease;
     }
     
     .po-suppliers-table tbody tr:hover {
         background-color: #f0f8ff;
+        opacity: 0.8 !important;
     }
     
-    .po-suppliers-table tbody tr.selected {
-        background-color: #e3f2fd;
+    /* When there's a selected row, dim all non-selected rows */
+    .po-suppliers-table tbody.has-selection tr:not(.selected-row) {
+        opacity: 0.4;
+    }
+    
+    /* Highlight the selected row */
+    .po-suppliers-table tbody tr.selected-row {
+        opacity: 1 !important;
+        background-color: #e3f2fd !important;
+        box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+        position: relative;
     }
     
     .po-email-btn {
@@ -39,9 +49,8 @@
     }
     
     .po-right-panel {
-        width: 50%;
+        width: 45%;
         height: 100%;
-        border: 1px solid #ddd;
         background-color: #fff;
         display: flex;
         flex-direction: column;
@@ -165,21 +174,35 @@
         <table class="reusable-table po-suppliers-table">
             <thead>
                 <tr>
-                    <th style="width: 20%;">Supplier</th>
-                    <th style="width: 13%;">First Name</th>
-                    <th style="width: 13%;">Last Name</th>
-                    <th style="width: 30%;">Email Address</th>
+                    <th style="width: 16%;">Supplier</th>
+                    <th style="width: 9%;">First Name</th>
+                    <th style="width: 9%;">Last Name</th>
+                    <th style="width: 22%;">Email Address</th>
+                    <th style="width: 12%;">Amount</th>
+                    <th style="width: 8%;">Sent</th>
                     <th style="width: 12%;">Update</th>
                     <th style="width: 12%;">Email</th>
                 </tr>
             </thead>
             <tbody id="poSuppliersTableBody">
                 <tr>
-                    <td colspan="6" style="text-align: center; color: #6c757d; padding: 20px;">
+                    <td colspan="8" style="text-align: center; color: #6c757d; padding: 20px;">
                         Loading suppliers...
                     </td>
                 </tr>
             </tbody>
+            <tfoot id="poSuppliersTableFooter" style="display: none;">
+                <tr style="background: var(--gradient-primary); color: white; font-weight: bold;">
+                    <td>TOTAL</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td id="poTotalAmount">$0.00</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
     
@@ -191,9 +214,7 @@
                 <i class="fa fa-file-invoice"></i>
                 <p>Click on a supplier to view purchase order</p>
             </div>
-            <div id="poDocument" class="po-document" style="display: none;">
-                <!-- PO content will be generated here -->
-            </div>
+            <iframe id="poPreviewFrame" style="width: 100%; height: 100%; border: none; border-radius: 8px; display: none;"></iframe>
         </div>
         
         <!-- Footer with download button -->

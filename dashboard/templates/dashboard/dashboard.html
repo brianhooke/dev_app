@@ -111,6 +111,14 @@ Version: v78 (displayed in header)
     <link rel="icon" href="{% static 'core/images/favicon.ico' %}">
     <link rel="stylesheet" href="{% static 'core/css/global_styles.css' %}">
     <style>
+        /* Prevent page scrolling */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100%;
+        }
+        
         /* Database Wipe Button - Top Left, Right of Navbar */
         #wipeDbBtn {
             position: fixed;
@@ -231,20 +239,8 @@ Version: v78 (displayed in header)
     </style>
 </head>
 
-<div style="position: relative;">
-    <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
-    <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v78
-        {% if 'test' in settings.SETTINGS_MODULE %}
-            <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
-        {% else %}
-            <span style="margin-left: 8px; padding: 2px 8px; background: #4CAF50; color: white; border-radius: 3px; font-weight: bold;">DEV</span>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Dynamic Content Area with Gradient Border (Workspace) -->
-<div id="dynamicContentArea" style="margin: 0; padding: 20px; border: 2px solid; border-image: linear-gradient(45deg, #cf66ff 0%, #0a88ef 100%) 1; min-height: calc(100vh - 90px); height: calc(100vh - 90px); position: relative;">
+<!-- Dynamic Content Area (Workspace) -->
+<div id="dynamicContentArea" style="margin: 0; padding: 20px; height: 100vh; position: relative; overflow: hidden;">
     <!-- Empty State (shown on page load) -->
     <div id="emptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #6c757d;">
     </div>
@@ -253,7 +249,7 @@ Version: v78 (displayed in header)
     <div id="xeroSection" style="display: none; height: 100%; flex-direction: column;">
         
         <!-- Xero Instances Table (scrollable) -->
-        <div style="flex: 1; overflow-y: auto; margin-bottom: 15px; border: 2px solid #ddd; position: relative;">
+        <div style="flex: 1; overflow-y: auto; position: relative;">
             <style>
                 #xeroSection .reusable-table thead {
                     position: sticky !important;
@@ -289,9 +285,9 @@ Version: v78 (displayed in header)
             </table>
         </div>
         
-        <!-- Footer Button -->
-        <div style="display: flex; justify-content: flex-end; flex-shrink: 0;">
-            <button type="button" class="btn btn-primary" id="addNewXeroBtn">Add New</button>
+        <!-- Footer Button - sticky at bottom -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; padding: 10px 15px; margin-top: auto; background: var(--gradient-primary); border-radius: 0 0 8px 8px;">
+            <button type="button" class="btn btn-light" id="addNewXeroBtn">Add New</button>
         </div>
     </div>
 
@@ -311,14 +307,14 @@ Version: v78 (displayed in header)
         </div>
         
         <!-- Contacts Table (scrollable) -->
-        <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow-y: auto; position: relative;">
+        <div style="flex: 1; overflow-y: auto; position: relative;">
             {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
         </div>
         
-        <!-- Footer Buttons -->
-        <div style="display: flex; justify-content: space-between; flex-shrink: 0;">
-            <button type="button" class="btn btn-info" id="pullXeroContactsBtn">Pull/Update Xero Contacts</button>
-            <button type="button" class="btn btn-primary" id="addContactBtn">Add Contact</button>
+        <!-- Footer Buttons - sticky at bottom -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; padding: 10px 15px; margin-top: auto; background: var(--gradient-primary); border-radius: 0 0 8px 8px;">
+            <button type="button" class="btn btn-light" id="pullXeroContactsBtn">Pull/Update Xero Contacts</button>
+            <button type="button" class="btn btn-light" id="addContactBtn">Add Contact</button>
         </div>
     </div>
 

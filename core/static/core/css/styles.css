@@ -90,7 +90,7 @@ table {
   /* Content styling */
   .main-content {
     margin-left: 160px; /* Same as custom-navbar width */
-    padding: 20px;
+    padding: 0;
   }
   
   #leftSide {

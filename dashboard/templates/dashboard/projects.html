@@ -92,13 +92,41 @@
         z-index: 10;
         box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
     }
+    
+    /* Quotes/POs table row selection styling */
+    .quotes-table tbody tr,
+    .pos-table tbody tr {
+        transition: opacity 0.3s ease, box-shadow 0.3s ease;
+        cursor: pointer;
+    }
+    
+    /* When there's a selected row, dim all non-selected rows */
+    .quotes-table tbody.has-selection tr:not(.selected-row),
+    .pos-table tbody.has-selection tr:not(.selected-row) {
+        opacity: 0.4;
+    }
+    
+    /* Highlight the selected row */
+    .quotes-table tbody tr.selected-row,
+    .pos-table tbody tr.selected-row {
+        opacity: 1 !important;
+        background-color: #e3f2fd !important;
+        box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+        position: relative;
+    }
+    
+    /* Keep hover effect visible on all rows */
+    .quotes-table tbody tr:hover,
+    .pos-table tbody tr:hover {
+        opacity: 0.8 !important;
+    }
 </style>
 
 <!-- Projects Section (hidden initially, shown when Projects clicked) -->
 <div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
     
     <!-- Projects Table (scrollable with fixed header) -->
-    <div style="flex: 1; margin-bottom: 15px; border: 2px solid #ddd; overflow: hidden; display: flex; flex-direction: column;">
+    <div style="flex: 1; margin-bottom: 15px; overflow: hidden; display: flex; flex-direction: column;">
         <div style="overflow-y: auto; flex: 1;">
             <table class="reusable-table" id="projectsTable" style="margin-bottom: 0;">
                 <thead>
@@ -135,11 +163,11 @@
     <!-- Construction View (hidden initially, shown when Construction link clicked) -->
     <div id="constructionView" style="display: none; height: 100%; flex-direction: column;">
         <!-- Back button and Project heading -->
-        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-            <button id="backToProjectsFromConstructionBtn" class="btn btn-secondary">
+        <div style="margin-bottom: 20px; display: flex; align-items: center; position: relative;">
+            <button id="backToProjectsFromConstructionBtn" class="btn btn-secondary" style="position: absolute; left: 0;">
                 <i class="fas fa-arrow-left"></i> Back to Projects
             </button>
-            <h3 id="constructionProjectName" style="margin: 0; flex: 1;"></h3>
+            <h3 id="constructionProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
         </div>
         
         <!-- Construction navigation buttons -->
@@ -161,7 +189,7 @@
         <input type="file" id="constructionQuotePdfInput" accept="application/pdf" style="display: none;">
         
         <!-- Construction content area -->
-        <div id="constructionContentArea" style="flex: 1; border: 2px solid #ddd; padding: 20px; overflow-y: auto;">
+        <div id="constructionContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
             <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
         </div>
     </div>
@@ -169,11 +197,11 @@
     <!-- Tender View (hidden initially, shown when Tender link clicked) -->
     <div id="tenderView" style="display: none; height: 100%; flex-direction: column;">
         <!-- Back button and Project heading -->
-        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-            <button id="backToProjectsBtn" class="btn btn-secondary">
+        <div style="margin-bottom: 20px; display: flex; align-items: center; position: relative;">
+            <button id="backToProjectsBtn" class="btn btn-secondary" style="position: absolute; left: 0;">
                 <i class="fas fa-arrow-left"></i> Back to Projects
             </button>
-            <h3 id="tenderProjectName" style="margin: 0; flex: 1;"></h3>
+            <h3 id="tenderProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
         </div>
         
         <!-- Tender navigation buttons -->
@@ -193,7 +221,7 @@
         <input type="file" id="tenderQuotePdfInput" accept="application/pdf" style="display: none;">
         
         <!-- Tender content area -->
-        <div id="tenderContentArea" style="flex: 1; border: 2px solid #ddd; padding: 20px; overflow-y: auto;">
+        <div id="tenderContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
             <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
         </div>
     </div>
@@ -1147,9 +1175,9 @@
             // Show Committed Quotes view
             $(`#${contentAreaId}`).html(`
                 <div style="display: flex; height: 100%; gap: 15px;">
-                    <div style="width: 60%; height: 100%;">
-                        <div style="height: 100%; overflow-y: auto; border: 1px solid #ddd;">
-                            <table id="${tableId}" class="reusable-table" style="margin-bottom: 0;">
+                    <div style="width: 55%; height: 100%; display: flex; flex-direction: column;">
+                        <div style="flex: 1; overflow-y: auto;">
+                            <table id="${tableId}" class="reusable-table quotes-table" style="margin-bottom: 0;">
                                 <thead>
                                     <tr>
                                         <th style="width: 25%;">Quote #</th>
@@ -1166,11 +1194,20 @@
                                         </td>
                                     </tr>
                                 </tbody>
+                                <tfoot id="${tableId}-footer" style="display: none;">
+                                    <tr style="background: var(--gradient-primary); color: white; font-weight: bold;">
+                                        <td>TOTAL</td>
+                                        <td></td>
+                                        <td id="${tableId}-total">$0.00</td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
-                    <div style="width: 40%; height: 100%;">
-                        <iframe id="${pdfViewerId}" style="width: 100%; height: 100%; border: 1px solid #ddd;" src=""></iframe>
+                    <div style="width: 45%; height: 100%;">
+                        <iframe id="${pdfViewerId}" style="width: 100%; height: 100%; border: none;" src=""></iframe>
                     </div>
                 </div>
             `);
@@ -1326,11 +1363,20 @@
                                 tbody.append(row);
                             });
                             
-                            // Add click handler for quote rows to show PDF
+                            // Add click handler for quote rows to show PDF and selection styling
                             $(document).off('click', `#${tableId} tbody tr`).on('click', `#${tableId} tbody tr`, function(e) {
                                 if ($(e.target).is('button') || $(e.target).closest('button').length > 0) {
                                     return;
                                 }
+                                
+                                // Remove previous selection styling
+                                $(`#${tableId} tbody tr`).removeClass('selected-row');
+                                
+                                // Add selection styling to clicked row
+                                $(this).addClass('selected-row');
+                                
+                                // Add class to tbody to trigger dimming effect
+                                $(`#${tableId} tbody`).addClass('has-selection');
                                 
                                 var pdfUrl = $(this).attr('data-pdf-url');
                                 var quoteNumber = $(this).attr('data-quote-number');
@@ -1342,9 +1388,24 @@
                                 }
                             });
                             
-                            // Auto-load first quote PDF
-                            if (quotes.length > 0 && quotes[0].pdf_url) {
-                                $(`#${pdfViewerId}`).attr('src', quotes[0].pdf_url);
+                            // Calculate and show total
+                            var totalCost = quotes.reduce(function(sum, quote) {
+                                return sum + parseFloat(quote.total_cost || 0);
+                            }, 0);
+                            
+                            var formattedTotal = totalCost.toLocaleString('en-AU', {
+                                style: 'currency',
+                                currency: 'AUD'
+                            });
+                            
+                            $(`#${tableId}-total`).text(formattedTotal);
+                            $(`#${tableId}-footer`).show();
+                            
+                            // Auto-select first quote row (triggers click to load PDF and apply selection styling)
+                            if (quotes.length > 0) {
+                                setTimeout(function() {
+                                    $(`#${tableId} tbody tr:first`).trigger('click');
+                                }, 100);
                             }
                         }
                         
@@ -1495,98 +1556,19 @@
                         var suppliers = Object.values(supplierMap);
                         console.log('Found', suppliers.length, 'unique suppliers');
                         
-                        // Populate suppliers table
-                        var tbody = $(`#${contentAreaId} #poSuppliersTableBody`);
-                        tbody.empty();
-                        
-                        if (suppliers.length === 0) {
-                            tbody.html('<tr><td colspan="6" style="text-align: center; color: #6c757d; padding: 20px;">No suppliers found in quotes</td></tr>');
-                        } else {
-                            // Sort by name
-                            suppliers.sort(function(a, b) {
-                                return a.name.localeCompare(b.name);
-                            });
-                            
-                            // Add table rows
-                            suppliers.forEach(function(supplier) {
-                                var row = $('<tr></tr>')
-                                    .attr('data-supplier-pk', supplier.contact_pk)
-                                    .attr('data-supplier-name', supplier.name)
-                                    .attr('data-supplier-email', supplier.email);
-                                
-                                row.append('<td class="po-supplier-name">' + escapeHtml(supplier.name) + '</td>');
-                                
-                                // Display first name
-                                var firstNameDisplay = supplier.first_name ? 
-                                    escapeHtml(supplier.first_name) : 
-                                    '<span style="color: #999; font-style: italic;">-</span>';
-                                row.append('<td class="po-first-name">' + firstNameDisplay + '</td>');
-                                
-                                // Display last name
-                                var lastNameDisplay = supplier.last_name ? 
-                                    escapeHtml(supplier.last_name) : 
-                                    '<span style="color: #999; font-style: italic;">-</span>';
-                                row.append('<td class="po-last-name">' + lastNameDisplay + '</td>');
-                                
-                                // Display email address
-                                var emailDisplay = supplier.email ? 
-                                    escapeHtml(supplier.email) : 
-                                    '<span style="color: #999; font-style: italic;">No email</span>';
-                                row.append('<td class="po-email">' + emailDisplay + '</td>');
-                                
-                                // Update button
-                                var updateBtn = $('<button class="btn btn-sm btn-primary po-update-btn">Update</button>');
-                                var updateCell = $('<td></td>').append(updateBtn);
-                                row.append(updateCell);
-                                
-                                // Email button
-                                var emailBtn = $('<button class="btn btn-sm btn-primary po-email-btn" title="Send PO email"><i class="fa fa-envelope"></i></button>');
-                                emailBtn.on('click', function(e) {
-                                    e.stopPropagation();
-                                    if (!supplier.email) {
-                                        alert('No email address available for this supplier');
-                                        return;
-                                    }
-                                    
-                                    if (!confirm(`Send purchase order to ${supplier.email}?`)) {
-                                        return;
-                                    }
-                                    
-                                    // Disable button and show spinner
-                                    emailBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-                                    
-                                    // Send PO email via backend
-                                    fetch(`/send_po_email/${projectObj.pk}/${supplier.contact_pk}/`, {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
-                                        }
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
-                                        if (data.status === 'success') {
-                                            alert(data.message);
-                                        } else {
-                                            alert(`Error: ${data.message}`);
-                                        }
-                                    })
-                                    .catch(error => {
-                                        emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
-                                        console.error('Error sending PO email:', error);
-                                        alert('Failed to send email. Please try again.');
-                                    });
-                                });
-                                
-                                var emailCell = $('<td></td>').append(emailBtn);
-                                row.append(emailCell);
-                                
-                                tbody.append(row);
-                            });
-                        }
-                        
-                        console.log('Suppliers table populated');
+                        // Fetch PO status for all suppliers
+                        $.ajax({
+                            url: '/get_po_status/' + projectObj.pk + '/',
+                            type: 'GET',
+                            success: function(statusResponse) {
+                                var poStatus = statusResponse.po_status || {};
+                                populatePOTable(suppliers, poStatus, projectObj, contentAreaId);
+                            },
+                            error: function() {
+                                // If status fetch fails, populate without status
+                                populatePOTable(suppliers, {}, projectObj, contentAreaId);
+                            }
+                        });
                     }
                 },
                 error: function(xhr, status, error) {
@@ -1594,22 +1576,183 @@
                 }
             });
             
+            // Helper function to populate PO table with status
+            function populatePOTable(suppliers, poStatus, projectObj, contentAreaId) {
+                var tbody = $(`#${contentAreaId} #poSuppliersTableBody`);
+                tbody.empty();
+                
+                if (suppliers.length === 0) {
+                    tbody.html('<tr><td colspan="8" style="text-align: center; color: #6c757d; padding: 20px;">No suppliers found in quotes</td></tr>');
+                } else {
+                    // Sort by name
+                    suppliers.sort(function(a, b) {
+                        return a.name.localeCompare(b.name);
+                    });
+                    
+                    // Track total amount
+                    var grandTotal = 0;
+                    
+                    // Add table rows
+                    suppliers.forEach(function(supplier) {
+                        // Calculate total amount for this supplier from their quotes
+                        var supplierTotal = supplier.quotes.reduce(function(sum, quote) {
+                            return sum + parseFloat(quote.total_cost || 0);
+                        }, 0);
+                        grandTotal += supplierTotal;
+                        
+                        // Check if PO was sent for this supplier
+                        var supplierStatus = poStatus[supplier.contact_pk] || {};
+                        var isSent = supplierStatus.sent || false;
+                        var pdfUrl = supplierStatus.pdf_url || null;
+                        
+                        var row = $('<tr></tr>')
+                            .attr('data-supplier-pk', supplier.contact_pk)
+                            .attr('data-supplier-name', supplier.name)
+                            .attr('data-supplier-email', supplier.email)
+                            .attr('data-po-sent', isSent ? 'true' : 'false')
+                            .attr('data-pdf-url', pdfUrl || '');
+                        
+                        row.append('<td class="po-supplier-name">' + escapeHtml(supplier.name) + '</td>');
+                        
+                        // Display first name
+                        var firstNameDisplay = supplier.first_name ? 
+                            escapeHtml(supplier.first_name) : 
+                            '<span style="color: #999; font-style: italic;">-</span>';
+                        row.append('<td class="po-first-name">' + firstNameDisplay + '</td>');
+                        
+                        // Display last name
+                        var lastNameDisplay = supplier.last_name ? 
+                            escapeHtml(supplier.last_name) : 
+                            '<span style="color: #999; font-style: italic;">-</span>';
+                        row.append('<td class="po-last-name">' + lastNameDisplay + '</td>');
+                        
+                        // Display email address
+                        var emailDisplay = supplier.email ? 
+                            escapeHtml(supplier.email) : 
+                            '<span style="color: #999; font-style: italic;">No email</span>';
+                        row.append('<td class="po-email">' + emailDisplay + '</td>');
+                        
+                        // Display amount
+                        var formattedAmount = supplierTotal.toLocaleString('en-AU', {
+                            style: 'currency',
+                            currency: 'AUD'
+                        });
+                        row.append('<td class="po-amount" style="text-align: right;">' + formattedAmount + '</td>');
+                        
+                        // Sent status column
+                        var sentDisplay = isSent ? 
+                            '<i class="fa fa-check" style="color: #28a745;"></i>' : 
+                            '<span style="color: #999;">-</span>';
+                        row.append('<td style="text-align: center;">' + sentDisplay + '</td>');
+                        
+                        // Update button
+                        var updateBtn = $('<button class="btn btn-sm btn-warning po-update-btn">Update</button>');
+                        var updateCell = $('<td></td>').append(updateBtn);
+                        row.append(updateCell);
+                        
+                        // Email button
+                        var emailBtn = $('<button class="btn btn-sm btn-primary po-email-btn" title="Send PO email"><i class="fa fa-envelope"></i></button>');
+                        emailBtn.on('click', function(e) {
+                            e.stopPropagation();
+                            if (!supplier.email) {
+                                alert('No email address available for this supplier');
+                                return;
+                            }
+                            
+                            if (!confirm(`Send purchase order to ${supplier.email}?`)) {
+                                return;
+                            }
+                            
+                            // Disable button and show spinner
+                            emailBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                            
+                            // Send PO email via backend
+                            fetch(`/send_po_email/${projectObj.pk}/${supplier.contact_pk}/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
+                                if (data.status === 'success') {
+                                    alert(data.message);
+                                    // Update the sent status in the row
+                                    row.attr('data-po-sent', 'true');
+                                    row.attr('data-pdf-url', data.pdf_url || '');
+                                    row.find('td:eq(5)').html('<i class="fa fa-check" style="color: #28a745;"></i>');
+                                } else {
+                                    alert(`Error: ${data.message}`);
+                                }
+                            })
+                            .catch(error => {
+                                emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
+                                console.error('Error sending PO email:', error);
+                                alert('Failed to send email. Please try again.');
+                            });
+                        });
+                        
+                        var emailCell = $('<td></td>').append(emailBtn);
+                        row.append(emailCell);
+                        
+                        tbody.append(row);
+                    });
+                    
+                    // Show footer with grand total
+                    var formattedGrandTotal = grandTotal.toLocaleString('en-AU', {
+                        style: 'currency',
+                        currency: 'AUD'
+                    });
+                    $(`#${contentAreaId} #poTotalAmount`).text(formattedGrandTotal);
+                    $(`#${contentAreaId} #poSuppliersTableFooter`).show();
+                    
+                    // Auto-select first row (triggers click to load PDF and apply selection styling)
+                    setTimeout(function() {
+                        $(`#${contentAreaId} #poSuppliersTableBody tr:first`).trigger('click');
+                    }, 100);
+                }
+                
+                console.log('Suppliers table populated');
+            }
+            
             // Attach click handler for supplier row selection
             $(`#${contentAreaId}`).off('click', '#poSuppliersTableBody tr').on('click', '#poSuppliersTableBody tr', function() {
                 var row = $(this);
                 var supplierPk = row.attr('data-supplier-pk');
                 var supplierName = row.attr('data-supplier-name');
+                var poSent = row.attr('data-po-sent') === 'true';
+                var pdfUrl = row.attr('data-pdf-url');
                 
                 if (!supplierPk) return; // Skip if no supplier data
                 
-                // Highlight selected row
-                $(`#${contentAreaId} #poSuppliersTableBody tr`).removeClass('selected');
-                row.addClass('selected');
+                // Remove previous selection styling
+                $(`#${contentAreaId} #poSuppliersTableBody tr`).removeClass('selected-row');
                 
-                console.log('Supplier row clicked:', supplierName, '(PK:', supplierPk, ')');
+                // Add selection styling to clicked row
+                row.addClass('selected-row');
                 
-                // Generate PO document for this supplier
-                generatePODocument(projectObj, supplierPk, supplierName, contentAreaId);
+                // Add class to tbody to trigger dimming effect
+                $(`#${contentAreaId} #poSuppliersTableBody`).addClass('has-selection');
+                
+                console.log('Supplier row clicked:', supplierName, '(PK:', supplierPk, '), Sent:', poSent);
+                
+                // If PO was sent and we have a PDF URL, display the stored PDF
+                // Otherwise, generate a preview
+                if (poSent && pdfUrl) {
+                    console.log('Displaying stored PO PDF:', pdfUrl);
+                    $(`#${contentAreaId} #poPlaceholder`).hide();
+                    $(`#${contentAreaId} #poPreviewFrame`).attr('src', pdfUrl).show();
+                    $(`#${contentAreaId} #poViewerFooter`).addClass('visible');
+                    
+                    // Store current supplier info for download
+                    $(`#${contentAreaId} #downloadPOBtn`).data('supplierPk', supplierPk);
+                    $(`#${contentAreaId} #downloadPOBtn`).data('supplierName', supplierName);
+                } else {
+                    // Generate PO preview for unsent POs
+                    generatePODocument(projectObj, supplierPk, supplierName, contentAreaId);
+                }
             });
             
             // PO Update button handler - convert row to editable inputs
@@ -1730,170 +1873,18 @@
         };
         
         function generatePODocument(projectObj, supplierPk, supplierName, contentAreaId) {
-            console.log('Generating PO document for supplier:', supplierName);
+            console.log('Loading PO preview for supplier:', supplierName);
             
-            // Fetch quotes and allocations for this supplier
-            $.ajax({
-                url: '/core/get_project_quotes/' + projectObj.pk + '/',
-                type: 'GET',
-                success: function(response) {
-                    if (response.status === 'success') {
-                        var allQuotes = response.quotes || [];
-                        
-                        // Filter quotes for this supplier
-                        var supplierQuotes = allQuotes.filter(function(quote) {
-                            var contactPk = quote.supplier_pk || quote.contact_pk;
-                            return contactPk == supplierPk;
-                        });
-                        
-                        console.log('Found', supplierQuotes.length, 'quotes for this supplier');
-                        
-                        if (supplierQuotes.length === 0) {
-                            $(`#${contentAreaId} #poPlaceholder`).show();
-                            $(`#${contentAreaId} #poDocument`).hide();
-                            return;
-                        }
-                        
-                        // Fetch allocations for these quotes
-                        var quoteIds = supplierQuotes.map(function(q) { return q.quotes_pk; });
-                        
-                        $.ajax({
-                            url: '/core/get_quote_allocations/',
-                            type: 'POST',
-                            contentType: 'application/json',
-                            data: JSON.stringify({ quote_ids: quoteIds }),
-                            success: function(allocResponse) {
-                                var allocations = allocResponse.allocations || [];
-                                console.log('Loaded', allocations.length, 'allocations');
-                                
-                                // Check if construction project
-                                var isConstruction = projectObj.project_type === 'construction';
-                                
-                                // Group allocations by item
-                                var itemMap = {};
-                                allocations.forEach(function(alloc) {
-                                    var itemName = alloc.item_name;
-                                    
-                                    if (isConstruction) {
-                                        // For construction: group by item + unit to preserve qty/rate
-                                        var itemKey = itemName + '|' + (alloc.unit || '');
-                                        if (!itemMap[itemKey]) {
-                                            itemMap[itemKey] = {
-                                                item: itemName,
-                                                unit: alloc.unit || '-',
-                                                qty: 0,
-                                                rate: parseFloat(alloc.rate) || 0,
-                                                total_amount: 0,
-                                                quote_numbers: []
-                                            };
-                                        }
-                                        itemMap[itemKey].qty += parseFloat(alloc.qty) || 0;
-                                        itemMap[itemKey].total_amount += parseFloat(alloc.amount);
-                                    } else {
-                                        // For non-construction: group by item only
-                                        if (!itemMap[itemName]) {
-                                            itemMap[itemName] = {
-                                                item: itemName,
-                                                total_amount: 0,
-                                                quote_numbers: []
-                                            };
-                                        }
-                                        itemMap[itemName].total_amount += parseFloat(alloc.amount);
-                                    }
-                                    
-                                    // Find quote number for this allocation
-                                    var quote = supplierQuotes.find(function(q) { return q.quotes_pk == alloc.quote_pk; });
-                                    var itemKey = isConstruction ? (itemName + '|' + (alloc.unit || '')) : itemName;
-                                    if (quote && itemMap[itemKey].quote_numbers.indexOf(quote.supplier_quote_number) === -1) {
-                                        itemMap[itemKey].quote_numbers.push(quote.supplier_quote_number);
-                                    }
-                                });
-                                
-                                var items = Object.values(itemMap);
-                                console.log('Grouped into', items.length, 'unique items');
-                                
-                                // Generate PO HTML
-                                var poHtml = '<h2>Purchase Order - ' + escapeHtml(projectObj.name) + '</h2>';
-                                poHtml += '<h3>' + escapeHtml(supplierName) + ' - Payment Schedule</h3>';
-                                
-                                poHtml += '<table class="reusable-table" style="margin-top: 20px;">';
-                                poHtml += '<thead><tr>';
-                                
-                                if (isConstruction) {
-                                    // Construction: Description | Qty | Unit | Rate | Amount | Quote #
-                                    poHtml += '<th style="width: 30%;">Description</th>';
-                                    poHtml += '<th style="width: 10%; text-align: right;">Qty</th>';
-                                    poHtml += '<th style="width: 8%;">Unit</th>';
-                                    poHtml += '<th style="width: 12%; text-align: right;">Rate</th>';
-                                    poHtml += '<th style="width: 15%; text-align: right;">Amount</th>';
-                                    poHtml += '<th style="width: 25%;">Quote #</th>';
-                                } else {
-                                    // Non-construction: Description | Amount | Quote #
-                                    poHtml += '<th style="width: 50%;">Description</th>';
-                                    poHtml += '<th style="width: 25%; text-align: right;">Amount</th>';
-                                    poHtml += '<th style="width: 25%;">Quote #</th>';
-                                }
-                                
-                                poHtml += '</tr></thead><tbody>';
-                                
-                                var colspanCount = isConstruction ? 6 : 3;
-                                
-                                if (items.length === 0) {
-                                    poHtml += '<tr><td colspan="' + colspanCount + '" style="text-align: center; color: #6c757d; padding: 20px;">No items found</td></tr>';
-                                } else {
-                                    var totalAmount = 0;
-                                    items.forEach(function(item) {
-                                        totalAmount += item.total_amount;
-                                        poHtml += '<tr>';
-                                        poHtml += '<td>' + escapeHtml(item.item) + '</td>';
-                                        
-                                        if (isConstruction) {
-                                            // Construction columns
-                                            poHtml += '<td style="text-align: right;">' + item.qty.toFixed(2) + '</td>';
-                                            poHtml += '<td>' + escapeHtml(item.unit) + '</td>';
-                                            poHtml += '<td style="text-align: right;">$' + item.rate.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '</td>';
-                                        }
-                                        
-                                        poHtml += '<td style="text-align: right;">$' + item.total_amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '</td>';
-                                        poHtml += '<td>' + item.quote_numbers.join(', ') + '</td>';
-                                        poHtml += '</tr>';
-                                    });
-                                    
-                                    // Total row
-                                    poHtml += '<tr style="font-weight: bold; background-color: #f0f0f0;">';
-                                    poHtml += '<td>TOTAL</td>';
-                                    
-                                    if (isConstruction) {
-                                        poHtml += '<td></td><td></td><td></td>'; // Empty cells for Qty, Unit, Rate
-                                    }
-                                    
-                                    poHtml += '<td style="text-align: right;">$' + totalAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '</td>';
-                                    poHtml += '<td></td>';
-                                    poHtml += '</tr>';
-                                }
-                                
-                                poHtml += '</tbody></table>';
-                                
-                                // Display PO document
-                                $(`#${contentAreaId} #poPlaceholder`).hide();
-                                $(`#${contentAreaId} #poDocument`).html(poHtml).show();
-                                $(`#${contentAreaId} #poViewerFooter`).addClass('visible');
-                                
-                                // Store current supplier info for download
-                                $(`#${contentAreaId} #downloadPOBtn`).data('supplierPk', supplierPk);
-                                $(`#${contentAreaId} #downloadPOBtn`).data('supplierName', supplierName);
-                            },
-                            error: function(xhr, status, error) {
-                                console.error('Error loading quote allocations:', error);
-                                alert('Error loading quote allocations');
-                            }
-                        });
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error loading quotes:', error);
-                }
-            });
+            // Load the full PO preview in the iframe
+            var previewUrl = `/preview_po/${projectObj.pk}/${supplierPk}/`;
+            
+            $(`#${contentAreaId} #poPlaceholder`).hide();
+            $(`#${contentAreaId} #poPreviewFrame`).attr('src', previewUrl).show();
+            $(`#${contentAreaId} #poViewerFooter`).addClass('visible');
+            
+            // Store current supplier info for download
+            $(`#${contentAreaId} #downloadPOBtn`).data('supplierPk', supplierPk);
+            $(`#${contentAreaId} #downloadPOBtn`).data('supplierName', supplierName);
         }
         
         // Handle PO Download button

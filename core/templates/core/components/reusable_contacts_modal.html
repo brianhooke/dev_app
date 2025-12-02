@@ -193,7 +193,7 @@ $(document).ready(function() {
                             <td class="contact-account" data-account="${contact.bank_account_number || ''}">${contact.bank_account_number || ''}</td>
                             <td class="contact-abn" style="white-space: nowrap;" data-abn="${contact.tax_number || ''}">${formattedAbn}</td>
                             <td><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>
-                            <td><button class="btn btn-sm btn-primary update-contact-btn">Update</button></td>
+                            <td><button class="btn btn-sm btn-warning update-contact-btn">Update</button></td>
                         `);
                         
                         tbody.append(row);

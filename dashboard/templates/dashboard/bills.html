@@ -117,11 +117,17 @@
         }
     </style>
 
-    <!-- Bills - Inbox Section (hidden initially, shown when Bills - Inbox clicked) -->
+    <!-- Bills Section (hidden initially, shown when Bills clicked) -->
     <div id="billsInboxSection" style="display: none; height: 100%; flex-direction: column;">
-        <div style="display: flex; height: 100%;">
+        <!-- Bills navigation buttons -->
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-primary bills-nav-btn" id="billsInboxBtn" data-mode="inbox">Inbox</button>
+            <button class="btn btn-outline-primary bills-nav-btn" id="billsDirectBtn" data-mode="direct">Direct</button>
+        </div>
+        
+        <div style="display: flex; flex: 1;">
             <!-- Left side: Bills Table (top 2/3) and Allocations (bottom 1/3) (50%) -->
-            <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column; border-right: 2px solid #ddd;">
+            <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column;">
                 <!-- Bills Table (flex to fill available space) -->
                 <div id="billsTableContainer" style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
                     <table class="table table-bordered table-hover" id="billsTable">
@@ -148,7 +154,7 @@
                     <div style="text-align: center; margin-bottom: 5px; flex-shrink: 0;">
                         <h6 id="allocationsTitle">Bill Allocations</h6>
                     </div>
-                    <div style="flex: 1; border: 2px solid #ddd; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+                    <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
                         <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
                             <thead style="flex-shrink: 0; display: block; position: sticky; top: 0; z-index: 10; background: white;">
                                 <tr style="display: table; width: 100%; table-layout: fixed;">
@@ -187,7 +193,7 @@
             <!-- Right side: PDF Viewer (50% - full height) -->
             <div style="width: 50%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
                 <div id="viewerSection" style="flex: 1; display: flex; flex-direction: column;">
-                    <div style="flex: 1; border: 2px solid #ddd; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                    <div style="flex: 1; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
                         <iframe 
                             id="billViewer" 
                             style="width: 100%; height: 100%; border: none; display: none;"
@@ -221,10 +227,6 @@
                     populateBillsTable(response, function(bill) {
                         return bill.invoice_status === -2;
                     }, 'inbox');
-                    
-                    // Remove active class from all nav items and set this one
-                    $('.reusable-navbar a').removeClass('active');
-                    $('#billsInboxLink').addClass('active');
                     
                     // Hide all sections using universal function
                     if (typeof window.hideAllSections === 'function') {
@@ -535,34 +537,70 @@
                     console.error('Error rendering bill row:', bill.invoice_pk, error);
                 }
             });
+            
+            // Auto-select first row after table is populated
+            setTimeout(function() {
+                var firstRow = $('#billsTableBody tr:first');
+                if (firstRow.length > 0 && firstRow.attr('data-invoice-pk')) {
+                    firstRow.trigger('click');
+                }
+            }, 100);
         }
         
-        // Handle Bills Inbox link click - loads inline content
-        $('#billsInboxLink').click(function(e) {
+        // Handle main Bills navbar link click - shows Bills section with Inbox selected by default
+        $('#billsLink').click(function(e) {
             e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
             
             // Reset tender view state
             if (typeof window.resetTenderViewState === 'function') {
                 window.resetTenderViewState();
             }
             
-            // Load Bills - Inbox into workspace (inline, no modal)
+            // Hide all sections using universal function
+            if (typeof window.hideAllSections === 'function') {
+                window.hideAllSections();
+            }
+            
+            // Show Bills section and add has-content class to hide background
+            $('#billsInboxSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Load Inbox by default
             loadBillsInbox();
+            
+            // Update button states - Inbox active
+            $('#billsInboxBtn').removeClass('btn-outline-primary').addClass('btn-primary');
+            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Scroll to top to show the bills section
             $('html, body').animate({ scrollTop: 0 }, 300);
         });
         
-        // Handle Bills Direct link click - loads inline content
-        $('#billsDirectLink').click(function(e) {
+        // Handle Inbox button click
+        $('#billsInboxBtn').click(function(e) {
             e.preventDefault();
             
-            // Reset tender view state
-            if (typeof window.resetTenderViewState === 'function') {
-                window.resetTenderViewState();
-            }
+            // Update button states
+            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
-            // Fetch bills data and populate workspace (inline, no modal)
+            // Load Bills - Inbox
+            loadBillsInbox();
+        });
+        
+        // Handle Direct button click
+        $('#billsDirectBtn').click(function(e) {
+            e.preventDefault();
+            
+            // Update button states
+            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+            $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            
+            // Fetch bills data and populate workspace
             $.ajax({
                 url: '{% url "core:get_bills_list" %}',
                 type: 'GET',
@@ -579,19 +617,6 @@
                                bill.project_pk === null;
                     }, 'direct');
                     
-                    // Remove active class from all nav items and set this one
-                    $('.reusable-navbar a').removeClass('active');
-                    $('#billsDirectLink').addClass('active');
-                    
-                    // Hide all sections using universal function
-                    if (typeof window.hideAllSections === 'function') {
-                        window.hideAllSections();
-                    }
-                    
-                    // Show Bills section and add has-content class to hide background
-                    $('#billsInboxSection').show();
-                    $('#dynamicContentArea').addClass('has-content');
-                    
                     // Show allocations section for Direct and adjust bills table to 67% height
                     $('#allocationsSection').css('display', 'flex');
                     $('#billsTableContainer').css('flex', '0 0 67%');
@@ -601,494 +626,491 @@
                     alert('Failed to load bills. Please try again.');
                 }
             });
-            
-            // Scroll to top
-            $('html, body').animate({ scrollTop: 0 }, 300);
         });
-                    
-                    // Add click handler for email links
-                    $(document).on('click', '.email-link', function(e) {
-                        e.preventDefault();
-                        var emailHtml = $(this).attr('data-email-html');
-                        var emailText = $(this).attr('data-email-text');
-                        var emailSubject = $(this).attr('data-email-subject');
-                        var emailFrom = $(this).attr('data-email-from');
-                        
-                        // Update viewer title
-                        $('#viewerTitle').text('Email: ' + emailSubject);
-                        
-                        // Create HTML content with email header
-                        var emailContent = '<div style="padding: 20px; font-family: Arial, sans-serif;">';
-                        emailContent += '<div style="border-bottom: 2px solid #ddd; margin-bottom: 20px; padding-bottom: 10px;">';
-                        emailContent += '<p style="margin: 5px 0;"><strong>From:</strong> ' + emailFrom + '</p>';
-                        emailContent += '<p style="margin: 5px 0;"><strong>Subject:</strong> ' + emailSubject + '</p>';
-                        emailContent += '</div>';
-                        
-                        // Add email body (HTML or text)
-                        if (emailHtml) {
-                            emailContent += emailHtml;
-                        } else if (emailText) {
-                            emailContent += '<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">' + emailText + '</pre>';
-                        } else {
-                            emailContent += '<p><em>No email content available</em></p>';
+        
+        // Add click handler for email links
+        $(document).on('click', '.email-link', function(e) {
+            e.preventDefault();
+            var emailHtml = $(this).attr('data-email-html');
+            var emailText = $(this).attr('data-email-text');
+            var emailSubject = $(this).attr('data-email-subject');
+            var emailFrom = $(this).attr('data-email-from');
+            
+            // Update viewer title
+            $('#viewerTitle').text('Email: ' + emailSubject);
+            
+            // Create HTML content with email header
+            var emailContent = '<div style="padding: 20px; font-family: Arial, sans-serif;">';
+            emailContent += '<div style="border-bottom: 2px solid #ddd; margin-bottom: 20px; padding-bottom: 10px;">';
+            emailContent += '<p style="margin: 5px 0;"><strong>From:</strong> ' + emailFrom + '</p>';
+            emailContent += '<p style="margin: 5px 0;"><strong>Subject:</strong> ' + emailSubject + '</p>';
+            emailContent += '</div>';
+            
+            // Add email body (HTML or text)
+            if (emailHtml) {
+                emailContent += emailHtml;
+            } else if (emailText) {
+                emailContent += '<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">' + emailText + '</pre>';
+            } else {
+                emailContent += '<p><em>No email content available</em></p>';
+            }
+            emailContent += '</div>';
+            
+            // Create a blob URL for the HTML content
+            var blob = new Blob([emailContent], { type: 'text/html' });
+            var blobUrl = URL.createObjectURL(blob);
+            
+            // Load HTML in iframe
+            $('#billViewer').attr('src', blobUrl).show();
+            $('#viewerPlaceholder').hide();
+        });
+        
+        // Note: PDF loading is now handled by the main row click handler
+        // to prevent duplicate loads and ensure proper selection tracking
+        
+        // Add change handler for Xero Instance / Project dropdown
+        $(document).on('change', '.xero-project-select', function() {
+            var selectedValue = $(this).val();
+            var row = $(this).closest('tr');
+            var supplierSelect = row.find('.supplier-select');
+            var selectedSupplier = supplierSelect.val(); // Remember current selection
+            
+            // Determine the xero_instance_id
+            var xeroInstanceId = null;
+            if (selectedValue.startsWith('xero_')) {
+                xeroInstanceId = parseInt(selectedValue.replace('xero_', ''));
+            } else if (selectedValue.startsWith('project_')) {
+                var projectPk = parseInt(selectedValue.replace('project_', ''));
+                var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
+                if (project) {
+                    xeroInstanceId = project.xero_instance_id;
+                }
+            }
+            
+            // Update invoice in database and handle allocations
+            var invoicePk = row.attr('data-invoice-pk');
+            
+            // Determine if this is a Xero Instance or Project selection
+            var updateData = { invoice_pk: invoicePk };
+            if (selectedValue.startsWith('xero_')) {
+                updateData.xero_instance_id = xeroInstanceId;
+                updateData.project_pk = null;
+            } else if (selectedValue.startsWith('project_')) {
+                var projectPk = parseInt(selectedValue.replace('project_', ''));
+                updateData.project_pk = projectPk;
+                updateData.xero_instance_id = null;
+            }
+            
+            // Update invoice in database
+            $.ajax({
+                url: '/core/update_invoice/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(updateData),
+                success: function(response) {
+                    console.log('Updated invoice Xero Instance/Project');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating invoice:', error);
+                }
+            });
+            
+            // If Xero Instance changed, null out allocation Xero fields
+            if (selectedValue.startsWith('xero_')) {
+                $.ajax({
+                    url: '/core/null_allocation_xero_fields/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ invoice_pk: invoicePk }),
+                    success: function(response) {
+                        console.log('Nulled allocation Xero fields');
+                        // If this is the selected row, clear dropdowns in UI
+                        if (currentSelectedInvoicePk === invoicePk) {
+                            $('#allocationsTableBody tr').each(function() {
+                                $(this).find('.xero-account-select').val('');
+                                $(this).removeAttr('data-xero-account-pk');
+                            });
                         }
-                        emailContent += '</div>';
-                        
-                        // Create a blob URL for the HTML content
-                        var blob = new Blob([emailContent], { type: 'text/html' });
-                        var blobUrl = URL.createObjectURL(blob);
-                        
-                        // Load HTML in iframe
-                        $('#billViewer').attr('src', blobUrl).show();
-                        $('#viewerPlaceholder').hide();
-                    });
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error nulling allocation Xero fields:', error);
+                    }
+                });
+            }
+            
+            // Update currentInvoiceData with new xero_instance_pk if this is the selected row
+            if (currentSelectedInvoicePk === invoicePk && currentInvoiceData) {
+                currentInvoiceData.xero_instance_pk = xeroInstanceId;
+                // Repopulate allocation dropdowns with new instance data
+                populateAllAllocationDropdowns();
+            }
+            
+            // Rebuild supplier dropdown
+            supplierSelect.empty();
+            
+            if (xeroInstanceId) {
+                // Enable and populate suppliers
+                supplierSelect.prop('disabled', false);
+                
+                // Add "Select Supplier..." option
+                supplierSelect.append($('<option>').val('').text('Select Supplier...'));
+                
+                // Add separator
+                supplierSelect.append($('<option>').val('separator1').text('─────────').prop('disabled', true));
+                
+                // Add "Add..." option
+                supplierSelect.append($('<option>').val('add_supplier').text('Add...'));
+                
+                // Add separator
+                supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
+                
+                window.billsData.suppliers.forEach(function(supplier) {
+                    if (supplier.xero_instance_id === xeroInstanceId) {
+                        var option = $('<option>')
+                            .val(supplier.contact_pk)
+                            .text(supplier.name)
+                            .attr('data-xero-instance', supplier.xero_instance_id);
+                        supplierSelect.append(option);
+                    }
+                });
+                
+                // Restore selection if still valid
+                if (selectedSupplier && supplierSelect.find('option[value="' + selectedSupplier + '"]').length > 0) {
+                    supplierSelect.val(selectedSupplier);
+                }
+            } else {
+                // Disable and show placeholder
+                supplierSelect.append($('<option>').val('').text('Select Xero Instance first...'));
+                supplierSelect.prop('disabled', true);
+            }
+            
+            // Update button state
+            validateAndUpdateSendButton(invoicePk);
+        });
+        
+        // Handle supplier dropdown change - open Add Supplier modal if selected
+        $(document).on('change', '.supplier-select', function() {
+            var selectedValue = $(this).val();
+            var row = $(this).closest('tr');
+            
+            if (selectedValue === 'add_supplier') {
+                // Get the Xero Instance ID from the combined dropdown
+                var combinedSelect = row.find('.xero-project-select');
+                var combinedValue = combinedSelect.val();
+                var xeroInstanceId = null;
+                
+                if (combinedValue.startsWith('xero_')) {
+                    xeroInstanceId = parseInt(combinedValue.replace('xero_', ''));
+                } else if (combinedValue.startsWith('project_')) {
+                    var projectPk = parseInt(combinedValue.replace('project_', ''));
+                    var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
+                    if (project) {
+                        xeroInstanceId = project.xero_instance_id;
+                    }
+                }
+                
+                if (xeroInstanceId) {
+                    // Reset dropdown to empty
+                    $(this).val('');
                     
-                    // Note: PDF loading is now handled by the main row click handler
-                    // to prevent duplicate loads and ensure proper selection tracking
-                    
-                    // Add change handler for Xero Instance / Project dropdown
-                    $(document).on('change', '.xero-project-select', function() {
-                        var selectedValue = $(this).val();
-                        var row = $(this).closest('tr');
-                        var supplierSelect = row.find('.supplier-select');
-                        var selectedSupplier = supplierSelect.val(); // Remember current selection
-                        
-                        // Determine the xero_instance_id
-                        var xeroInstanceId = null;
-                        if (selectedValue.startsWith('xero_')) {
-                            xeroInstanceId = parseInt(selectedValue.replace('xero_', ''));
-                        } else if (selectedValue.startsWith('project_')) {
-                            var projectPk = parseInt(selectedValue.replace('project_', ''));
-                            var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
-                            if (project) {
-                                xeroInstanceId = project.xero_instance_id;
-                            }
-                        }
-                        
-                        // Update invoice in database and handle allocations
-                        var invoicePk = row.attr('data-invoice-pk');
-                        
-                        // Determine if this is a Xero Instance or Project selection
-                        var updateData = { invoice_pk: invoicePk };
-                        if (selectedValue.startsWith('xero_')) {
-                            updateData.xero_instance_id = xeroInstanceId;
-                            updateData.project_pk = null;
-                        } else if (selectedValue.startsWith('project_')) {
-                            var projectPk = parseInt(selectedValue.replace('project_', ''));
-                            updateData.project_pk = projectPk;
-                            updateData.xero_instance_id = null;
-                        }
-                        
-                        // Update invoice in database
-                        $.ajax({
-                            url: '/core/update_invoice/',
-                            type: 'POST',
-                            contentType: 'application/json',
-                            data: JSON.stringify(updateData),
-                            success: function(response) {
-                                console.log('Updated invoice Xero Instance/Project');
-                            },
-                            error: function(xhr, status, error) {
-                                console.error('Error updating invoice:', error);
+                    // Open Add Supplier modal
+                    window.openAddSupplierModal(xeroInstanceId, row);
+                }
+            }
+        });
+        
+        // Add click handler for send buttons
+        $(document).on('click', '.send-bill-btn', function(e) {
+            e.preventDefault();
+            
+            var button = $(this);
+            var row = button.closest('tr');
+            var invoicePk = button.attr('data-invoice-pk');
+            
+            // Get values from row
+            var xeroInstanceOrProject = row.find('.xero-project-select').val();
+            var supplierPk = row.find('.supplier-select').val();
+            var invoiceNumber = row.find('.invoice-number-input').val();
+            var netValue = row.find('.net-input').val();
+            var gstValue = row.find('.gst-input').val();
+            var totalNet = parseFloat(netValue);
+            var totalGst = parseFloat(gstValue);
+            
+            // Validate all required fields
+            var errors = [];
+            if (!xeroInstanceOrProject) {
+                errors.push('Please select a Xero Instance or Project');
+            }
+            if (!supplierPk || supplierPk === 'add_supplier') {
+                errors.push('Please select a Supplier');
+            }
+            if (!invoiceNumber || invoiceNumber.trim() === '') {
+                errors.push('Please enter an Invoice Number');
+            }
+            if (!totalNet || isNaN(totalNet) || totalNet === 0) {
+                errors.push('Please enter a non-zero Net amount');
+            }
+            // GST can be 0, but field cannot be empty
+            if (gstValue === null || gstValue === undefined || gstValue === '' || isNaN(totalGst)) {
+                errors.push('Please enter a GST amount (can be 0)');
+            }
+            
+            // Check if we're in Bills - Direct modal using stored modal type
+            var isDirectModal = (currentBillsModalType === 'direct');
+            
+            if (isDirectModal) {
+                // Additional validation for Bills - Direct
+                
+                // Check if this is the currently selected invoice
+                if (currentSelectedInvoicePk !== invoicePk) {
+                    errors.push('Please select this bill row to view and complete allocations');
+                } else {
+                    // Validate allocations
+                    var hasAllocations = $('#allocationsTableBody tr').length > 0;
+                    if (!hasAllocations) {
+                        errors.push('No allocations found. Please add at least one allocation');
+                    } else {
+                        // Check that all allocations have Xero Account selected
+                        var missingAccount = false;
+                        $('#allocationsTableBody tr').each(function() {
+                            var accountVal = $(this).find('.xero-account-select').val();
+                            if (!accountVal) {
+                                missingAccount = true;
                             }
                         });
                         
-                        // If Xero Instance changed, null out allocation Xero fields
-                        if (selectedValue.startsWith('xero_')) {
-                            $.ajax({
-                                url: '/core/null_allocation_xero_fields/',
-                                type: 'POST',
-                                contentType: 'application/json',
-                                data: JSON.stringify({ invoice_pk: invoicePk }),
-                                success: function(response) {
-                                    console.log('Nulled allocation Xero fields');
-                                    // If this is the selected row, clear dropdowns in UI
-                                    if (currentSelectedInvoicePk === invoicePk) {
-                                        $('#allocationsTableBody tr').each(function() {
-                                            $(this).find('.xero-account-select').val('');
-                                            $(this).removeAttr('data-xero-account-pk');
-                                        });
-                                    }
-                                },
-                                error: function(xhr, status, error) {
-                                    console.error('Error nulling allocation Xero fields:', error);
-                                }
-                            });
+                        if (missingAccount) {
+                            errors.push('All allocations must have a Xero Account selected');
                         }
                         
-                        // Update currentInvoiceData with new xero_instance_pk if this is the selected row
-                        if (currentSelectedInvoicePk === invoicePk && currentInvoiceData) {
-                            currentInvoiceData.xero_instance_pk = xeroInstanceId;
-                            // Repopulate allocation dropdowns with new instance data
-                            populateAllAllocationDropdowns();
+                        // Check remaining allocations are exactly 0.00
+                        var remainingNetText = $('#remainingNet').text().replace('$', '');
+                        var remainingGstText = $('#remainingGst').text().replace('$', '');
+                        var remainingNet = parseFloat(remainingNetText);
+                        var remainingGst = parseFloat(remainingGstText);
+                        
+                        if (Math.abs(remainingNet) >= 0.01) {
+                            errors.push('Still to allocate Net must be exactly $0.00 (currently: $' + remainingNet.toFixed(2) + ')');
                         }
+                        if (Math.abs(remainingGst) >= 0.01) {
+                            errors.push('Still to allocate GST must be exactly $0.00 (currently: $' + remainingGst.toFixed(2) + ')');
+                        }
+                    }
+                }
+            }
+            
+            if (errors.length > 0) {
+                alert('Please fix the following errors:\n\n' + errors.join('\n'));
+                return;
+            }
+            
+            // Store original button text for restoration on error
+            var originalBtnText = button.text();
+            
+            // Disable button and show processing state
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+            
+            // Send AJAX request
+            fetch('/send_bill/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                body: JSON.stringify({
+                    invoice_pk: invoicePk,
+                    xero_instance_or_project: xeroInstanceOrProject,
+                    supplier_pk: supplierPk,
+                    invoice_number: invoiceNumber,
+                    total_net: totalNet,
+                    total_gst: totalGst
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Check if this was the currently selected row
+                    var wasSelected = (currentSelectedInvoicePk === invoicePk);
+                    
+                    // Remove row from table with fade effect
+                    row.fadeOut(400, function() {
+                        $(this).remove();
                         
-                        // Rebuild supplier dropdown
-                        supplierSelect.empty();
+                        // Check if table is empty
+                        if ($('#billsTableBody tr').length === 0) {
+                            $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
+                        }
+                    });
+                    
+                    // If this was the selected row, clear RHS allocations and PDF viewer
+                    if (wasSelected) {
+                        // Clear allocations table
+                        $('#allocationsTableBody').empty();
                         
-                        if (xeroInstanceId) {
-                            // Enable and populate suppliers
-                            supplierSelect.prop('disabled', false);
+                        // Reset "still to allocate" values
+                        $('#remainingNet').text('$0.00').css('color', 'green');
+                        $('#remainingGst').text('$0.00').css('color', 'green');
+                        
+                        // Clear PDF viewer
+                        $('#billViewer').attr('src', '').hide();
+                        $('#viewerPlaceholder').show();
+                        $('#viewerTitle').text('');
+                        
+                        // Clear current selection
+                        currentSelectedInvoicePk = null;
+                        currentInvoiceData = null;
+                    }
+                } else {
+                    // Re-enable button on error
+                    button.prop('disabled', false).html(originalBtnText);
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error sending bill:', error);
+                button.prop('disabled', false).html(originalBtnText);
+                alert('Failed to send bill. Please try again.');
+            });
+        });
+        
+        // Add click handler for archive buttons
+        $(document).on('click', '.archive-bill-btn', function(e) {
+            e.preventDefault();
+            var invoicePk = $(this).attr('data-invoice-pk');
+            var row = $(this).closest('tr');
+            
+            if (confirm('Are you sure you want to archive this Bill?')) {
+                // Send AJAX request to archive the invoice
+                $.ajax({
+                    url: '{% url "core:archive_bill" %}',
+                    type: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    data: JSON.stringify({
+                        invoice_pk: invoicePk
+                    }),
+                    contentType: 'application/json',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Check if this was the currently selected row
+                            var wasSelected = (currentSelectedInvoicePk === invoicePk);
                             
-                            // Add "Select Supplier..." option
-                            supplierSelect.append($('<option>').val('').text('Select Supplier...'));
-                            
-                            // Add separator
-                            supplierSelect.append($('<option>').val('separator1').text('─────────').prop('disabled', true));
-                            
-                            // Add "Add..." option
-                            supplierSelect.append($('<option>').val('add_supplier').text('Add...'));
-                            
-                            // Add separator
-                            supplierSelect.append($('<option>').val('separator2').text('─────────').prop('disabled', true));
-                            
-                            window.billsData.suppliers.forEach(function(supplier) {
-                                if (supplier.xero_instance_id === xeroInstanceId) {
-                                    var option = $('<option>')
-                                        .val(supplier.contact_pk)
-                                        .text(supplier.name)
-                                        .attr('data-xero-instance', supplier.xero_instance_id);
-                                    supplierSelect.append(option);
-                                }
+                            // Remove row from table with fade effect
+                            row.fadeOut(300, function() {
+                                $(this).remove();
                             });
                             
-                            // Restore selection if still valid
-                            if (selectedSupplier && supplierSelect.find('option[value="' + selectedSupplier + '"]').length > 0) {
-                                supplierSelect.val(selectedSupplier);
+                            // If this was the selected row, clear RHS allocations and PDF viewer
+                            if (wasSelected) {
+                                // Clear allocations table
+                                $('#allocationsTableBody').empty();
+                                
+                                // Reset "still to allocate" values
+                                $('#remainingNet').text('$0.00').css('color', 'green');
+                                $('#remainingGst').text('$0.00').css('color', 'green');
+                                
+                                // Clear PDF viewer
+                                $('#billViewer').attr('src', '').hide();
+                                $('#viewerPlaceholder').show();
+                                $('#viewerTitle').text('');
+                                
+                                // Clear current selection
+                                currentSelectedInvoicePk = null;
+                                currentInvoiceData = null;
                             }
                         } else {
-                            // Disable and show placeholder
-                            supplierSelect.append($('<option>').val('').text('Select Xero Instance first...'));
-                            supplierSelect.prop('disabled', true);
+                            alert('Failed to archive bill: ' + response.message);
                         }
-                        
-                        // Update button state
-                        validateAndUpdateSendButton(invoicePk);
-                    });
-                    
-                    // Handle supplier dropdown change - open Add Supplier modal if selected
-                    $(document).on('change', '.supplier-select', function() {
-                        var selectedValue = $(this).val();
-                        var row = $(this).closest('tr');
-                        
-                        if (selectedValue === 'add_supplier') {
-                            // Get the Xero Instance ID from the combined dropdown
-                            var combinedSelect = row.find('.xero-project-select');
-                            var combinedValue = combinedSelect.val();
-                            var xeroInstanceId = null;
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Archive error:', error);
+                        alert('Failed to archive bill. Please try again.');
+                    }
+                });
+            }
+        });
+        
+        // Add click handler for return to inbox buttons
+        $(document).on('click', '.return-to-inbox-btn', function(e) {
+            e.preventDefault();
+            var invoicePk = $(this).attr('data-invoice-pk');
+            var row = $(this).closest('tr');
+            
+            if (confirm('Are you sure you want to return this bill to the inbox?')) {
+                // Send AJAX request to return to inbox
+                $.ajax({
+                    url: '{% url "core:return_to_inbox" %}',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        invoice_pk: invoicePk
+                    }),
+                    headers: {
+                        'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Check if this was the currently selected row
+                            var wasSelected = (currentSelectedInvoicePk === invoicePk);
                             
-                            if (combinedValue.startsWith('xero_')) {
-                                xeroInstanceId = parseInt(combinedValue.replace('xero_', ''));
-                            } else if (combinedValue.startsWith('project_')) {
-                                var projectPk = parseInt(combinedValue.replace('project_', ''));
-                                var project = window.billsData.projects.find(p => p.projects_pk === projectPk);
-                                if (project) {
-                                    xeroInstanceId = project.xero_instance_id;
+                            // Update the invoice in the global bills data
+                            if (window.billsData && window.billsData.bills) {
+                                var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
+                                if (invoice) {
+                                    invoice.invoice_status = -2;
+                                    invoice.xero_instance_id = null;
+                                    invoice.project_pk = null;
+                                    invoice.total_net = null;
+                                    invoice.total_gst = null;
+                                    invoice.supplier_invoice_number = null;
+                                    invoice.contact_pk = null;
                                 }
                             }
                             
-                            if (xeroInstanceId) {
-                                // Reset dropdown to empty
-                                $(this).val('');
+                            // Remove row from table with fade effect
+                            row.fadeOut(400, function() {
+                                $(this).remove();
                                 
-                                // Open Add Supplier modal
-                                window.openAddSupplierModal(xeroInstanceId, row);
-                            }
-                        }
-                    });
-                    
-                    // Add click handler for send buttons
-                    $(document).on('click', '.send-bill-btn', function(e) {
-                        e.preventDefault();
-                        
-                        var button = $(this);
-                        var row = button.closest('tr');
-                        var invoicePk = button.attr('data-invoice-pk');
-                        
-                        // Get values from row
-                        var xeroInstanceOrProject = row.find('.xero-project-select').val();
-                        var supplierPk = row.find('.supplier-select').val();
-                        var invoiceNumber = row.find('.invoice-number-input').val();
-                        var netValue = row.find('.net-input').val();
-                        var gstValue = row.find('.gst-input').val();
-                        var totalNet = parseFloat(netValue);
-                        var totalGst = parseFloat(gstValue);
-                        
-                        // Validate all required fields
-                        var errors = [];
-                        if (!xeroInstanceOrProject) {
-                            errors.push('Please select a Xero Instance or Project');
-                        }
-                        if (!supplierPk || supplierPk === 'add_supplier') {
-                            errors.push('Please select a Supplier');
-                        }
-                        if (!invoiceNumber || invoiceNumber.trim() === '') {
-                            errors.push('Please enter an Invoice Number');
-                        }
-                        if (!totalNet || isNaN(totalNet) || totalNet === 0) {
-                            errors.push('Please enter a non-zero Net amount');
-                        }
-                        // GST can be 0, but field cannot be empty
-                        if (gstValue === null || gstValue === undefined || gstValue === '' || isNaN(totalGst)) {
-                            errors.push('Please enter a GST amount (can be 0)');
-                        }
-                        
-                        // Check if we're in Bills - Direct modal using stored modal type
-                        var isDirectModal = (currentBillsModalType === 'direct');
-                        
-                        if (isDirectModal) {
-                            // Additional validation for Bills - Direct
-                            
-                            // Check if this is the currently selected invoice
-                            if (currentSelectedInvoicePk !== invoicePk) {
-                                errors.push('Please select this bill row to view and complete allocations');
-                            } else {
-                                // Validate allocations
-                                var hasAllocations = $('#allocationsTableBody tr').length > 0;
-                                if (!hasAllocations) {
-                                    errors.push('No allocations found. Please add at least one allocation');
-                                } else {
-                                    // Check that all allocations have Xero Account selected
-                                    var missingAccount = false;
-                                    $('#allocationsTableBody tr').each(function() {
-                                        var accountVal = $(this).find('.xero-account-select').val();
-                                        if (!accountVal) {
-                                            missingAccount = true;
-                                        }
-                                    });
-                                    
-                                    if (missingAccount) {
-                                        errors.push('All allocations must have a Xero Account selected');
-                                    }
-                                    
-                                    // Check remaining allocations are exactly 0.00
-                                    var remainingNetText = $('#remainingNet').text().replace('$', '');
-                                    var remainingGstText = $('#remainingGst').text().replace('$', '');
-                                    var remainingNet = parseFloat(remainingNetText);
-                                    var remainingGst = parseFloat(remainingGstText);
-                                    
-                                    if (Math.abs(remainingNet) >= 0.01) {
-                                        errors.push('Still to allocate Net must be exactly $0.00 (currently: $' + remainingNet.toFixed(2) + ')');
-                                    }
-                                    if (Math.abs(remainingGst) >= 0.01) {
-                                        errors.push('Still to allocate GST must be exactly $0.00 (currently: $' + remainingGst.toFixed(2) + ')');
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (errors.length > 0) {
-                            alert('Please fix the following errors:\n\n' + errors.join('\n'));
-                            return;
-                        }
-                        
-                        // Store original button text for restoration on error
-                        var originalBtnText = button.text();
-                        
-                        // Disable button and show processing state
-                        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
-                        
-                        // Send AJAX request
-                        fetch('/send_bill/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
-                            },
-                            body: JSON.stringify({
-                                invoice_pk: invoicePk,
-                                xero_instance_or_project: xeroInstanceOrProject,
-                                supplier_pk: supplierPk,
-                                invoice_number: invoiceNumber,
-                                total_net: totalNet,
-                                total_gst: totalGst
-                            })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                // Check if this was the currently selected row
-                                var wasSelected = (currentSelectedInvoicePk === invoicePk);
-                                
-                                // Remove row from table with fade effect
-                                row.fadeOut(400, function() {
-                                    $(this).remove();
-                                    
-                                    // Check if table is empty
-                                    if ($('#billsTableBody tr').length === 0) {
-                                        $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
-                                    }
-                                });
-                                
-                                // If this was the selected row, clear RHS allocations and PDF viewer
-                                if (wasSelected) {
-                                    // Clear allocations table
-                                    $('#allocationsTableBody').empty();
-                                    
-                                    // Reset "still to allocate" values
-                                    $('#remainingNet').text('$0.00').css('color', 'green');
-                                    $('#remainingGst').text('$0.00').css('color', 'green');
-                                    
-                                    // Clear PDF viewer
-                                    $('#billViewer').attr('src', '').hide();
-                                    $('#viewerPlaceholder').show();
-                                    $('#viewerTitle').text('');
-                                    
-                                    // Clear current selection
-                                    currentSelectedInvoicePk = null;
-                                    currentInvoiceData = null;
-                                }
-                            } else {
-                                // Re-enable button on error
-                                button.prop('disabled', false).html(originalBtnText);
-                                alert('Error: ' + data.message);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error sending bill:', error);
-                            button.prop('disabled', false).html(originalBtnText);
-                            alert('Failed to send bill. Please try again.');
-                        });
-                    });
-                    
-                    // Add click handler for archive buttons
-                    $(document).on('click', '.archive-bill-btn', function(e) {
-                        e.preventDefault();
-                        var invoicePk = $(this).attr('data-invoice-pk');
-                        var row = $(this).closest('tr');
-                        
-                        if (confirm('Are you sure you want to archive this Bill?')) {
-                            // Send AJAX request to archive the invoice
-                            $.ajax({
-                                url: '{% url "core:archive_bill" %}',
-                                type: 'POST',
-                                headers: {
-                                    'X-CSRFToken': '{{ csrf_token }}'
-                                },
-                                data: JSON.stringify({
-                                    invoice_pk: invoicePk
-                                }),
-                                contentType: 'application/json',
-                                success: function(response) {
-                                    if (response.status === 'success') {
-                                        // Check if this was the currently selected row
-                                        var wasSelected = (currentSelectedInvoicePk === invoicePk);
-                                        
-                                        // Remove row from table with fade effect
-                                        row.fadeOut(300, function() {
-                                            $(this).remove();
-                                        });
-                                        
-                                        // If this was the selected row, clear RHS allocations and PDF viewer
-                                        if (wasSelected) {
-                                            // Clear allocations table
-                                            $('#allocationsTableBody').empty();
-                                            
-                                            // Reset "still to allocate" values
-                                            $('#remainingNet').text('$0.00').css('color', 'green');
-                                            $('#remainingGst').text('$0.00').css('color', 'green');
-                                            
-                                            // Clear PDF viewer
-                                            $('#billViewer').attr('src', '').hide();
-                                            $('#viewerPlaceholder').show();
-                                            $('#viewerTitle').text('');
-                                            
-                                            // Clear current selection
-                                            currentSelectedInvoicePk = null;
-                                            currentInvoiceData = null;
-                                        }
-                                    } else {
-                                        alert('Failed to archive bill: ' + response.message);
-                                    }
-                                },
-                                error: function(xhr, status, error) {
-                                    console.error('Archive error:', error);
-                                    alert('Failed to archive bill. Please try again.');
+                                // Check if table is empty
+                                if ($('#billsTableBody tr').length === 0) {
+                                    $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
                                 }
                             });
+                            
+                            // If this was the selected row, clear RHS allocations and PDF viewer
+                            if (wasSelected) {
+                                // Clear allocations table
+                                $('#allocationsTableBody').empty();
+                                
+                                // Reset "still to allocate" values
+                                $('#remainingNet').text('$0.00').css('color', 'green');
+                                $('#remainingGst').text('$0.00').css('color', 'green');
+                                
+                                // Clear PDF viewer
+                                $('#billViewer').attr('src', '').hide();
+                                $('#viewerPlaceholder').show();
+                                $('#viewerTitle').text('');
+                                
+                                // Clear current selection
+                                currentSelectedInvoicePk = null;
+                                currentInvoiceData = null;
+                            }
+                        } else {
+                            alert('Failed to return bill to inbox: ' + response.message);
                         }
-                    });
-                    
-                    // Add click handler for return to inbox buttons
-                    $(document).on('click', '.return-to-inbox-btn', function(e) {
-                        e.preventDefault();
-                        var invoicePk = $(this).attr('data-invoice-pk');
-                        var row = $(this).closest('tr');
-                        
-                        if (confirm('Are you sure you want to return this bill to the inbox?')) {
-                            // Send AJAX request to return to inbox
-                            $.ajax({
-                                url: '{% url "core:return_to_inbox" %}',
-                                type: 'POST',
-                                contentType: 'application/json',
-                                data: JSON.stringify({
-                                    invoice_pk: invoicePk
-                                }),
-                                headers: {
-                                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
-                                },
-                                success: function(response) {
-                                    if (response.status === 'success') {
-                                        // Check if this was the currently selected row
-                                        var wasSelected = (currentSelectedInvoicePk === invoicePk);
-                                        
-                                        // Update the invoice in the global bills data
-                                        if (window.billsData && window.billsData.bills) {
-                                            var invoice = window.billsData.bills.find(b => b.invoice_pk === parseInt(invoicePk));
-                                            if (invoice) {
-                                                invoice.invoice_status = -2;
-                                                invoice.xero_instance_id = null;
-                                                invoice.project_pk = null;
-                                                invoice.total_net = null;
-                                                invoice.total_gst = null;
-                                                invoice.supplier_invoice_number = null;
-                                                invoice.contact_pk = null;
-                                            }
-                                        }
-                                        
-                                        // Remove row from table with fade effect
-                                        row.fadeOut(400, function() {
-                                            $(this).remove();
-                                            
-                                            // Check if table is empty
-                                            if ($('#billsTableBody tr').length === 0) {
-                                                $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
-                                            }
-                                        });
-                                        
-                                        // If this was the selected row, clear RHS allocations and PDF viewer
-                                        if (wasSelected) {
-                                            // Clear allocations table
-                                            $('#allocationsTableBody').empty();
-                                            
-                                            // Reset "still to allocate" values
-                                            $('#remainingNet').text('$0.00').css('color', 'green');
-                                            $('#remainingGst').text('$0.00').css('color', 'green');
-                                            
-                                            // Clear PDF viewer
-                                            $('#billViewer').attr('src', '').hide();
-                                            $('#viewerPlaceholder').show();
-                                            $('#viewerTitle').text('');
-                                            
-                                            // Clear current selection
-                                            currentSelectedInvoicePk = null;
-                                            currentInvoiceData = null;
-                                        }
-                                    } else {
-                                        alert('Failed to return bill to inbox: ' + response.message);
-                                    }
-                                },
-                                error: function(xhr, status, error) {
-                                    console.error('Return to inbox error:', error);
-                                    alert('Failed to return bill to inbox. Please try again.');
-                                }
-                            });
-                        }
-                    });
-                    
-                    // Global variable to store current invoice data for allocations
-                    var currentInvoiceData = null;
-                    var currentSelectedInvoicePk = null;
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Return to inbox error:', error);
+                        alert('Failed to return bill to inbox. Please try again.');
+                    }
+                });
+            }
+        });
+        
+        // Global variable to store current invoice data for allocations
+        var currentInvoiceData = null;
+        var currentSelectedInvoicePk = null;
                     
                     // Function to create an allocation row
                     function createAllocationRow(netAmount, gstAmount, allocationPk, xeroAccountPk, notes) {

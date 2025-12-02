@@ -84,10 +84,7 @@ def dashboard_view(request):
     nav_items = [
         {'label': 'Dashboard', 'url': '/', 'id': 'dashboardLink', 'page_id': 'dashboard'},
         {'divider': True},
-        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'submenu': [
-            {'label': 'Inbox', 'id': 'billsInboxLink', 'page_id': 'bills_inbox'},
-            {'label': 'Direct', 'id': 'billsDirectLink', 'page_id': 'bills_direct'},
-        ]},
+        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
         {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects'},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True},
@@ -1799,9 +1796,11 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
             body {{
                 font-family: 'Helvetica', 'Arial', sans-serif;
                 margin: 0;
-                padding: 0;
+                padding: 30px 40px;
                 color: #333;
                 position: relative;
+                background-color: #fff;
+                box-sizing: border-box;
             }}
             .header {{
                 text-align: center;
@@ -1814,23 +1813,11 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
                 margin: 0 0 8px 0;
                 font-weight: bold;
             }}
-            .subheading-container {{
-                position: relative;
-            }}
             h2 {{
                 color: #7f8c8d;
                 font-size: {f'16px' if num_items > 20 else '18px'};
                 margin: 0;
                 font-weight: normal;
-                display: inline-block;
-            }}
-            .date-inline {{
-                position: absolute;
-                right: 0;
-                top: 50%;
-                transform: translateY(-50%);
-                color: #95a5a6;
-                font-size: {f'10px' if num_items > 20 else '11px'};
             }}
             table {{
                 width: 100%;
@@ -1919,10 +1906,7 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
     <body>
         <div class="header">
             <h1>Purchase Order</h1>
-            <div class="subheading-container">
-                <h2>{project.project} - {supplier.name}</h2>
-                <div class="date-inline">Generated on {date.today().strftime('%B %d, %Y')}</div>
-            </div>
+            <h2>{project.project} - {supplier.name}</h2>
         </div>
         
         <table>
@@ -1983,6 +1967,99 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
     '''
     
     return html_content
+
+
+def get_po_status(request, project_pk):
+    """
+    Get PO sent status for all suppliers in a project.
+    Returns dict mapping supplier_pk to {sent: bool, pdf_url: str|null, po_order_pk: int|null}
+    """
+    try:
+        project = Projects.objects.get(projects_pk=project_pk)
+        
+        # Get all Po_orders for this project
+        po_orders = Po_orders.objects.filter(project=project, po_sent=True).select_related('po_supplier')
+        
+        # Build status map
+        status_map = {}
+        for po in po_orders:
+            supplier_pk = po.po_supplier.contact_pk
+            pdf_url = po.pdf.url if po.pdf else None
+            status_map[supplier_pk] = {
+                'sent': True,
+                'pdf_url': pdf_url,
+                'po_order_pk': po.po_order_pk
+            }
+        
+        return JsonResponse({
+            'status': 'success',
+            'po_status': status_map
+        })
+        
+    except Projects.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error getting PO status: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def preview_po(request, project_pk, supplier_pk):
+    """
+    Generate PO HTML preview for display in iframe.
+    Returns the same HTML that would be used for the PDF email.
+    """
+    try:
+        from collections import defaultdict
+        
+        # Get project and supplier details
+        project = Projects.objects.get(projects_pk=project_pk)
+        supplier = Contacts.objects.get(contact_pk=supplier_pk)
+        
+        # Get all quotes for this project and supplier
+        quotes = Quotes.objects.filter(
+            project=project,
+            contact_pk=supplier
+        ).prefetch_related('quote_allocations')
+        
+        if not quotes.exists():
+            return HttpResponse('<html><body style="font-family: Arial; padding: 20px; color: #666; text-align: center;"><p>No quotes found for this supplier</p></body></html>')
+        
+        # Group allocations by item
+        items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+        
+        for quote in quotes:
+            for allocation in quote.quote_allocations.all():
+                item_name = allocation.item.item
+                items_map[item_name]['amount'] += allocation.amount
+                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+        
+        # Convert to list
+        items = [
+            {
+                'description': item_name,
+                'amount': float(data['amount']),
+                'quote_numbers': ', '.join(data['quote_numbers'])
+            }
+            for item_name, data in items_map.items()
+        ]
+        
+        # Calculate total
+        total_amount = sum(item['amount'] for item in items)
+        
+        # Generate HTML with a placeholder URL to show the full format
+        # The actual URL will be generated when the email is sent
+        html_content = generate_po_html(project, supplier, items, total_amount, po_url="[URL will be generated when email is sent]")
+        
+        return HttpResponse(html_content)
+        
+    except Projects.DoesNotExist:
+        return HttpResponse('<html><body style="font-family: Arial; padding: 20px; color: red; text-align: center;"><p>Project not found</p></body></html>', status=404)
+    except Contacts.DoesNotExist:
+        return HttpResponse('<html><body style="font-family: Arial; padding: 20px; color: red; text-align: center;"><p>Supplier not found</p></body></html>', status=404)
+    except Exception as e:
+        logger.error(f"Error generating PO preview: {e}")
+        return HttpResponse(f'<html><body style="font-family: Arial; padding: 20px; color: red; text-align: center;"><p>Error: {str(e)}</p></body></html>', status=500)
 
 
 @csrf_exempt
@@ -2212,7 +2289,8 @@ Mason'''
         
         return JsonResponse({
             'status': 'success',
-            'message': f'Purchase order sent to {supplier.email}'
+            'message': f'Purchase order sent to {supplier.email}',
+            'pdf_url': po_order.pdf.url if po_order.pdf else None
         })
         
     except Projects.DoesNotExist:
