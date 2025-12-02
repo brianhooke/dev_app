@@ -55,11 +55,36 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
-PROJECT_NAME = '123 Fake Street'
-LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
-BACKGROUND_IMAGE_PATH = os.path.join(MEDIA_ROOT, 'backgrounds', 'my_bg.jpg')
+# Media files - use S3 in Docker/AWS, local filesystem otherwise
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+
+if AWS_STORAGE_BUCKET_NAME and os.path.exists('/app'):
+    # Running in Docker on AWS - use S3 for media files
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_DEFAULT_ACL = None
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    
+    # Media Files (User Uploads) - S3
+    AWS_MEDIA_LOCATION = 'media'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_MEDIA_LOCATION}/'
+    DEFAULT_FILE_STORAGE = 'dev_app.storagebackends.MyS3Boto3Storage'
+    MEDIA_ROOT = ''  # Not used with S3
+    
+    PROJECT_NAME = os.environ.get('PROJECT_NAME', '123 Fake Street')
+    LETTERHEAD_PATH = os.environ.get('LETTERHEAD_PATH', '')
+    BACKGROUND_IMAGE_PATH = os.environ.get('BACKGROUND_IMAGE_PATH', '')
+else:
+    # Local development - use local filesystem
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    MEDIA_URL = '/media/'
+    PROJECT_NAME = '123 Fake Street'
+    LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
+    BACKGROUND_IMAGE_PATH = os.path.join(MEDIA_ROOT, 'backgrounds', 'my_bg.jpg')
 
 LOGGING = {
     'version': 1,
