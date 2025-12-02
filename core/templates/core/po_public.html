@@ -449,75 +449,9 @@
             font-size: 14px;
         }
         
-        /* Alien Animation */
-        .alien-container {
-            position: fixed;
-            bottom: 20px;
-            left: -150px;
-            z-index: 9999;
-            animation: walkAcross 8s ease-in-out forwards;
-            pointer-events: none;
-        }
-        
-        @keyframes walkAcross {
-            0% {
-                left: -150px;
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            85% {
-                opacity: 1;
-            }
-            100% {
-                left: 110%;
-                opacity: 0;
-            }
-        }
-        
-        .alien {
-            font-size: 60px;
-            animation: bounce 0.5s infinite alternate;
-            display: inline-block;
-        }
-        
-        @keyframes bounce {
-            0% {
-                transform: translateY(0px);
-            }
-            100% {
-                transform: translateY(-10px);
-            }
-        }
-        
-        .alien-shadow {
-            width: 40px;
-            height: 8px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 50%;
-            margin: 5px auto 0;
-            animation: shadowPulse 0.5s infinite alternate;
-        }
-        
-        @keyframes shadowPulse {
-            0% {
-                transform: scaleX(1);
-                opacity: 0.3;
-            }
-            100% {
-                transform: scaleX(0.8);
-                opacity: 0.2;
-            }
-        }
     </style>
 </head>
 <body>
-    <!-- Alien Animation -->
-    <div class="alien-container">
-        <div class="alien">👽</div>
-        <div class="alien-shadow"></div>
-    </div>
     
     <div class="main-layout">
         <!-- Left Panel: Payment Schedule -->

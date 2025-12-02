@@ -92,7 +92,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
 
-Version: v76 (displayed in header)
+Version: v77 (displayed in header)
 -->
 
 {% block title %}
@@ -146,33 +146,6 @@ Version: v76 (displayed in header)
             transform: scale(0.95);
         }
         
-        /* UFO Animation */
-        .spaceship {
-            position: fixed;
-            left: -100px;
-            font-size: 48px;
-            z-index: 10000;
-            pointer-events: none;
-        }
-        
-        .spaceship.green {
-            filter: hue-rotate(100deg) saturate(1.5);
-        }
-        
-        .spaceship.purple {
-            filter: hue-rotate(260deg) saturate(1.5);
-        }
-        
-        @keyframes flyAcross {
-            0% {
-                left: -100px;
-                transform: rotate(0deg);
-            }
-            100% {
-                left: calc(100% + 100px);
-                transform: rotate(10deg);
-            }
-        }
         
         /* Bills table row selection styling - applies to BOTH Inbox and Direct modals */
         #billsTableBody tr {
@@ -258,13 +231,10 @@ Version: v76 (displayed in header)
     </style>
 </head>
 
-<!-- UFOs will be added dynamically via JavaScript -->
-<div id="spaceship-container"></div>
-
 <div style="position: relative;">
     <h3 style="text-align: center;">Project <img src="{% static 'core/images/logo.png' %}" alt="Icon" style="height: 1.6em; vertical-align: middle; position: relative; bottom: 0.3em;">anagement App</h3>
     <div style="position: absolute; top: 0; right: 20px; font-size: 12px; color: #666;">
-        v76
+        v77
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="margin-left: 8px; padding: 2px 8px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">🧪 TEST</span>
         {% else %}
@@ -500,41 +470,48 @@ Version: v76 (displayed in header)
             }
         });
         
-        // Create 20 UFOs (green and purple) with different positions and timing
-        for (let i = 0; i < 20; i++) {
-            // Random vertical position between 5% and 85% of screen height
-            const topPosition = 5 + (i * 4); // Spread them out vertically
-            
-            // Stagger animation start times
-            const delay = i * 0.15; // Each UFO starts 0.15s after the previous
-            
-            // Random duration between 3-5 seconds
-            const duration = 3 + Math.random() * 2;
-            
-            // Alternate between green and purple UFOs
-            const colorClass = i % 2 === 0 ? 'green' : 'purple';
-            
-            // Create UFO element
-            const spaceship = $('<div class="spaceship ' + colorClass + '">🛸</div>');
-            spaceship.css({
-                'top': topPosition + '%',
-                'animation': `flyAcross ${duration}s ease-in-out ${delay}s forwards`
-            });
-            
-            $('#spaceship-container').append(spaceship);
-        }
+        // Toggle Database Wipe Button visibility with SHIFT+BIN sequence
+        let binSequence = [];
+        const BIN_SEQUENCE = ['b', 'i', 'n'];
+        let shiftHeld = false;
         
-        // Remove all UFOs after animation completes (longest duration + delay)
-        setTimeout(function() {
-            $('#spaceship-container').remove();
-        }, 8000);
-        
-        // Toggle Database Wipe Button visibility with SHIFT+B
         $(document).on('keydown', function(e) {
-            // SHIFT+B (keyCode 66 is 'B')
-            if (e.shiftKey && e.keyCode === 66) {
+            // Track shift key
+            if (e.key === 'Shift') {
+                shiftHeld = true;
+                binSequence = []; // Reset sequence when shift is pressed
+                return;
+            }
+            
+            // Only track keys while shift is held
+            if (!shiftHeld) {
+                binSequence = [];
+                return;
+            }
+            
+            const key = e.key.toLowerCase();
+            binSequence.push(key);
+            
+            // Check if sequence matches so far
+            for (let i = 0; i < binSequence.length; i++) {
+                if (binSequence[i] !== BIN_SEQUENCE[i]) {
+                    binSequence = [];
+                    return;
+                }
+            }
+            
+            // Check if full sequence is complete (SHIFT+B+I+N)
+            if (binSequence.length === BIN_SEQUENCE.length) {
                 e.preventDefault();
                 $('#wipeDbBtn').toggleClass('visible');
+                binSequence = [];
+            }
+        });
+        
+        $(document).on('keyup', function(e) {
+            if (e.key === 'Shift') {
+                shiftHeld = false;
+                binSequence = [];
             }
         });
         
