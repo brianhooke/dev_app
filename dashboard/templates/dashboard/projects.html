@@ -1013,7 +1013,7 @@
             console.log('Loading allocations for quote:', quotePk);
             
             $.ajax({
-                url: `/core/get_quote_allocations/${quotePk}/`,
+                url: `/core/get_allocations_for_quote/${quotePk}/`,
                 type: 'GET',
                 success: function(response) {
                     if (response.status === 'success') {
