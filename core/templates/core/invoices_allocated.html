@@ -1,39 +1,160 @@
-<!-- Allocated Invoices Section Template - uses reusable allocations section -->
-{% with section_id="allocatedInvoice" allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
-{% include "core/components/reusable_allocations_section.html" %}
-{% endwith %}
-
-<!-- Additional styling for allocated invoices -->
+<!-- Allocated Invoices Section Template -->
 <style>
+    /* Compact Allocated Invoices Table Styling */
+    #allocatedInvoicesTable {
+        font-size: 12px;
+    }
+    
+    #allocatedInvoicesTable th {
+        padding: 6px 5px !important;
+        font-size: 11px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    
+    #allocatedInvoicesTable td {
+        padding: 4px 5px !important;
+        vertical-align: middle;
+    }
+    
+    /* Row selection styling */
+    #allocatedInvoicesTable tbody tr {
+        cursor: pointer;
+        transition: opacity 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    /* When there's a selected row, dim all non-selected rows */
+    #allocatedInvoicesTable tbody.has-selection tr:not(.selected-row) {
+        opacity: 0.4;
+    }
+    
+    /* Highlight the selected row */
+    #allocatedInvoicesTable tbody tr.selected-row {
+        opacity: 1 !important;
+        background-color: #e3f2fd !important;
+        box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+        position: relative;
+    }
+    
+    /* Keep hover effect visible on all rows */
+    #allocatedInvoicesTable tbody tr:hover {
+        opacity: 0.8 !important;
+    }
+    
+    /* Compact Allocations Table Styling */
+    #allocatedInvoiceAllocationsTable {
+        font-size: 11px;
+    }
+    
+    #allocatedInvoiceAllocationsTable th {
+        padding: 5px 4px !important;
+        font-size: 10px;
+        white-space: nowrap;
+        vertical-align: middle;
+        line-height: 1.2;
+    }
+    
+    #allocatedInvoiceAllocationsTable td {
+        padding: 3px 4px !important;
+        vertical-align: middle;
+        line-height: 1.2;
+    }
+    
     /* Action buttons styling */
     .allocated-action-btn {
         font-size: 10px;
         padding: 2px 6px;
         margin: 0 2px;
     }
-    
-    /* Hide Add Row button for allocated invoices (read-only) */
-    #allocatedInvoiceAddAllocationBtn {
-        display: none !important;
-    }
 </style>
 
-<!-- Update footer text and styling for allocated invoices -->
-<script>
-(function() {
-    // Change footer text from "Still to Allocate" to "Total Allocated"
-    const footer = document.getElementById('allocatedInvoiceStillToAllocateFooter');
-    if (footer) {
-        const firstCell = footer.querySelector('div:first-child');
-        if (firstCell) {
-            firstCell.textContent = 'Total Allocated:';
-        }
+<div class="invoices-container" style="height: 100%; display: flex; flex-direction: column;">
+    <div style="display: flex; flex: 1; overflow: hidden;">
+        <!-- Left side: Invoices Table (top 2/3) and Allocations (bottom 1/3) (50%) -->
+        <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column; height: 100%;">
+            <!-- Invoices Table -->
+            <div id="allocatedInvoicesTableContainer" style="flex: 2; overflow-y: auto; margin-bottom: 15px;">
+                <table class="table table-bordered table-hover" id="allocatedInvoicesTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 22%;">Supplier</th>
+                            <th style="width: 18%;">Invoice #</th>
+                            <th style="width: 15%;">$ Net</th>
+                            <th style="width: 15%;">$ GST</th>
+                            <th style="width: 15%;">Unallocate</th>
+                            <th style="width: 15%;">Approve</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allocatedInvoicesTableBody">
+                        <!-- Invoices will be populated here via JavaScript -->
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                                Loading invoices...
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot id="allocatedInvoicesTableFooter" style="display: none;">
+                        <tr style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white; font-weight: bold;">
+                            <td>TOTAL</td>
+                            <td></td>
+                            <td id="allocatedInvoicesNetTotal">$0.00</td>
+                            <td id="allocatedInvoicesGstTotal">$0.00</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <!-- Allocations section (bottom 1/3) - read-only -->
+            <div id="allocatedInvoiceAllocationsSection" style="flex: 1; display: flex; flex-direction: column;">
+                <div style="text-align: left; margin-bottom: 5px; flex-shrink: 0;">
+                    <h6 id="allocatedInvoiceAllocationsTitle" style="margin: 0;">Invoice Allocations</h6>
+                </div>
+                <div style="flex: 1; overflow-y: auto;">
+                    <table class="table table-bordered table-sm" id="allocatedInvoiceAllocationsTable" style="margin-bottom: 0; table-layout: fixed; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Item</th>
+                                <th style="width: 15%;">$ Net</th>
+                                <th style="width: 15%;">$ GST</th>
+                                <th style="width: 30%;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allocatedInvoiceAllocationsTableBody">
+                            <!-- Allocations will be populated here (read-only) -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Totals section - aligned with table columns -->
+                <div style="margin-top: 8px; padding: 6px 0; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                    <div style="display: table; width: 100%; table-layout: fixed; font-size: 11px;">
+                        <div style="display: table-cell; width: 40%; padding-left: 8px;"><strong>Total Allocated:</strong></div>
+                        <div style="display: table-cell; width: 15%; text-align: left;"><strong id="allocatedTotalNet" style="color: green;">$0.00</strong></div>
+                        <div style="display: table-cell; width: 15%; text-align: left;"><strong id="allocatedTotalGst" style="color: green;">$0.00</strong></div>
+                        <div style="display: table-cell; width: 30%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
-        // Update value colors to always be green for allocated
-        const netSpan = document.getElementById('allocatedInvoiceRemainingNet');
-        const gstSpan = document.getElementById('allocatedInvoiceRemainingGst');
-        if (netSpan) netSpan.style.color = '#90EE90';
-        if (gstSpan) gstSpan.style.color = '#90EE90';
-    }
-})();
-</script>
+        <!-- Right side: PDF Viewer (50% - full height) -->
+        <div style="width: 50%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
+            <div id="allocatedInvoiceViewerSection" style="flex: 1; display: flex; flex-direction: column;">
+                <div style="flex: 1; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-radius: 8px;">
+                    <iframe 
+                        id="allocatedInvoicePdfViewer" 
+                        style="width: 100%; height: 100%; border: none; display: none;"
+                        allow="fullscreen"
+                        src="">
+                    </iframe>
+                    <div id="allocatedInvoiceViewerPlaceholder" style="text-align: center; color: #6c757d;">
+                        <i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px;"></i>
+                        <p>Click on an invoice to view the PDF</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

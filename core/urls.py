@@ -146,7 +146,7 @@ urlpatterns = [
     
     # Quotes section (reusable template)
     path('quotes/', quotes_view, name='quotes'),
-    path('get_quote_allocations_by_quote/<int:quote_pk>/', get_quote_allocations_for_quote, name='get_quote_allocations_for_quote'),
+    path('get_quote_allocations/<int:quote_pk>/', get_quote_allocations_for_quote, name='get_quote_allocations_for_quote'),
     path('create_quote_allocation/', create_quote_allocation, name='create_quote_allocation'),
     path('update_quote_allocation/<int:allocation_pk>/', update_quote_allocation, name='update_quote_allocation'),
     path('delete_quote_allocation/<int:allocation_pk>/', delete_quote_allocation, name='delete_quote_allocation'),

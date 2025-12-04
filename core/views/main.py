@@ -728,23 +728,7 @@ def invoices_view(request):
     """Render the invoices section template."""
     template_type = request.GET.get('template', 'unallocated')
     if template_type == 'allocated':
-        context = {
-            'main_table_columns': [
-                {'header': 'Supplier', 'width': '22%'},
-                {'header': 'Invoice #', 'width': '18%'},
-                {'header': '$ Net', 'width': '15%'},
-                {'header': '$ GST', 'width': '15%'},
-                {'header': 'Unallocate', 'width': '15%'},
-                {'header': 'Approve', 'width': '15%'},
-            ],
-            'allocations_columns': [
-                {'header': 'Item', 'width': '40%'},
-                {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
-                {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
-                {'header': 'Notes', 'width': '30%'},
-            ],
-        }
-        return render(request, 'core/invoices_allocated.html', context)
+        return render(request, 'core/invoices_allocated.html')
     
     # Define column configurations for the reusable template
     context = {

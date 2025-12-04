@@ -936,25 +936,14 @@
                 // 3. Quote # (read-only)
                 row.append($('<td>').text(quote.supplier_quote_number || '-'));
                 
-                // 4. Update/Save button
+                // 4. Update button
                 const updateBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning quote-update-btn')
                     .text('Update')
                     .attr('data-quote-pk', quote.quotes_pk)
                     .on('click', function(e) {
                         e.stopPropagation();
-                        const btn = $(this);
-                        if (btn.hasClass('quote-save-btn')) {
-                            // In edit mode - clicking Save exits edit mode
-                            exitQuoteEditMode();
-                        } else {
-                            // Not in edit mode - clicking Update enters edit mode
-                            // First select this row if not already selected
-                            if (!row.hasClass('selected-row')) {
-                                selectQuoteRow(row);
-                            }
-                            enterQuoteEditMode(quote.quotes_pk);
-                        }
+                        openQuoteUpdateModal(quote);
                     });
                 row.append($('<td>').css('text-align', 'center').append(updateBtn));
                 
@@ -971,7 +960,7 @@
                 
                 // Row click handler for selection
                 row.on('click', function(e) {
-                    if ($(e.target).closest('.quote-update-btn, .quote-save-btn, .quote-delete-btn').length) return;
+                    if ($(e.target).closest('.quote-update-btn, .quote-delete-btn').length) return;
                     selectQuoteRow($(this));
                 });
                 
@@ -1024,12 +1013,11 @@
             console.log('Loading allocations for quote:', quotePk);
             
             $.ajax({
-                url: `/core/get_quote_allocations_by_quote/${quotePk}/`,
+                url: `/core/get_quote_allocations/${quotePk}/`,
                 type: 'GET',
                 success: function(response) {
                     if (response.status === 'success') {
                         window.currentSelectedQuote = response.quote;
-                        window.currentQuoteAllocations = response.allocations;  // Store for read-only mode
                         populateQuoteAllocationsTable(response.allocations);
                         updateQuoteStillToAllocate();
                     } else {
@@ -1042,39 +1030,26 @@
             });
         }
         
-        // Track which quote is being edited
-        window.quoteEditMode = null;
-        
         // Populate quote allocations table
         function populateQuoteAllocationsTable(allocations) {
             const tbody = $('#quoteAllocationsTableBody');
             tbody.empty();
             
-            // Check if this quote is in edit mode
-            const isEditMode = window.quoteEditMode === window.currentSelectedQuote?.quotes_pk;
-            
             if (!allocations || allocations.length === 0) {
-                if (isEditMode) {
-                    // Add one empty row for new entry in edit mode
-                    addQuoteAllocationRow(null, true);
-                } else {
-                    tbody.html('<tr><td colspan="4" style="text-align: center; color: #6c757d; padding: 10px;">No allocations yet</td></tr>');
-                }
+                // Add one empty row for new entry
+                addQuoteAllocationRow();
             } else {
                 allocations.forEach(function(alloc) {
-                    addQuoteAllocationRow(alloc, isEditMode);
+                    addQuoteAllocationRow(alloc);
                 });
             }
-            
-            // Show/hide Add Row button based on edit mode
-            $('#quoteAddAllocationBtn').toggle(isEditMode);
             
             // Always update still to allocate after populating
             updateQuoteStillToAllocate();
         }
         
-        // Add a quote allocation row (editable or read-only)
-        function addQuoteAllocationRow(allocation = null, editable = false) {
+        // Add a quote allocation row
+        function addQuoteAllocationRow(allocation = null) {
             const tbody = $('#quoteAllocationsTableBody');
             const row = $('<tr>');
             
@@ -1082,184 +1057,71 @@
                 row.attr('data-allocation-pk', allocation.quote_allocations_pk);
             }
             
-            if (editable) {
-                // EDITABLE MODE
-                // 1. Item dropdown
-                const itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
-                itemSelect.append($('<option>').val('').text('Select Item...'));
-                (window.quotesCostingItems || []).forEach(function(item) {
-                    const option = $('<option>').val(item.costing_pk).text(item.item);
-                    if (allocation && allocation.item_pk === item.costing_pk) {
-                        option.prop('selected', true);
-                    }
-                    itemSelect.append(option);
-                });
-                itemSelect.on('change', function() {
-                    updateQuoteSaveButtonState();
+            // 1. Item dropdown
+            const itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
+            itemSelect.append($('<option>').val('').text('Select Item...'));
+            (window.quotesCostingItems || []).forEach(function(item) {
+                const option = $('<option>').val(item.costing_pk).text(item.item);
+                if (allocation && allocation.item_pk === item.costing_pk) {
+                    option.prop('selected', true);
+                }
+                itemSelect.append(option);
+            });
+            itemSelect.on('change', function() {
+                saveQuoteAllocationRow(row);
+            });
+            row.append($('<td>').append(itemSelect));
+            
+            // 2. $ Net input
+            const netInput = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .addClass('form-control form-control-sm quote-allocation-net-input')
+                .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
+                .on('change', function() {
+                    updateQuoteStillToAllocate();
                     saveQuoteAllocationRow(row);
                 });
-                row.append($('<td>').append(itemSelect));
-                
-                // 2. $ Net input
-                const netInput = $('<input>')
-                    .attr('type', 'number')
-                    .attr('step', '0.01')
-                    .addClass('form-control form-control-sm quote-allocation-net-input')
-                    .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
-                    .on('input', function() {
-                        // Update calculations dynamically as user types
-                        updateQuoteStillToAllocate();
-                        updateQuoteSaveButtonState();
-                    })
-                    .on('change', function() {
-                        // Save only when field loses focus
-                        saveQuoteAllocationRow(row);
-                    });
-                row.append($('<td>').append(netInput));
-                
-                // 3. Notes input
-                const notesInput = $('<input>')
-                    .attr('type', 'text')
-                    .addClass('form-control form-control-sm quote-allocation-notes-input')
-                    .val(allocation ? allocation.notes || '' : '')
-                    .on('change', function() {
-                        saveQuoteAllocationRow(row);
-                    });
-                row.append($('<td>').append(notesInput));
-                
-                // 4. Delete button
-                const deleteBtn = $('<button>')
-                    .addClass('btn btn-sm btn-danger')
-                    .html('<i class="fas fa-times"></i>')
-                    .on('click', function() {
-                        deleteQuoteAllocationRow(row);
-                    });
-                row.append($('<td>').css('text-align', 'center').append(deleteBtn));
-            } else {
-                // READ-ONLY MODE - use display: table for consistent column widths
-                row.css('display', 'table').css('width', '100%').css('table-layout', 'fixed');
-                
-                // 1. Item name (text)
-                const itemName = allocation?.item_name || '-';
-                row.append($('<td>').css('width', '40%').text(itemName));
-                
-                // 2. $ Net (text)
-                const netAmount = allocation ? parseFloat(allocation.amount).toFixed(2) : '0.00';
-                row.append($('<td>').css('width', '20%').text('$' + netAmount));
-                
-                // 3. Notes (text)
-                row.append($('<td>').css('width', '35%').text(allocation?.notes || '-'));
-                
-                // 4. Empty cell (no delete button in read-only)
-                row.append($('<td>').css('width', '5%'));
-            }
+            row.append($('<td>').append(netInput));
+            
+            // 3. Notes input
+            const notesInput = $('<input>')
+                .attr('type', 'text')
+                .addClass('form-control form-control-sm quote-allocation-notes-input')
+                .val(allocation ? allocation.notes || '' : '')
+                .on('change', function() {
+                    saveQuoteAllocationRow(row);
+                });
+            row.append($('<td>').append(notesInput));
+            
+            // 4. Delete button
+            const deleteBtn = $('<button>')
+                .addClass('btn btn-sm btn-danger')
+                .html('<i class="fas fa-times"></i>')
+                .on('click', function() {
+                    deleteQuoteAllocationRow(row);
+                });
+            row.append($('<td>').css('text-align', 'center').append(deleteBtn));
             
             tbody.append(row);
         }
         
-        // Enter edit mode for a quote
-        function enterQuoteEditMode(quotePk) {
-            window.quoteEditMode = quotePk;
-            
-            // Update the button to "Save"
-            const row = $(`#quoteMainTableBody tr[data-quote-pk="${quotePk}"]`);
-            const btn = row.find('.quote-update-btn');
-            btn.text('Save').removeClass('btn-warning').addClass('btn-secondary quote-save-btn');
-            
-            // Reload allocations in edit mode
-            if (window.currentSelectedQuote && window.currentSelectedQuote.quotes_pk === quotePk) {
-                loadQuoteAllocations(quotePk);
-            }
-            
-            updateQuoteSaveButtonState();
-        }
-        
-        // Exit edit mode and save
-        function exitQuoteEditMode() {
-            const quotePk = window.quoteEditMode;
-            window.quoteEditMode = null;
-            
-            // Update the button back to "Update"
-            const row = $(`#quoteMainTableBody tr[data-quote-pk="${quotePk}"]`);
-            const btn = row.find('.quote-save-btn');
-            btn.text('Update').removeClass('btn-secondary btn-success quote-save-btn').addClass('btn-warning quote-update-btn');
-            
-            // Reload allocations in read-only mode
-            if (window.currentSelectedQuote && window.currentSelectedQuote.quotes_pk === quotePk) {
-                loadQuoteAllocations(quotePk);
-            }
-        }
-        
-        // Update Save button state based on validation
-        function updateQuoteSaveButtonState() {
-            if (!window.quoteEditMode) return;
-            
-            const quotePk = window.quoteEditMode;
-            const row = $(`#quoteMainTableBody tr[data-quote-pk="${quotePk}"]`);
-            const btn = row.find('.quote-save-btn');
-            
-            // Check validation: still to allocate = 0 AND all rows have item selected
-            const totalNet = parseFloat(window.currentSelectedQuote?.total_cost) || 0;
-            let allocatedNet = 0;
-            let allItemsSelected = true;
-            
-            $('#quoteAllocationsTableBody tr').each(function() {
-                const itemVal = $(this).find('.quote-allocation-item-select').val();
-                const netVal = parseFloat($(this).find('.quote-allocation-net-input').val()) || 0;
-                
-                allocatedNet += netVal;
-                
-                // Require item for rows with non-zero amounts
-                if (netVal > 0 && !itemVal) {
-                    allItemsSelected = false;
-                }
-            });
-            
-            const isFullyAllocated = Math.abs(totalNet - allocatedNet) < 0.01;
-            const isValid = isFullyAllocated && allItemsSelected;
-            
-            if (isValid) {
-                btn.removeClass('btn-secondary').addClass('btn-success');
-            } else {
-                btn.removeClass('btn-success').addClass('btn-secondary');
-            }
-        }
-        
-        // Update quote allocation footer (Total Allocated in read-only, Still to Allocate in edit)
+        // Update quote still to allocate values
         function updateQuoteStillToAllocate() {
             if (!window.currentSelectedQuote) return;
             
             const totalNet = parseFloat(window.currentSelectedQuote.total_cost) || 0;
-            const isEditMode = window.quoteEditMode === window.currentSelectedQuote?.quotes_pk;
             
             let allocatedNet = 0;
+            $('#quoteAllocationsTableBody tr').each(function() {
+                allocatedNet += parseFloat($(this).find('.quote-allocation-net-input').val()) || 0;
+            });
             
-            if (isEditMode) {
-                // In edit mode, read from input fields
-                $('#quoteAllocationsTableBody tr').each(function() {
-                    allocatedNet += parseFloat($(this).find('.quote-allocation-net-input').val()) || 0;
-                });
-                
-                // Show "Still to Allocate" in edit mode
-                const remainingNet = totalNet - allocatedNet;
-                $('#quoteStillToAllocateFooter > div:first-child').text('Still to Allocate:');
-                $('#quoteRemainingNet')
-                    .text('$' + remainingNet.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}))
-                    .css('color', Math.abs(remainingNet) < 0.01 ? '#90EE90' : '#ffcccc');
-            } else {
-                // In read-only mode, use stored allocations data
-                if (window.currentQuoteAllocations) {
-                    window.currentQuoteAllocations.forEach(function(alloc) {
-                        allocatedNet += parseFloat(alloc.amount) || 0;
-                    });
-                }
-                
-                // Show "Total Allocated" in read-only mode (always green)
-                $('#quoteStillToAllocateFooter > div:first-child').text('Total Allocated:');
-                $('#quoteRemainingNet')
-                    .text('$' + allocatedNet.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}))
-                    .css('color', '#90EE90');
-            }
+            const remainingNet = totalNet - allocatedNet;
+            
+            $('#quoteRemainingNet')
+                .text('$' + remainingNet.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}))
+                .css('color', Math.abs(remainingNet) < 0.01 ? '#90EE90' : '#ffcccc');
         }
         
         // Save a quote allocation row (debounced)
@@ -1384,8 +1246,7 @@
         
         // Add allocation button handler
         $(document).on('click', '#quoteAddAllocationBtn', function() {
-            addQuoteAllocationRow(null, true);  // Add editable row
-            updateQuoteSaveButtonState();
+            addQuoteAllocationRow();
         });
         
         // Load construction documents section for CONSTRUCTION
@@ -2123,7 +1984,7 @@
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load allocated invoices:', error);
-                    $('#allocatedInvoiceMainTableBody').html(`
+                    $('#allocatedInvoicesTableBody').html(`
                         <tr><td colspan="6" style="text-align: center; color: #dc3545;">Failed to load invoices</td></tr>
                     `);
                 }
@@ -2132,7 +1993,7 @@
         
         // Populate allocated invoices table
         function populateAllocatedInvoicesTable(invoices, suppliers) {
-            const tbody = $('#allocatedInvoiceMainTableBody');
+            const tbody = $('#allocatedInvoicesTableBody');
             tbody.empty();
             tbody.removeClass('has-selection');
             
@@ -2202,13 +2063,13 @@
                 totalNet += invoice.total_net || 0;
                 totalGst += invoice.total_gst || 0;
             });
-            $('#allocatedInvoiceFooterCol3').text('$' + totalNet.toFixed(2));
-            $('#allocatedInvoiceFooterCol4').text('$' + totalGst.toFixed(2));
-            $('#allocatedInvoiceMainTableFooter').show();
+            $('#allocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
+            $('#allocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
+            $('#allocatedInvoicesTableFooter').show();
             
             // Auto-select the first row
             setTimeout(function() {
-                const firstRow = $('#allocatedInvoiceMainTableBody tr').first();
+                const firstRow = $('#allocatedInvoicesTableBody tr').first();
                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                     selectAllocatedInvoiceRow(firstRow);
                 }
@@ -2222,7 +2083,7 @@
                 return;
             }
             
-            const tbody = $('#allocatedInvoiceMainTableBody');
+            const tbody = $('#allocatedInvoicesTableBody');
             
             tbody.find('tr').removeClass('selected-row');
             row.addClass('selected-row');
@@ -2274,8 +2135,8 @@
                         });
                         
                         // Update totals
-                        $('#allocatedInvoiceRemainingNet').text('$' + totalNet.toFixed(2));
-                        $('#allocatedInvoiceRemainingGst').text('$' + totalGst.toFixed(2));
+                        $('#allocatedTotalNet').text('$' + totalNet.toFixed(2));
+                        $('#allocatedTotalGst').text('$' + totalGst.toFixed(2));
                     }
                 },
                 error: function(xhr, status, error) {
@@ -2349,35 +2210,35 @@
                 
                 // Clear allocations section
                 $('#allocatedInvoiceAllocationsTableBody').empty();
-                $('#allocatedInvoiceRemainingNet').text('$0.00');
-                $('#allocatedInvoiceRemainingGst').text('$0.00');
+                $('#allocatedTotalNet').text('$0.00');
+                $('#allocatedTotalGst').text('$0.00');
                 
                 // Recalculate footer totals
                 let totalNet = 0;
                 let totalGst = 0;
-                $('#allocatedInvoiceMainTableBody tr').each(function() {
+                $('#allocatedInvoicesTableBody tr').each(function() {
                     const netText = $(this).find('td:eq(2)').text().replace('$', '');
                     const gstText = $(this).find('td:eq(3)').text().replace('$', '');
                     totalNet += parseFloat(netText) || 0;
                     totalGst += parseFloat(gstText) || 0;
                 });
-                $('#allocatedInvoiceFooterCol3').text('$' + totalNet.toFixed(2));
-                $('#allocatedInvoiceFooterCol4').text('$' + totalGst.toFixed(2));
+                $('#allocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
+                $('#allocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
                 
                 // Select next available row or show placeholder
-                const firstRow = $('#allocatedInvoiceMainTableBody tr').first();
+                const firstRow = $('#allocatedInvoicesTableBody tr').first();
                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                     selectAllocatedInvoiceRow(firstRow);
                 } else {
-                    $('#allocatedInvoiceMainTableBody').html(`
+                    $('#allocatedInvoicesTableBody').html(`
                         <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
                             No allocated invoices found for this project.
                         </td></tr>
                     `);
-                    $('#allocatedInvoiceMainTableBody').removeClass('has-selection');
+                    $('#allocatedInvoicesTableBody').removeClass('has-selection');
                     $('#allocatedInvoicePdfViewer').hide();
                     $('#allocatedInvoiceViewerPlaceholder').show();
-                    $('#allocatedInvoiceMainTableFooter').hide();
+                    $('#allocatedInvoicesTableFooter').hide();
                 }
             });
         }

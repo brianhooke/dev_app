@@ -151,48 +151,39 @@ Required context variables:
                 </table>
             </div>
             
-            <!-- Allocations section - flexible height, max ~40% -->
-            <div id="{{ section_id }}AllocationsSection" style="flex: 0 1 auto; display: flex; flex-direction: column; max-height: 45%;">
+            <!-- Allocations section (bottom 1/3) -->
+            <div id="{{ section_id }}AllocationsSection" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
                 <div style="text-align: left; margin-bottom: 5px; flex-shrink: 0;">
                     <h6 id="{{ section_id }}AllocationsTitle" style="margin: 0;">{{ allocations_title }}</h6>
                 </div>
                 
-                <!-- Table wrapper with border -->
-                <div style="display: flex; flex-direction: column; border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; flex: 0 1 auto;">
-                    <!-- Fixed header -->
-                    <div style="flex-shrink: 0; background: white;">
-                        <table class="table table-bordered table-sm" style="margin-bottom: 0;">
-                            <thead>
-                                <tr style="display: table; width: 100%; table-layout: fixed;">
-                                    {% for col in allocations_columns %}
-                                    <th style="width: {{ col.width }}; padding: 5px 4px; font-size: 10px;">{{ col.header }}</th>
-                                    {% endfor %}
-                                </tr>
-                            </thead>
-                        </table>
+                <!-- Scrollable table container -->
+                <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+                    <table class="table table-bordered table-sm" id="{{ section_id }}AllocationsTable" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
+                        <thead style="flex-shrink: 0; display: block; position: sticky; top: 0; z-index: 10; background: white;">
+                            <tr style="display: table; width: 100%; table-layout: fixed;">
+                                {% for col in allocations_columns %}
+                                <th style="width: {{ col.width }};">{{ col.header }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody id="{{ section_id }}AllocationsTableBody" style="flex: 1; display: block; overflow-y: auto;">
+                            <!-- Allocations will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Still to allocate section - sticky footer like contract budget -->
+                <div id="{{ section_id }}StillToAllocateFooter" style="flex-shrink: 0; display: flex; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white; font-weight: bold; border-radius: 0 0 4px 4px; font-size: 11px;">
+                    {% for col in allocations_columns %}
+                    <div style="width: {{ col.width }}; padding: 6px 8px; {% if col.still_to_allocate_id %}text-align: left;{% endif %}">
+                        {% if forloop.first %}
+                        Still to Allocate:
+                        {% elif col.still_to_allocate_id %}
+                        <span id="{{ section_id }}{{ col.still_to_allocate_id }}" style="color: #ffcccc;">$0.00</span>
+                        {% endif %}
                     </div>
-                    
-                    <!-- Scrollable body - grows to fit content, max height triggers scroll -->
-                    <div style="flex: 0 1 auto; overflow-y: auto; max-height: 150px;">
-                        <table class="table table-bordered table-sm" id="{{ section_id }}AllocationsTable" style="margin-bottom: 0;">
-                            <tbody id="{{ section_id }}AllocationsTableBody">
-                                <!-- Allocations will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <!-- Still to allocate section - always at bottom of table wrapper -->
-                    <div id="{{ section_id }}StillToAllocateFooter" style="flex-shrink: 0; display: flex; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white; font-weight: bold; font-size: 11px;">
-                        {% for col in allocations_columns %}
-                        <div style="width: {{ col.width }}; padding: 6px 8px; {% if col.still_to_allocate_id %}text-align: left;{% endif %}">
-                            {% if forloop.first %}
-                            Still to Allocate:
-                            {% elif col.still_to_allocate_id %}
-                            <span id="{{ section_id }}{{ col.still_to_allocate_id }}" style="color: #ffcccc;">$0.00</span>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
+                    {% endfor %}
                 </div>
                 
                 <button type="button" class="btn btn-secondary btn-sm" id="{{ section_id }}AddAllocationBtn" style="align-self: flex-start; margin-top: 8px;">
