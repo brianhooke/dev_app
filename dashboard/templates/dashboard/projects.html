@@ -825,6 +825,24 @@
         function loadConstructionQuotesSection() {
             console.log('Loading quotes section with reusable template');
             
+            // Show New Quote button
+            $('#constructionNewQuoteBtn').show();
+            
+            // Load contacts for the project if not already loaded
+            if (!window.constructionProjectContacts || window.constructionProjectContacts.length === 0) {
+                const projectPk = window.currentConstructionProject.pk;
+                $.ajax({
+                    url: '{% url "core:get_project_contacts" 0 %}'.replace('0', projectPk),
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.constructionProjectContacts = response.contacts;
+                            console.log('Loaded', response.contacts.length, 'contacts for quotes');
+                        }
+                    }
+                });
+            }
+            
             $.ajax({
                 url: '{% url "core:quotes" %}',
                 type: 'GET',
@@ -899,6 +917,300 @@
                 });
             });
         }
+        
+        // ==========================================
+        // NEW QUOTE INLINE ENTRY (Construction)
+        // ==========================================
+        
+        // State for new quote mode
+        window.newQuoteMode = false;
+        window.newQuotePdfData = null;
+        window.newQuotePdfUrl = null;
+        window.newQuoteAllocations = [];
+        
+        // Click handler for New Quote button (construction)
+        $(document).on('click', '#constructionNewQuoteBtn', function() {
+            console.log('Construction New Quote button clicked');
+            $('#constructionQuotePdfInput').click();
+        });
+        
+        // File input change handler for new quote PDF (construction)
+        $(document).on('change', '#constructionQuotePdfInput', function(event) {
+            var file = event.target.files[0];
+            if (file) {
+                console.log('Quote PDF selected:', file.name);
+                
+                var pdfBlobUrl = URL.createObjectURL(file);
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var pdfData = e.target.result;
+                    
+                    // Store PDF data for later save
+                    window.newQuotePdfData = pdfData;
+                    window.newQuotePdfUrl = pdfBlobUrl;
+                    
+                    // Enter new quote mode - add editable row inline
+                    enterNewQuoteMode();
+                };
+                reader.onerror = function(e) {
+                    console.error('Error reading PDF file:', e);
+                    alert('Error reading PDF file. Please try again.');
+                };
+                reader.readAsDataURL(file);
+                
+                $(this).val('');
+            }
+        });
+        
+        // Enter new quote mode - add editable row at top of table
+        function enterNewQuoteMode() {
+            window.newQuoteMode = true;
+            window.newQuoteAllocations = [];
+            
+            const tbody = $('#quoteMainTableBody');
+            
+            // Remove any existing new quote row
+            tbody.find('.new-quote-row').remove();
+            
+            // Remove "no quotes" placeholder if present
+            if (tbody.find('tr').length === 1 && tbody.find('tr td[colspan]').length === 1) {
+                tbody.empty();
+            }
+            
+            // Build supplier dropdown options
+            const suppliers = window.constructionProjectContacts || [];
+            let supplierOptions = '<option value="">Select Supplier...</option>';
+            suppliers.forEach(function(contact) {
+                supplierOptions += `<option value="${contact.contact_pk}">${contact.name}</option>`;
+            });
+            
+            // Create new editable row at TOP
+            const newRow = $(`
+                <tr class="new-quote-row" style="background-color: #fffde7;">
+                    <td>
+                        <select class="form-control form-control-sm new-quote-supplier" style="font-size: 11px;">
+                            ${supplierOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm new-quote-net" 
+                               step="0.01" min="0" placeholder="0.00" style="font-size: 11px;">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm new-quote-number" 
+                               placeholder="Quote #" maxlength="255" style="font-size: 11px;">
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-sm btn-secondary new-quote-save-btn" disabled 
+                                style="font-size: 10px; padding: 2px 8px;">Save</button>
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-sm btn-outline-danger new-quote-cancel-btn"
+                                style="font-size: 10px; padding: 2px 6px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+            
+            // Prepend to table
+            tbody.prepend(newRow);
+            
+            // Select the new row visually
+            tbody.addClass('has-selection');
+            tbody.find('tr').removeClass('selected-row');
+            newRow.addClass('selected-row');
+            
+            // Show PDF in viewer
+            $('#quotePdfViewer').attr('src', window.newQuotePdfUrl).show();
+            $('#quoteViewerPlaceholder').hide();
+            
+            // Clear allocations table and add empty row for new quote
+            const allocBody = $('#quoteAllocationsTableBody');
+            allocBody.empty();
+            addQuoteAllocationRow(); // Add one empty row
+            
+            // Update title
+            $('#quoteAllocationsTitle').text('Quote Allocations (New Quote)');
+            
+            // Reset still to allocate
+            updateNewQuoteStillToAllocate();
+            
+            // Focus on supplier dropdown
+            newRow.find('.new-quote-supplier').focus();
+        }
+        
+        // Exit new quote mode
+        function exitNewQuoteMode() {
+            window.newQuoteMode = false;
+            window.newQuotePdfData = null;
+            window.newQuotePdfUrl = null;
+            window.newQuoteAllocations = [];
+            
+            // Remove new quote row
+            $('#quoteMainTableBody').find('.new-quote-row').remove();
+            
+            // Reset title
+            $('#quoteAllocationsTitle').text('Quote Allocations');
+            
+            // Reload quotes data
+            loadQuotesData();
+        }
+        
+        // Validate new quote and update save button state
+        function validateNewQuote() {
+            const row = $('.new-quote-row');
+            if (row.length === 0) return false;
+            
+            const supplier = row.find('.new-quote-supplier').val();
+            const net = parseFloat(row.find('.new-quote-net').val()) || 0;
+            const quoteNumber = row.find('.new-quote-number').val().trim();
+            
+            // Check if we have allocations
+            const allocations = getNewQuoteAllocations();
+            const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+            
+            // Validation: supplier required, quote number required, allocations should match total
+            const isValid = supplier && quoteNumber && allocations.length > 0 && 
+                           allocations.some(a => a.item_pk && parseFloat(a.amount) > 0);
+            
+            // Update save button
+            const saveBtn = row.find('.new-quote-save-btn');
+            if (isValid) {
+                saveBtn.removeClass('btn-secondary').addClass('btn-success').prop('disabled', false);
+            } else {
+                saveBtn.removeClass('btn-success').addClass('btn-secondary').prop('disabled', true);
+            }
+            
+            return isValid;
+        }
+        
+        // Get allocations for new quote from table
+        function getNewQuoteAllocations() {
+            const allocations = [];
+            $('#quoteAllocationsTableBody tr').each(function() {
+                const row = $(this);
+                const itemPk = row.find('.allocation-item-select').val();
+                const amount = parseFloat(row.find('.allocation-amount-input').val()) || 0;
+                const notes = row.find('.allocation-notes-input').val() || '';
+                const qty = parseFloat(row.find('.allocation-qty-input').val()) || null;
+                const unit = row.find('.allocation-unit-input').val() || '';
+                const rate = parseFloat(row.find('.allocation-rate-input').val()) || null;
+                
+                if (itemPk) {
+                    allocations.push({ item_pk: itemPk, amount, notes, qty, unit, rate });
+                }
+            });
+            return allocations;
+        }
+        
+        // Update still to allocate for new quote
+        function updateNewQuoteStillToAllocate() {
+            if (!window.newQuoteMode) return;
+            
+            const row = $('.new-quote-row');
+            const totalNet = parseFloat(row.find('.new-quote-net').val()) || 0;
+            const allocations = getNewQuoteAllocations();
+            const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+            const stillToAllocate = totalNet - totalAllocated;
+            
+            // Update the still to allocate display
+            const stillToAllocateEl = $('#quoteStillToAllocateNet');
+            if (stillToAllocateEl.length) {
+                stillToAllocateEl.text('$' + stillToAllocate.toFixed(2));
+                // Color coding
+                if (Math.abs(stillToAllocate) < 0.01) {
+                    stillToAllocateEl.css('color', '#90EE90'); // Light green
+                } else {
+                    stillToAllocateEl.css('color', '#ffcccc'); // Light red
+                }
+            }
+            
+            // Validate after updating
+            validateNewQuote();
+        }
+        
+        // Save new quote
+        function saveNewQuote() {
+            if (!validateNewQuote()) {
+                alert('Please fill in all required fields and add at least one allocation.');
+                return;
+            }
+            
+            const row = $('.new-quote-row');
+            const supplierPk = row.find('.new-quote-supplier').val();
+            const totalCost = parseFloat(row.find('.new-quote-net').val()) || 0;
+            const quoteNumber = row.find('.new-quote-number').val().trim();
+            const allocations = getNewQuoteAllocations();
+            
+            // Prepare data for save
+            const saveData = {
+                project_pk: window.currentConstructionProject.pk,
+                supplier: supplierPk,
+                total_cost: totalCost,
+                quote_number: quoteNumber,
+                line_items: allocations.map(a => ({
+                    item: a.item_pk,
+                    amount: a.amount,
+                    notes: a.notes,
+                    qty: a.qty,
+                    unit: a.unit,
+                    rate: a.rate
+                })),
+                pdf_data_url: window.newQuotePdfData
+            };
+            
+            // Disable save button while saving
+            row.find('.new-quote-save-btn').prop('disabled', true).text('Saving...');
+            
+            $.ajax({
+                url: '/core/save_project_quote/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(saveData),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        console.log('Quote saved successfully:', response);
+                        exitNewQuoteMode();
+                    } else {
+                        alert('Error saving quote: ' + response.message);
+                        row.find('.new-quote-save-btn').prop('disabled', false).text('Save');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save quote:', error);
+                    alert('Failed to save quote. Please try again.');
+                    row.find('.new-quote-save-btn').prop('disabled', false).text('Save');
+                }
+            });
+        }
+        
+        // Event handlers for new quote row inputs
+        $(document).on('change input', '.new-quote-supplier, .new-quote-net, .new-quote-number', function() {
+            validateNewQuote();
+            if ($(this).hasClass('new-quote-net')) {
+                updateNewQuoteStillToAllocate();
+            }
+        });
+        
+        // Cancel new quote
+        $(document).on('click', '.new-quote-cancel-btn', function() {
+            if (confirm('Cancel this new quote entry?')) {
+                exitNewQuoteMode();
+            }
+        });
+        
+        // Save new quote
+        $(document).on('click', '.new-quote-save-btn', function() {
+            saveNewQuote();
+        });
+        
+        // Update validation when allocations change (in new quote mode)
+        $(document).on('change input', '#quoteAllocationsTableBody input, #quoteAllocationsTableBody select', function() {
+            if (window.newQuoteMode) {
+                updateNewQuoteStillToAllocate();
+            }
+        });
         
         // Populate quotes table
         function populateQuotesTable(quotes, suppliers) {

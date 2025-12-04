@@ -211,3 +211,52 @@ Required context variables:
         </div>
     </div>
 </div>
+
+<script>
+// Dynamic height adjustment for allocations table
+(function() {
+    var sectionId = '{{ section_id }}';
+    var rowHeight = 32; // Approximate height per row in pixels
+    var maxRows = 8; // Maximum rows before scrolling kicks in
+    var headerHeight = 30; // Height of thead
+    
+    // Function to adjust allocations table height based on row count
+    window.adjustAllocationsHeight = window.adjustAllocationsHeight || {};
+    window.adjustAllocationsHeight[sectionId] = function() {
+        var tbody = document.getElementById(sectionId + 'AllocationsTableBody');
+        if (!tbody) return;
+        
+        var rowCount = tbody.querySelectorAll('tr').length;
+        var desiredRows = Math.min(rowCount, maxRows);
+        var newHeight = Math.max(desiredRows * rowHeight, rowHeight * 2); // Minimum 2 rows height
+        
+        // Set the tbody height to show all rows up to max
+        tbody.style.maxHeight = newHeight + 'px';
+        tbody.style.minHeight = (rowHeight * 2) + 'px';
+    };
+    
+    // Auto-adjust on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.adjustAllocationsHeight[sectionId]) {
+                window.adjustAllocationsHeight[sectionId]();
+            }
+        }, 100);
+    });
+    
+    // Observe changes to tbody and adjust height
+    var observer = new MutationObserver(function(mutations) {
+        if (window.adjustAllocationsHeight[sectionId]) {
+            window.adjustAllocationsHeight[sectionId]();
+        }
+    });
+    
+    // Start observing when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        var tbody = document.getElementById(sectionId + 'AllocationsTableBody');
+        if (tbody) {
+            observer.observe(tbody, { childList: true, subtree: true });
+        }
+    });
+})();
+</script>
