@@ -722,3 +722,331 @@ def upload_margin_category_and_lines(request):
             logger.error(f'Error in upload_margin_category_and_lines: {str(e)}')
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+def invoices_view(request):
+    """Render the invoices section template."""
+    template_type = request.GET.get('template', 'unallocated')
+    if template_type == 'allocated':
+        context = {
+            'main_table_columns': [
+                {'header': 'Supplier', 'width': '22%'},
+                {'header': 'Invoice #', 'width': '18%'},
+                {'header': '$ Net', 'width': '15%'},
+                {'header': '$ GST', 'width': '15%'},
+                {'header': 'Unallocate', 'width': '15%'},
+                {'header': 'Approve', 'width': '15%'},
+            ],
+            'allocations_columns': [
+                {'header': 'Item', 'width': '40%'},
+                {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
+                {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
+                {'header': 'Notes', 'width': '30%'},
+            ],
+        }
+        return render(request, 'core/invoices_allocated.html', context)
+    
+    # Define column configurations for the reusable template
+    context = {
+        'main_table_columns': [
+            {'header': 'Supplier', 'width': '25%'},
+            {'header': 'Invoice #', 'width': '20%'},
+            {'header': '$ Net', 'width': '17%'},
+            {'header': '$ GST', 'width': '17%'},
+            {'header': 'Allocate', 'width': '13%'},
+            {'header': 'Del', 'width': '8%'},
+        ],
+        'allocations_columns': [
+            {'header': 'Item', 'width': '35%'},
+            {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
+            {'header': 'Notes', 'width': '30%'},
+            {'header': '', 'width': '5%', 'align': 'center'},
+        ],
+    }
+    return render(request, 'core/invoices.html', context)
+
+
+def quotes_view(request):
+    """Render the quotes section template."""
+    # Define column configurations for the reusable template
+    context = {
+        'main_table_columns': [
+            {'header': 'Supplier', 'width': '30%'},
+            {'header': '$ Net', 'width': '20%'},
+            {'header': 'Quote #', 'width': '25%'},
+            {'header': 'Save', 'width': '15%'},
+            {'header': 'Del', 'width': '10%'},
+        ],
+        'allocations_columns': [
+            {'header': 'Item', 'width': '40%'},
+            {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Notes', 'width': '35%'},
+            {'header': '', 'width': '5%', 'align': 'center'},
+        ],
+    }
+    return render(request, 'core/quotes.html', context)
+
+
+def get_project_invoices(request, project_pk):
+    """
+    Get invoices for a project filtered by status.
+    Query params:
+    - status: invoice_status to filter by (default: 0 for unallocated)
+    """
+    try:
+        status = int(request.GET.get('status', 0))
+        
+        # Get invoices for this project with the specified status
+        invoices = Invoices.objects.filter(
+            project_id=project_pk,
+            invoice_status=status
+        ).select_related('contact_pk', 'email_attachment').order_by('-invoice_pk')
+        
+        # Get suppliers (contacts) for this project's xero instance
+        project = Projects.objects.get(projects_pk=project_pk)
+        suppliers = []
+        if project.xero_instance:
+            suppliers = list(Contacts.objects.filter(
+                xero_instance=project.xero_instance
+            ).values('contact_pk', 'name').order_by('name'))
+        
+        # Build response data
+        invoices_data = []
+        for inv in invoices:
+            # Get PDF URL from invoice.pdf field
+            pdf_url = None
+            if inv.pdf:
+                try:
+                    pdf_url = inv.pdf.url
+                except Exception as e:
+                    logger.error(f'Error getting PDF URL for invoice {inv.invoice_pk}: {str(e)}')
+            
+            # Get attachment URL from email_attachment (fallback)
+            attachment_url = None
+            if inv.email_attachment:
+                try:
+                    attachment_url = inv.email_attachment.get_download_url()
+                except Exception as e:
+                    logger.error(f'Error getting attachment URL for invoice {inv.invoice_pk}: {str(e)}')
+            
+            logger.info(f'Invoice {inv.invoice_pk}: pdf_url={pdf_url}, attachment_url={attachment_url}')
+            
+            invoices_data.append({
+                'invoice_pk': inv.invoice_pk,
+                'supplier_pk': inv.contact_pk.contact_pk if inv.contact_pk else None,
+                'supplier_name': inv.contact_pk.name if inv.contact_pk else None,
+                'invoice_number': inv.supplier_invoice_number or '',
+                'total_net': float(inv.total_net) if inv.total_net else None,
+                'total_gst': float(inv.total_gst) if inv.total_gst else None,
+                'pdf_url': pdf_url,
+                'attachment_url': attachment_url,
+                'invoice_status': inv.invoice_status,
+            })
+        
+        # Get costing items for this project
+        costing_items = list(Costing.objects.filter(
+            project_id=project_pk
+        ).select_related('category').values(
+            'costing_pk', 'item', 'category__category'
+        ).order_by('category__order_in_list', 'order_in_list'))
+        
+        return JsonResponse({
+            'status': 'success',
+            'invoices': invoices_data,
+            'suppliers': suppliers,
+            'costing_items': costing_items,
+            'project_pk': project_pk,
+        })
+        
+    except Projects.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error in get_project_invoices: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def get_unallocated_invoice_allocations(request, invoice_pk):
+    """
+    Get all allocations for a specific invoice (for unallocated invoices section).
+    """
+    try:
+        allocations = Invoice_allocations.objects.filter(
+            invoice_pk_id=invoice_pk
+        ).select_related('item').order_by('invoice_allocations_pk')
+        
+        allocations_data = []
+        for alloc in allocations:
+            allocations_data.append({
+                'allocation_pk': alloc.invoice_allocations_pk,
+                'item_pk': alloc.item_id,
+                'item_name': alloc.item.item if alloc.item else None,
+                'amount': float(alloc.amount) if alloc.amount else 0,
+                'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
+                'notes': alloc.notes or '',
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocations': allocations_data
+        })
+        
+    except Exception as e:
+        logger.error(f'Error getting invoice allocations: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def create_unallocated_invoice_allocation(request):
+    """
+    Create a new allocation for an unallocated invoice.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        invoice_pk = data.get('invoice_pk')
+        
+        if not invoice_pk:
+            return JsonResponse({'status': 'error', 'message': 'invoice_pk required'}, status=400)
+        
+        # Create new allocation with defaults
+        allocation = Invoice_allocations.objects.create(
+            invoice_pk_id=invoice_pk,
+            item_id=data.get('item_pk') or None,
+            amount=data.get('amount', 0),
+            gst_amount=data.get('gst_amount', 0),
+            notes=data.get('notes', ''),
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocation_pk': allocation.invoice_allocations_pk
+        })
+        
+    except Exception as e:
+        logger.error(f'Error creating invoice allocation: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def update_unallocated_invoice_allocation(request, allocation_pk):
+    """
+    Update an existing allocation for an unallocated invoice.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        
+        allocation = Invoice_allocations.objects.get(invoice_allocations_pk=allocation_pk)
+        
+        # Update fields if provided
+        if 'item_pk' in data:
+            allocation.item_id = data['item_pk'] if data['item_pk'] else None
+        if 'amount' in data:
+            allocation.amount = data['amount'] or 0
+        if 'gst_amount' in data:
+            allocation.gst_amount = data['gst_amount'] or 0
+        if 'notes' in data:
+            allocation.notes = data['notes'] or ''
+        
+        allocation.save()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Invoice_allocations.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error updating invoice allocation: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_unallocated_invoice_allocation(request, allocation_pk):
+    """
+    Delete an allocation for an unallocated invoice.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        allocation = Invoice_allocations.objects.get(invoice_allocations_pk=allocation_pk)
+        allocation.delete()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Invoice_allocations.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error deleting invoice allocation: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def allocate_invoice(request, invoice_pk):
+    """
+    Mark an invoice as allocated (invoice_status = 1).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        invoice.invoice_status = 1
+        invoice.save()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Invoices.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error allocating invoice: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def unallocate_invoice(request, invoice_pk):
+    """
+    Return an invoice to unallocated status (invoice_status = 0).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        invoice.invoice_status = 0
+        invoice.save()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Invoices.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error unallocating invoice: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def approve_invoice(request, invoice_pk):
+    """
+    Mark an invoice as approved (invoice_status = 2).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        invoice.invoice_status = 2
+        invoice.save()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Invoices.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error approving invoice: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

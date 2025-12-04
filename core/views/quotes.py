@@ -247,6 +247,118 @@ def get_quote_allocations(request, supplier_id):
         })
     data['costings'] = costings
     return JsonResponse(data, safe=False)
+
+
+def get_quote_allocations_for_quote(request, quote_pk):
+    """Get all allocations for a specific quote."""
+    try:
+        quote = Quotes.objects.get(quotes_pk=quote_pk)
+        allocations = Quote_allocations.objects.filter(quotes_pk=quote).select_related('item')
+        
+        allocations_data = []
+        for alloc in allocations:
+            allocations_data.append({
+                'quote_allocations_pk': alloc.quote_allocations_pk,
+                'item_pk': alloc.item.costing_pk if alloc.item else None,
+                'item_name': alloc.item.item if alloc.item else None,
+                'amount': float(alloc.amount) if alloc.amount else 0,
+                'qty': float(alloc.qty) if alloc.qty else None,
+                'unit': alloc.unit,
+                'rate': float(alloc.rate) if alloc.rate else None,
+                'notes': alloc.notes,
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'quote': {
+                'quotes_pk': quote.quotes_pk,
+                'supplier_quote_number': quote.supplier_quote_number,
+                'total_cost': float(quote.total_cost) if quote.total_cost else 0,
+            },
+            'allocations': allocations_data
+        })
+    except Quotes.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Quote not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def create_quote_allocation(request):
+    """Create a new quote allocation."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+    
+    try:
+        quote_pk = request.POST.get('quote_pk')
+        item_pk = request.POST.get('item_pk')
+        amount = request.POST.get('amount', 0)
+        notes = request.POST.get('notes', '')
+        
+        quote = Quotes.objects.get(quotes_pk=quote_pk)
+        item = Costing.objects.get(costing_pk=item_pk) if item_pk else None
+        
+        allocation = Quote_allocations.objects.create(
+            quotes_pk=quote,
+            item=item,
+            amount=Decimal(amount) if amount else Decimal('0'),
+            notes=notes
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocation_pk': allocation.quote_allocations_pk
+        })
+    except Quotes.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Quote not found'}, status=404)
+    except Costing.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def update_quote_allocation(request, allocation_pk):
+    """Update an existing quote allocation."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+    
+    try:
+        allocation = Quote_allocations.objects.get(quote_allocations_pk=allocation_pk)
+        
+        item_pk = request.POST.get('item_pk')
+        amount = request.POST.get('amount', 0)
+        notes = request.POST.get('notes', '')
+        
+        if item_pk:
+            allocation.item = Costing.objects.get(costing_pk=item_pk)
+        allocation.amount = Decimal(amount) if amount else Decimal('0')
+        allocation.notes = notes
+        allocation.save()
+        
+        return JsonResponse({'status': 'success'})
+    except Quote_allocations.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+    except Costing.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_quote_allocation(request, allocation_pk):
+    """Delete a quote allocation."""
+    try:
+        allocation = Quote_allocations.objects.get(quote_allocations_pk=allocation_pk)
+        allocation.delete()
+        return JsonResponse({'status': 'success'})
+    except Quote_allocations.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
 @csrf_exempt
 def update_uncommitted(request):
     if request.method == 'POST':

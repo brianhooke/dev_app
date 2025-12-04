@@ -1,0 +1,39 @@
+<!-- Allocated Invoices Section Template - uses reusable allocations section -->
+{% with section_id="allocatedInvoice" allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
+{% include "core/components/reusable_allocations_section.html" %}
+{% endwith %}
+
+<!-- Additional styling for allocated invoices -->
+<style>
+    /* Action buttons styling */
+    .allocated-action-btn {
+        font-size: 10px;
+        padding: 2px 6px;
+        margin: 0 2px;
+    }
+    
+    /* Hide Add Row button for allocated invoices (read-only) */
+    #allocatedInvoiceAddAllocationBtn {
+        display: none !important;
+    }
+</style>
+
+<!-- Update footer text and styling for allocated invoices -->
+<script>
+(function() {
+    // Change footer text from "Still to Allocate" to "Total Allocated"
+    const footer = document.getElementById('allocatedInvoiceStillToAllocateFooter');
+    if (footer) {
+        const firstCell = footer.querySelector('div:first-child');
+        if (firstCell) {
+            firstCell.textContent = 'Total Allocated:';
+        }
+        
+        // Update value colors to always be green for allocated
+        const netSpan = document.getElementById('allocatedInvoiceRemainingNet');
+        const gstSpan = document.getElementById('allocatedInvoiceRemainingGst');
+        if (netSpan) netSpan.style.color = '#90EE90';
+        if (gstSpan) gstSpan.style.color = '#90EE90';
+    }
+})();
+</script>

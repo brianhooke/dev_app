@@ -3,9 +3,10 @@ from django.views.generic import RedirectView
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_invoice, upload_design_pdf, create_plan, send_test_email_view, model_viewer_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, view_po_pdf, send_po_email_view, update_uncommitted, upload_categories, upload_costings, upload_invoice, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_invoices_by_supplier, get_quotes_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_invoice_allocations, wipe_database, view_po_by_unique_id
 from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance, create_invoice_allocation, update_invoice_allocation, delete_invoice_allocation, update_invoice, null_allocation_xero_fields
+from .views.main import invoices_view, quotes_view, get_project_invoices, get_unallocated_invoice_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_invoice, unallocate_invoice, approve_invoice
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
-from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes, get_project_committed_amounts
+from .views.quotes import get_project_contacts, save_project_quote, get_project_quotes, get_project_committed_amounts, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file
 from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
@@ -131,6 +132,24 @@ urlpatterns = [
     path('api/receive_email/', receive_email, name='receive_email'),
     path('api/emails/', email_list, name='email_list'),
     path('api/diagnostics/', api_diagnostics, name='api_diagnostics'),
+    
+    # Invoices section
+    path('invoices/', invoices_view, name='invoices'),
+    path('get_project_invoices/<int:project_pk>/', get_project_invoices, name='get_project_invoices'),
+    path('get_unallocated_invoice_allocations/<int:invoice_pk>/', get_unallocated_invoice_allocations, name='get_unallocated_invoice_allocations'),
+    path('create_unallocated_invoice_allocation/', create_unallocated_invoice_allocation, name='create_unallocated_invoice_allocation'),
+    path('update_unallocated_invoice_allocation/<int:allocation_pk>/', update_unallocated_invoice_allocation, name='update_unallocated_invoice_allocation'),
+    path('delete_unallocated_invoice_allocation/<int:allocation_pk>/', delete_unallocated_invoice_allocation, name='delete_unallocated_invoice_allocation'),
+    path('allocate_invoice/<int:invoice_pk>/', allocate_invoice, name='allocate_invoice'),
+    path('unallocate_invoice/<int:invoice_pk>/', unallocate_invoice, name='unallocate_invoice'),
+    path('approve_invoice/<int:invoice_pk>/', approve_invoice, name='approve_invoice'),
+    
+    # Quotes section (reusable template)
+    path('quotes/', quotes_view, name='quotes'),
+    path('get_quote_allocations_by_quote/<int:quote_pk>/', get_quote_allocations_for_quote, name='get_quote_allocations_for_quote'),
+    path('create_quote_allocation/', create_quote_allocation, name='create_quote_allocation'),
+    path('update_quote_allocation/<int:allocation_pk>/', update_quote_allocation, name='update_quote_allocation'),
+    path('delete_quote_allocation/<int:allocation_pk>/', delete_quote_allocation, name='delete_quote_allocation'),
     
     # Document management endpoints
     path('get_project_folders/<int:project_pk>/', get_project_folders, name='get_project_folders'),

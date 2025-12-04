@@ -11,7 +11,8 @@ from .main import main, homepage_view, build_view
 # Quote views
 from .quotes import (
     commit_data, update_quote, delete_quote, get_quote_allocations,
-    update_uncommitted, get_quotes_by_supplier, get_quote_allocations_by_quotes
+    update_uncommitted, get_quotes_by_supplier, get_quote_allocations_by_quotes,
+    get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation
 )
 
 # Bill/Invoice views
@@ -53,7 +54,11 @@ from .main import (
     create_contacts, send_test_email, send_test_email_view,
     upload_categories, upload_costings, update_contract_budget_amounts,
     upload_letterhead, update_contacts, xeroapi, make_api_request,
-    mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines
+    mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines,
+    invoices_view, get_project_invoices,
+    get_unallocated_invoice_allocations, create_unallocated_invoice_allocation,
+    update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation,
+    allocate_invoice, unallocate_invoice, approve_invoice
 )
 
 # Database management views

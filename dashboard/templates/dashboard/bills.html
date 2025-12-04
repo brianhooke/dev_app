@@ -125,11 +125,11 @@
             <button class="btn btn-outline-primary bills-nav-btn" id="billsDirectBtn" data-mode="direct">Direct</button>
         </div>
         
-        <div style="display: flex; flex: 1;">
-            <!-- Left side: Bills Table (top 2/3) and Allocations (bottom 1/3) (50%) -->
-            <div style="width: 50%; padding-right: 15px; display: flex; flex-direction: column;">
+        <div style="display: flex; flex: 1; overflow: hidden; min-height: 0;">
+            <!-- Left side: Bills Table and Allocations (60%) -->
+            <div style="width: 60%; padding-right: 15px; display: flex; flex-direction: column; height: 100%; overflow: hidden;">
                 <!-- Bills Table (flex to fill available space) -->
-                <div id="billsTableContainer" style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
+                <div id="billsTableContainer" style="flex: 2; overflow-y: auto; margin-bottom: 15px; min-height: 0;">
                     <table class="table table-bordered table-hover" id="billsTable">
                         <thead>
                             <tr>
@@ -149,51 +149,63 @@
                     </table>
                 </div>
                 
-                <!-- Allocations section (bottom 1/3 - hidden for Bills - Inbox) -->
-                <div id="allocationsSection" style="height: 33%; display: none; flex-direction: column;">
-                    <div style="text-align: center; margin-bottom: 5px; flex-shrink: 0;">
-                        <h6 id="allocationsTitle">Bill Allocations</h6>
+                <!-- Allocations section - flexible height, max ~40% (hidden for Bills - Inbox) -->
+                <div id="allocationsSection" style="flex: 0 1 auto; display: none; flex-direction: column; max-height: 45%; min-height: 0; overflow: hidden;">
+                    <div style="text-align: left; margin-bottom: 5px; flex-shrink: 0;">
+                        <h6 id="allocationsTitle" style="margin: 0;">Bill Allocations</h6>
                     </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
-                        <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
-                            <thead style="flex-shrink: 0; display: block; position: sticky; top: 0; z-index: 10; background: white;">
-                                <tr style="display: table; width: 100%; table-layout: fixed;">
-                                    <th style="width: 28%;">Xero Account</th>
-                                    <th style="width: 15%;">$ Net</th>
-                                    <th style="width: 15%;">$ GST</th>
-                                    <th style="width: 42%;">Description</th>
-                                </tr>
-                            </thead>
-                            <tbody id="allocationsTableBody" style="flex: 1; display: block; overflow-y: auto;">
-                                <!-- Allocations will be populated here via JavaScript -->
-                            </tbody>
-                        </table>
+                    
+                    <!-- Table wrapper with border -->
+                    <div style="display: flex; flex-direction: column; border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; flex: 0 1 auto;">
+                        <!-- Fixed header -->
+                        <div style="flex-shrink: 0; background: white;">
+                            <table class="table table-bordered table-sm" style="margin-bottom: 0;">
+                                <thead>
+                                    <tr style="display: table; width: 100%; table-layout: fixed;">
+                                        <th style="width: 28%; padding: 5px 4px; font-size: 10px;">Xero Account</th>
+                                        <th style="width: 15%; padding: 5px 4px; font-size: 10px;">$ Net</th>
+                                        <th style="width: 15%; padding: 5px 4px; font-size: 10px;">$ GST</th>
+                                        <th style="width: 37%; padding: 5px 4px; font-size: 10px;">Description</th>
+                                        <th style="width: 5%; padding: 5px 4px; font-size: 10px;"></th>
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
+                        
+                        <!-- Scrollable body - grows to fit content, max height triggers scroll -->
+                        <div style="flex: 0 1 auto; overflow-y: auto; max-height: 150px;">
+                            <table class="table table-bordered table-sm" id="allocationsTable" style="margin-bottom: 0;">
+                                <tbody id="allocationsTableBody">
+                                    <!-- Allocations will be populated here via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Still to allocate section - sticky footer -->
+                        <div id="billsStillToAllocateFooter" style="flex-shrink: 0; display: flex; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white; font-weight: bold; font-size: 11px;">
+                            <div style="width: 28%; padding: 6px 8px;">Still to Allocate:</div>
+                            <div style="width: 15%; padding: 6px 8px;"><span id="remainingNet" style="color: #ffcccc;">$0.00</span></div>
+                            <div style="width: 15%; padding: 6px 8px;"><span id="remainingGst" style="color: #ffcccc;">$0.00</span></div>
+                            <div style="width: 37%; padding: 6px 8px;"></div>
+                            <div style="width: 5%; padding: 6px 8px;"></div>
+                        </div>
                     </div>
-                    <div style="margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                        <div style="flex: 0 0 28%; padding-left: 5px;">
-                            <strong>Still to allocate:</strong>
-                        </div>
-                        <div style="flex: 0 0 15%; text-align: center; font-weight: bold;" id="remainingNet">
-                            $0.00
-                        </div>
-                        <div style="flex: 0 0 15%; text-align: center; font-weight: bold;" id="remainingGst">
-                            $0.00
-                        </div>
-                        <div style="flex: 1;"></div>
+                    
+                    <div style="margin-top: 8px; display: flex; gap: 8px;">
                         <button type="button" class="btn btn-sm btn-info" id="pullXeroAccountsBtn" style="display: none;">
                             <i class="fas fa-download"></i> Pull Accounts
                         </button>
-                        <button type="button" class="btn btn-sm btn-success" id="addAllocationBtn">
+                        <button type="button" class="btn btn-sm btn-secondary" id="addAllocationBtn">
                             <i class="fas fa-plus"></i> Add Row
                         </button>
                     </div>
                 </div>
             </div>
             
-            <!-- Right side: PDF Viewer (50% - full height) -->
-            <div style="width: 50%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
+            <!-- Right side: PDF Viewer (40% - full height) -->
+            <div style="width: 40%; padding-left: 15px; display: flex; flex-direction: column; height: 100%;">
                 <div id="viewerSection" style="flex: 1; display: flex; flex-direction: column;">
-                    <div style="flex: 1; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                    <div style="flex: 1; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-radius: 8px;">
                         <iframe 
                             id="billViewer" 
                             style="width: 100%; height: 100%; border: none; display: none;"
@@ -341,7 +353,7 @@
                         var selectedXeroInstanceId = null;
                         if (bill.project_pk) {
                             // Find the project's xero_instance_id
-                            var project = response.projects.find(p => p.projects_pk === bill.project_pk);
+                            var project = billsData.projects.find(p => p.projects_pk === bill.project_pk);
                             if (project) {
                                 selectedXeroInstanceId = project.xero_instance_id;
                             }
@@ -617,9 +629,9 @@
                                bill.project_pk === null;
                     }, 'direct');
                     
-                    // Show allocations section for Direct and adjust bills table to 67% height
+                    // Show allocations section for Direct and adjust bills table flex
                     $('#allocationsSection').css('display', 'flex');
-                    $('#billsTableContainer').css('flex', '0 0 67%');
+                    $('#billsTableContainer').css({'flex': '1 1 auto', 'min-height': '0'});
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load bills:', error);
@@ -1284,25 +1296,21 @@
                         var remainingNet = invoiceNet - allocatedNet;
                         var remainingGst = invoiceGst - allocatedGst;
                         
-                        // Update display with color coding
+                        // Update display with color coding (light colors for gradient background)
                         $('#remainingNet').text('$' + remainingNet.toFixed(2));
                         $('#remainingGst').text('$' + remainingGst.toFixed(2));
                         
-                        // Color code: green if zero, blue if positive, red if negative
+                        // Color code: light green if zero, light red if not zero
                         if (Math.abs(remainingNet) < 0.01) {
-                            $('#remainingNet').css('color', 'green');
-                        } else if (remainingNet > 0) {
-                            $('#remainingNet').css('color', 'blue');
+                            $('#remainingNet').css('color', '#90EE90');
                         } else {
-                            $('#remainingNet').css('color', 'red');
+                            $('#remainingNet').css('color', '#ffcccc');
                         }
                         
                         if (Math.abs(remainingGst) < 0.01) {
-                            $('#remainingGst').css('color', 'green');
-                        } else if (remainingGst > 0) {
-                            $('#remainingGst').css('color', 'blue');
+                            $('#remainingGst').css('color', '#90EE90');
                         } else {
-                            $('#remainingGst').css('color', 'red');
+                            $('#remainingGst').css('color', '#ffcccc');
                         }
                         
                         // Update Send to Xero button state
