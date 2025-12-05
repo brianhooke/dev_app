@@ -1363,17 +1363,24 @@
                         addQuoteAllocationRow(alloc);
                     });
                 }
+                // Set label to "Still to Allocate"
+                $('#quoteAllocationFooterLabel').text('Still to Allocate:');
                 updateNewQuoteStillToAllocate();
             } else {
                 // View mode: show read-only rows
                 if (!allocations || allocations.length === 0) {
                     tbody.html('<tr><td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">No allocations for this quote</td></tr>');
+                    $('#quoteRemainingNet').text('$0.00').css('color', '#90EE90');
                 } else {
                     allocations.forEach(function(alloc) {
                         displayQuoteAllocationRow(alloc);
                     });
+                    // Calculate and display total allocated
+                    const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+                    $('#quoteRemainingNet').text('$' + totalAllocated.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})).css('color', '#90EE90');
                 }
-                updateQuoteStillToAllocate();
+                // Set label to "Total Allocated"
+                $('#quoteAllocationFooterLabel').text('Total Allocated:');
             }
         }
         

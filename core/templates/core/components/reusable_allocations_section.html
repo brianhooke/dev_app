@@ -178,7 +178,7 @@ Required context variables:
                     {% for col in allocations_columns %}
                     <div style="width: {{ col.width }}; padding: 6px 8px; {% if col.still_to_allocate_id %}text-align: left;{% endif %}">
                         {% if forloop.first %}
-                        Still to Allocate:
+                        <span id="{{ section_id }}AllocationFooterLabel">Still to Allocate:</span>
                         {% elif col.still_to_allocate_id %}
                         <span id="{{ section_id }}{{ col.still_to_allocate_id }}" style="color: #ffcccc;">$0.00</span>
                         {% endif %}
