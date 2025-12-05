@@ -564,11 +564,21 @@ def save_project_quote(request):
                 
                 # Handle construction vs non-construction projects
                 if is_construction:
-                    # Construction: save qty, unit, rate and calculate amount
-                    qty = Decimal(str(item_data.get('qty', 0)))
-                    unit = item_data.get('unit', '')
-                    rate = Decimal(str(item_data.get('rate', 0)))
-                    amount = qty * rate
+                    # Construction: check if qty/rate provided, otherwise use direct amount
+                    qty_val = item_data.get('qty')
+                    rate_val = item_data.get('rate')
+                    unit = item_data.get('unit', '') or ''
+                    
+                    if qty_val is not None and rate_val is not None:
+                        # Use qty * rate calculation
+                        qty = Decimal(str(qty_val))
+                        rate = Decimal(str(rate_val))
+                        amount = qty * rate
+                    else:
+                        # Use direct amount (for simplified quote entry)
+                        qty = None
+                        rate = None
+                        amount = Decimal(str(item_data.get('amount', 0)))
                     
                     Quote_allocations.objects.create(
                         quotes_pk=quote,
