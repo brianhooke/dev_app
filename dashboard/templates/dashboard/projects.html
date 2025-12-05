@@ -986,7 +986,7 @@
             
             // Create new editable row at TOP
             const newRow = $(`
-                <tr class="new-quote-row" style="background-color: #fffde7;">
+                <tr class="new-quote-row selected-row" style="background-color: #fffde7 !important; opacity: 1 !important;">
                     <td>
                         <select class="form-control form-control-sm new-quote-supplier" style="font-size: 11px;">
                             ${supplierOptions}
@@ -1090,15 +1090,12 @@
             const allocations = [];
             $('#quoteAllocationsTableBody tr').each(function() {
                 const row = $(this);
-                const itemPk = row.find('.allocation-item-select').val();
-                const amount = parseFloat(row.find('.allocation-amount-input').val()) || 0;
-                const notes = row.find('.allocation-notes-input').val() || '';
-                const qty = parseFloat(row.find('.allocation-qty-input').val()) || null;
-                const unit = row.find('.allocation-unit-input').val() || '';
-                const rate = parseFloat(row.find('.allocation-rate-input').val()) || null;
+                const itemPk = row.find('.quote-allocation-item-select').val();
+                const amount = parseFloat(row.find('.quote-allocation-net-input').val()) || 0;
+                const notes = row.find('.quote-allocation-notes-input').val() || '';
                 
                 if (itemPk) {
-                    allocations.push({ item_pk: itemPk, amount, notes, qty, unit, rate });
+                    allocations.push({ item_pk: itemPk, amount, notes, qty: null, unit: '', rate: null });
                 }
             });
             return allocations;
@@ -1357,7 +1354,11 @@
             }
             
             // Always update still to allocate after populating
-            updateQuoteStillToAllocate();
+            if (window.newQuoteMode) {
+                updateNewQuoteStillToAllocate();
+            } else {
+                updateQuoteStillToAllocate();
+            }
         }
         
         // Add a quote allocation row
@@ -1380,7 +1381,11 @@
                 itemSelect.append(option);
             });
             itemSelect.on('change', function() {
-                saveQuoteAllocationRow(row);
+                if (window.newQuoteMode) {
+                    updateNewQuoteStillToAllocate();
+                } else {
+                    saveQuoteAllocationRow(row);
+                }
             });
             row.append($('<td>').append(itemSelect));
             
@@ -1391,8 +1396,12 @@
                 .addClass('form-control form-control-sm quote-allocation-net-input')
                 .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
                 .on('change', function() {
-                    updateQuoteStillToAllocate();
-                    saveQuoteAllocationRow(row);
+                    if (window.newQuoteMode) {
+                        updateNewQuoteStillToAllocate();
+                    } else {
+                        updateQuoteStillToAllocate();
+                        saveQuoteAllocationRow(row);
+                    }
                 });
             row.append($('<td>').append(netInput));
             
@@ -1402,7 +1411,9 @@
                 .addClass('form-control form-control-sm quote-allocation-notes-input')
                 .val(allocation ? allocation.notes || '' : '')
                 .on('change', function() {
-                    saveQuoteAllocationRow(row);
+                    if (!window.newQuoteMode) {
+                        saveQuoteAllocationRow(row);
+                    }
                 });
             row.append($('<td>').append(notesInput));
             
@@ -1490,6 +1501,13 @@
         
         // Delete a quote allocation row
         function deleteQuoteAllocationRow(row) {
+            // In new quote mode, just remove the row without AJAX
+            if (window.newQuoteMode) {
+                row.remove();
+                updateNewQuoteStillToAllocate();
+                return;
+            }
+            
             const allocationPk = row.attr('data-allocation-pk');
             
             if (allocationPk) {
