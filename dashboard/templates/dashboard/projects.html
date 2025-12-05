@@ -1033,6 +1033,9 @@
             // Update title
             $('#quoteAllocationsTitle').text('Quote Allocations (New Quote)');
             
+            // Show Add Row button in new quote mode
+            $('#quoteAddAllocationBtn').show();
+            
             // Reset still to allocate
             updateNewQuoteStillToAllocate();
             
@@ -1315,6 +1318,9 @@
             
             // Load quote allocations
             loadQuoteAllocations(quotePk);
+            
+            // Hide Add Row button in view mode
+            $('#quoteAddAllocationBtn').hide();
         }
         
         // Load allocations for a quote
@@ -1344,24 +1350,51 @@
             const tbody = $('#quoteAllocationsTableBody');
             tbody.empty();
             
-            if (!allocations || allocations.length === 0) {
-                // Add one empty row for new entry
-                addQuoteAllocationRow();
-            } else {
-                allocations.forEach(function(alloc) {
-                    addQuoteAllocationRow(alloc);
-                });
-            }
-            
-            // Always update still to allocate after populating
             if (window.newQuoteMode) {
+                // New quote mode: show editable rows
+                if (!allocations || allocations.length === 0) {
+                    addQuoteAllocationRow();
+                } else {
+                    allocations.forEach(function(alloc) {
+                        addQuoteAllocationRow(alloc);
+                    });
+                }
                 updateNewQuoteStillToAllocate();
             } else {
+                // View mode: show read-only rows
+                if (!allocations || allocations.length === 0) {
+                    tbody.html('<tr><td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">No allocations for this quote</td></tr>');
+                } else {
+                    allocations.forEach(function(alloc) {
+                        displayQuoteAllocationRow(alloc);
+                    });
+                }
                 updateQuoteStillToAllocate();
             }
         }
         
-        // Add a quote allocation row
+        // Display a read-only quote allocation row (for viewing saved quotes)
+        function displayQuoteAllocationRow(allocation) {
+            const tbody = $('#quoteAllocationsTableBody');
+            const row = $('<tr>').attr('data-allocation-pk', allocation.quote_allocations_pk);
+            
+            // 1. Item name (read-only text)
+            row.append($('<td>').text(allocation.item_name || '-'));
+            
+            // 2. $ Net (read-only text)
+            const amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+            row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+            
+            // 3. Notes (read-only text)
+            row.append($('<td>').text(allocation.notes || '-'));
+            
+            // 4. Empty cell (no delete button in view mode)
+            row.append($('<td>'));
+            
+            tbody.append(row);
+        }
+        
+        // Add an editable quote allocation row (for new quotes / update mode)
         function addQuoteAllocationRow(allocation = null) {
             const tbody = $('#quoteAllocationsTableBody');
             const row = $('<tr>');
