@@ -727,10 +727,29 @@ def upload_margin_category_and_lines(request):
 def invoices_view(request):
     """Render the invoices section template."""
     template_type = request.GET.get('template', 'unallocated')
-    if template_type == 'allocated':
-        return render(request, 'core/invoices_allocated.html')
     
-    # Define column configurations for the reusable template
+    if template_type == 'allocated':
+        # Allocated invoices - read-only display with Unallocate/Approve buttons
+        context = {
+            'main_table_columns': [
+                {'header': 'Supplier', 'width': '22%'},
+                {'header': 'Invoice #', 'width': '18%'},
+                {'header': '$ Net', 'width': '15%'},
+                {'header': '$ GST', 'width': '15%'},
+                {'header': 'Unallocate', 'width': '15%'},
+                {'header': 'Approve', 'width': '15%'},
+            ],
+            'allocations_columns': [
+                {'header': 'Item', 'width': '40%'},
+                {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'TotalNet'},
+                {'header': '$ GST', 'width': '20%', 'still_to_allocate_id': 'TotalGst'},
+                {'header': 'Notes', 'width': '20%'},
+            ],
+            'readonly': True,
+        }
+        return render(request, 'core/invoices_allocated.html', context)
+    
+    # Unallocated invoices - editable with Allocate/Delete buttons
     context = {
         'main_table_columns': [
             {'header': 'Supplier', 'width': '25%'},

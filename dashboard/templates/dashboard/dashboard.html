@@ -92,7 +92,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentInvoiceData, currentSelectedInvoicePk
 
-Version: v78 (displayed in header)
+Version: v88 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -339,6 +339,7 @@ Version: v78 (displayed in header)
 {% include 'core/quotes_modals.html' %}
 
 <script src="{% static 'core/js/xero.js' %}"></script>
+<script src="{% static 'core/js/allocations_manager.js' %}"></script>
 <script src="{% static 'core/js/quotes_entry.js' %}"></script>
 <script src="{% static 'core/js/documents.js' %}"></script>
 

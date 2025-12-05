@@ -819,14 +819,154 @@
             loadConstructionInvoicesSection(subsection);
         });
         
-        // Construction Quote Functions - Uses reusable template
+        // ==========================================
+        // QUOTES SECTION - Uses AllocationsManager
+        // ==========================================
+        
+        // Initialize quotes AllocationsManager configuration
+        function initQuotesAllocationsManager() {
+            if (window.quotesManagerInitialized) return;
+            
+            AllocationsManager.init({
+                sectionId: 'quote',
+                mainTable: {
+                    emptyMessage: 'No quotes found for this project.',
+                    showFooter: true,
+                    footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
+                    // Custom row renderer for quotes
+                    renderRow: function(quote, index, cfg) {
+                        var pdfUrl = quote.pdf_url || '';
+                        var row = $('<tr>').attr('data-pk', quote.quotes_pk).attr('data-quote-pk', quote.quotes_pk).attr('data-pdf-url', pdfUrl);
+                        
+                        // 1. Supplier
+                        row.append($('<td>').text(quote.supplier_name || '-'));
+                        
+                        // 2. $ Net
+                        var netAmount = quote.total_cost ? parseFloat(quote.total_cost) : 0;
+                        row.append($('<td>').text('$' + netAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                        
+                        // 3. Quote #
+                        row.append($('<td>').text(quote.supplier_quote_number || '-'));
+                        
+                        // 4. Update button
+                        var updateBtn = $('<button>')
+                            .addClass('btn btn-sm btn-warning quote-update-btn')
+                            .text('Update')
+                            .attr('data-quote-pk', quote.quotes_pk)
+                            .on('click', function(e) {
+                                e.stopPropagation();
+                                openQuoteUpdateModal(quote);
+                            });
+                        row.append($('<td>').css('text-align', 'center').append(updateBtn));
+                        
+                        // 5. Delete button
+                        var deleteBtn = $('<button>')
+                            .addClass('btn btn-sm btn-danger quote-delete-btn')
+                            .html('<i class="fas fa-trash"></i>')
+                            .attr('data-quote-pk', quote.quotes_pk)
+                            .on('click', function(e) {
+                                e.stopPropagation();
+                                deleteQuote(quote.quotes_pk, $(this).closest('tr'));
+                            });
+                        row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+                        
+                        return row;
+                    },
+                    // Custom row selection handler
+                    onRowSelect: function(row, pk, cfg) {
+                        // Hide Add Row button in view mode
+                        $('#quoteAddAllocationBtn').hide();
+                    }
+                },
+                allocations: {
+                    emptyMessage: 'No allocations for this quote',
+                    editable: false,
+                    // Custom read-only allocation row renderer
+                    renderRow: function(alloc, cfg) {
+                        var row = $('<tr>').attr('data-allocation-pk', alloc.quote_allocations_pk);
+                        row.append($('<td>').text(alloc.item_name || '-'));
+                        var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                        row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                        row.append($('<td>').text(alloc.notes || '-'));
+                        row.append($('<td>')); // Empty cell for delete column
+                        return row;
+                    },
+                    // Custom editable allocation row renderer (for new/update mode)
+                    renderEditableRow: function(allocation, cfg, onChange) {
+                        var row = $('<tr>');
+                        if (allocation) row.attr('data-allocation-pk', allocation.quote_allocations_pk);
+                        
+                        // Item dropdown
+                        var itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
+                        itemSelect.append($('<option>').val('').text('Select Item...'));
+                        (window.quotesCostingItems || window.itemsItems || []).forEach(function(item) {
+                            var option = $('<option>').val(item.costing_pk).text(item.item);
+                            if (allocation && allocation.item_pk === item.costing_pk) option.prop('selected', true);
+                            itemSelect.append(option);
+                        });
+                        itemSelect.on('change', onChange);
+                        row.append($('<td>').append(itemSelect));
+                        
+                        // Amount input
+                        var amountInput = $('<input>')
+                            .attr('type', 'number').attr('step', '0.01')
+                            .addClass('form-control form-control-sm quote-allocation-net-input')
+                            .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
+                            .on('change input', onChange);
+                        row.append($('<td>').append(amountInput));
+                        
+                        // Notes input
+                        var notesInput = $('<input>')
+                            .attr('type', 'text')
+                            .addClass('form-control form-control-sm quote-allocation-notes-input')
+                            .val(allocation ? allocation.notes || '' : '');
+                        row.append($('<td>').append(notesInput));
+                        
+                        // Delete button
+                        var deleteBtn = $('<button>')
+                            .addClass('btn btn-sm btn-danger')
+                            .html('<i class="fas fa-times"></i>')
+                            .on('click', function() {
+                                row.remove();
+                                onChange();
+                            });
+                        row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+                        
+                        return row;
+                    },
+                    // Callback when allocations change
+                    onUpdate: function(sectionId, totals) {
+                        // Validate new quote if in new mode
+                        if (window.newQuoteMode) {
+                            validateNewQuote();
+                        }
+                    }
+                },
+                api: {
+                    loadAllocations: '/core/get_allocations_for_quote/{pk}/'
+                }
+            });
+            
+            window.quotesManagerInitialized = true;
+            console.log('Quotes AllocationsManager initialized');
+        }
         
         // Load the quotes section view for CONSTRUCTION
         function loadConstructionQuotesSection() {
             console.log('Loading quotes section with reusable template');
             
+            // Initialize AllocationsManager for quotes
+            initQuotesAllocationsManager();
+            
             // Show New Quote button
             $('#constructionNewQuoteBtn').show();
+            
+            // Set shared project reference for quotes
+            window.currentQuotesProject = {
+                pk: window.currentConstructionProject.pk,
+                project_type: window.currentConstructionProject.project_type,
+                contacts: window.constructionProjectContacts || []
+            };
             
             // Load contacts for the project if not already loaded
             if (!window.constructionProjectContacts || window.constructionProjectContacts.length === 0) {
@@ -837,6 +977,7 @@
                     success: function(response) {
                         if (response.status === 'success') {
                             window.constructionProjectContacts = response.contacts;
+                            window.currentQuotesProject.contacts = response.contacts;
                             console.log('Loaded', response.contacts.length, 'contacts for quotes');
                         }
                     }
@@ -864,9 +1005,15 @@
             });
         }
         
-        // Load quotes data for the current project
+        // Load quotes data for the current project (shared for Construction & Tender)
         function loadQuotesData() {
-            const projectPk = window.currentConstructionProject.pk;
+            const projectPk = window.currentQuotesProject ? window.currentQuotesProject.pk : 
+                              (window.currentConstructionProject ? window.currentConstructionProject.pk : 
+                               window.currentTenderProject ? window.currentTenderProject.pk : null);
+            if (!projectPk) {
+                console.error('No project available for loading quotes');
+                return;
+            }
             console.log('Loading quotes for project:', projectPk);
             
             // First ensure items are loaded for the allocation dropdowns
@@ -903,7 +1050,8 @@
                             console.log('Loaded quotes:', response.quotes.length);
                             window.quotesCostingItems = window.itemsItems || [];
                             console.log('Costing items for quotes:', window.quotesCostingItems.length);
-                            populateQuotesTable(response.quotes, window.constructionProjectContacts || []);
+                            const contacts = (window.currentQuotesProject && window.currentQuotesProject.contacts) || [];
+                            populateQuotesTable(response.quotes, contacts);
                         } else {
                             console.error('Error loading quotes:', response.message);
                         }
@@ -919,7 +1067,7 @@
         }
         
         // ==========================================
-        // NEW QUOTE INLINE ENTRY (Construction)
+        // NEW QUOTE INLINE ENTRY (Shared for Construction & Tender)
         // ==========================================
         
         // State for new quote mode
@@ -927,6 +1075,7 @@
         window.newQuotePdfData = null;
         window.newQuotePdfUrl = null;
         window.newQuoteAllocations = [];
+        window.currentQuotesProject = null; // Shared project reference for quotes
         
         // Click handler for New Quote button (construction)
         $(document).on('click', '#constructionNewQuoteBtn', function() {
@@ -934,8 +1083,14 @@
             $('#constructionQuotePdfInput').click();
         });
         
-        // File input change handler for new quote PDF (construction)
-        $(document).on('change', '#constructionQuotePdfInput', function(event) {
+        // Click handler for New Quote button (tender) - triggers file input
+        $(document).on('click', '#newQuoteBtn', function() {
+            console.log('Tender New Quote button clicked');
+            $('#tenderQuotePdfInput').click();
+        });
+        
+        // File input change handler for new quote PDF (Construction & Tender - both use enterNewQuoteMode)
+        $(document).on('change', '#constructionQuotePdfInput, #tenderQuotePdfInput', function(event) {
             var file = event.target.files[0];
             if (file) {
                 console.log('Quote PDF selected:', file.name);
@@ -977,8 +1132,8 @@
                 tbody.empty();
             }
             
-            // Build supplier dropdown options
-            const suppliers = window.constructionProjectContacts || [];
+            // Build supplier dropdown options (use shared currentQuotesProject)
+            const suppliers = (window.currentQuotesProject && window.currentQuotesProject.contacts) || [];
             let supplierOptions = '<option value="">Select Supplier...</option>';
             suppliers.forEach(function(contact) {
                 supplierOptions += `<option value="${contact.contact_pk}">${contact.name}</option>`;
@@ -1147,9 +1302,9 @@
             const quoteNumber = row.find('.new-quote-number').val().trim();
             const allocations = getNewQuoteAllocations();
             
-            // Prepare data for save
+            // Prepare data for save (use shared currentQuotesProject)
             const saveData = {
-                project_pk: window.currentConstructionProject.pk,
+                project_pk: window.currentQuotesProject.pk,
                 supplier: supplierPk,
                 total_cost: totalCost,
                 quote_number: quoteNumber,
@@ -1216,137 +1371,22 @@
             }
         });
         
-        // Populate quotes table
+        // Populate quotes table - delegates to AllocationsManager
         function populateQuotesTable(quotes, suppliers) {
-            const tbody = $('#quoteMainTableBody');
-            tbody.empty();
-            tbody.removeClass('has-selection');
-            
-            if (quotes.length === 0) {
-                tbody.html(`
-                    <tr><td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
-                        No quotes found for this project.
-                    </td></tr>
-                `);
-                $('#quoteMainTableFooter').hide();
-                return;
-            }
-            
-            // Store suppliers globally
+            // Store suppliers globally for backward compatibility
             window.quoteSectionSuppliers = suppliers;
-            
-            let totalNet = 0;
-            
-            quotes.forEach(function(quote) {
-                const pdfUrl = quote.pdf_url || '';
-                const row = $('<tr>').attr('data-quote-pk', quote.quotes_pk).attr('data-pdf-url', pdfUrl);
-                
-                // 1. Supplier (read-only text)
-                row.append($('<td>').text(quote.supplier_name || '-'));
-                
-                // 2. $ Net (read-only)
-                const netAmount = quote.total_cost ? parseFloat(quote.total_cost) : 0;
-                totalNet += netAmount;
-                row.append($('<td>').text('$' + netAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
-                
-                // 3. Quote # (read-only)
-                row.append($('<td>').text(quote.supplier_quote_number || '-'));
-                
-                // 4. Update button
-                const updateBtn = $('<button>')
-                    .addClass('btn btn-sm btn-warning quote-update-btn')
-                    .text('Update')
-                    .attr('data-quote-pk', quote.quotes_pk)
-                    .on('click', function(e) {
-                        e.stopPropagation();
-                        openQuoteUpdateModal(quote);
-                    });
-                row.append($('<td>').css('text-align', 'center').append(updateBtn));
-                
-                // 5. Delete button
-                const deleteBtn = $('<button>')
-                    .addClass('btn btn-sm btn-danger quote-delete-btn')
-                    .html('<i class="fas fa-trash"></i>')
-                    .attr('data-quote-pk', quote.quotes_pk)
-                    .on('click', function(e) {
-                        e.stopPropagation();
-                        deleteQuote(quote.quotes_pk, $(this).closest('tr'));
-                    });
-                row.append($('<td>').css('text-align', 'center').append(deleteBtn));
-                
-                // Row click handler for selection
-                row.on('click', function(e) {
-                    if ($(e.target).closest('.quote-update-btn, .quote-delete-btn').length) return;
-                    selectQuoteRow($(this));
-                });
-                
-                tbody.append(row);
-            });
-            
-            // Update footer totals
-            $('#quoteFooterCol2').text('$' + totalNet.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-            $('#quoteMainTableFooter').show();
-            
-            // Auto-select first row
-            setTimeout(function() {
-                const firstRow = $('#quoteMainTableBody tr').first();
-                if (firstRow.length && firstRow.attr('data-quote-pk')) {
-                    selectQuoteRow(firstRow);
-                }
-            }, 100);
+            // Delegate to AllocationsManager (uses custom renderRow from config)
+            AllocationsManager.populateMainTable('quote', quotes);
         }
         
-        // Select a quote row
+        // Select a quote row - delegates to AllocationsManager
         function selectQuoteRow(row) {
-            // Skip if already selected (don't refresh PDF or allocations)
-            if (row.hasClass('selected-row')) {
-                return;
-            }
-            
-            const tbody = $('#quoteMainTableBody');
-            tbody.addClass('has-selection');
-            tbody.find('tr').removeClass('selected-row');
-            row.addClass('selected-row');
-            
-            const quotePk = row.attr('data-quote-pk');
-            const pdfUrl = row.attr('data-pdf-url');
-            
-            // Load PDF only if different row
-            if (pdfUrl) {
-                $('#quotePdfViewer').attr('src', pdfUrl).show();
-                $('#quoteViewerPlaceholder').hide();
-            } else {
-                $('#quotePdfViewer').hide();
-                $('#quoteViewerPlaceholder').show();
-            }
-            
-            // Load quote allocations
-            loadQuoteAllocations(quotePk);
-            
-            // Hide Add Row button in view mode
-            $('#quoteAddAllocationBtn').hide();
+            AllocationsManager.selectRow('quote', row);
         }
         
-        // Load allocations for a quote
+        // Load allocations for a quote - delegates to AllocationsManager
         function loadQuoteAllocations(quotePk) {
-            console.log('Loading allocations for quote:', quotePk);
-            
-            $.ajax({
-                url: `/core/get_allocations_for_quote/${quotePk}/`,
-                type: 'GET',
-                success: function(response) {
-                    if (response.status === 'success') {
-                        window.currentSelectedQuote = response.quote;
-                        populateQuoteAllocationsTable(response.allocations);
-                        updateQuoteStillToAllocate();
-                    } else {
-                        console.error('Error loading quote allocations:', response.message);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Failed to load quote allocations:', error);
-                }
-            });
+            AllocationsManager.loadAllocations('quote', quotePk);
         }
         
         // Populate quote allocations table
@@ -1671,9 +1711,67 @@
             `);
         }
         
+        // ==========================================
+        // INVOICES SECTION - Uses AllocationsManager
+        // ==========================================
+        
+        // Initialize invoices AllocationsManager configuration
+        function initInvoicesAllocationsManager() {
+            if (window.invoicesManagerInitialized) return;
+            
+            AllocationsManager.init({
+                sectionId: 'invoice',
+                mainTable: {
+                    emptyMessage: 'No unallocated invoices found for this project.',
+                    showFooter: true,
+                    footerTotals: [
+                        { colIndex: 3, valueKey: 'total_net' },
+                        { colIndex: 4, valueKey: 'total_gst' }
+                    ],
+                    // Note: Invoices use custom populateUnallocatedInvoicesTable due to editable fields
+                    onRowSelect: function(row, pk, cfg) {
+                        // Store current selected invoice data
+                        window.currentSelectedInvoice = {
+                            invoice_pk: pk,
+                            total_net: parseFloat(row.find('.net-input').val()) || 0,
+                            total_gst: parseFloat(row.find('.gst-input').val()) || 0
+                        };
+                    }
+                },
+                allocations: {
+                    emptyMessage: 'No allocations for this invoice',
+                    editable: true,
+                    // Custom allocation row renderer for invoices
+                    renderEditableRow: function(allocation, cfg, onChange) {
+                        // Uses createInvoiceAllocationRow from existing code
+                        return createInvoiceAllocationRow(
+                            allocation ? allocation.allocation_pk : null,
+                            allocation ? allocation.item_pk : '',
+                            allocation ? allocation.amount : '',
+                            allocation ? allocation.gst_amount : '',
+                            allocation ? allocation.notes : ''
+                        );
+                    },
+                    onUpdate: function(sectionId, totals) {
+                        updateInvoiceStillToAllocate();
+                        validateInvoiceAllocation();
+                    }
+                },
+                api: {
+                    loadAllocations: '/core/get_unallocated_invoice_allocations/{pk}/'
+                }
+            });
+            
+            window.invoicesManagerInitialized = true;
+            console.log('Invoices AllocationsManager initialized');
+        }
+        
         // Load construction Invoices section for CONSTRUCTION
         function loadConstructionInvoicesSection(subsection = 'unallocated') {
             console.log(`Loading invoices section: ${subsection}`);
+            
+            // Initialize AllocationsManager for invoices
+            initInvoicesAllocationsManager();
             
             // Determine which template to load based on subsection
             const templateUrl = subsection === 'allocated' 
@@ -1892,41 +1990,36 @@
         }
         
         // Helper function to select an invoice row
+        // Note: Invoices have editable rows so we keep custom logic, but use AllocationsManager for visual selection
         function selectInvoiceRow(row) {
-            // Skip if already selected (don't refresh PDF or allocations)
+            // Skip if already selected
             if (row.hasClass('selected-row')) {
                 return;
             }
             
-            console.log('selectInvoiceRow called, pdf_url:', row.attr('data-pdf-url'));
             const tbody = $('#unallocatedInvoicesTableBody');
-            
-            // Remove selection from other rows
             tbody.find('tr').removeClass('selected-row');
             row.addClass('selected-row');
-            
-            // Add has-selection class to tbody for dimming effect
             tbody.addClass('has-selection');
             
-            // Store current selected invoice data
+            // Store current selected invoice data (invoice-specific)
+            const invoicePk = row.attr('data-invoice-pk') || row.attr('data-pk');
             window.currentSelectedInvoice = {
-                invoice_pk: row.attr('data-invoice-pk'),
+                invoice_pk: invoicePk,
                 total_net: parseFloat(row.find('.net-input').val()) || 0,
                 total_gst: parseFloat(row.find('.gst-input').val()) || 0
             };
             
-            // Clear allocations section and load existing allocations
+            // Load allocations
             $('#invoiceAllocationsTableBody').empty();
-            loadInvoiceAllocations(window.currentSelectedInvoice.invoice_pk);
+            loadInvoiceAllocations(invoicePk);
             
             // Load PDF in viewer
             const pdfUrl = row.attr('data-pdf-url');
-            console.log('Loading PDF URL:', pdfUrl);
             if (pdfUrl && pdfUrl !== 'null' && pdfUrl !== '') {
                 $('#invoicePdfViewer').attr('src', pdfUrl).show();
                 $('#invoiceViewerPlaceholder').hide();
             } else {
-                console.log('No PDF URL available for this invoice');
                 $('#invoicePdfViewer').hide();
                 $('#invoiceViewerPlaceholder').html(`
                     <i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px; color: #ccc;"></i>
@@ -3053,11 +3146,16 @@
                 var file = event.target.files[0];
                 if (file) {
                     console.log('Quote PDF selected:', file.name);
+                    console.log('contentAreaId:', contentAreaId);
+                    console.log('projectObj:', projectObj);
+                    console.log('contactsVarName:', contactsVarName, 'value:', window[contactsVarName]);
                     
                     var pdfBlobUrl = URL.createObjectURL(file);
                     var reader = new FileReader();
                     reader.onload = function(e) {
                         var pdfData = e.target.result;
+                        console.log('FileReader onload fired, pdfData length:', pdfData ? pdfData.length : 0);
+                        console.log('QuotesEntry available:', typeof QuotesEntry);
                         
                         // Display quote entry form using QuotesEntry module
                         QuotesEntry.init({
@@ -3826,18 +3924,60 @@
             }
         });
         
-        // Tender Quote Functions - Uses shared functions (defined above)
+        // Tender Quote Functions - Uses same template as Construction
         
-        // Load the quotes section view for TENDER
+        // Load the quotes section view for TENDER (same format as Construction)
         function loadQuotesSection() {
-            window.loadSharedQuotesSection({
-                projectObj: window.currentTenderProject,
-                contentAreaId: 'tenderContentArea',
-                tableId: 'tenderCommittedQuotesTable',
-                pdfViewerId: 'tenderQuotePdfViewer',
-                newQuoteBtnId: 'newQuoteBtn',
-                pdfInputId: 'tenderQuotePdfInput',
-                contactsVarName: 'projectContacts'
+            console.log('Loading quotes section for Tender with reusable template');
+            
+            // Initialize AllocationsManager for quotes (shared with Construction)
+            initQuotesAllocationsManager();
+            
+            // Show New Quote button
+            $('#newQuoteBtn').show();
+            
+            // Set shared project reference for quotes (used by loadQuotesData and enterNewQuoteMode)
+            window.currentQuotesProject = {
+                pk: window.currentTenderProject.pk,
+                project_type: window.currentTenderProject.project_type,
+                contacts: window.projectContacts || []
+            };
+            
+            // Load contacts for the project if not already loaded
+            if (!window.projectContacts || window.projectContacts.length === 0) {
+                const projectPk = window.currentTenderProject.pk;
+                $.ajax({
+                    url: '{% url "core:get_project_contacts" 0 %}'.replace('0', projectPk),
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.projectContacts = response.contacts;
+                            window.currentQuotesProject.contacts = response.contacts;
+                            console.log('Loaded', response.contacts.length, 'contacts for Tender quotes');
+                        }
+                    }
+                });
+            }
+            
+            // Load the same quotes template used by Construction
+            $.ajax({
+                url: '{% url "core:quotes" %}',
+                type: 'GET',
+                success: function(response) {
+                    $('#tenderContentArea').html(response);
+                    // Now fetch and populate the quotes
+                    loadQuotesData();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load quotes section:', error);
+                    $('#tenderContentArea').html(`
+                        <div style="text-align: center; padding: 40px; color: #dc3545;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                            <h4>Error Loading Quotes</h4>
+                            <p>${error}</p>
+                        </div>
+                    `);
+                }
             });
         }
         

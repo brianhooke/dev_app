@@ -212,6 +212,29 @@
 
 <script>
     $(document).ready(function() {
+        // ==========================================
+        // BILLS SECTION - Initialize AllocationsManager
+        // ==========================================
+        // Note: Bills uses custom layout (50/50, Inbox/Direct modes)
+        // AllocationsManager is initialized for future use and consistency
+        if (typeof AllocationsManager !== 'undefined') {
+            AllocationsManager.init({
+                sectionId: 'bill',
+                mainTable: {
+                    emptyMessage: 'No bills to display.',
+                    showFooter: false
+                },
+                allocations: {
+                    emptyMessage: 'No allocations for this bill',
+                    editable: true
+                },
+                api: {
+                    // Bills allocations are managed differently (Xero accounts)
+                }
+            });
+            console.log('Bills AllocationsManager initialized');
+        }
+        
         // Load Bills - Inbox function (called when navbar link is clicked)
         function loadBillsInbox() {
             $.ajax({
@@ -341,7 +364,7 @@
                         var selectedXeroInstanceId = null;
                         if (bill.project_pk) {
                             // Find the project's xero_instance_id
-                            var project = response.projects.find(p => p.projects_pk === bill.project_pk);
+                            var project = billsData.projects.find(p => p.projects_pk === bill.project_pk);
                             if (project) {
                                 selectedXeroInstanceId = project.xero_instance_id;
                             }
