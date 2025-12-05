@@ -1072,10 +1072,14 @@
             // Check if we have allocations
             const allocations = getNewQuoteAllocations();
             const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+            const stillToAllocate = net - totalAllocated;
             
-            // Validation: supplier required, quote number required, allocations should match total
-            const isValid = supplier && quoteNumber && allocations.length > 0 && 
-                           allocations.some(a => a.item_pk && parseFloat(a.amount) > 0);
+            // Validation: supplier, quote #, net > 0, at least one allocation, fully allocated
+            const hasValidAllocations = allocations.length > 0 && 
+                                        allocations.some(a => a.item_pk && parseFloat(a.amount) > 0);
+            const isFullyAllocated = Math.abs(stillToAllocate) < 0.01; // Within 1 cent
+            
+            const isValid = supplier && quoteNumber && net > 0 && hasValidAllocations && isFullyAllocated;
             
             // Update save button
             const saveBtn = row.find('.new-quote-save-btn');
