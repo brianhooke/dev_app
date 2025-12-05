@@ -1111,10 +1111,10 @@
             const totalAllocated = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
             const stillToAllocate = totalNet - totalAllocated;
             
-            // Update the still to allocate display
-            const stillToAllocateEl = $('#quoteStillToAllocateNet');
+            // Update the still to allocate display (ID is quoteRemainingNet per quotes.html config)
+            const stillToAllocateEl = $('#quoteRemainingNet');
             if (stillToAllocateEl.length) {
-                stillToAllocateEl.text('$' + stillToAllocate.toFixed(2));
+                stillToAllocateEl.text('$' + stillToAllocate.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                 // Color coding
                 if (Math.abs(stillToAllocate) < 0.01) {
                     stillToAllocateEl.css('color', '#90EE90'); // Light green
