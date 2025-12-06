@@ -63,13 +63,12 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 # Use S3 if bucket name AND credentials are set (indicates AWS deployment)
 USE_S3_STORAGE = bool(AWS_STORAGE_BUCKET_NAME and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
 
-import logging
-logger = logging.getLogger(__name__)
-logger.info(f"S3 Storage Check: bucket={AWS_STORAGE_BUCKET_NAME}, key_set={bool(AWS_ACCESS_KEY_ID)}, secret_set={bool(AWS_SECRET_ACCESS_KEY)}, USE_S3={USE_S3_STORAGE}")
+# Print to stdout for visibility in container logs (logging may not be configured yet)
+print(f"[SETTINGS] S3 Storage Check: bucket={AWS_STORAGE_BUCKET_NAME}, key_set={bool(AWS_ACCESS_KEY_ID)}, secret_set={bool(AWS_SECRET_ACCESS_KEY)}, USE_S3={USE_S3_STORAGE}")
 
 if USE_S3_STORAGE:
     # Running on AWS - use S3 for media files
-    logger.info("Configuring S3 storage for media files")
+    print("[SETTINGS] Configuring S3 storage for media files")
     AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_DEFAULT_ACL = None
@@ -94,15 +93,16 @@ if USE_S3_STORAGE:
     PROJECT_NAME = os.environ.get('PROJECT_NAME', '123 Fake Street')
     LETTERHEAD_PATH = os.environ.get('LETTERHEAD_PATH', '')
     BACKGROUND_IMAGE_PATH = os.environ.get('BACKGROUND_IMAGE_PATH', '')
-    logger.info(f"S3 configured: MEDIA_URL={MEDIA_URL}, DEFAULT_FILE_STORAGE={DEFAULT_FILE_STORAGE}")
+    print(f"[SETTINGS] S3 configured: MEDIA_URL={MEDIA_URL}, DEFAULT_FILE_STORAGE={DEFAULT_FILE_STORAGE}")
 else:
     # Local development - use local filesystem
-    logger.info("Configuring local filesystem for media files")
+    print("[SETTINGS] Configuring local filesystem for media files")
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
     MEDIA_URL = '/media/'
     PROJECT_NAME = '123 Fake Street'
     LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
     BACKGROUND_IMAGE_PATH = os.path.join(MEDIA_ROOT, 'backgrounds', 'my_bg.jpg')
+    print(f"[SETTINGS] Local filesystem: MEDIA_URL={MEDIA_URL}, MEDIA_ROOT={MEDIA_ROOT}")
 
 LOGGING = {
     'version': 1,
