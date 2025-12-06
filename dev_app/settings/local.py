@@ -57,12 +57,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Media files - use S3 in Docker/AWS, local filesystem otherwise
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 
-if AWS_STORAGE_BUCKET_NAME and os.path.exists('/app'):
-    # Running in Docker on AWS - use S3 for media files
+# Use S3 if bucket name AND credentials are set (indicates AWS deployment)
+USE_S3_STORAGE = bool(AWS_STORAGE_BUCKET_NAME and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"S3 Storage Check: bucket={AWS_STORAGE_BUCKET_NAME}, key_set={bool(AWS_ACCESS_KEY_ID)}, secret_set={bool(AWS_SECRET_ACCESS_KEY)}, USE_S3={USE_S3_STORAGE}")
+
+if USE_S3_STORAGE:
+    # Running on AWS - use S3 for media files
+    logger.info("Configuring S3 storage for media files")
     AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
-    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_DEFAULT_ACL = None
     AWS_S3_OBJECT_PARAMETERS = {
@@ -73,13 +81,23 @@ if AWS_STORAGE_BUCKET_NAME and os.path.exists('/app'):
     AWS_MEDIA_LOCATION = 'media'
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_MEDIA_LOCATION}/'
     DEFAULT_FILE_STORAGE = 'dev_app.storagebackends.MyS3Boto3Storage'
+    STORAGES = {
+        "default": {
+            "BACKEND": "dev_app.storagebackends.MyS3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
     MEDIA_ROOT = ''  # Not used with S3
     
     PROJECT_NAME = os.environ.get('PROJECT_NAME', '123 Fake Street')
     LETTERHEAD_PATH = os.environ.get('LETTERHEAD_PATH', '')
     BACKGROUND_IMAGE_PATH = os.environ.get('BACKGROUND_IMAGE_PATH', '')
+    logger.info(f"S3 configured: MEDIA_URL={MEDIA_URL}, DEFAULT_FILE_STORAGE={DEFAULT_FILE_STORAGE}")
 else:
     # Local development - use local filesystem
+    logger.info("Configuring local filesystem for media files")
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
     MEDIA_URL = '/media/'
     PROJECT_NAME = '123 Fake Street'
