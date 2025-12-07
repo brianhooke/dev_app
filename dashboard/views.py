@@ -40,9 +40,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db import models
 from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, Invoice_allocations, Categories, Costing, Quotes, Quote_allocations, Po_orders, Po_order_detail, Units
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timedelta
+from django.utils import timezone
 from io import StringIO, TextIOWrapper, BytesIO
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, EmailMultiAlternatives
@@ -2652,4 +2654,252 @@ def delete_unit(request):
         return JsonResponse({
             'status': 'error',
             'message': f'Error deleting unit: {str(e)}'
+        }, status=500)
+
+
+def get_recent_activities(request):
+    """
+    Get recent activities for the dashboard.
+    'Recent' = within 24 workday hours (last 24 hours for now).
+    
+    Activities tracked:
+    1. Invoices moved from Inbox (email invoices that were processed - have email_attachment and status > -2)
+    2. New projects created
+    3. Invoices allocated (status changed to 1)
+    """
+    try:
+        # Calculate 24 hours ago
+        now = timezone.now()
+        cutoff = now - timedelta(hours=24)
+        
+        activities = []
+        
+        # 1. Invoices moved from Inbox
+        # These are invoices that came from email (have email_attachment or received_email)
+        # and have been moved out of inbox (status > -2, meaning they were processed)
+        # We look at updated_at to see when they were moved
+        inbox_moved = Invoices.objects.filter(
+            updated_at__gte=cutoff,
+            invoice_status__gt=-2,  # Not in unprocessed state
+        ).filter(
+            # Has email origin (came from inbox)
+            models.Q(email_attachment__isnull=False) | models.Q(received_email__isnull=False)
+        ).exclude(
+            # Exclude if created_at == updated_at (meaning just created, not moved)
+            created_at=models.F('updated_at')
+        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        
+        for invoice in inbox_moved:
+            supplier_name = invoice.contact_pk.name if invoice.contact_pk else 'Unknown'
+            project_name = invoice.project.project if invoice.project else 'Unassigned'
+            activities.append({
+                'type': 'inbox_moved',
+                'icon': 'fas fa-inbox',
+                'color': '#17a2b8',  # info blue
+                'message': f'Invoice from {supplier_name} moved from Inbox',
+                'detail': f'Project: {project_name}',
+                'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
+                'link': f'/project/{invoice.project.projects_pk}/' if invoice.project else None,
+            })
+        
+        # 2. New projects created
+        new_projects = Projects.objects.filter(
+            created_at__gte=cutoff
+        ).order_by('-created_at')[:10]
+        
+        for project in new_projects:
+            activities.append({
+                'type': 'project_created',
+                'icon': 'fas fa-folder-plus',
+                'color': '#28a745',  # success green
+                'message': f'New project created: {project.project}',
+                'detail': f'Type: {project.project_type or "Not set"}',
+                'timestamp': project.created_at.isoformat() if project.created_at else None,
+                'link': f'/project/{project.projects_pk}/',
+            })
+        
+        # 3. Invoices allocated (status = 1, recently updated)
+        # These are invoices that were allocated to a project
+        allocated_invoices = Invoices.objects.filter(
+            updated_at__gte=cutoff,
+            invoice_status=1,  # Allocated status
+        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        
+        for invoice in allocated_invoices:
+            supplier_name = invoice.contact_pk.name if invoice.contact_pk else 'Unknown'
+            project_name = invoice.project.project if invoice.project else 'Unassigned'
+            activities.append({
+                'type': 'invoice_allocated',
+                'icon': 'fas fa-check-circle',
+                'color': '#6f42c1',  # purple
+                'message': f'Invoice allocated: {supplier_name}',
+                'detail': f'Project: {project_name}',
+                'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
+                'link': f'/project/{invoice.project.projects_pk}/' if invoice.project else None,
+            })
+        
+        # Sort all activities by timestamp (most recent first)
+        activities.sort(key=lambda x: x['timestamp'] or '', reverse=True)
+        
+        # Limit to 50 most recent
+        activities = activities[:50]
+        
+        return JsonResponse({
+            'status': 'success',
+            'activities': activities,
+            'count': len(activities)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting recent activities: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+def get_action_items(request):
+    """
+    Get action items for the dashboard.
+    
+    Action items:
+    1. Bills in Inbox (invoice_status = -2)
+    2. Bills to be Allocated in {project} (invoice_status = 0, grouped by project)
+    3. Bills to be Approved in {project} (invoice_status = 1 or 102, grouped by project)
+    4. Approved Bills ready to send to Xero (invoice_status = 2 or 103)
+    5. Supplier Progress Claims awaiting Approval (invoice_status = 100)
+    """
+    try:
+        action_items = []
+        
+        # 1. Bills in Inbox (status -2)
+        inbox_count = Invoices.objects.filter(invoice_status=-2).count()
+        if inbox_count > 0:
+            action_items.append({
+                'type': 'inbox',
+                'icon': 'fas fa-inbox',
+                'color': '#dc3545',  # red - urgent
+                'priority': 1,
+                'title': 'Bills in Inbox',
+                'count': inbox_count,
+                'message': f'{inbox_count} bill{"s" if inbox_count > 1 else ""} waiting to be processed',
+                'action': 'Go to Inbox',
+                'action_type': 'bills_inbox',
+            })
+        
+        # 2. Bills to be Allocated (status 0, grouped by project)
+        unallocated = Invoices.objects.filter(invoice_status=0).select_related('project')
+        unallocated_by_project = {}
+        for inv in unallocated:
+            project_name = inv.project.project if inv.project else 'Unassigned'
+            project_pk = inv.project.projects_pk if inv.project else None
+            key = (project_pk, project_name)
+            if key not in unallocated_by_project:
+                unallocated_by_project[key] = 0
+            unallocated_by_project[key] += 1
+        
+        for (project_pk, project_name), count in unallocated_by_project.items():
+            action_items.append({
+                'type': 'allocate',
+                'icon': 'fas fa-file-invoice-dollar',
+                'color': '#fd7e14',  # orange
+                'priority': 2,
+                'title': f'Bills to be Allocated',
+                'subtitle': project_name,
+                'count': count,
+                'message': f'{count} bill{"s" if count > 1 else ""} need allocation',
+                'action': 'Allocate',
+                'action_type': 'project_invoices',
+                'project_pk': project_pk,
+            })
+        
+        # 3. Bills to be Approved (status 1 or 102, grouped by project)
+        to_approve = Invoices.objects.filter(invoice_status__in=[1, 102]).select_related('project')
+        approve_by_project = {}
+        for inv in to_approve:
+            project_name = inv.project.project if inv.project else 'Unassigned'
+            project_pk = inv.project.projects_pk if inv.project else None
+            key = (project_pk, project_name)
+            if key not in approve_by_project:
+                approve_by_project[key] = 0
+            approve_by_project[key] += 1
+        
+        for (project_pk, project_name), count in approve_by_project.items():
+            action_items.append({
+                'type': 'approve',
+                'icon': 'fas fa-check-circle',
+                'color': '#ffc107',  # yellow
+                'priority': 3,
+                'title': f'Bills to be Approved',
+                'subtitle': project_name,
+                'count': count,
+                'message': f'{count} bill{"s" if count > 1 else ""} awaiting approval',
+                'action': 'Review',
+                'action_type': 'project_allocated',
+                'project_pk': project_pk,
+            })
+        
+        # 4. Approved Bills ready to send to Xero (status 2 or 103)
+        ready_for_xero = Invoices.objects.filter(invoice_status__in=[2, 103]).count()
+        if ready_for_xero > 0:
+            action_items.append({
+                'type': 'xero',
+                'icon': 'fas fa-paper-plane',
+                'color': '#28a745',  # green
+                'priority': 4,
+                'title': 'Approved Bills ready to send to Xero',
+                'count': ready_for_xero,
+                'message': f'{ready_for_xero} bill{"s" if ready_for_xero > 1 else ""} ready to send',
+                'action': 'Send to Xero',
+                'action_type': 'bills_approvals',
+            })
+        
+        # 5. Supplier Progress Claims awaiting Approval (status 100)
+        pending_claims = Invoices.objects.filter(invoice_status=100).select_related('project', 'contact_pk')
+        claims_by_supplier = {}
+        for inv in pending_claims:
+            supplier_name = inv.contact_pk.name if inv.contact_pk else 'Unknown Supplier'
+            project_name = inv.project.project if inv.project else 'Unknown Project'
+            project_pk = inv.project.projects_pk if inv.project else None
+            key = (supplier_name, project_pk, project_name)
+            if key not in claims_by_supplier:
+                claims_by_supplier[key] = 0
+            claims_by_supplier[key] += 1
+        
+        for (supplier_name, project_pk, project_name), count in claims_by_supplier.items():
+            action_items.append({
+                'type': 'progress_claim',
+                'icon': 'fas fa-file-contract',
+                'color': '#6f42c1',  # purple
+                'priority': 2,  # High priority - supplier waiting
+                'title': 'Supplier Progress Claim awaiting Approval',
+                'subtitle': f'{supplier_name} - {project_name}',
+                'count': count,
+                'message': f'{count} claim{"s" if count > 1 else ""} pending approval',
+                'action': 'Review',
+                'action_type': 'po_claims',
+                'project_pk': project_pk,
+            })
+        
+        # Sort by priority
+        action_items.sort(key=lambda x: x['priority'])
+        
+        # Calculate summary counts
+        total_count = len(action_items)
+        pending_count = sum(1 for item in action_items if item['type'] in ['inbox', 'allocate', 'approve', 'progress_claim'])
+        
+        return JsonResponse({
+            'status': 'success',
+            'action_items': action_items,
+            'summary': {
+                'total': total_count,
+                'pending': pending_count,
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting action items: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
         }, status=500)

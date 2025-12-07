@@ -19,6 +19,57 @@
 </div>
 
 <style>
+    /* Global: Ensure all tables have white backgrounds (prevents background image bleed-through) */
+    .table,
+    table {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody,
+    table tbody {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody tr,
+    table tbody tr {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody tr td,
+    table tbody tr td {
+        background-color: #ffffff !important;
+    }
+    
+    /* Override for special rows that need different backgrounds */
+    .table tbody tr.selected-row,
+    .table tbody tr.selected-row td,
+    table tbody tr.selected-row,
+    table tbody tr.selected-row td {
+        background-color: #e3f2fd !important;
+    }
+    
+    .table tbody tr.category-row,
+    .table tbody tr.category-row td,
+    table tbody tr.category-row,
+    table tbody tr.category-row td {
+        background-color: #f9f9f9 !important;
+    }
+    
+    .table tbody tr:hover,
+    .table tbody tr:hover td,
+    table tbody tr:hover,
+    table tbody tr:hover td {
+        background-color: #f5f5f5 !important;
+    }
+    
+    /* Reusable table white backgrounds */
+    .reusable-table,
+    .reusable-table tbody,
+    .reusable-table tbody tr,
+    .reusable-table tbody tr td {
+        background-color: #ffffff !important;
+    }
+    
     /* Compact Projects Table Styling */
     #projectsTable .form-control-sm {
         font-size: 11px !important;
@@ -98,6 +149,7 @@
     .pos-table tbody tr {
         transition: opacity 0.3s ease, box-shadow 0.3s ease;
         cursor: pointer;
+        background-color: #ffffff;
     }
     
     /* When there's a selected row, dim all non-selected rows */
@@ -1360,15 +1412,14 @@
                 $('#dynamicContentArea').css({
                     'background-image': `url(${backgroundUrl})`,
                     'background-size': 'cover',
-                    'background-position': 'center',
+                    'background-position': 'center center',
                     'background-repeat': 'no-repeat',
-                    'background-attachment': 'fixed',
                     'position': 'relative'
                 });
                 
                 // Add overlay to darken/fade the background
                 if ($('#dynamicContentArea').find('.workspace-background-overlay').length === 0) {
-                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.95); pointer-events: none; z-index: 0;"></div>');
+                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.85); pointer-events: none; z-index: 0;"></div>');
                 }
             }
             
@@ -3071,10 +3122,15 @@
                 error: function(xhr, status, error) {
                     console.error('Failed to load allocated invoices:', error);
                     $('#allocatedInvoicesTableBody').html(`
-                        <tr><td colspan="6" style="text-align: center; color: #dc3545;">Failed to load invoices</td></tr>
+                        <tr><td colspan="7" style="text-align: center; color: #dc3545;">Failed to load invoices</td></tr>
                     `);
                 }
             });
+        }
+        
+        // Helper function to format money with thousand separators
+        function formatAllocatedMoney(num) {
+            return parseFloat(num || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         
         // Populate allocated invoices table
@@ -3085,7 +3141,7 @@
             
             if (invoices.length === 0) {
                 tbody.html(`
-                    <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                    <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">
                         No allocated invoices found for this project.
                     </td></tr>
                 `);
@@ -3094,48 +3150,179 @@
             
             invoices.forEach(function(invoice) {
                 const pdfUrl = invoice.pdf_url || invoice.attachment_url || '';
-                const row = $('<tr>').attr('data-invoice-pk', invoice.invoice_pk).attr('data-pdf-url', pdfUrl);
+                const isPOClaim = invoice.invoice_status === 102;
+                const row = $('<tr>').attr('data-invoice-pk', invoice.invoice_pk).attr('data-pdf-url', pdfUrl).attr('data-invoice-status', invoice.invoice_status);
                 
                 // 1. Supplier (read-only)
                 const supplierName = invoice.supplier_name || 'Unknown';
                 row.append($('<td>').text(supplierName));
                 
-                // 2. Invoice # (read-only)
-                row.append($('<td>').text(invoice.invoice_number || '-'));
+                // 2. Invoice # 
+                const invoiceNumCell = $('<td>');
+                if (isPOClaim) {
+                    const hasInvoiceNumber = invoice.invoice_number && invoice.invoice_number.trim() !== '';
+                    if (hasInvoiceNumber) {
+                        // Has invoice number - show as text (can be made editable via Edit button)
+                        invoiceNumCell.addClass('allocated-invoice-number-cell')
+                            .text(invoice.invoice_number)
+                            .attr('data-value', invoice.invoice_number);
+                    } else {
+                        // No invoice number - show editable input
+                        const invoiceNumInput = $('<input>')
+                            .attr('type', 'text')
+                            .addClass('form-control form-control-sm allocated-invoice-number-input')
+                            .val('')
+                            .attr('data-original-value', '')
+                            .on('input', function(e) {
+                                e.stopPropagation();
+                                updateAllocatedSaveButtonState(row);
+                            })
+                            .on('click', function(e) { e.stopPropagation(); });
+                        invoiceNumCell.append(invoiceNumInput);
+                    }
+                } else {
+                    invoiceNumCell.text(invoice.invoice_number || '-');
+                }
+                row.append(invoiceNumCell);
                 
                 // 3. $ Net (read-only)
-                const netAmount = invoice.total_net ? parseFloat(invoice.total_net).toFixed(2) : '0.00';
-                row.append($('<td>').text('$' + netAmount));
+                row.append($('<td>').text('$' + formatAllocatedMoney(invoice.total_net)));
                 
-                // 4. $ GST (read-only)
-                const gstAmount = invoice.total_gst ? parseFloat(invoice.total_gst).toFixed(2) : '0.00';
-                row.append($('<td>').text('$' + gstAmount));
+                // 4. $ GST
+                const gstCell = $('<td>');
+                if (isPOClaim) {
+                    const hasInvoiceNumber = invoice.invoice_number && invoice.invoice_number.trim() !== '';
+                    const gstRawValue = invoice.total_gst ? parseFloat(invoice.total_gst).toFixed(2) : '0.00';
+                    if (hasInvoiceNumber) {
+                        // Has invoice number - show as text (can be made editable via Edit button)
+                        gstCell.addClass('allocated-gst-cell')
+                            .text('$' + formatAllocatedMoney(invoice.total_gst))
+                            .attr('data-value', gstRawValue);
+                    } else {
+                        // No invoice number - show editable input
+                        const gstInput = $('<input>')
+                            .attr('type', 'number')
+                            .attr('step', '0.01')
+                            .attr('min', '0')
+                            .addClass('form-control form-control-sm allocated-gst-input')
+                            .css({'width': '70px'})
+                            .val(gstRawValue)
+                            .attr('data-original-value', gstRawValue)
+                            .on('click', function(e) { e.stopPropagation(); });
+                        gstCell.append(gstInput);
+                    }
+                } else {
+                    gstCell.text('$' + formatAllocatedMoney(invoice.total_gst));
+                }
+                row.append(gstCell);
                 
-                // 5. Unallocate button
+                // 5. Progress Claim column - show green tick + "view" link for PO claim invoices (status=102)
+                const poCell = $('<td>').css('text-align', 'center');
+                if (isPOClaim) {
+                    // Green tick icon
+                    const tickIcon = $('<i>')
+                        .addClass('fas fa-check')
+                        .css({'color': '#28a745', 'margin-right': '4px'});
+                    poCell.append(tickIcon);
+                    
+                    // View link
+                    const viewLink = $('<a>')
+                        .attr('href', '#')
+                        .addClass('po-view-link')
+                        .css({'color': '#007bff', 'cursor': 'pointer', 'text-decoration': 'underline'})
+                        .text('view')
+                        .attr('data-invoice-pk', invoice.invoice_pk)
+                        .on('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            showPOTableForInvoice(invoice.invoice_pk, invoice.invoice_pk);
+                        });
+                    poCell.append(viewLink);
+                }
+                // Non-PO claims: leave cell empty
+                row.append(poCell);
+                
+                // 6. Unallocate button - disabled for PO claim invoices
                 const unallocateBtn = $('<button>')
-                    .addClass('btn btn-sm btn-warning allocated-action-btn')
+                    .addClass('btn btn-sm allocated-action-btn')
                     .text('Unallocate')
-                    .attr('data-invoice-pk', invoice.invoice_pk)
-                    .on('click', function(e) {
+                    .attr('data-invoice-pk', invoice.invoice_pk);
+                
+                if (isPOClaim) {
+                    unallocateBtn.addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
+                } else {
+                    unallocateBtn.addClass('btn-warning').on('click', function(e) {
                         e.stopPropagation();
                         unallocateInvoice($(this));
                     });
+                }
                 row.append($('<td>').css('text-align', 'center').append(unallocateBtn));
                 
-                // 6. Approve button
+                // 7. Approve button
                 const approveBtn = $('<button>')
-                    .addClass('btn btn-sm btn-success allocated-action-btn')
+                    .addClass('btn btn-sm allocated-action-btn allocated-approve-btn')
                     .text('Approve')
                     .attr('data-invoice-pk', invoice.invoice_pk)
                     .on('click', function(e) {
                         e.stopPropagation();
-                        approveInvoice($(this));
+                        if (!$(this).prop('disabled')) {
+                            approveInvoice($(this));
+                        }
                     });
+                
+                // Set approve button state based on PO claim and invoice number
+                if (isPOClaim) {
+                    const hasInvoiceNumber = invoice.invoice_number && invoice.invoice_number.trim() !== '';
+                    if (hasInvoiceNumber) {
+                        // Has invoice number - approve is enabled
+                        approveBtn.addClass('btn-success').prop('disabled', false);
+                    } else {
+                        // No invoice number - approve is disabled
+                        approveBtn.addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
+                    }
+                } else {
+                    approveBtn.addClass('btn-success').prop('disabled', false);
+                }
                 row.append($('<td>').css('text-align', 'center').append(approveBtn));
+                
+                // 8. Save/Edit button - only for PO claims
+                if (isPOClaim) {
+                    const hasInvoiceNumber = invoice.invoice_number && invoice.invoice_number.trim() !== '';
+                    const saveEditBtn = $('<button>')
+                        .addClass('btn btn-sm allocated-action-btn allocated-save-btn')
+                        .attr('data-invoice-pk', invoice.invoice_pk)
+                        .attr('data-mode', hasInvoiceNumber ? 'edit' : 'save');
+                    
+                    if (hasInvoiceNumber) {
+                        // Has invoice number - show Edit button (green, enabled)
+                        saveEditBtn.addClass('btn-info').text('Edit').prop('disabled', false)
+                            .on('click', function(e) {
+                                e.stopPropagation();
+                                enableEditMode(row);
+                            });
+                    } else {
+                        // No invoice number - show Save button (grey, disabled until validation)
+                        saveEditBtn.addClass('btn-secondary').text('Save').prop('disabled', true)
+                            .on('click', function(e) {
+                                e.stopPropagation();
+                                saveAllocatedInvoice($(this));
+                            });
+                    }
+                    row.append($('<td>').css('text-align', 'center').append(saveEditBtn));
+                    
+                    // Initialize save button state if in save mode
+                    if (!hasInvoiceNumber) {
+                        updateAllocatedSaveButtonState(row);
+                    }
+                } else {
+                    row.append($('<td>').css('text-align', 'center').text('-'));
+                }
                 
                 // Row click handler for selection and PDF viewing
                 row.on('click', function(e) {
                     if ($(e.target).closest('.allocated-action-btn').length) return;
+                    if ($(e.target).closest('.po-view-link').length) return;
+                    if ($(e.target).closest('input').length) return;
                     selectAllocatedInvoiceRow($(this));
                 });
                 
@@ -3149,8 +3336,8 @@
                 totalNet += invoice.total_net || 0;
                 totalGst += invoice.total_gst || 0;
             });
-            $('#allocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
-            $('#allocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
+            $('#allocatedInvoicesNetTotal').text('$' + formatAllocatedMoney(totalNet));
+            $('#allocatedInvoicesGstTotal').text('$' + formatAllocatedMoney(totalGst));
             $('#allocatedInvoicesTableFooter').show();
             
             // Auto-select the first row
@@ -3160,6 +3347,357 @@
                     selectAllocatedInvoiceRow(firstRow);
                 }
             }, 100);
+        }
+        
+        // Update Save button state based on Invoice # field having a value
+        function updateAllocatedSaveButtonState(row) {
+            const invoiceNumInput = row.find('.allocated-invoice-number-input');
+            const saveBtn = row.find('.allocated-save-btn');
+            const hasInvoiceNumber = invoiceNumInput.length && invoiceNumInput.val().trim() !== '';
+            
+            if (hasInvoiceNumber) {
+                saveBtn.removeClass('btn-secondary btn-info').addClass('btn-success').prop('disabled', false);
+            } else {
+                saveBtn.removeClass('btn-success btn-info').addClass('btn-secondary').prop('disabled', true);
+            }
+        }
+        
+        // Enable edit mode for a PO claim row
+        function enableEditMode(row) {
+            const invoiceNumCell = row.find('.allocated-invoice-number-cell');
+            const gstCell = row.find('.allocated-gst-cell');
+            const saveBtn = row.find('.allocated-save-btn');
+            const approveBtn = row.find('.allocated-approve-btn');
+            
+            // Get current values
+            const currentInvoiceNum = invoiceNumCell.attr('data-value') || '';
+            const currentGst = gstCell.attr('data-value') || '0.00';
+            
+            // Replace invoice number cell with input
+            const invoiceNumInput = $('<input>')
+                .attr('type', 'text')
+                .addClass('form-control form-control-sm allocated-invoice-number-input')
+                .val(currentInvoiceNum)
+                .attr('data-original-value', currentInvoiceNum)
+                .on('input', function(e) {
+                    e.stopPropagation();
+                    updateAllocatedSaveButtonState(row);
+                })
+                .on('click', function(e) { e.stopPropagation(); });
+            invoiceNumCell.removeClass('allocated-invoice-number-cell').empty().append(invoiceNumInput);
+            
+            // Replace GST cell with input
+            const gstInput = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .attr('min', '0')
+                .addClass('form-control form-control-sm allocated-gst-input')
+                .css({'width': '70px'})
+                .val(currentGst)
+                .attr('data-original-value', currentGst)
+                .on('click', function(e) { e.stopPropagation(); });
+            gstCell.removeClass('allocated-gst-cell').empty().append(gstInput);
+            
+            // Change Edit button to Save button
+            saveBtn.attr('data-mode', 'save')
+                .text('Save')
+                .removeClass('btn-info btn-success')
+                .addClass('btn-secondary')
+                .prop('disabled', true)
+                .off('click')
+                .on('click', function(e) {
+                    e.stopPropagation();
+                    saveAllocatedInvoice($(this));
+                });
+            
+            // Disable Approve button while in edit mode
+            approveBtn.removeClass('btn-success').addClass('btn-secondary')
+                .prop('disabled', true).css('opacity', '0.5');
+            
+            // Update save button state
+            updateAllocatedSaveButtonState(row);
+        }
+        
+        // Save allocated invoice changes (Invoice # and GST)
+        function saveAllocatedInvoice(btn) {
+            const row = btn.closest('tr');
+            const invoicePk = row.attr('data-invoice-pk');
+            const invoiceNumber = row.find('.allocated-invoice-number-input').val().trim();
+            const totalGst = parseFloat(row.find('.allocated-gst-input').val()) || 0;
+            
+            // Confirm if GST is 0
+            if (totalGst === 0) {
+                if (!confirm('Are you sure GST is $0.00 for this Bill?')) {
+                    return; // User cancelled
+                }
+            }
+            
+            btn.prop('disabled', true).text('Saving...');
+            
+            $.ajax({
+                url: `/core/update_allocated_invoice/${invoicePk}/`,
+                type: 'POST',
+                data: JSON.stringify({
+                    invoice_number: invoiceNumber,
+                    total_gst: totalGst.toFixed(2)
+                }),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        btn.text('Saved!').addClass('btn-success');
+                        setTimeout(function() {
+                            // Transition to view mode - convert inputs back to text
+                            const invoiceNumCell = row.find('.allocated-invoice-number-input').parent();
+                            const gstCell = row.find('.allocated-gst-input').parent();
+                            
+                            // Replace input with text for invoice number
+                            invoiceNumCell.addClass('allocated-invoice-number-cell')
+                                .attr('data-value', invoiceNumber)
+                                .empty()
+                                .text(invoiceNumber);
+                            
+                            // Replace input with text for GST
+                            gstCell.addClass('allocated-gst-cell')
+                                .attr('data-value', totalGst.toFixed(2))
+                                .empty()
+                                .text('$' + formatAllocatedMoney(totalGst));
+                            
+                            // Change Save button back to Edit button
+                            btn.attr('data-mode', 'edit')
+                                .text('Edit')
+                                .removeClass('btn-success btn-secondary btn-danger')
+                                .addClass('btn-info')
+                                .prop('disabled', false)
+                                .off('click')
+                                .on('click', function(e) {
+                                    e.stopPropagation();
+                                    enableEditMode(row);
+                                });
+                            
+                            // Enable Approve button
+                            const approveBtn = row.find('.allocated-approve-btn');
+                            approveBtn.removeClass('btn-secondary').addClass('btn-success')
+                                .prop('disabled', false).css('opacity', '1');
+                        }, 1500);
+                    } else {
+                        btn.text('Error').removeClass('btn-success').addClass('btn-danger');
+                        setTimeout(function() {
+                            btn.text('Save').removeClass('btn-danger');
+                            updateAllocatedSaveButtonState(row);
+                        }, 2000);
+                    }
+                },
+                error: function() {
+                    btn.text('Error').removeClass('btn-success').addClass('btn-danger');
+                    setTimeout(function() {
+                        btn.text('Save').removeClass('btn-danger');
+                        updateAllocatedSaveButtonState(row);
+                    }, 2000);
+                }
+            });
+        }
+        
+        // Show PO table for invoice in the viewer area
+        function showPOTableForInvoice(invoicePk, currentInvoicePk) {
+            console.log('Loading PO table for invoice:', invoicePk);
+            
+            $.ajax({
+                url: `/core/get_po_table_data_for_invoice/${invoicePk}/`,
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        renderPOTableInViewer(response, currentInvoicePk);
+                    } else {
+                        console.error('Error loading PO data:', response.message);
+                        $('#allocatedInvoicePdfViewer').hide();
+                        $('#allocatedInvoiceViewerPlaceholder').html(`
+                            <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 10px; color: #dc3545;"></i>
+                            <p style="color: #dc3545;">${response.message || 'Error loading PO data'}</p>
+                        `).show();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load PO data:', error);
+                    $('#allocatedInvoicePdfViewer').hide();
+                    $('#allocatedInvoiceViewerPlaceholder').html(`
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 10px; color: #dc3545;"></i>
+                        <p style="color: #dc3545;">Failed to load PO data</p>
+                    `).show();
+                }
+            });
+        }
+        
+        // Render PO table in the viewer area
+        function renderPOTableInViewer(data, currentInvoicePk) {
+            const isConstruction = data.is_construction;
+            const items = data.items;
+            const claims = data.individual_claims || [];
+            
+            // Helper function to format numbers with thousand separators
+            function formatMoney(num) {
+                return num.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            function formatQty(num) {
+                return num.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            }
+            
+            // Find the claim number and allocations for the current invoice
+            let currentClaimNumber = null;
+            let currentClaimAllocations = {};
+            for (let i = 0; i < claims.length; i++) {
+                if (claims[i].invoice_pk === currentInvoicePk) {
+                    currentClaimNumber = claims[i].claim_number;
+                    currentClaimAllocations = claims[i].allocations || {};
+                    break;
+                }
+            }
+            
+            // Build table HTML
+            let tableHtml = `
+                <div style="padding: 6px; background: white; height: 100%; overflow-y: auto; overflow-x: auto;">
+                    <div style="margin-bottom: 6px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px;">
+                        <div style="font-size: 11px; font-weight: 600; color: #2c3e50; margin-bottom: 2px;">Payment Schedule</div>
+                        <div style="font-size: 9px; color: #6c757d;">
+                            <strong>${data.supplier_name}</strong> - ${data.project_name}
+                        </div>
+                        ${currentClaimNumber ? `<div style="font-size: 10px; font-weight: 700; color: #dc3545; margin-top: 3px;">Progress Claim ${currentClaimNumber}</div>` : ''}
+                    </div>
+                    
+                    <!-- This Claim Table -->
+                    <table class="table table-sm" style="font-size: 9px; margin-bottom: 0; table-layout: fixed; width: 100%;">
+                        <thead style="background: #34495e; color: white; font-size: 8px;">
+                            <tr>
+                                <th rowspan="2" style="padding: 3px 2px; width: ${isConstruction ? '20%' : '35%'}; vertical-align: middle;">Description</th>
+                                <th rowspan="2" style="padding: 3px 2px; text-align: right; width: ${isConstruction ? '14%' : '22%'}; vertical-align: middle;">Contract $</th>
+                                ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: center; width: 8%; vertical-align: middle;">Units</th>' : ''}
+                                ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 8%; vertical-align: middle;">Qty</th>' : ''}
+                                ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 12%; vertical-align: middle;">Rate</th>' : ''}
+                                <th colspan="2" style="padding: 3px 2px; text-align: center; width: ${isConstruction ? '26%' : '43%'}; background: #dc3545;">This Claim</th>
+                            </tr>
+                            <tr>
+                                <th style="padding: 3px 2px; text-align: right; background: #dc3545;">%</th>
+                                <th style="padding: 3px 2px; text-align: right; background: #dc3545;">$</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            let totalContractSum = 0;
+            let totalThisClaim = 0;
+            let totalAllClaims = 0;
+            let totalStillToClaim = 0;
+            
+            items.forEach(function(item) {
+                totalContractSum += item.contract_sum || 0;
+                totalAllClaims += item.previous_claims || 0;
+                totalStillToClaim += item.still_to_claim || 0;
+                
+                // Get this claim's amount for this item
+                const thisClaimAmount = currentClaimAllocations[item.description] || 0;
+                totalThisClaim += thisClaimAmount;
+                const thisClaimPercent = item.contract_sum > 0 ? (thisClaimAmount / item.contract_sum * 100) : 0;
+                
+                tableHtml += `
+                    <tr>
+                        <td style="padding: 3px 2px; word-break: break-word;">${item.description}</td>
+                        <td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$${formatMoney(item.contract_sum || 0)}</td>
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: center;">${item.unit || '-'}</td>` : ''}
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: right;">${formatQty(item.contract_qty || 0)}</td>` : ''}
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$${formatMoney(item.contract_rate || 0)}</td>` : ''}
+                        <td style="padding: 3px 2px; text-align: right; color: #dc3545;">${thisClaimPercent.toFixed(0)}%</td>
+                        <td style="padding: 3px 2px; text-align: right; font-weight: 600; color: #dc3545; white-space: nowrap;">$${formatMoney(thisClaimAmount)}</td>
+                    </tr>
+                `;
+            });
+            
+            // Total row for This Claim table
+            tableHtml += `
+                        <tr style="background: #f8f9fa; font-weight: 700; border-top: 1px solid #34495e;">
+                            <td style="padding: 4px 2px;"><strong>TOTAL</strong></td>
+                            <td style="padding: 4px 2px; text-align: right;">$${formatMoney(totalContractSum)}</td>
+                            ${isConstruction ? '<td></td><td></td><td></td>' : ''}
+                            <td style="padding: 4px 2px; text-align: right; color: #dc3545;">${totalContractSum > 0 ? ((totalThisClaim / totalContractSum) * 100).toFixed(0) : 0}%</td>
+                            <td style="padding: 4px 2px; text-align: right; color: #dc3545;">$${formatMoney(totalThisClaim)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Spacing rows -->
+                <div style="height: 36px;"></div>
+                
+                <!-- All Claims To Date Section -->
+                <div style="margin-bottom: 6px;">
+                    <div style="font-size: 10px; font-weight: 600; color: #2c3e50;">All Claims To Date</div>
+                </div>
+                <table class="table table-sm" style="font-size: 9px; margin-bottom: 0; table-layout: fixed; width: 100%;">
+                    <thead style="background: #34495e; color: white; font-size: 8px;">
+                        <tr>
+                            <th rowspan="2" style="padding: 3px 2px; width: ${isConstruction ? '16%' : '24%'}; vertical-align: middle;">Description</th>
+                            <th rowspan="2" style="padding: 3px 2px; text-align: right; width: ${isConstruction ? '12%' : '16%'}; vertical-align: middle;">Contract $</th>
+                            ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: center; width: 6%; vertical-align: middle;">Units</th>' : ''}
+                            ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 5%; vertical-align: middle;">Qty</th>' : ''}
+                            ${isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 9%; vertical-align: middle;">Rate</th>' : ''}
+                            <th colspan="2" style="padding: 3px 2px; text-align: center; width: ${isConstruction ? '20%' : '30%'};">All Claims</th>
+                            <th colspan="2" style="padding: 3px 2px; text-align: center; width: ${isConstruction ? '20%' : '30%'};">Remaining</th>
+                        </tr>
+                        <tr>
+                            <th style="padding: 3px 2px; text-align: right;">%</th>
+                            <th style="padding: 3px 2px; text-align: right;">$</th>
+                            <th style="padding: 3px 2px; text-align: right;">%</th>
+                            <th style="padding: 3px 2px; text-align: right;">$</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            items.forEach(function(item) {
+                const remainingPercent = item.contract_sum > 0 ? ((item.still_to_claim || 0) / item.contract_sum * 100) : 0;
+                tableHtml += `
+                    <tr>
+                        <td style="padding: 3px 2px; word-break: break-word;">${item.description}</td>
+                        <td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$${formatMoney(item.contract_sum || 0)}</td>
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: center;">${item.unit || '-'}</td>` : ''}
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: right;">${formatQty(item.contract_qty || 0)}</td>` : ''}
+                        ${isConstruction ? `<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$${formatMoney(item.contract_rate || 0)}</td>` : ''}
+                        <td style="padding: 3px 2px; text-align: right;">${(item.complete_percent || 0).toFixed(0)}%</td>
+                        <td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$${formatMoney(item.previous_claims || 0)}</td>
+                        <td style="padding: 3px 2px; text-align: right;">${remainingPercent.toFixed(0)}%</td>
+                        <td style="padding: 3px 2px; text-align: right; font-weight: 600; white-space: nowrap;">$${formatMoney(item.still_to_claim || 0)}</td>
+                    </tr>
+                `;
+            });
+            
+            // Total row for All Claims table
+            tableHtml += `
+                        <tr style="background: #f8f9fa; font-weight: 700; border-top: 1px solid #34495e;">
+                            <td style="padding: 4px 2px;"><strong>TOTAL</strong></td>
+                            <td style="padding: 4px 2px; text-align: right;">$${formatMoney(totalContractSum)}</td>
+                            ${isConstruction ? '<td></td><td></td><td></td>' : ''}
+                            <td style="padding: 4px 2px; text-align: right;">${totalContractSum > 0 ? ((totalAllClaims / totalContractSum) * 100).toFixed(0) : 0}%</td>
+                            <td style="padding: 4px 2px; text-align: right;">$${formatMoney(totalAllClaims)}</td>
+                            <td style="padding: 4px 2px; text-align: right;">${totalContractSum > 0 ? ((totalStillToClaim / totalContractSum) * 100).toFixed(0) : 0}%</td>
+                            <td style="padding: 4px 2px; text-align: right; font-weight: 600;">$${formatMoney(totalStillToClaim)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+            `;
+            
+            // Show table in viewer area (replace PDF viewer)
+            $('#allocatedInvoicePdfViewer').hide();
+            // Override parent's centering to align content at top, keep horizontal center
+            $('#allocatedInvoiceViewerPlaceholder').parent().css({
+                'align-items': 'flex-start',
+                'justify-content': 'center'
+            });
+            $('#allocatedInvoiceViewerPlaceholder').css({
+                'width': '100%',
+                'height': '100%',
+                'text-align': 'center'
+            }).html(tableHtml).show();
         }
         
         // Select an allocated invoice row
@@ -3180,7 +3718,17 @@
             // Load allocations for this invoice (read-only)
             loadAllocatedInvoiceAllocations(invoicePk);
             
-            // Load PDF
+            // Load PDF - restore centering for PDF/placeholder views
+            $('#allocatedInvoiceViewerPlaceholder').parent().css({
+                'align-items': 'center',
+                'justify-content': 'center'
+            });
+            $('#allocatedInvoiceViewerPlaceholder').css({
+                'width': '',
+                'height': '',
+                'text-align': 'center'
+            });
+            
             const pdfUrl = row.attr('data-pdf-url');
             if (pdfUrl && pdfUrl !== 'null' && pdfUrl !== '') {
                 $('#allocatedInvoicePdfViewer').attr('src', pdfUrl).show();
@@ -3260,10 +3808,11 @@
             });
         }
         
-        // Approve invoice - set status to 2
+        // Approve invoice - set status to 2 (or 103 for PO claims)
         function approveInvoice(btn) {
             const invoicePk = btn.attr('data-invoice-pk');
             const row = btn.closest('tr');
+            const currentStatus = parseInt(row.attr('data-invoice-status')) || 1;
             
             const originalText = btn.text();
             btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
@@ -3271,6 +3820,11 @@
             $.ajax({
                 url: `/core/approve_invoice/${invoicePk}/`,
                 type: 'POST',
+                data: JSON.stringify({ current_status: currentStatus }),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
                 success: function(response) {
                     if (response.status === 'success') {
                         console.log('Invoice approved:', invoicePk);
@@ -3317,7 +3871,7 @@
                     selectAllocatedInvoiceRow(firstRow);
                 } else {
                     $('#allocatedInvoicesTableBody').html(`
-                        <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                        <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">
                             No allocated invoices found for this project.
                         </td></tr>
                     `);
@@ -3562,15 +4116,14 @@
                 $('#dynamicContentArea').css({
                     'background-image': `url(${backgroundUrl})`,
                     'background-size': 'cover',
-                    'background-position': 'center',
+                    'background-position': 'center center',
                     'background-repeat': 'no-repeat',
-                    'background-attachment': 'fixed',
                     'position': 'relative'
                 });
                 
                 // Add overlay to darken/fade the background
                 if ($('#dynamicContentArea').find('.workspace-background-overlay').length === 0) {
-                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.95); pointer-events: none; z-index: 0;"></div>');
+                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.85); pointer-events: none; z-index: 0;"></div>');
                 }
             }
             

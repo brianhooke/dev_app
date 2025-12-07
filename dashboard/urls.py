@@ -49,4 +49,8 @@ urlpatterns = [
     path('add_unit/', views.add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', views.reorder_unit, name='reorder_unit'),
     path('delete_unit/', views.delete_unit, name='delete_unit'),
+    
+    # Dashboard activity endpoints
+    path('get_recent_activities/', views.get_recent_activities, name='get_recent_activities'),
+    path('get_action_items/', views.get_action_items, name='get_action_items'),
 ]

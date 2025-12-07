@@ -1155,3 +1155,129 @@ def null_allocation_xero_fields(request):
     except Exception as e:
         logger.error(f"Error nulling allocation Xero fields: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def get_approved_invoices(request):
+    """
+    Get list of approved invoices ready to send to Xero (status 2 or 103).
+    Used by the Approvals section in Bills.
+    """
+    from core.models import XeroInstances, Projects, XeroAccounts
+    
+    # Get invoices with status 2 (approved) or 103 (PO approved, invoice uploaded & approved)
+    invoices = Invoices.objects.filter(
+        invoice_status__in=[2, 103]
+    ).select_related(
+        'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
+    ).prefetch_related('invoice_allocations__xero_account', 'invoice_allocations__item').order_by('-created_at')
+    
+    # Prepare invoices data
+    invoices_data = []
+    for invoice in invoices:
+        try:
+            # Get project name
+            project_name = invoice.project.project if invoice.project else '-'
+            
+            # Get xero instance name (from invoice or project)
+            xero_instance_name = '-'
+            xero_instance_id = None
+            if invoice.xero_instance:
+                xero_instance_name = invoice.xero_instance.xero_name
+                xero_instance_id = invoice.xero_instance.xero_instance_pk
+            elif invoice.project and invoice.project.xero_instance:
+                xero_instance_name = invoice.project.xero_instance.xero_name
+                xero_instance_id = invoice.project.xero_instance.xero_instance_pk
+            
+            # Get supplier name
+            supplier_name = invoice.contact_pk.name if invoice.contact_pk else '-'
+            
+            # Get Xero account from first allocation (if exists)
+            xero_account_name = '-'
+            first_allocation = invoice.invoice_allocations.first()
+            if first_allocation and first_allocation.xero_account:
+                xero_account_name = first_allocation.xero_account.name
+            
+            # Calculate gross
+            total_net = float(invoice.total_net) if invoice.total_net else 0
+            total_gst = float(invoice.total_gst) if invoice.total_gst else 0
+            total_gross = total_net + total_gst
+            
+            # Get PDF URL - check invoice.pdf first, then email_attachment
+            pdf_url = ''
+            if invoice.pdf:
+                pdf_url = invoice.pdf.url
+            elif invoice.email_attachment:
+                pdf_url = invoice.email_attachment.get_download_url() or ''
+            
+            # Get allocations
+            allocations = []
+            for allocation in invoice.invoice_allocations.all():
+                allocations.append({
+                    'allocation_pk': allocation.invoice_allocations_pk,
+                    'costing_name': allocation.item.item if allocation.item else '-',
+                    'amount': float(allocation.amount) if allocation.amount else 0,
+                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
+                    'notes': allocation.notes or '',
+                })
+            
+            invoice_data = {
+                'invoice_pk': invoice.invoice_pk,
+                'invoice_status': invoice.invoice_status,
+                'project_name': project_name,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'xero_instance_name': xero_instance_name,
+                'xero_instance_id': xero_instance_id,
+                'xero_account_name': xero_account_name,
+                'supplier_name': supplier_name,
+                'supplier_invoice_number': invoice.supplier_invoice_number or '',
+                'total_gross': total_gross,
+                'total_net': total_net,
+                'total_gst': total_gst,
+                'pdf_url': pdf_url,
+                'allocations': allocations,
+            }
+            invoices_data.append(invoice_data)
+        except Exception as e:
+            logger.error(f"Error processing approved invoice {invoice.invoice_pk}: {str(e)}")
+            continue
+    
+    return JsonResponse({
+        'invoices': invoices_data,
+        'count': len(invoices_data)
+    })
+
+
+def return_invoice_to_project(request, invoice_id):
+    """
+    Return an approved invoice back to project (from Approvals).
+    Status 2 -> 1 (allocated)
+    Status 103 -> 102 (PO approved, invoice uploaded)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    
+    try:
+        invoice = Invoices.objects.get(invoice_pk=invoice_id)
+        
+        if invoice.invoice_status == 2:
+            invoice.invoice_status = 1
+        elif invoice.invoice_status == 103:
+            invoice.invoice_status = 102
+        else:
+            return JsonResponse({
+                'status': 'error', 
+                'message': f'Invoice status {invoice.invoice_status} cannot be returned to project'
+            }, status=400)
+        
+        invoice.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'new_status': invoice.invoice_status,
+            'message': 'Invoice returned to project'
+        })
+    except Invoices.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error returning invoice to project: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

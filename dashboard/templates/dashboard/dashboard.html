@@ -241,8 +241,260 @@ Version: v89 (displayed in navbar bottom-left)
 
 <!-- Dynamic Content Area (Workspace) -->
 <div id="dynamicContentArea" style="margin: 0; padding: 20px; height: 100vh; position: relative; overflow: hidden;">
-    <!-- Empty State (shown on page load) -->
-    <div id="emptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #6c757d;">
+    <!-- Dashboard Home Section (shown on page load) -->
+    <div id="dashboardHomeSection" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+        <style>
+            /* Dashboard Summary Cards */
+            .dashboard-summary-cards {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 30px;
+                flex-wrap: wrap;
+            }
+            
+            .summary-card {
+                flex: 1;
+                min-width: 150px;
+                max-width: 200px;
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                text-align: center;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            
+            .summary-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            .summary-card .card-icon {
+                font-size: 24px;
+                margin-bottom: 8px;
+            }
+            
+            .summary-card .card-number {
+                font-size: 32px;
+                font-weight: 700;
+                line-height: 1;
+                margin-bottom: 4px;
+            }
+            
+            .summary-card .card-label {
+                font-size: 12px;
+                color: #6c757d;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .summary-card.urgent { border-left: 4px solid #dc3545; }
+            .summary-card.urgent .card-number { color: #dc3545; }
+            
+            .summary-card.warning { border-left: 4px solid #ffc107; }
+            .summary-card.warning .card-number { color: #d39e00; }
+            
+            .summary-card.success { border-left: 4px solid #28a745; }
+            .summary-card.success .card-number { color: #28a745; }
+            
+            .summary-card.info { border-left: 4px solid #17a2b8; }
+            .summary-card.info .card-number { color: #17a2b8; }
+            
+            /* Dashboard Sections */
+            .dashboard-section {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            
+            .dashboard-section-header {
+                display: flex;
+                align-items: center;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+            }
+            
+            .dashboard-section-header h5 {
+                margin: 0;
+                font-weight: 600;
+                color: #2c3e50;
+            }
+            
+            .dashboard-section-header .section-icon {
+                margin-right: 10px;
+                font-size: 18px;
+            }
+            
+            /* Action Items List */
+            .action-item {
+                display: flex;
+                align-items: center;
+                padding: 12px 15px;
+                margin-bottom: 8px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border-left: 4px solid #6c757d;
+                transition: background 0.2s;
+            }
+            
+            .action-item:hover {
+                background: #e9ecef;
+            }
+            
+            .action-item.urgent { border-left-color: #dc3545; }
+            .action-item.warning { border-left-color: #ffc107; }
+            .action-item.success { border-left-color: #28a745; }
+            
+            .action-item .item-icon {
+                margin-right: 12px;
+                font-size: 16px;
+            }
+            
+            .action-item .item-content {
+                flex: 1;
+            }
+            
+            .action-item .item-title {
+                font-weight: 500;
+                color: #2c3e50;
+                margin-bottom: 2px;
+            }
+            
+            .action-item .item-subtitle {
+                font-size: 12px;
+                color: #6c757d;
+            }
+            
+            .action-item .item-action {
+                margin-left: 15px;
+            }
+            
+            .action-item .item-action a {
+                color: #007bff;
+                text-decoration: none;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            
+            .action-item .item-action a:hover {
+                text-decoration: underline;
+            }
+            
+            /* Activity Items */
+            .activity-item {
+                display: flex;
+                align-items: flex-start;
+                padding: 10px 0;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            
+            .activity-item:last-child {
+                border-bottom: none;
+            }
+            
+            .activity-item .activity-icon {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                background: #e9ecef;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 12px;
+                font-size: 14px;
+                color: #6c757d;
+            }
+            
+            .activity-item .activity-icon.success { background: #d4edda; color: #28a745; }
+            .activity-item .activity-icon.info { background: #d1ecf1; color: #17a2b8; }
+            
+            .activity-item .activity-content {
+                flex: 1;
+            }
+            
+            .activity-item .activity-text {
+                font-size: 13px;
+                color: #2c3e50;
+            }
+            
+            .activity-item .activity-time {
+                font-size: 11px;
+                color: #adb5bd;
+                margin-top: 2px;
+            }
+            
+            /* Empty state within sections */
+            .dashboard-empty {
+                text-align: center;
+                padding: 30px;
+                color: #adb5bd;
+            }
+            
+            .dashboard-empty i {
+                font-size: 40px;
+                margin-bottom: 10px;
+            }
+        </style>
+        
+        <!-- Summary Cards Row -->
+        <div class="dashboard-summary-cards">
+            <div class="summary-card urgent" id="cardActionItems">
+                <div class="card-icon">🔴</div>
+                <div class="card-number" id="actionItemsCount">-</div>
+                <div class="card-label">Action Items</div>
+            </div>
+            <div class="summary-card warning" id="cardPending">
+                <div class="card-icon">🟡</div>
+                <div class="card-number" id="pendingCount">-</div>
+                <div class="card-label">Pending</div>
+            </div>
+            <div class="summary-card success" id="cardCompleted">
+                <div class="card-icon">🟢</div>
+                <div class="card-number" id="completedCount">-</div>
+                <div class="card-label">Completed Today</div>
+            </div>
+            <div class="summary-card info" id="cardProjects">
+                <div class="card-icon">📊</div>
+                <div class="card-number" id="activeProjectsCount">-</div>
+                <div class="card-label">Active Projects</div>
+            </div>
+        </div>
+        
+        <!-- Two Column Layout for Action Items and Activity -->
+        <div style="display: flex; gap: 20px; flex: 1; min-height: 0;">
+            <!-- Action Items Section (Left) -->
+            <div class="dashboard-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <div class="dashboard-section-header">
+                    <span class="section-icon">⚠️</span>
+                    <h5>Action Items</h5>
+                </div>
+                <div id="actionItemsList" style="flex: 1; overflow-y: auto;">
+                    <!-- Action items will be populated here -->
+                    <div class="dashboard-empty">
+                        <i class="fas fa-check-circle"></i>
+                        <p>Loading action items...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Activity Section (Right) -->
+            <div class="dashboard-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <div class="dashboard-section-header">
+                    <span class="section-icon">📋</span>
+                    <h5>Recent Activity</h5>
+                </div>
+                <div id="activityList" style="flex: 1; overflow-y: auto;">
+                    <!-- Activity items will be populated here -->
+                    <div class="dashboard-empty">
+                        <i class="fas fa-history"></i>
+                        <p>Loading activity...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Xero Section (hidden initially, shown when Xero clicked) -->
@@ -350,8 +602,9 @@ Version: v89 (displayed in navbar bottom-left)
         
         // Universal function to hide all workspace sections
         window.hideAllSections = function() {
-            $('#emptyState').hide();
+            $('#dashboardHomeSection').hide();
             $('#billsInboxSection').hide();
+            $('#billsApprovalsSection').hide();
             $('#allocationsSection').hide();
             $('#contactsSection').hide();
             $('#projectsSection').hide();
@@ -365,6 +618,282 @@ Version: v89 (displayed in navbar bottom-left)
             $('.workspace-background-overlay').remove();
         };
         
+        // Function to load dashboard data
+        function loadDashboardData() {
+            // Load action items
+            loadActionItems();
+            
+            // Load recent activities
+            loadRecentActivities();
+            
+            // Load active projects count
+            loadActiveProjectsCount();
+        }
+        
+        // Function to load action items
+        function loadActionItems() {
+            $('#actionItemsList').html(`
+                <div class="dashboard-empty">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading action items...</p>
+                </div>
+            `);
+            
+            $.ajax({
+                url: '{% url "dashboard:get_action_items" %}',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        // Update summary counts
+                        $('#actionItemsCount').text(response.summary.total);
+                        $('#pendingCount').text(response.summary.pending);
+                        
+                        if (response.action_items.length > 0) {
+                            renderActionItems(response.action_items);
+                        } else {
+                            $('#actionItemsList').html(`
+                                <div class="dashboard-empty">
+                                    <i class="fas fa-check-circle"></i>
+                                    <p>No action items at this time</p>
+                                </div>
+                            `);
+                        }
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load action items:', error);
+                    $('#actionItemsList').html(`
+                        <div class="dashboard-empty">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Failed to load action items</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        // Function to render action items
+        function renderActionItems(items) {
+            var html = '';
+            
+            items.forEach(function(item) {
+                var subtitle = item.subtitle ? `<div style="font-size: 11px; color: #666; margin-top: 2px;">${item.subtitle}</div>` : '';
+                
+                html += `
+                    <div class="action-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee;">
+                        <div class="action-icon" style="width: 40px; height: 40px; border-radius: 8px; background-color: ${item.color}20; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
+                            <i class="${item.icon}" style="color: ${item.color}; font-size: 16px;"></i>
+                        </div>
+                        <div class="action-content" style="flex: 1; min-width: 0;">
+                            <div class="action-title" style="font-size: 13px; font-weight: 600; color: #333;">${item.title}</div>
+                            ${subtitle}
+                            <div class="action-message" style="font-size: 11px; color: #888; margin-top: 3px;">${item.message}</div>
+                        </div>
+                        <div class="action-count" style="background-color: ${item.color}15; color: ${item.color}; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; margin-right: 10px;">
+                            ${item.count}
+                        </div>
+                        <button class="btn btn-sm" style="background-color: ${item.color}; color: white; font-size: 11px; padding: 6px 12px; border: none; border-radius: 6px; white-space: nowrap;" onclick="handleActionItemClick('${item.action_type}', ${item.project_pk || 'null'})">
+                            ${item.action} <i class="fas fa-arrow-right" style="margin-left: 4px; font-size: 10px;"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            
+            $('#actionItemsList').html(html);
+        }
+        
+        // Function to handle action item clicks (global for onclick handlers)
+        window.handleActionItemClick = function(actionType, projectPk) {
+            switch(actionType) {
+                case 'bills_inbox':
+                    // Navigate to Bills > Inbox
+                    $('#billsLink').click();
+                    setTimeout(function() {
+                        $('.btn-outline-secondary:contains("Inbox")').click();
+                    }, 100);
+                    break;
+                case 'bills_approvals':
+                    // Navigate to Bills > Approvals
+                    $('#billsLink').click();
+                    setTimeout(function() {
+                        $('.btn-outline-primary:contains("Approvals")').click();
+                    }, 100);
+                    break;
+                case 'project_invoices':
+                    // Navigate to project's Invoices > Unallocated
+                    navigateToProjectSection(projectPk, 'invoices', 'unallocated');
+                    break;
+                case 'project_allocated':
+                    // Navigate to project's Invoices > Allocated
+                    navigateToProjectSection(projectPk, 'invoices', 'allocated');
+                    break;
+                case 'po_claims':
+                    // Navigate to project's POs section
+                    navigateToProjectSection(projectPk, 'pos', null);
+                    break;
+                default:
+                    console.log('Unknown action type:', actionType);
+            }
+        };
+        
+        // Navigate to a project section within the SPA
+        function navigateToProjectSection(projectPk, section, subsection) {
+            if (!projectPk) {
+                console.error('No project PK provided');
+                return;
+            }
+            
+            // Store the target navigation for after project loads
+            window.pendingProjectNavigation = {
+                section: section,
+                subsection: subsection
+            };
+            
+            // First, click on Projects link
+            $('#projectsLink').click();
+            
+            // Wait for projects to load, then find and click the project
+            setTimeout(function() {
+                // Find the project card with matching pk
+                var projectCard = $(`.project-card[data-project-pk="${projectPk}"]`);
+                
+                if (projectCard.length) {
+                    // Click the construction link to open the project
+                    projectCard.find('.construction-link').click();
+                    
+                    // After project view opens, navigate to the target section
+                    setTimeout(function() {
+                        if (section === 'invoices') {
+                            // Click on invoices button group
+                            $('#invoicesButtonGroup .invoices-main-btn').click();
+                            
+                            // Then click the specific subsection
+                            setTimeout(function() {
+                                if (subsection === 'unallocated') {
+                                    $('#invoicesButtonGroup .btn:contains("Unallocated")').click();
+                                } else if (subsection === 'allocated') {
+                                    $('#invoicesButtonGroup .btn:contains("Allocated")').click();
+                                }
+                            }, 100);
+                        } else if (section === 'pos') {
+                            // Click on POs button
+                            $('.construction-nav-btn[data-section="pos"]').click();
+                        } else if (section === 'quotes') {
+                            $('.construction-nav-btn[data-section="quotes"]').click();
+                        }
+                        
+                        // Clear pending navigation
+                        window.pendingProjectNavigation = null;
+                    }, 300);
+                } else {
+                    console.error('Project card not found for pk:', projectPk);
+                    alert('Project not found. It may have been archived.');
+                }
+            }, 500);
+        }
+        
+        // Function to load active projects count
+        function loadActiveProjectsCount() {
+            // For now, just count all projects
+            $.ajax({
+                url: '/core/get_projects/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.projects) {
+                        $('#activeProjectsCount').text(response.projects.length);
+                    }
+                },
+                error: function() {
+                    $('#activeProjectsCount').text('0');
+                }
+            });
+            
+            // Completed today placeholder
+            $('#completedCount').text('0');
+        }
+        
+        // Function to load recent activities
+        function loadRecentActivities() {
+            $('#activityList').html(`
+                <div class="dashboard-empty">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading activity...</p>
+                </div>
+            `);
+            
+            $.ajax({
+                url: '{% url "dashboard:get_recent_activities" %}',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success' && response.activities.length > 0) {
+                        renderActivities(response.activities);
+                    } else {
+                        $('#activityList').html(`
+                            <div class="dashboard-empty">
+                                <i class="fas fa-history"></i>
+                                <p>No recent activity</p>
+                            </div>
+                        `);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load activities:', error);
+                    $('#activityList').html(`
+                        <div class="dashboard-empty">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Failed to load activity</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        // Function to render activity items
+        function renderActivities(activities) {
+            var html = '';
+            
+            activities.forEach(function(activity) {
+                var timeAgo = formatTimeAgo(activity.timestamp);
+                
+                html += `
+                    <div class="activity-item" style="display: flex; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid #eee; cursor: ${activity.link ? 'pointer' : 'default'};" ${activity.link ? 'onclick="window.location.href=\'' + activity.link + '\'"' : ''}>
+                        <div class="activity-icon" style="width: 32px; height: 32px; border-radius: 50%; background-color: ${activity.color}20; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
+                            <i class="${activity.icon}" style="color: ${activity.color}; font-size: 14px;"></i>
+                        </div>
+                        <div class="activity-content" style="flex: 1; min-width: 0;">
+                            <div class="activity-message" style="font-size: 13px; font-weight: 500; color: #333; margin-bottom: 2px;">${activity.message}</div>
+                            <div class="activity-detail" style="font-size: 11px; color: #666;">${activity.detail}</div>
+                        </div>
+                        <div class="activity-time" style="font-size: 11px; color: #999; white-space: nowrap; margin-left: 8px;">${timeAgo}</div>
+                    </div>
+                `;
+            });
+            
+            $('#activityList').html(html);
+        }
+        
+        // Helper function to format timestamp as "time ago"
+        function formatTimeAgo(isoTimestamp) {
+            if (!isoTimestamp) return '';
+            
+            var date = new Date(isoTimestamp);
+            var now = new Date();
+            var diffMs = now - date;
+            var diffMins = Math.floor(diffMs / 60000);
+            var diffHours = Math.floor(diffMs / 3600000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return diffMins + 'm ago';
+            if (diffHours < 24) return diffHours + 'h ago';
+            
+            // Format as date if older than 24h
+            return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+        }
+        
+        // Initialize dashboard on page load
+        $('#dynamicContentArea').addClass('has-content');
+        loadDashboardData();
+        
         // Handle navbar dropdown toggle
         $('.nav-dropdown-toggle').click(function(e) {
             e.preventDefault();
@@ -374,7 +903,7 @@ Version: v89 (displayed in navbar bottom-left)
             dropdown.toggleClass('open');
         });
         
-        // Dashboard link - resets workspace to empty state
+        // Dashboard link - shows dashboard home with alerts/activity
         $('#dashboardLink').click(function(e) {
             e.preventDefault();
             
@@ -390,9 +919,12 @@ Version: v89 (displayed in navbar bottom-left)
                 window.resetTenderViewState();
             }
             
-            // Show empty state and remove has-content class to show background
-            $('#emptyState').show();
-            $('#dynamicContentArea').removeClass('has-content');
+            // Show dashboard home section
+            $('#dashboardHomeSection').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Load dashboard data (to be implemented)
+            loadDashboardData();
             
             // Clear any selected bills
             currentSelectedInvoicePk = null;

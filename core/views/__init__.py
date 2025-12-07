@@ -25,7 +25,7 @@ from .bills import (
 # PO views
 from .pos import (
     create_po_order, generate_po_pdf, view_po_pdf, wrap_text,
-    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_invoice_pdf
+    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_invoice_pdf, get_po_table_data_for_invoice
 )
 
 # Claims views
@@ -55,7 +55,7 @@ from .main import (
     upload_categories, upload_costings, update_contract_budget_amounts,
     upload_letterhead, update_contacts, xeroapi, make_api_request,
     mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines,
-    invoices_view, get_project_invoices,
+    invoices_view, get_project_invoices, update_allocated_invoice,
     get_unallocated_invoice_allocations, create_unallocated_invoice_allocation,
     update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation,
     allocate_invoice, unallocate_invoice, approve_invoice

@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from django.template import loader
 from ..forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from ..models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
 import json
 from django.shortcuts import render
@@ -728,23 +729,50 @@ def invoices_view(request):
     """Render the invoices section template."""
     template_type = request.GET.get('template', 'unallocated')
     
+    if template_type == 'approvals':
+        # Approvals - invoices approved and ready to send to Xero (status 2 or 103)
+        context = {
+            'main_table_title': 'Approved Invoices',
+            'main_table_columns': [
+                {'header': 'Project', 'width': '15%'},
+                {'header': 'Xero Instance', 'width': '12%'},
+                {'header': 'Xero Account', 'width': '12%'},
+                {'header': 'Supplier', 'width': '13%'},
+                {'header': '$ Gross', 'width': '9%'},
+                {'header': '$ Net', 'width': '9%'},
+                {'header': '$ GST', 'width': '9%'},
+                {'header': 'Send to Xero', 'width': '12%'},
+                {'header': 'Return to Project', 'width': '12%'},
+            ],
+            'allocations_columns': [
+                {'header': 'Item', 'width': '25%'},
+                {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'TotalNet'},
+                {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'TotalGst'},
+                {'header': 'Notes', 'width': '45%'},
+            ],
+            'readonly': True,
+        }
+        return render(request, 'core/invoices_approvals.html', context)
+    
     if template_type == 'allocated':
         # Allocated invoices - read-only display with Unallocate/Approve buttons
         context = {
             'main_table_title': 'Invoices',
             'main_table_columns': [
-                {'header': 'Supplier', 'width': '22%'},
-                {'header': 'Invoice #', 'width': '18%'},
-                {'header': '$ Net', 'width': '15%'},
-                {'header': '$ GST', 'width': '15%'},
-                {'header': 'Unallocate', 'width': '15%'},
-                {'header': 'Approve', 'width': '15%'},
+                {'header': 'Supplier', 'width': '15%'},
+                {'header': 'Invoice #', 'width': '12%'},
+                {'header': '$ Net', 'width': '10%'},
+                {'header': '$ GST', 'width': '10%'},
+                {'header': 'Progress Claim', 'width': '10%'},
+                {'header': 'Unallocate', 'width': '13%'},
+                {'header': 'Approve', 'width': '13%'},
+                {'header': 'Save', 'width': '10%'},
             ],
             'allocations_columns': [
-                {'header': 'Item', 'width': '40%'},
-                {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'TotalNet'},
-                {'header': '$ GST', 'width': '20%', 'still_to_allocate_id': 'TotalGst'},
-                {'header': 'Notes', 'width': '20%'},
+                {'header': 'Item', 'width': '20%'},
+                {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
+                {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
+                {'header': 'Notes', 'width': '56%'},
             ],
             'readonly': True,
         }
@@ -770,6 +798,31 @@ def invoices_view(request):
         ],
     }
     return render(request, 'core/invoices.html', context)
+
+
+@csrf_exempt
+def update_allocated_invoice(request, invoice_pk):
+    """Update invoice number and GST for an allocated invoice."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+    
+    try:
+        import json
+        data = json.loads(request.body)
+        invoice_number = data.get('invoice_number', '')
+        total_gst = data.get('total_gst', '0.00')
+        
+        invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        invoice.supplier_invoice_number = invoice_number
+        invoice.total_gst = float(total_gst)
+        invoice.save()
+        
+        return JsonResponse({'status': 'success'})
+    except Invoices.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error updating allocated invoice {invoice_pk}: {e}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 def quotes_view(request):
@@ -823,15 +876,23 @@ def get_project_invoices(request, project_pk):
     Get invoices for a project filtered by status.
     Query params:
     - status: invoice_status to filter by (default: 0 for unallocated)
+             status=1 also includes status=102 (PO claim invoices)
     """
     try:
         status = int(request.GET.get('status', 0))
         
         # Get invoices for this project with the specified status
-        invoices = Invoices.objects.filter(
-            project_id=project_pk,
-            invoice_status=status
-        ).select_related('contact_pk', 'email_attachment').order_by('-invoice_pk')
+        # For allocated invoices (status=1), also include PO claim invoices (status=102)
+        if status == 1:
+            invoices = Invoices.objects.filter(
+                project_id=project_pk,
+                invoice_status__in=[1, 102]
+            ).select_related('contact_pk', 'email_attachment').order_by('-invoice_pk')
+        else:
+            invoices = Invoices.objects.filter(
+                project_id=project_pk,
+                invoice_status=status
+            ).select_related('contact_pk', 'email_attachment').order_by('-invoice_pk')
         
         # Get suppliers (contacts) for this project's xero instance
         project = Projects.objects.get(projects_pk=project_pk)
@@ -1063,17 +1124,33 @@ def unallocate_invoice(request, invoice_pk):
 @csrf_exempt
 def approve_invoice(request, invoice_pk):
     """
-    Mark an invoice as approved (invoice_status = 2).
+    Mark an invoice as approved.
+    - PO claim invoices (status 102) -> status 103
+    - Other invoices -> status 2
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
     
     try:
+        # Get current status from request body if provided
+        current_status = None
+        if request.body:
+            data = json.loads(request.body)
+            current_status = data.get('current_status')
+        
         invoice = Invoices.objects.get(invoice_pk=invoice_pk)
-        invoice.invoice_status = 2
+        
+        # Use current_status from request or fall back to invoice's actual status
+        status_to_check = current_status if current_status is not None else invoice.invoice_status
+        
+        # PO claim invoices (102) go to 103, others go to 2
+        if status_to_check == 102:
+            invoice.invoice_status = 103
+        else:
+            invoice.invoice_status = 2
         invoice.save()
         
-        return JsonResponse({'status': 'success'})
+        return JsonResponse({'status': 'success', 'new_status': invoice.invoice_status})
         
     except Invoices.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)

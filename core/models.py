@@ -20,6 +20,8 @@ class XeroInstances(models.Model):
     oauth_refresh_token_encrypted = models.BinaryField(null=True, blank=True)
     oauth_token_expires_at = models.DateTimeField(null=True, blank=True)
     oauth_tenant_id = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def _get_cipher(self):
         """Get Fernet cipher using encryption key from settings."""
@@ -92,6 +94,8 @@ class XeroAccounts(models.Model):
     account_id = models.CharField(max_length=255)  # Xero's AccountID (unique per instance)
     account_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, etc.
     account_type = models.CharField(max_length=100, null=True, blank=True)  # EXPENSE, REVENUE, etc.
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     class Meta:
         db_table = 'xero_accounts'
         verbose_name = 'Xero Account'
@@ -127,6 +131,8 @@ class Projects(models.Model):
     manager = models.CharField(max_length=255, null=True, blank=True)
     manager_email = models.CharField(max_length=255, null=True, blank=True)
     contracts_admin_emails = models.CharField(max_length=500, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         return self.project
@@ -144,11 +150,15 @@ class SPVData(models.Model):
     director_2 = models.CharField(max_length=255)
     abn = models.CharField(max_length=255)
     acn = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
 # SERVICE: documents
 class DesignCategories(models.Model):
     design_category_pk = models.AutoField(primary_key=True)
     design_category = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return self.design_category
 
@@ -158,15 +168,21 @@ class PlanPdfs(models.Model):
     design_category = models.ForeignKey(DesignCategories, on_delete=models.CASCADE)
     plan_number = models.CharField(max_length=255)
     rev_number = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
 # SERVICE: documents
 class Letterhead(models.Model):
     letterhead_path = models.FileField(upload_to='letterhead/')
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
 # SERVICE: documents
 class ReportCategories(models.Model):
     report_category_pk = models.AutoField(primary_key=True)
     report_category = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return self.report_category
 
@@ -175,11 +191,15 @@ class ReportPdfs(models.Model):
     file = models.FileField(upload_to='reports/')
     report_category = models.ForeignKey(ReportCategories, on_delete=models.CASCADE)
     report_reference = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
 # SERVICE: documents
 class Models_3d(models.Model):
     file = models.FileField(upload_to='3d/')
     filename = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
 # SERVICE: pos
 class Po_globals(models.Model):
@@ -192,6 +212,8 @@ class Po_globals(models.Model):
     note1 = models.CharField(max_length=1000)
     note2 = models.CharField(max_length=1000)
     note3 = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"Reference: {self.reference}, Invoicee: {self.invoicee}, Address: {self.address}, ABN: {self.ABN}, Email: {self.email}, Note1: {self.note1}, Note2: {self.note2}, Note3: {self.note3}"
 
@@ -207,6 +229,8 @@ class Categories(models.Model):
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return self.category
 
@@ -215,6 +239,8 @@ class Units(models.Model):
     unit_pk = models.AutoField(primary_key=True)
     unit_name = models.CharField(max_length=50, unique=True)
     order_in_list = models.IntegerField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
         ordering = ['order_in_list']
@@ -240,6 +266,8 @@ class Costing(models.Model):
     fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"{self.item} (Category: {self.category})"
 
@@ -251,6 +279,8 @@ class Quotes(models.Model):
     pdf = models.FileField(upload_to='pdfs/', null=True)
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, related_name='quotes')
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"Quote #{self.quotes_pk} - Cost: {self.total_cost}"
 
@@ -264,6 +294,8 @@ class Quote_allocations(models.Model):
     unit = models.CharField(max_length=50, null=True, blank=True)
     rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     notes = models.CharField(max_length=1000, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
 
@@ -306,7 +338,7 @@ class Invoices(models.Model):
     # Replaced invoice_division with FK to Projects
     project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when sent to Xero, 3 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved but no invoice uploaded, 102 is approved and invoice uploaded.
+    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when approved, 3 when sent to Xero, 4 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved in PO URL but no invoice uploaded, 102 is approved in PO URL and invoice uploaded, 103 is PO approved, invoice uploaded & approved for payment, 104 if sent to xero
     invoice_xero_id = models.CharField(max_length=255, null=True, blank=True)
     supplier_invoice_number = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
@@ -320,7 +352,8 @@ class Invoices(models.Model):
     received_email = models.ForeignKey('ReceivedEmail', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     email_attachment = models.ForeignKey('EmailAttachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     auto_created = models.BooleanField(default=False)  # Track if created automatically from email
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         if self.total_net:
@@ -343,6 +376,8 @@ class Invoice_allocations(models.Model):
         (1, "direct cost in progress claim")
     ])
     xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
@@ -354,6 +389,8 @@ class HC_claims(models.Model):
     status = models.IntegerField(default=0) #0 for unapproved, 1 for approved, 2 for sent to Xero, 3 for payment received
     display_id = models.IntegerField(blank=True, null=True)
     invoicee = models.CharField(blank = True, null = True, max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def save(self, *args, **kwargs):
         if not self.display_id:
             # Get the highest display_id in the table
@@ -386,6 +423,8 @@ class HC_claim_allocations(models.Model):
     hc_claimed = models.DecimalField(max_digits=10, decimal_places=2)
     qs_claimed_previous = models.DecimalField(max_digits=10, decimal_places=2)
     qs_claimed = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"HC Claim Allocation - PK: {self.hc_claim_allocations_pk}, HC Claim PK: {self.hc_claim_pk.pk}, Item: {self.item}, Committed: {self.committed}, Uncommitted: {self.uncommitted}, Fixed on Site: {self.fixed_on_site}, Fixed on Site Previous: {self.fixed_on_site_previous}, Fixed on Site This: {self.fixed_on_site_this}, SC Invoiced: {self.sc_invoiced}, SC Invoiced Previous: {self.sc_invoiced_previous}, Adjustment: {self.adjustment}, HC Claimed: {self.hc_claimed}, HC Claimed Previous: {self.hc_claimed_previous}, QS Claimed: {self.qs_claimed}, QS Claimed Previous: {self.qs_claimed_previous}"
 
@@ -393,6 +432,8 @@ class HC_claim_allocations(models.Model):
 class Hc_variation(models.Model):
     hc_variation_pk = models.AutoField(primary_key=True)
     date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}"
@@ -407,6 +448,8 @@ class Hc_variation_allocations(models.Model):
     unit = models.CharField(max_length=50, null=True, blank=True)
     rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     notes = models.CharField(max_length=200, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         return f"HC Variation Allocation - Variation PK: {self.hc_variation.hc_variation_pk}, Costing: {self.costing.pk}, Amount: {self.amount}"
@@ -472,6 +515,9 @@ class Contacts(models.Model):
         
         return 2  # Verified but data has changed
     
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
     def __str__(self):
         return self.name
 
@@ -483,7 +529,8 @@ class Po_orders(models.Model):
     unique_id = models.CharField(max_length=64, unique=True, db_index=True, null=True, blank=True)  # UUID for shareable URL
     pdf = models.FileField(upload_to='po_pdfs/', null=True, blank=True)  # Stored PDF for record keeping
     po_sent = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
         return f"PO Order #{self.po_order_pk} - {self.po_supplier.name}" + (f" ({self.unique_id})" if self.unique_id else "")
@@ -500,6 +547,8 @@ class Po_order_detail(models.Model):
     unit = models.CharField(max_length=50, null=True, blank=True)
     rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     variation_note = models.CharField(max_length=1000, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
         return f"PO Order Detail - PK: {self.po_order_detail_pk}, Date: {self.date}, Amount: {self.amount}, Variation_note: {self.variation_note}"
 
@@ -526,6 +575,7 @@ class ReceivedEmail(models.Model):
     # Timestamps
     received_at = models.DateTimeField()
     processed_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     # S3 storage locations
     s3_bucket = models.CharField(max_length=100)
@@ -589,6 +639,7 @@ class EmailAttachment(models.Model):
     
     # Timestamps
     uploaded_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
         ordering = ['filename']

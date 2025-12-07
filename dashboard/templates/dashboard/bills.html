@@ -94,6 +94,7 @@
             display: table;
             width: 100%;
             table-layout: fixed;
+            background-color: #ffffff;
         }
         
         #allocationsTable tbody td {
@@ -123,6 +124,7 @@
         <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
             <button class="btn btn-primary bills-nav-btn" id="billsInboxBtn" data-mode="inbox">Inbox</button>
             <button class="btn btn-outline-primary bills-nav-btn" id="billsDirectBtn" data-mode="direct">Direct</button>
+            <button class="btn btn-outline-primary bills-nav-btn" id="billsApprovalsBtn" data-mode="approvals">Approvals</button>
         </div>
         
         <div style="display: flex; flex: 1;">
@@ -207,6 +209,21 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- Approvals Section (hidden initially, loaded via AJAX) -->
+    <div id="billsApprovalsSection" style="display: none; height: 100%; flex-direction: column;">
+        <!-- Bills navigation buttons (duplicated for this section) -->
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-outline-primary bills-nav-btn approvals-nav-btn" data-mode="inbox">Inbox</button>
+            <button class="btn btn-outline-primary bills-nav-btn approvals-nav-btn" data-mode="direct">Direct</button>
+            <button class="btn btn-primary bills-nav-btn approvals-nav-btn" data-mode="approvals">Approvals</button>
+        </div>
+        
+        <!-- Approvals content loaded via AJAX -->
+        <div id="approvalsContent" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Content will be loaded via AJAX from invoices_approvals.html -->
         </div>
     </div>
 
@@ -650,6 +667,274 @@
                 }
             });
         });
+        
+        // Handle Approvals button click
+        $('#billsApprovalsBtn').click(function(e) {
+            e.preventDefault();
+            
+            // Update button states for main section
+            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+            $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            
+            // Hide main bills section, show approvals section
+            $('#billsInboxSection').find('> div:not(:first-child)').hide();
+            $('#billsInboxSection').hide();
+            $('#billsApprovalsSection').css('display', 'flex').show();
+            
+            // Load approvals template if not already loaded
+            if ($('#approvalsContent').children().length === 0) {
+                $.ajax({
+                    url: '{% url "core:invoices" %}?template=approvals',
+                    type: 'GET',
+                    success: function(html) {
+                        $('#approvalsContent').html(html);
+                        // Load approved invoices data
+                        loadApprovedInvoices();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load approvals template:', error);
+                        $('#approvalsContent').html('<p class="text-danger text-center p-4">Failed to load approvals section</p>');
+                    }
+                });
+            } else {
+                // Reload data
+                loadApprovedInvoices();
+            }
+        });
+        
+        // Handle navigation buttons in Approvals section
+        $(document).on('click', '.approvals-nav-btn', function(e) {
+            e.preventDefault();
+            var mode = $(this).data('mode');
+            
+            if (mode === 'inbox') {
+                // Switch back to Inbox
+                $('#billsApprovalsSection').hide();
+                $('#billsInboxSection').css('display', 'flex').show();
+                $('#billsInboxSection').find('> div:not(:first-child)').show();
+                $('#billsInboxBtn').click();
+            } else if (mode === 'direct') {
+                // Switch to Direct
+                $('#billsApprovalsSection').hide();
+                $('#billsInboxSection').css('display', 'flex').show();
+                $('#billsInboxSection').find('> div:not(:first-child)').show();
+                $('#billsDirectBtn').click();
+            }
+            // mode === 'approvals' - already on approvals, do nothing
+        });
+        
+        // Function to load approved invoices
+        function loadApprovedInvoices() {
+            $.ajax({
+                url: '{% url "core:get_approved_invoices" %}',
+                type: 'GET',
+                success: function(response) {
+                    console.log('Approved invoices loaded:', response);
+                    window.approvedInvoicesData = response.invoices;
+                    populateApprovalsTable(response.invoices);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load approved invoices:', error);
+                    $('#approvalsMainTableBody').html('<tr><td colspan="8" class="text-center text-danger">Failed to load invoices</td></tr>');
+                }
+            });
+        }
+        
+        // Function to populate the approvals table
+        function populateApprovalsTable(invoices) {
+            var tbody = $('#approvalsMainTableBody');
+            tbody.empty();
+            tbody.removeClass('has-selection');
+            
+            // Helper function to format money with thousand separators
+            function formatMoney(num) {
+                return parseFloat(num || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            
+            if (!invoices || invoices.length === 0) {
+                tbody.html('<tr><td colspan="9" class="text-center text-muted p-4">No approved invoices waiting to be sent to Xero</td></tr>');
+                return;
+            }
+            
+            invoices.forEach(function(invoice) {
+                var row = $('<tr>')
+                    .attr('data-invoice-pk', invoice.invoice_pk)
+                    .attr('data-pdf-url', invoice.pdf_url || '');
+                
+                // 1. Project
+                var projectName = invoice.project_name || '-';
+                row.append($('<td>').append(
+                    $('<div>').addClass('truncate-2-lines').attr('title', projectName).text(projectName)
+                ));
+                
+                // 2. Xero Instance
+                var xeroInstanceName = invoice.xero_instance_name || '-';
+                row.append($('<td>').append(
+                    $('<div>').addClass('truncate-2-lines').attr('title', xeroInstanceName).text(xeroInstanceName)
+                ));
+                
+                // 3. Xero Account
+                row.append($('<td>').text(invoice.xero_account_name || '-'));
+                
+                // 4. Supplier
+                var supplierName = invoice.supplier_name || '-';
+                row.append($('<td>').append(
+                    $('<div>').addClass('truncate-2-lines').attr('title', supplierName).text(supplierName)
+                ));
+                
+                // 5. $ Gross
+                row.append($('<td>').css('text-align', 'right').text('$' + formatMoney(invoice.total_gross)));
+                
+                // 6. $ Net
+                row.append($('<td>').css('text-align', 'right').text('$' + formatMoney(invoice.total_net)));
+                
+                // 7. $ GST
+                row.append($('<td>').css('text-align', 'right').text('$' + formatMoney(invoice.total_gst)));
+                
+                // 8. Send to Xero button
+                var sendBtn = $('<button>')
+                    .addClass('btn btn-sm btn-success approvals-send-btn')
+                    .attr('data-invoice-pk', invoice.invoice_pk)
+                    .text('Send')
+                    .on('click', function(e) {
+                        e.stopPropagation();
+                        sendApprovedInvoiceToXero(invoice.invoice_pk, $(this));
+                    });
+                row.append($('<td>').css('text-align', 'center').append(sendBtn));
+                
+                // 9. Return to Project button
+                var returnBtn = $('<button>')
+                    .addClass('btn btn-sm btn-warning approvals-return-btn')
+                    .attr('data-invoice-pk', invoice.invoice_pk)
+                    .text('Return')
+                    .on('click', function(e) {
+                        e.stopPropagation();
+                        returnInvoiceToProject(invoice.invoice_pk, $(this));
+                    });
+                row.append($('<td>').css('text-align', 'center').append(returnBtn));
+                
+                tbody.append(row);
+            });
+            
+            // Auto-select first row
+            setTimeout(function() {
+                var firstRow = tbody.find('tr').first();
+                if (firstRow.length && firstRow.attr('data-invoice-pk')) {
+                    selectApprovalsRow(firstRow);
+                }
+            }, 100);
+        }
+        
+        // Function to select an approvals row
+        function selectApprovalsRow(row) {
+            var tbody = $('#approvalsMainTableBody');
+            tbody.find('tr').removeClass('selected-row');
+            row.addClass('selected-row');
+            tbody.addClass('has-selection');
+            
+            var invoicePk = row.attr('data-invoice-pk');
+            var pdfUrl = row.attr('data-pdf-url');
+            
+            // Show PDF in viewer
+            if (pdfUrl) {
+                $('#approvalsPdfViewer').attr('src', pdfUrl).show();
+                $('#approvalsViewerPlaceholder').hide();
+            } else {
+                $('#approvalsPdfViewer').hide();
+                $('#approvalsViewerPlaceholder').show();
+            }
+            
+            // Populate allocations table
+            var invoice = window.approvedInvoicesData.find(function(inv) {
+                return inv.invoice_pk === parseInt(invoicePk);
+            });
+            
+            if (invoice && invoice.allocations) {
+                populateApprovalsAllocations(invoice.allocations);
+            }
+        }
+        
+        // Function to populate approvals allocations
+        function populateApprovalsAllocations(allocations) {
+            var tbody = $('#approvalsAllocationsTableBody');
+            tbody.empty();
+            
+            function formatMoney(num) {
+                return parseFloat(num || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            
+            var totalNet = 0;
+            var totalGst = 0;
+            
+            allocations.forEach(function(allocation) {
+                var row = $('<tr>');
+                row.append($('<td>').text(allocation.costing_name || '-'));
+                row.append($('<td>').css('text-align', 'right').text('$' + formatMoney(allocation.amount)));
+                row.append($('<td>').css('text-align', 'right').text('$' + formatMoney(allocation.gst_amount)));
+                row.append($('<td>').text(allocation.notes || ''));
+                tbody.append(row);
+                
+                totalNet += allocation.amount || 0;
+                totalGst += allocation.gst_amount || 0;
+            });
+            
+            // Update totals
+            $('#approvalsTotalNet').text('$' + formatMoney(totalNet));
+            $('#approvalsTotalGst').text('$' + formatMoney(totalGst));
+        }
+        
+        // Row click handler for approvals table
+        $(document).on('click', '#approvalsMainTableBody tr', function() {
+            selectApprovalsRow($(this));
+        });
+        
+        // Function to send approved invoice to Xero (placeholder)
+        function sendApprovedInvoiceToXero(invoicePk, btn) {
+            btn.prop('disabled', true).text('Sending...');
+            
+            // TODO: Implement actual Xero send logic
+            // For now, show a placeholder alert
+            setTimeout(function() {
+                alert('Send to Xero functionality will be implemented. Invoice PK: ' + invoicePk);
+                btn.prop('disabled', false).text('Send to Xero');
+            }, 500);
+        }
+        
+        // Function to return an invoice back to project
+        function returnInvoiceToProject(invoicePk, btn) {
+            btn.prop('disabled', true).text('Returning...');
+            
+            $.ajax({
+                url: '/core/return_invoice_to_project/' + invoicePk + '/',
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(response) {
+                    console.log('Invoice returned to project:', response);
+                    // Remove the row from the table
+                    $('tr[data-invoice-pk="' + invoicePk + '"]').fadeOut(300, function() {
+                        $(this).remove();
+                        // Check if table is now empty
+                        if ($('#approvalsMainTableBody tr').length === 0) {
+                            $('#approvalsMainTableBody').html('<tr><td colspan="9" class="text-center text-muted p-4">No approved invoices waiting to be sent to Xero</td></tr>');
+                        } else {
+                            // Select first remaining row
+                            var firstRow = $('#approvalsMainTableBody tr').first();
+                            if (firstRow.attr('data-invoice-pk')) {
+                                selectApprovalsRow(firstRow);
+                            }
+                        }
+                    });
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to return invoice:', error);
+                    alert('Failed to return invoice: ' + (xhr.responseJSON?.message || error));
+                    btn.prop('disabled', false).text('Return to Project');
+                }
+            });
+        }
         
         // Add click handler for email links
         $(document).on('click', '.email-link', function(e) {

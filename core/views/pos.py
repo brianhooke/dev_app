@@ -1179,3 +1179,198 @@ def view_po_pdf_by_unique_id(request, unique_id):
     except Exception as e:
         logger.error(f'Error serving PO PDF: {e}', exc_info=True)
         return HttpResponse(f'Error: {str(e)}', status=500)
+
+
+def get_po_table_data_for_invoice(request, invoice_pk):
+    """
+    Get PO table data for an invoice (used in allocated invoices view).
+    Returns the same data as the PO public page table.
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get the invoice
+        invoice = Invoices.objects.select_related('contact_pk', 'project').get(invoice_pk=invoice_pk)
+        supplier = invoice.contact_pk
+        project = invoice.project
+        
+        logger.info(f"get_po_table_data_for_invoice: invoice_pk={invoice_pk}, supplier={supplier}, project={project}")
+        
+        if not supplier or not project:
+            logger.warning(f"Invoice {invoice_pk} missing supplier ({supplier}) or project ({project})")
+            return JsonResponse({'status': 'error', 'message': 'Invoice missing supplier or project'}, status=400)
+        
+        # Find the PO for this supplier/project
+        po_order = Po_orders.objects.filter(
+            po_supplier=supplier,
+            project=project
+        ).order_by('-created_at').first()
+        
+        if not po_order:
+            return JsonResponse({'status': 'error', 'message': 'No PO found for this invoice'}, status=404)
+        
+        # Check if construction project
+        is_construction = project.project_type == 'construction'
+        
+        # Get all quotes for this project and supplier
+        quotes = Quotes.objects.filter(
+            project=project,
+            contact_pk=supplier
+        ).prefetch_related('quote_allocations')
+        
+        if is_construction:
+            # For construction: aggregate from Po_order_detail
+            items_map = defaultdict(lambda: {
+                'contract_sum': Decimal('0'),
+                'contract_qty': Decimal('0'),
+                'quote_numbers': [],
+                'costing_pk': None,
+                'unit': None
+            })
+            
+            # Get all Po_order_details for this PO
+            po_details = Po_order_detail.objects.select_related('costing', 'quote').filter(po_order_pk=po_order)
+            
+            for detail in po_details:
+                if not detail.costing:
+                    continue  # Skip if no costing linked
+                    
+                item_name = detail.costing.item
+                items_map[item_name]['costing_pk'] = detail.costing.costing_pk
+                # Convert unit to string (it's a ForeignKey to Units model)
+                items_map[item_name]['unit'] = str(detail.costing.unit) if detail.costing.unit else '-'
+                
+                # Sum qty and calculate contract sum (qty * rate)
+                if detail.qty and detail.rate:
+                    items_map[item_name]['contract_sum'] += detail.qty * detail.rate
+                    items_map[item_name]['contract_qty'] += detail.qty
+                elif detail.amount:
+                    items_map[item_name]['contract_sum'] += detail.amount
+                
+                # Track quote numbers
+                if detail.quote and detail.quote.supplier_quote_number:
+                    if detail.quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(detail.quote.supplier_quote_number)
+        else:
+            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None})
+            
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    if not allocation.item:
+                        continue  # Skip if no item linked
+                    item_name = allocation.item.item
+                    items_map[item_name]['amount'] += allocation.amount or Decimal('0')
+                    items_map[item_name]['costing_pk'] = allocation.item.costing_pk
+                    
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+        
+        # Get all approved claims (invoice_status = 102)
+        completed_invoices = Invoices.objects.filter(
+            project=project,
+            contact_pk=supplier,
+            invoice_status=102
+        ).order_by('invoice_date', 'invoice_pk')
+        
+        # Build list of individual claims
+        individual_claims = []
+        claim_number = 1
+        
+        # Calculate previous claims by item (only status 102)
+        previous_claims_by_item = defaultdict(Decimal)
+        for inv in completed_invoices:
+            invoice_pdf_url = None
+            if inv.pdf and hasattr(inv.pdf, 'url'):
+                invoice_pdf_url = inv.pdf.url
+            
+            claim_data = {
+                'claim_number': claim_number,
+                'invoice_pk': inv.invoice_pk,
+                'invoice_pdf_url': invoice_pdf_url,
+                'allocations': {}
+            }
+            allocations = Invoice_allocations.objects.filter(invoice_pk=inv)
+            for alloc in allocations:
+                if alloc.item:
+                    item_name = alloc.item.item
+                    if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
+                        claim_amount = alloc.qty * alloc.rate
+                    else:
+                        claim_amount = alloc.amount or Decimal('0')
+                    previous_claims_by_item[item_name] += claim_amount
+                    claim_data['allocations'][item_name] = float(claim_amount)
+            individual_claims.append(claim_data)
+            claim_number += 1
+        
+        # Convert to list
+        items = []
+        for item_name, data in items_map.items():
+            if is_construction:
+                contract_sum = float(data['contract_sum'])
+                contract_qty = float(data['contract_qty'])
+                contract_rate = contract_sum / contract_qty if contract_qty > 0 else 0.0
+            else:
+                contract_sum = float(data['amount'])
+                contract_qty = 0.0
+                contract_rate = 0.0
+                
+            previous_claims = float(previous_claims_by_item.get(item_name, Decimal('0')))
+            still_to_claim = contract_sum - previous_claims
+            
+            # Calculate percentages
+            previous_claims_percent = (previous_claims / contract_sum * 100) if contract_sum > 0 else 0.0
+            still_to_claim_percent = (still_to_claim / contract_sum * 100) if contract_sum > 0 else 0.0
+            complete_percent = previous_claims_percent  # Complete = what's been claimed
+            
+            # Build individual claim data for this item
+            item_individual_claims = []
+            for claim in individual_claims:
+                claim_amount = claim['allocations'].get(item_name, 0.0)
+                claim_percent = (claim_amount / contract_sum * 100) if contract_sum > 0 else 0.0
+                item_individual_claims.append({
+                    'claim_number': claim['claim_number'],
+                    'amount': claim_amount,
+                    'percent': claim_percent
+                })
+            
+            item_data = {
+                'description': item_name,
+                'costing_pk': data['costing_pk'],
+                'contract_sum': contract_sum,
+                'quote_numbers': ', '.join(data['quote_numbers']),
+                'complete_percent': complete_percent,
+                'previous_claims': previous_claims,
+                'previous_claims_percent': previous_claims_percent,
+                'still_to_claim': still_to_claim,
+                'still_to_claim_percent': still_to_claim_percent,
+                'individual_claims': item_individual_claims,
+            }
+            
+            # Add construction-specific fields
+            if is_construction:
+                item_data['unit'] = data.get('unit', '-')
+                item_data['contract_qty'] = contract_qty
+                item_data['contract_rate'] = contract_rate
+            
+            items.append(item_data)
+        
+        logger.info(f"Returning PO data: {len(items)} items, {len(individual_claims)} claims")
+        
+        return JsonResponse({
+            'status': 'success',
+            'po_unique_id': po_order.unique_id or '',
+            'supplier_name': supplier.name if supplier else 'Unknown',
+            'project_name': project.project if project else 'Unknown',
+            'is_construction': is_construction,
+            'items': items,
+            'individual_claims': individual_claims,
+        })
+        
+    except Invoices.DoesNotExist:
+        logger.error(f'Invoice not found: {invoice_pk}')
+        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
+    except Exception as e:
+        import traceback
+        logger.error(f'Error in get_po_table_data_for_invoice for invoice {invoice_pk}: {e}')
+        logger.error(traceback.format_exc())
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
