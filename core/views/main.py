@@ -731,6 +731,7 @@ def invoices_view(request):
     if template_type == 'allocated':
         # Allocated invoices - read-only display with Unallocate/Approve buttons
         context = {
+            'main_table_title': 'Invoices',
             'main_table_columns': [
                 {'header': 'Supplier', 'width': '22%'},
                 {'header': 'Invoice #', 'width': '18%'},
@@ -751,6 +752,7 @@ def invoices_view(request):
     
     # Unallocated invoices - editable with Allocate/Delete buttons
     context = {
+        'main_table_title': 'Invoices',
         'main_table_columns': [
             {'header': 'Supplier', 'width': '25%'},
             {'header': 'Invoice #', 'width': '20%'},
@@ -774,6 +776,7 @@ def quotes_view(request):
     """Render the quotes section template."""
     # Define column configurations for the reusable template
     context = {
+        'main_table_title': 'Quotes',
         'main_table_columns': [
             {'header': 'Supplier', 'width': '30%'},
             {'header': '$ Net', 'width': '20%'},
@@ -789,6 +792,30 @@ def quotes_view(request):
         ],
     }
     return render(request, 'core/quotes.html', context)
+
+
+def po_view(request):
+    """Render the PO section template using reusable allocations section."""
+    # Define column configurations for the reusable template
+    context = {
+        'main_table_title': 'Purchase Orders',
+        'main_table_columns': [
+            {'header': 'Supplier', 'width': '18%'},
+            {'header': 'First Name', 'width': '10%'},
+            {'header': 'Last Name', 'width': '10%'},
+            {'header': 'Email Address', 'width': '20%'},
+            {'header': 'Amount', 'width': '12%'},
+            {'header': 'Sent', 'width': '6%'},
+            {'header': 'Update', 'width': '12%'},
+            {'header': 'Email', 'width': '12%'},
+        ],
+        'allocations_columns': [
+            {'header': 'Item', 'width': '50%'},
+            {'header': 'Amount', 'width': '25%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Quote #', 'width': '25%'},
+        ],
+    }
+    return render(request, 'core/po_new.html', context)
 
 
 def get_project_invoices(request, project_pk):

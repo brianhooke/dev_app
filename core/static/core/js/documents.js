@@ -32,7 +32,12 @@ var DocumentsManager = (function() {
         setTimeout(function() {
             // Move modals to body level so Bootstrap can display them properly
             // They're currently nested in the content area which breaks modal display
-            if ($(containerSelector + ' #newFolderModal').length && !$('body > #newFolderModal').length) {
+            // First, remove any existing modals at body level (from previous container loads)
+            $('body > #newFolderModal').remove();
+            $('body > #renameFolderModal').remove();
+            
+            // Now move the modals from the current container to body
+            if ($(containerSelector + ' #newFolderModal').length) {
                 console.log('Moving modals to body level from container:', containerSelector);
                 var newFolderModal = $(containerSelector + ' #newFolderModal').detach();
                 var renameFolderModal = $(containerSelector + ' #renameFolderModal').detach();

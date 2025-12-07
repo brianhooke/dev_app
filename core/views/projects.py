@@ -243,6 +243,18 @@ def update_project(request, project_pk):
         if project_name:
             project.project = project_name
         
+        # Update Xero instance if provided
+        xero_instance_pk = request.POST.get('xero_instance_pk', '').strip()
+        if xero_instance_pk:
+            try:
+                xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+                project.xero_instance = xero_instance
+            except XeroInstances.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invalid Xero instance'
+                }, status=400)
+        
         # Update sales account if provided
         xero_sales_account = request.POST.get('xero_sales_account', '').strip()
         if xero_sales_account:

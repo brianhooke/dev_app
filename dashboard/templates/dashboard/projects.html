@@ -172,43 +172,407 @@
         background-color: #0d6efd;
         border-color: #0d6efd;
     }
+    
+    /* Projects Card Grid Styles */
+    .projects-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 10px 0;
+    }
+    
+    .projects-empty {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        color: #6c757d;
+    }
+    
+    .projects-empty i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    
+    .project-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+    
+    .project-card:hover {
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
+    }
+    
+    .project-card .card-header {
+        height: 80px;
+        background: var(--gradient-primary);
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        padding: 12px 15px;
+        background-size: cover;
+        background-position: center;
+    }
+    
+    .project-card .card-header.has-bg::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    }
+    
+    .project-card .card-title {
+        position: relative;
+        z-index: 1;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .project-card .card-body {
+        padding: 15px;
+        flex: 1;
+    }
+    
+    .project-card .card-info {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .project-card .card-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .project-card .card-icon {
+        width: 20px;
+        color: #6c757d;
+        font-size: 12px;
+        text-align: center;
+    }
+    
+    .project-card .card-label {
+        font-size: 12px;
+        color: #6c757d;
+        min-width: 60px;
+    }
+    
+    .project-card .card-value {
+        font-size: 13px;
+        color: #212529;
+        flex: 1;
+    }
+    
+    .project-card .type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .project-card .type-badge.construction { background: #e3f2fd; color: #1565c0; }
+    .project-card .type-badge.manufacturing { background: #fff3e0; color: #ef6c00; }
+    .project-card .type-badge.general { background: #f3e5f5; color: #7b1fa2; }
+    .project-card .type-badge.development { background: #e8f5e9; color: #2e7d32; }
+    .project-card .type-badge.precast { background: #fce4ec; color: #c2185b; }
+    .project-card .type-badge.pods { background: #e0f7fa; color: #00838f; }
+    
+    .project-card .card-footer {
+        padding: 12px 15px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f8f9fa;
+    }
+    
+    .project-card .card-status a {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        text-decoration: none;
+        margin-right: 8px;
+    }
+    
+    .project-card .card-status a.project-status-link { background: #e3f2fd; color: #1565c0; }
+    .project-card .card-status a.project-status-link:hover { background: #1565c0; color: white; }
+    .project-card .card-status a.construction-link { background: #e8f5e9; color: #2e7d32; }
+    .project-card .card-status a.construction-link:hover { background: #2e7d32; color: white; }
+    
+    .project-card .card-actions button {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    
+    /* Project Modal Styles */
+    .project-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .project-modal.show {
+        display: flex;
+    }
+    
+    .project-modal-content {
+        background: white;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .project-modal-header {
+        padding: 20px;
+        background: var(--gradient-primary);
+        color: white;
+        border-radius: 12px 12px 0 0;
+        position: relative;
+        min-height: 80px;
+        display: flex;
+        align-items: flex-end;
+        background-size: cover;
+        background-position: center;
+    }
+    
+    .project-modal-header.has-bg::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.3));
+        border-radius: 12px 12px 0 0;
+    }
+    
+    .project-modal-header h4 {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        font-weight: 600;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .project-modal-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        z-index: 2;
+    }
+    
+    .project-modal-close:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    
+    .project-modal-body {
+        padding: 25px;
+    }
+    
+    .project-modal-body .form-group {
+        margin-bottom: 18px;
+    }
+    
+    .project-modal-body label {
+        font-weight: 600;
+        font-size: 12px;
+        color: #495057;
+        margin-bottom: 5px;
+        display: block;
+        text-transform: uppercase;
+    }
+    
+    .project-modal-body label.required::after {
+        content: ' *';
+        color: #dc3545;
+    }
+    
+    .project-modal-body .form-control {
+        border-radius: 6px;
+    }
+    
+    .project-modal-body .form-control:disabled {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    .project-modal-body .validation-error {
+        color: #dc3545;
+        font-size: 11px;
+        margin-top: 4px;
+        display: none;
+    }
+    
+    .project-modal-body .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+    
+    .project-modal-body .form-control.is-invalid + .validation-error {
+        display: block;
+    }
+    
+    .project-modal-footer {
+        padding: 15px 25px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .project-modal-footer .nav-buttons {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .project-modal-footer .action-buttons {
+        display: flex;
+        gap: 8px;
+    }
 </style>
 
 <!-- Projects Section (hidden initially, shown when Projects clicked) -->
 <div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
     
-    <!-- Projects Table (scrollable with fixed header) -->
-    <div style="flex: 1; margin-bottom: 15px; overflow: hidden; display: flex; flex-direction: column;">
-        <div style="overflow-y: auto; flex: 1;">
-            <table class="reusable-table" id="projectsTable" style="margin-bottom: 0;">
-                <thead>
-                    <tr>
-                        <th>Project</th>
-                        <th>Status</th>
-                        <th>Test</th>
-                        <th>Type</th>
-                        <th>Xero Instance</th>
-                        <th>Sales Account</th>
-                        <th>Manager</th>
-                        <th>Manager Email</th>
-                        <th>Contracts Admin Emails</th>
-                        <th>Background Image</th>
-                        <th>Last Edited</th>
-                        <th>Last Invoiced</th>
-                        <th>Bills Status</th>
-                        <th style="width: 100px; text-align: center;">Update</th>
-                        <th style="width: 80px; text-align: center;" id="archiveColumnHeader">Archive</th>
-                    </tr>
-                </thead>
-                <tbody id="projectsTableBody">
-                    <!-- Projects will be populated here via JavaScript -->
-                    <tr>
-                        <td colspan="15" style="text-align: center; padding: 40px; color: #6c757d;">
-                            No projects found. Click "Add Project" to create one.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+    <!-- Projects Card Grid (scrollable) -->
+    <div id="projectsGridContainer" style="flex: 1; overflow-y: auto;">
+        <div id="projectsGrid" class="projects-grid">
+            <div class="projects-empty">
+                <i class="fas fa-folder-open"></i>
+                <p>Loading projects...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Projects Footer with buttons -->
+    <div id="projectsHeader" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-shrink: 0; padding-top: 15px; border-top: 1px solid #e9ecef;">
+        <button id="toggleArchiveBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
+            <i class="fas fa-archive"></i> Show Archived
+        </button>
+        <button id="addProjectBtn" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Add Project
+        </button>
+    </div>
+    
+    <!-- Project Modal -->
+    <div id="projectModal" class="project-modal">
+        <div class="project-modal-content">
+            <div class="project-modal-header" id="projectModalHeader">
+                <button class="project-modal-close" id="projectModalClose">&times;</button>
+                <h4 id="projectModalTitle">Project Details</h4>
+            </div>
+            <div class="project-modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label class="required">Project Name</label>
+                            <input type="text" class="form-control" id="modalProjectName" disabled>
+                            <div class="validation-error">Project name is required</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select class="form-control" id="modalProjectType" disabled>
+                                <option value="general">General</option>
+                                <option value="development">Development</option>
+                                <option value="construction">Construction</option>
+                                <option value="precast">Precast</option>
+                                <option value="pods">Pods</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Manager</label>
+                            <input type="text" class="form-control" id="modalManager" disabled>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Manager Email</label>
+                            <input type="email" class="form-control" id="modalManagerEmail" disabled>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contracts Admin Emails</label>
+                    <input type="text" class="form-control" id="modalContractsAdminEmails" placeholder="Semicolon separated" disabled>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="required">Xero Instance</label>
+                            <select class="form-control" id="modalXeroInstance" disabled>
+                                <option value="">Select Xero Instance...</option>
+                            </select>
+                            <div class="validation-error">Xero Instance is required</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="required">Sales Account</label>
+                            <select class="form-control" id="modalSalesAccount" disabled>
+                                <option value="">Select Sales Account...</option>
+                            </select>
+                            <div class="validation-error">Sales Account is required</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Background Image</label>
+                    <input type="file" class="form-control" id="modalBackgroundImage" accept="image/*" disabled>
+                </div>
+            </div>
+            <div class="project-modal-footer">
+                <div class="nav-buttons">
+                    <a href="#" class="btn btn-outline-primary btn-sm" id="modalTenderBtn">
+                        <i class="fas fa-file-alt"></i> Open Tender
+                    </a>
+                    <a href="#" class="btn btn-outline-success btn-sm" id="modalExecutionBtn">
+                        <i class="fas fa-hard-hat"></i> Open Execution
+                    </a>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary btn-sm" id="modalCancelBtn">Cancel</button>
+                    <button class="btn btn-warning btn-sm" id="modalUpdateBtn">Update</button>
+                    <button class="btn btn-success btn-sm" id="modalSaveBtn" style="display: none;">Save Changes</button>
+                    <button class="btn btn-success btn-sm" id="modalCreateBtn" style="display: none;">Create Project</button>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -285,14 +649,6 @@
             <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
         </div>
     </div>
-    
-    <!-- Footer Buttons -->
-    <div id="projectsFooterButtons" style="display: flex; justify-content: space-between; flex-shrink: 0;">
-        <button id="toggleArchiveBtn" class="btn btn-secondary" data-showing-archived="0">
-            <i class="fas fa-archive"></i> Show Archived
-        </button>
-        <button id="addProjectBtn" class="btn btn-success">Add Project</button>
-    </div>
 </div>
 
 <script>
@@ -343,9 +699,9 @@
             $('#projectsSection').css('display', 'flex').show();
             $('#dynamicContentArea').addClass('has-content');
             
-            // Show projects table and footer buttons
-            $('#projectsTable').closest('div').parent().show();
-            $('#projectsFooterButtons').show();
+            // Show projects header and grid
+            $('#projectsHeader').show();
+            $('#projectsGridContainer').show();
             
             // Load projects data
             loadProjects();
@@ -377,110 +733,83 @@
         }
         
         // Function to populate projects table with data
+        // Populate projects as card grid (replaces old table-based populateProjectsTable)
         function populateProjectsTable(projects, showingArchived) {
-            const tbody = $('#projectsTableBody');
-            const archiveHeader = $('#archiveColumnHeader');
+            const grid = $('#projectsGrid');
             
-            console.log('📊 Populating projects table with', projects.length, 'projects');
+            console.log('📊 Populating projects grid with', projects.length, 'projects');
             
-            // Update archive column header based on view
-            if (showingArchived) {
-                archiveHeader.html('Unarchive');
-            } else {
-                archiveHeader.html('Archive');
-            }
-            
-            // Clear existing rows (except add row if present)
-            tbody.find('tr:not(.add-project-row)').remove();
+            // Clear existing cards
+            grid.empty();
             
             if (projects.length === 0) {
-                // Show empty state if no projects and no add row
-                if (tbody.find('.add-project-row').length === 0) {
-                    const message = showingArchived ? 'No archived projects found.' : 'No projects found. Click "Add Project" to create one.';
-                    tbody.html(`
-                        <tr>
-                            <td colspan="15" style="text-align: center; padding: 40px; color: #6c757d;">
-                                ${message}
-                            </td>
-                        </tr>
-                    `);
-                }
+                const message = showingArchived ? 'No archived projects found.' : 'No projects found. Click "Add Project" to create one.';
+                grid.html(`<div class="projects-empty"><i class="fas fa-folder-open"></i><p>${message}</p></div>`);
                 return;
             }
             
-            // Add project rows
+            // Determine archive button appearance based on view
+            const archiveBtnClass = showingArchived ? 'btn-outline-success' : 'btn-outline-danger';
+            const archiveBtnIcon = showingArchived ? 'fa-box-open' : 'fa-archive';
+            const archiveBtnTitle = showingArchived ? 'Restore' : 'Archive';
+            
+            // Add project cards
             projects.forEach(project => {
                 console.log(`📁 Project: ${project.project}`);
-                console.log(`  - Background URL: ${project.background_url || '(none)'}`);
                 
-                const row = $(`<tr data-project-pk="${project.projects_pk}"></tr>`);
+                const typeClass = project.project_type || 'general';
+                const hasBackground = project.background_url ? 'has-bg' : '';
+                const backgroundStyle = project.background_url ? `background-image: url('${project.background_url}');` : '';
                 
-                // Store original data for update functionality
-                row.data('original-project', project.project);
-                row.data('original-sales-account', project.xero_sales_account || '');
-                row.data('original-manager', project.manager || '');
-                row.data('original-manager-email', project.manager_email || '');
-                row.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
-                row.data('xero-instance-pk', project.xero_instance_pk);
-                row.data('background-url', project.background_url || '');
-                row.data('project-type', project.project_type);
-                
-                // Build background image cell
-                let backgroundCell = '-';
-                if (project.background_url) {
-                    console.log(`  - Creating img tag for: ${project.background_url}`);
-                    backgroundCell = `<img src="${project.background_url}" alt="Background" style="max-width: 60px; max-height: 40px; cursor: pointer;" onclick="window.open('${project.background_url}', '_blank')">`;
-                } else {
-                    console.log(`  - No background URL, showing "-"`);
-                }
-                
-                // Build archive/unarchive button
-                let archiveButton;
-                if (showingArchived) {
-                    archiveButton = `<button class="btn btn-sm btn-info unarchive-project-btn" title="Unarchive project">
-                        <i class="fas fa-box-open"></i>
-                    </button>`;
-                } else {
-                    archiveButton = `<button class="btn btn-sm btn-danger archive-project-btn" title="Archive project">
-                        <i class="fas fa-archive"></i>
-                    </button>`;
-                }
-                
-                // Build status display
-                let statusDisplay = '-';
-                if (project.project_status === 0) {
-                    statusDisplay = '<a href="#" class="project-status-link" data-status="0">Tender</a>';
-                } else if (project.project_status === 1) {
-                    statusDisplay = 'Won (Not Started)';
-                } else if (project.project_status === 2) {
-                    statusDisplay = 'Started';
-                } else if (project.project_status === 3) {
-                    statusDisplay = 'Finished';
-                }
-                
-                row.append(`
-                    <td class="project-name">${project.project}</td>
-                    <td class="project-status">${statusDisplay}</td>
-                    <td class="project-test"><a href="#" class="construction-link">construction</a></td>
-                    <td>${project.project_type_display}</td>
-                    <td>${project.xero_instance_name || '-'}</td>
-                    <td class="sales-account">${project.xero_sales_account_display || '-'}</td>
-                    <td class="manager">${project.manager || '-'}</td>
-                    <td class="manager-email">${project.manager_email || '-'}</td>
-                    <td class="contracts-admin-emails">${project.contracts_admin_emails || '-'}</td>
-                    <td class="background-image">${backgroundCell}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td style="text-align: center;">
-                        <button class="btn btn-sm btn-primary update-project-btn">Update</button>
-                    </td>
-                    <td style="text-align: center;">
-                        ${archiveButton}
-                    </td>
+                const card = $(`
+                    <div class="project-card" data-project-pk="${project.projects_pk}">
+                        <div class="card-header ${hasBackground}" style="${backgroundStyle}">
+                            <h5 class="card-title">${project.project}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="card-info">
+                                <div class="card-row">
+                                    <span class="card-icon"><i class="fas fa-tag"></i></span>
+                                    <span class="type-badge ${typeClass}">${project.project_type_display || 'General'}</span>
+                                </div>
+                                <div class="card-row">
+                                    <span class="card-icon"><i class="fas fa-user"></i></span>
+                                    <span class="card-label">Manager:</span>
+                                    <span class="card-value">${project.manager || '-'}</span>
+                                </div>
+                                <div class="card-row">
+                                    <span class="card-icon"><i class="fas fa-building"></i></span>
+                                    <span class="card-label">Xero:</span>
+                                    <span class="card-value">${project.xero_instance_name || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="card-status">
+                                <a href="#" class="project-status-link" data-status="${project.project_status}">Tender</a>
+                                <a href="#" class="construction-link">Execution</a>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn ${archiveBtnClass} btn-sm archive-project-btn" title="${archiveBtnTitle}">
+                                    <i class="fas ${archiveBtnIcon}"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 `);
                 
-                tbody.append(row);
+                // Store project data on the card for click handlers
+                card.data('project-pk', project.projects_pk);
+                card.data('original-project', project.project);
+                card.data('original-sales-account', project.xero_sales_account || '');
+                card.data('original-manager', project.manager || '');
+                card.data('original-manager-email', project.manager_email || '');
+                card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
+                card.data('xero-instance-pk', project.xero_instance_pk);
+                card.data('background-url', project.background_url || '');
+                card.data('project-type', project.project_type);
+                
+                grid.append(card);
             });
         }
         
@@ -502,74 +831,361 @@
             loadProjects(newShowingArchived);
         });
         
-        // Add Project button handler - insert blank row at top
+        // ========== PROJECT MODAL FUNCTIONALITY ==========
+        var currentModalProject = null;
+        var isEditMode = false;
+        var isCreateMode = false;
+        var xeroInstancesCache = null;
+        var xeroAccountsCache = {};
+        
+        // Add Project button - open modal in create mode
         $(document).on('click', '#addProjectBtn', function() {
-            const tbody = $('#projectsTableBody');
+            openProjectModal(null, true);
+        });
+        
+        // Click on project card to open modal
+        $(document).on('click', '.project-card', function(e) {
+            // Don't open modal if clicking on a button or link
+            if ($(e.target).closest('a, button').length) return;
             
-            // Check if add row already exists
-            if (tbody.find('.add-project-row').length > 0) {
-                alert('Please complete or cancel the current add operation first.');
-                return;
+            const card = $(this);
+            const project = {
+                projects_pk: card.data('project-pk'),
+                project: card.find('.card-title').text(),
+                project_type: card.data('project-type'),
+                manager: card.data('original-manager'),
+                manager_email: card.data('original-manager-email'),
+                contracts_admin_emails: card.data('original-contracts-admin-emails'),
+                xero_instance_pk: card.data('xero-instance-pk'),
+                xero_sales_account: card.data('original-sales-account'),
+                background_url: card.data('background-url')
+            };
+            openProjectModal(project, false);
+        });
+        
+        // Open project modal
+        function openProjectModal(project, createMode) {
+            currentModalProject = project;
+            isCreateMode = createMode;
+            isEditMode = false;
+            
+            // Reset modal state
+            clearValidationErrors();
+            
+            // Load Xero instances for dropdown
+            loadXeroInstances().then(function() {
+                if (createMode) {
+                    // Create mode
+                    $('#projectModalTitle').text('New Project');
+                    $('#projectModalHeader').removeClass('has-bg').css('background-image', '');
+                    
+                    // Clear all fields
+                    $('#modalProjectName').val('');
+                    $('#modalProjectType').val('general');
+                    $('#modalManager').val('');
+                    $('#modalManagerEmail').val('');
+                    $('#modalContractsAdminEmails').val('');
+                    $('#modalXeroInstance').val('');
+                    $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+                    $('#modalBackgroundImage').val('');
+                    
+                    // Enable all inputs for create mode
+                    enableFormInputs(true);
+                    
+                    // Show create button, hide others
+                    $('#modalUpdateBtn').hide();
+                    $('#modalSaveBtn').hide();
+                    $('#modalCreateBtn').show();
+                    $('.nav-buttons').hide();
+                } else {
+                    // View mode
+                    $('#projectModalTitle').text(project.project);
+                    
+                    // Set header background
+                    if (project.background_url) {
+                        $('#projectModalHeader').addClass('has-bg')
+                            .css('background-image', `url('${project.background_url}')`);
+                    } else {
+                        $('#projectModalHeader').removeClass('has-bg').css('background-image', '');
+                    }
+                    
+                    // Populate fields
+                    $('#modalProjectName').val(project.project);
+                    $('#modalProjectType').val(project.project_type);
+                    $('#modalManager').val(project.manager || '');
+                    $('#modalManagerEmail').val(project.manager_email || '');
+                    $('#modalContractsAdminEmails').val(project.contracts_admin_emails || '');
+                    $('#modalXeroInstance').val(project.xero_instance_pk || '');
+                    
+                    // Load sales accounts for the selected Xero instance
+                    if (project.xero_instance_pk) {
+                        loadXeroAccounts(project.xero_instance_pk).then(function() {
+                            $('#modalSalesAccount').val(project.xero_sales_account || '');
+                        });
+                    }
+                    
+                    // Disable all inputs (view mode)
+                    enableFormInputs(false);
+                    
+                    // Show update button, hide save/create
+                    $('#modalUpdateBtn').show();
+                    $('#modalSaveBtn').hide();
+                    $('#modalCreateBtn').hide();
+                    $('.nav-buttons').show();
+                }
+                
+                $('#projectModal').addClass('show');
+            });
+        }
+        
+        // Load Xero instances
+        function loadXeroInstances() {
+            if (xeroInstancesCache) {
+                populateXeroInstances(xeroInstancesCache);
+                return Promise.resolve();
             }
             
-            // Clear empty state message if present
-            tbody.find('tr').filter(function() {
-                return $(this).find('td[colspan]').length > 0;
-            }).remove();
-            
-            // Build Xero Instance dropdown options
-            const xeroInstances = {{ xero_instances_json|safe }};
-            let xeroInstanceOptions = '<option value="">Select Xero Instance *</option>';
-            xeroInstances.forEach(instance => {
-                xeroInstanceOptions += `<option value="${instance.xero_instance_pk}">${instance.xero_name}</option>`;
+            return $.ajax({
+                url: '/core/get_xero_instances/',
+                type: 'GET'
+            }).then(function(response) {
+                // API returns array directly
+                xeroInstancesCache = Array.isArray(response) ? response : [];
+                populateXeroInstances(xeroInstancesCache);
             });
+        }
+        
+        function populateXeroInstances(instances) {
+            const select = $('#modalXeroInstance');
+            select.html('<option value="">Select Xero Instance...</option>');
+            instances.forEach(function(inst) {
+                select.append(`<option value="${inst.xero_instance_pk}">${inst.xero_name}</option>`);
+            });
+        }
+        
+        // Load Xero accounts for an instance
+        function loadXeroAccounts(instancePk) {
+            if (xeroAccountsCache[instancePk]) {
+                populateXeroAccounts(xeroAccountsCache[instancePk]);
+                return Promise.resolve();
+            }
             
-            // Create add row
-            const addRow = $('<tr class="add-project-row" style="background-color: #f8f9fa;"></tr>');
-            
-            addRow.html(`
-                <td><input type="text" class="form-control form-control-sm add-project-name" placeholder="Project name *" required></td>
-                <td>-</td>
-                <td>-</td>
-                <td>
-                    <select class="form-control form-control-sm add-project-type">
-                        <option value="general">General</option>
-                        <option value="development">Development</option>
-                        <option value="construction">Construction</option>
-                        <option value="precast">Precast</option>
-                        <option value="pods">Pods</option>
-                    </select>
-                </td>
-                <td>
-                    <select class="form-control form-control-sm add-xero-instance" required>
-                        ${xeroInstanceOptions}
-                    </select>
-                </td>
-                <td>
-                    <select class="form-control form-control-sm add-sales-account" disabled>
-                        <option value="">Select Xero Instance first</option>
-                    </select>
-                </td>
-                <td><input type="text" class="form-control form-control-sm add-manager" placeholder="Manager name"></td>
-                <td><input type="email" class="form-control form-control-sm add-manager-email" placeholder="Manager email"></td>
-                <td><input type="text" class="form-control form-control-sm add-contracts-admin-emails" placeholder="Emails (semicolon separated)"></td>
-                <td><input type="file" class="form-control form-control-sm add-background-image" accept="image/*"></td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-                <td style="text-align: center;">
-                    <button class="btn btn-sm btn-success save-new-project-btn">Save</button>
-                </td>
-                <td style="text-align: center;">
-                    <button class="btn btn-sm btn-secondary cancel-add-project-btn">Cancel</button>
-                </td>
-            `);
-            
-            tbody.prepend(addRow);
-            
-            // Focus on project name input
-            addRow.find('.add-project-name').focus();
+            return $.ajax({
+                url: `/core/get_xero_accounts/${instancePk}/`,
+                type: 'GET'
+            }).then(function(response) {
+                const accounts = response.accounts || [];
+                // Filter for revenue/sales accounts
+                const filtered = accounts.filter(acc => 
+                    acc.account_type === 'REVENUE' || 
+                    acc.account_type === 'SALES' || 
+                    acc.account_type === 'OTHERINCOME'
+                );
+                xeroAccountsCache[instancePk] = filtered;
+                populateXeroAccounts(filtered);
+            });
+        }
+        
+        function populateXeroAccounts(accounts) {
+            const select = $('#modalSalesAccount');
+            select.html('<option value="">Select Sales Account...</option>');
+            accounts.forEach(function(acc) {
+                select.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
+            });
+        }
+        
+        // Xero instance change handler
+        $('#modalXeroInstance').on('change', function() {
+            const instancePk = $(this).val();
+            if (instancePk) {
+                loadXeroAccounts(instancePk);
+            } else {
+                $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+            }
         });
+        
+        // Enable/disable form inputs
+        function enableFormInputs(enable) {
+            $('#modalProjectName').prop('disabled', !enable);
+            $('#modalProjectType').prop('disabled', !enable);
+            $('#modalManager').prop('disabled', !enable);
+            $('#modalManagerEmail').prop('disabled', !enable);
+            $('#modalContractsAdminEmails').prop('disabled', !enable);
+            $('#modalXeroInstance').prop('disabled', !enable);
+            $('#modalSalesAccount').prop('disabled', !enable);
+            $('#modalBackgroundImage').prop('disabled', !enable);
+        }
+        
+        // Validation
+        function validateForm() {
+            let isValid = true;
+            clearValidationErrors();
+            
+            // Project name required
+            if (!$('#modalProjectName').val().trim()) {
+                $('#modalProjectName').addClass('is-invalid');
+                isValid = false;
+            }
+            
+            // Xero instance required
+            if (!$('#modalXeroInstance').val()) {
+                $('#modalXeroInstance').addClass('is-invalid');
+                isValid = false;
+            }
+            
+            // Sales account required
+            if (!$('#modalSalesAccount').val()) {
+                $('#modalSalesAccount').addClass('is-invalid');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        function clearValidationErrors() {
+            $('.form-control').removeClass('is-invalid');
+        }
+        
+        // Update button - enable edit mode
+        $('#modalUpdateBtn').on('click', function() {
+            isEditMode = true;
+            enableFormInputs(true);
+            // Disable project type change for existing projects
+            $('#modalProjectType').prop('disabled', true);
+            
+            $(this).hide();
+            $('#modalSaveBtn').show();
+        });
+        
+        // Save Changes button
+        $('#modalSaveBtn').on('click', function() {
+            if (!validateForm()) return;
+            
+            const formData = new FormData();
+            formData.append('project_name', $('#modalProjectName').val().trim());
+            formData.append('xero_instance_pk', $('#modalXeroInstance').val());
+            formData.append('xero_sales_account', $('#modalSalesAccount').val());
+            formData.append('manager', $('#modalManager').val().trim());
+            formData.append('manager_email', $('#modalManagerEmail').val().trim());
+            formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
+            
+            const bgFile = $('#modalBackgroundImage')[0].files[0];
+            if (bgFile) {
+                formData.append('background', bgFile);
+            }
+            
+            const btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+            
+            $.ajax({
+                url: `/core/update_project/${currentModalProject.projects_pk}/`,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#projectModal').removeClass('show');
+                        loadProjects($('#toggleArchiveBtn').data('showing-archived') === 1);
+                    } else {
+                        alert(response.message || 'Error saving project');
+                    }
+                    btn.prop('disabled', false).html('Save Changes');
+                },
+                error: function() {
+                    alert('Error saving project');
+                    btn.prop('disabled', false).html('Save Changes');
+                }
+            });
+        });
+        
+        // Create Project button
+        $('#modalCreateBtn').on('click', function() {
+            if (!validateForm()) return;
+            
+            const formData = new FormData();
+            formData.append('project_name', $('#modalProjectName').val().trim());
+            formData.append('project_type', $('#modalProjectType').val());
+            formData.append('xero_instance_pk', $('#modalXeroInstance').val());
+            formData.append('xero_sales_account', $('#modalSalesAccount').val());
+            formData.append('manager', $('#modalManager').val().trim());
+            formData.append('manager_email', $('#modalManagerEmail').val().trim());
+            formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
+            
+            const bgFile = $('#modalBackgroundImage')[0].files[0];
+            if (bgFile) {
+                formData.append('background', bgFile);
+            }
+            
+            const btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Creating...');
+            
+            $.ajax({
+                url: '/core/create_project/',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#projectModal').removeClass('show');
+                        loadProjects(false);
+                    } else {
+                        alert(response.message || 'Error creating project');
+                    }
+                    btn.prop('disabled', false).html('Create Project');
+                },
+                error: function() {
+                    alert('Error creating project');
+                    btn.prop('disabled', false).html('Create Project');
+                }
+            });
+        });
+        
+        // Modal Tender button
+        $('#modalTenderBtn').on('click', function(e) {
+            e.preventDefault();
+            if (!currentModalProject) return;
+            
+            // Close modal and trigger tender view
+            $('#projectModal').removeClass('show');
+            
+            // Find the card and trigger tender link click
+            const card = $(`.project-card[data-project-pk="${currentModalProject.projects_pk}"]`);
+            card.find('.project-status-link').click();
+        });
+        
+        // Modal Execution button
+        $('#modalExecutionBtn').on('click', function(e) {
+            e.preventDefault();
+            if (!currentModalProject) return;
+            
+            // Close modal and trigger execution view
+            $('#projectModal').removeClass('show');
+            
+            // Find the card and trigger construction link click
+            const card = $(`.project-card[data-project-pk="${currentModalProject.projects_pk}"]`);
+            card.find('.construction-link').click();
+        });
+        
+        // Close modal handlers
+        $('#projectModalClose, #modalCancelBtn').on('click', function() {
+            $('#projectModal').removeClass('show');
+            currentModalProject = null;
+            isEditMode = false;
+            isCreateMode = false;
+        });
+        
+        // Click outside modal to close
+        $('#projectModal').on('click', function(e) {
+            if ($(e.target).hasClass('project-modal')) {
+                $(this).removeClass('show');
+                currentModalProject = null;
+                isEditMode = false;
+                isCreateMode = false;
+            }
+        });
+        // ========== END PROJECT MODAL FUNCTIONALITY ==========
         
         // Handle Xero Instance selection to populate Sales Account dropdown
         $(document).on('change', '.add-xero-instance', function() {
@@ -711,13 +1327,16 @@
             }
         });
         
-        // Handle Construction link click - show construction view
+        // Handle Construction link click - show construction view (Execution mode)
         $(document).on('click', '.construction-link', function(e) {
             e.preventDefault();
             
-            const row = $(this).closest('tr');
+            // Support both card grid and legacy table row
+            const card = $(this).closest('.project-card');
+            const row = card.length ? card : $(this).closest('tr');
+            
             const projectPk = row.data('project-pk');
-            const projectName = row.find('.project-name').text();
+            const projectName = card.length ? card.find('.card-title').text() : row.find('.project-name').text();
             const backgroundUrl = row.data('background-url');
             const xeroInstancePk = row.data('xero-instance-pk');
             const projectType = row.data('project-type');
@@ -753,9 +1372,9 @@
                 }
             }
             
-            // Hide projects table and footer buttons
-            $('#projectsTable').closest('div').parent().hide();
-            $('#projectsFooterButtons').hide();
+            // Hide projects header and grid
+            $('#projectsHeader').hide();
+            $('#projectsGridContainer').hide();
             
             // Show construction view
             $('#constructionView').css('display', 'flex').show();
@@ -2871,74 +3490,44 @@
             }
         });
         
-        // Archive project button handler
-        $(document).on('click', '.archive-project-btn', function() {
+        // Archive project button handler (works with both cards and table rows)
+        $(document).on('click', '.archive-project-btn', function(e) {
+            e.stopPropagation();
             const button = $(this);
-            const row = button.closest('tr');
+            const card = button.closest('.project-card');
+            const row = card.length ? card : button.closest('tr');
             const projectPk = row.data('project-pk');
-            const projectName = row.find('.project-name').text();
+            const projectName = card.length ? card.find('.card-title').text() : row.find('.project-name').text();
             
-            if (!confirm(`Are you sure you want to archive "${projectName}"?`)) {
+            // Check if we're viewing archived (restore) or active (archive)
+            const isShowingArchived = $('#toggleArchiveBtn').data('showing-archived') === 1;
+            const action = isShowingArchived ? 'restore' : 'archive';
+            
+            if (!confirm(`Are you sure you want to ${action} "${projectName}"?`)) {
                 return;
             }
             
             // Show processing state
             button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
             
-            // Make AJAX call to archive project
+            // Make AJAX call to toggle archive status
             $.ajax({
                 url: `/core/toggle_project_archive/${projectPk}/`,
                 type: 'POST',
-                data: { archived: '1' },
+                data: { archived: isShowingArchived ? '0' : '1' },
                 success: function(response) {
                     if (response.status === 'success') {
-                        // Reload projects list (will remove archived project from active view)
-                        loadProjects(false);
+                        // Reload projects list
+                        loadProjects(isShowingArchived);
                     } else {
-                        alert(response.message || 'Error archiving project');
+                        alert(response.message || `Error ${action}ing project`);
                         button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error archiving project:', error);
-                    alert('Error archiving project. Please try again.');
+                    console.error(`Error ${action}ing project:`, error);
+                    alert(`Error ${action}ing project. Please try again.`);
                     button.prop('disabled', false).html('<i class="fas fa-archive"></i>');
-                }
-            });
-        });
-        
-        // Unarchive project button handler
-        $(document).on('click', '.unarchive-project-btn', function() {
-            const button = $(this);
-            const row = button.closest('tr');
-            const projectPk = row.data('project-pk');
-            const projectName = row.find('.project-name').text();
-            
-            if (!confirm(`Are you sure you want to unarchive "${projectName}"?`)) {
-                return;
-            }
-            
-            // Show processing state
-            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-            
-            // Make AJAX call to unarchive project
-            $.ajax({
-                url: `/core/toggle_project_archive/${projectPk}/`,
-                type: 'POST',
-                data: { archived: '0' },
-                success: function(response) {
-                    if (response.status === 'success') {
-                        // Reload projects list (will remove unarchived project from archived view)
-                        loadProjects(true);
-                    } else {
-                        alert(response.message || 'Error unarchiving project');
-                        button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error unarchiving project:', error);
-                    alert('Error unarchiving project. Please try again.');
-                    button.prop('disabled', false).html('<i class="fas fa-box-open"></i>');
                 }
             });
         });
@@ -2947,9 +3536,12 @@
         $(document).on('click', '.project-status-link', function(e) {
             e.preventDefault();
             
-            const row = $(this).closest('tr');
+            // Support both card grid and legacy table row
+            const card = $(this).closest('.project-card');
+            const row = card.length ? card : $(this).closest('tr');
+            
             const projectPk = row.data('project-pk');
-            const projectName = row.find('.project-name').text();
+            const projectName = card.length ? card.find('.card-title').text() : row.find('.project-name').text();
             const backgroundUrl = row.data('background-url');
             const projectType = row.data('project-type');
             
@@ -2982,16 +3574,16 @@
                 }
             }
             
-            // Hide projects table and footer buttons
-            $('#projectsTable').closest('div').parent().hide();
-            $('#projectsFooterButtons').hide();
+            // Hide projects header and grid
+            $('#projectsHeader').hide();
+            $('#projectsGridContainer').hide();
             
             // Show tender view
             $('#tenderView').css('display', 'flex').show();
             $('#tenderProjectName').text(projectName);
         });
         
-        // Handle Back to Projects button
+        // Handle Back to Projects button (from Tender view)
         $('#backToProjectsBtn').click(function() {
             console.log('Returning to projects list');
             
@@ -3009,9 +3601,9 @@
             // Hide tender view
             $('#tenderView').hide();
             
-            // Show projects table and footer buttons
-            $('#projectsTable').closest('div').parent().show();
-            $('#projectsFooterButtons').show();
+            // Show projects header and grid
+            $('#projectsHeader').show();
+            $('#projectsGridContainer').show();
         });
         
         // Handle Back to Projects button from Construction view
@@ -3032,9 +3624,9 @@
             // Hide construction view
             $('#constructionView').hide();
             
-            // Show projects table and footer buttons
-            $('#projectsTable').closest('div').parent().show();
-            $('#projectsFooterButtons').show();
+            // Show projects header and grid
+            $('#projectsHeader').show();
+            $('#projectsGridContainer').show();
         });
         
         // Function to reset construction view state

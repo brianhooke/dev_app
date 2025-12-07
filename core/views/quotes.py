@@ -465,7 +465,7 @@ def get_project_contacts(request, project_pk):
 @require_http_methods(["POST"])
 def save_project_quote(request):
     """
-    Save a quote for a project
+    Save or update a quote for a project
     
     Expected POST data:
     {
@@ -476,7 +476,8 @@ def save_project_quote(request):
         "line_items": [
             {"item": int (costing_pk), "amount": decimal, "notes": string}
         ],
-        "pdf_data_url": string (base64 encoded PDF)
+        "pdf_data_url": string (base64 encoded PDF) - required for new quotes only
+        "quote_pk": int (optional - if provided, updates existing quote)
     }
     """
     try:
@@ -489,13 +490,23 @@ def save_project_quote(request):
         quote_number = data.get('quote_number')
         line_items = data.get('line_items', [])
         pdf_data_url = data.get('pdf_data_url')
+        quote_pk = data.get('quote_pk')  # For updates
         
-        # Validate required fields
-        if not all([project_pk, supplier_pk, total_cost, quote_number, pdf_data_url]):
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Missing required fields'
-            }, status=400)
+        is_update = quote_pk is not None
+        
+        # Validate required fields (pdf_data_url only required for new quotes)
+        if is_update:
+            if not all([project_pk, supplier_pk, total_cost, quote_number]):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Missing required fields'
+                }, status=400)
+        else:
+            if not all([project_pk, supplier_pk, total_cost, quote_number, pdf_data_url]):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Missing required fields'
+                }, status=400)
         
         if not line_items:
             return JsonResponse({
@@ -520,35 +531,60 @@ def save_project_quote(request):
                 'message': 'Contact/Supplier not found'
             }, status=404)
         
-        # Process PDF
-        try:
-            # Extract base64 data from data URL
-            format_part, imgstr = pdf_data_url.split(';base64,')
-            ext = format_part.split('/')[-1]
-            
-            # Generate unique filename
-            supplier_name = contact.name.replace(' ', '_')
-            unique_filename = f"{supplier_name}_{quote_number}_{uuid.uuid4()}.{ext}"
-            
-            # Decode and create file
-            pdf_content = ContentFile(base64.b64decode(imgstr), name=unique_filename)
-        except Exception as e:
-            logger.error(f"Error processing PDF: {str(e)}")
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Error processing PDF: {str(e)}'
-            }, status=400)
+        # Process PDF only for new quotes
+        pdf_content = None
+        if pdf_data_url:
+            try:
+                # Extract base64 data from data URL
+                format_part, imgstr = pdf_data_url.split(';base64,')
+                ext = format_part.split('/')[-1]
+                
+                # Generate unique filename
+                supplier_name = contact.name.replace(' ', '_')
+                unique_filename = f"{supplier_name}_{quote_number}_{uuid.uuid4()}.{ext}"
+                
+                # Decode and create file
+                pdf_content = ContentFile(base64.b64decode(imgstr), name=unique_filename)
+            except Exception as e:
+                logger.error(f"Error processing PDF: {str(e)}")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Error processing PDF: {str(e)}'
+                }, status=400)
         
-        # Create Quote using transaction
+        # Create or Update Quote using transaction
         with transaction.atomic():
-            # Create the quote
-            quote = Quotes.objects.create(
-                supplier_quote_number=quote_number,
-                total_cost=total_cost,
-                pdf=pdf_content,
-                contact_pk=contact,
-                project=project
-            )
+            if is_update:
+                # Update existing quote
+                try:
+                    quote = Quotes.objects.get(quotes_pk=quote_pk)
+                except Quotes.DoesNotExist:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Quote not found'
+                    }, status=404)
+                
+                # Update quote fields
+                quote.supplier_quote_number = quote_number
+                quote.total_cost = total_cost
+                quote.contact_pk = contact
+                if pdf_content:
+                    quote.pdf = pdf_content
+                quote.save()
+                
+                # Delete existing allocations and recreate
+                Quote_allocations.objects.filter(quotes_pk=quote).delete()
+                
+                logger.info(f"Updating quote {quote_pk}")
+            else:
+                # Create new quote
+                quote = Quotes.objects.create(
+                    supplier_quote_number=quote_number,
+                    total_cost=total_cost,
+                    pdf=pdf_content,
+                    contact_pk=contact,
+                    project=project
+                )
             
             # Create quote allocations
             is_construction = (project.project_type == 'construction')
@@ -600,11 +636,12 @@ def save_project_quote(request):
                         notes=notes
                     )
             
-            logger.info(f"Quote {quote.quotes_pk} created for project {project.project} with {len(line_items)} allocations")
+            action = 'updated' if is_update else 'created'
+            logger.info(f"Quote {quote.quotes_pk} {action} for project {project.project} with {len(line_items)} allocations")
             
             return JsonResponse({
                 'status': 'success',
-                'message': 'Quote saved successfully',
+                'message': f'Quote {action} successfully',
                 'quote_pk': quote.quotes_pk,
                 'quote_number': quote.supplier_quote_number
             })

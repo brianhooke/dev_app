@@ -1,0 +1,47 @@
+<!-- Purchase Orders Template - Using Reusable Allocations Section -->
+<!-- Context variables main_table_columns and allocations_columns are passed from the view -->
+
+{% include "core/components/reusable_allocations_section.html" with section_id="po" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="PO Line Items" viewer_placeholder_text="Click on a supplier to view purchase order" viewer_placeholder_icon="fas fa-file-invoice" readonly=True allocations_footer_label="Total:" %}
+
+<!-- PO-specific CSS overrides -->
+<style>
+    /* Compact Main Table Styling for PO */
+    #poMainTable { font-size: 12px; }
+    #poMainTable th { padding: 6px 5px !important; font-size: 11px; white-space: nowrap; vertical-align: middle; }
+    #poMainTable td { padding: 4px 5px !important; vertical-align: middle; }
+    #poMainTable .form-control-sm { font-size: 11px; padding: 3px 5px; height: 28px; min-height: 28px; }
+    #poMainTable input[type="text"], #poMainTable input[type="number"] { font-size: 11px; padding: 3px 5px; height: 28px; }
+    #poMainTable tbody tr { cursor: pointer; transition: opacity 0.3s ease, box-shadow 0.3s ease; }
+    #poMainTable tbody.has-selection tr:not(.selected-row) { opacity: 0.4; }
+    #poMainTable tbody tr.selected-row { opacity: 1 !important; background-color: #e3f2fd !important; box-shadow: 0 0 10px rgba(33, 150, 243, 0.3); position: relative; }
+    #poMainTable tbody tr:hover { opacity: 0.8 !important; }
+    
+    /* PO Email button styling */
+    .po-email-btn { padding: 4px 8px; font-size: 12px; }
+    
+    /* Viewer footer for download button */
+    #poViewerFooter {
+        display: none;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-top: 1px solid #ddd;
+        text-align: center;
+    }
+    #poViewerFooter.visible {
+        display: block;
+    }
+</style>
+
+<!-- Viewer footer with download button (appended after viewer) -->
+<script>
+(function() {
+    // Add download button footer to the viewer section
+    var viewerSection = document.getElementById('poViewerSection');
+    if (viewerSection) {
+        var footer = document.createElement('div');
+        footer.id = 'poViewerFooter';
+        footer.innerHTML = '<button class="btn btn-primary btn-sm" id="poDownloadBtn"><i class="fa fa-download"></i> Download PDF</button>';
+        viewerSection.appendChild(footer);
+    }
+})();
+</script>

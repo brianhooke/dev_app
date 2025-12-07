@@ -127,6 +127,13 @@ Optional context variables:
     <div style="display: flex; flex: 1; overflow: hidden;">
         <!-- Left side: Main Table (top 2/3) and Allocations (bottom 1/3) (60%) -->
         <div style="width: 60%; padding-right: 8px; display: flex; flex-direction: column; height: 100%;">
+            <!-- Main Table Title -->
+            {% if main_table_title %}
+            <div style="text-align: left; margin-bottom: 5px; flex-shrink: 0;">
+                <h6 id="{{ section_id }}MainTableTitle" style="margin: 0;">{{ main_table_title }}</h6>
+            </div>
+            {% endif %}
+            
             <!-- Main Table -->
             <div id="{{ section_id }}TableContainer" style="flex: 2; overflow-y: auto; margin-bottom: 15px;">
                 <table class="table table-bordered table-hover" id="{{ section_id }}MainTable">
@@ -171,7 +178,7 @@ Optional context variables:
                                 {% endfor %}
                             </tr>
                         </thead>
-                        <tbody id="{{ section_id }}AllocationsTableBody" style="display: block; overflow-y: auto; max-height: 168px;">
+                        <tbody id="{{ section_id }}AllocationsTableBody" style="display: block; overflow-y: auto; max-height: 210px;">
                             <!-- Allocations will be populated here - rows styled via CSS -->
                         </tbody>
                     </table>
@@ -222,8 +229,8 @@ Optional context variables:
 // Dynamic height adjustment for allocations table - sizes to content up to max
 (function() {
     var sectionId = '{{ section_id }}';
-    var rowHeight = 28; // Approximate height per row in pixels
-    var maxRows = 6; // Maximum rows before scrolling kicks in (one row taller than before)
+    var rowHeight = 35; // Approximate height per row in pixels (increased for input rows)
+    var maxRows = 6; // Maximum rows before scrolling kicks in
     
     // Function to adjust allocations table height based on row count
     window.adjustAllocationsHeight = window.adjustAllocationsHeight || {};

@@ -1,0 +1,1064 @@
+<!-- Working Budget Template -->
+<style>
+    .contract-budget-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        position: relative;
+        overflow-y: auto;
+    }
+    
+    .contract-budget-container .table-wrapper {
+        flex: 0 0 auto;
+        position: relative;
+    }
+    
+    
+    /* Category row styling */
+    .contract-budget-container .reusable-table tr.category-row {
+        background-color: #f9f9f9;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .contract-budget-container .reusable-table tr.category-row:hover {
+        background-color: #ececec;
+    }
+    
+    /* Internal category styling - purple */
+    .contract-budget-container .reusable-table tr.category-row.internal-category {
+        background-color: #e6d5f5;
+        color: #6f2da8;
+    }
+    
+    .contract-budget-container .reusable-table tr.category-row.internal-category:hover {
+        background-color: #d9c5ed;
+    }
+    
+    .contract-budget-container .reusable-table tr.item-row.internal-item {
+        color: #6f2da8;
+    }
+    
+    .contract-budget-container .reusable-table tr.item-row.internal-item td {
+        color: #6f2da8;
+    }
+    
+    /* Item row indent */
+    .contract-budget-container .reusable-table td.indent {
+        padding-left: 30px;
+    }
+    
+    /* Compact inputs for contract budget */
+    .contract-budget-container .reusable-table input[type="number"] {
+        width: 100%;
+        padding: 3px 5px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 11px;
+        text-align: right;
+    }
+    
+    .contract-budget-container .reusable-table input[type="number"]:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .contract-budget-container .reusable-table .budget-amount {
+        text-align: right;
+        font-weight: 500;
+    }
+    
+    .contract-budget-container .reusable-table .committed-amount {
+        text-align: right;
+        color: #6c757d;
+    }
+    
+    /* Right-align all data cells except first column (Category/Item) */
+    .contract-budget-container .reusable-table tbody td {
+        text-align: right;
+    }
+    
+    .contract-budget-container .reusable-table tbody td:first-child {
+        text-align: left;
+    }
+    
+    .contract-budget-container .reusable-table .working-budget-amount {
+        text-align: right;
+    }
+    
+    /* Totals row styling - using tfoot for perfect alignment */
+    .contract-budget-container .reusable-table tfoot tr {
+        background: var(--gradient-primary);
+        color: white;
+        font-weight: bold;
+    }
+    
+    .contract-budget-container .reusable-table tfoot td {
+        padding: 6px 6px;
+        text-align: right;
+        font-size: 12px;
+        color: white;
+    }
+    
+    .contract-budget-container .reusable-table tfoot td:first-child {
+        text-align: left;
+    }
+</style>
+
+<div class="contract-budget-container">
+    <div class="table-wrapper">
+        <table class="reusable-table" id="contractBudgetTable">
+            <thead id="contractBudgetTableHead">
+                <!-- Table headers will be rendered by JavaScript based on project type -->
+            </thead>
+            <tbody id="contractBudgetTableBody">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">
+                        Loading...
+                    </td>
+                </tr>
+            </tbody>
+            <tfoot id="totalsRow">
+                <!-- Totals will be rendered by JavaScript based on project type -->
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    console.log('Working Budget script loaded');
+    
+    // Initialize Contract Budget when loaded - use setTimeout to ensure DOM is ready
+    setTimeout(function() {
+        if (window.currentContractBudgetProject && window.currentContractBudgetProject.pk) {
+            console.log('Initializing contract budget for project:', window.currentContractBudgetProject.pk, 'in container:', window.currentContractBudgetContainer);
+            loadContractBudget(window.currentContractBudgetProject.pk);
+        } else {
+            // No project selected yet - this is normal on page load
+            console.log('Contract Budget waiting for project selection...');
+        }
+    }, 100);
+    
+    function renderTableHeaders(isTender, isConstructionType) {
+        // isTender: controls column visibility (true = reduced columns, false = full columns)
+        // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
+        var thead = $(window.currentContractBudgetContainer + ' #contractBudgetTableHead');
+        thead.empty();
+        
+        if (isTender) {
+            // TENDER MODE: Reduced columns
+            if (isConstructionType) {
+                // Tender + Construction: Two-row header with Uncommitted spanning Qty | Rate | Amount
+                // Columns: Category/Item | Unit | Working Budget | Uncommitted (Qty|Rate|Amount) | Committed
+                var headerRow1 = $('<tr></tr>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Category / Item</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Unit</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Working Budget</th>');
+                headerRow1.append('<th colspan="3" style="text-align: center;">Uncommitted</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Committed</th>');
+                thead.append(headerRow1);
+                
+                var headerRow2 = $('<tr></tr>');
+                headerRow2.append('<th>Qty</th>');
+                headerRow2.append('<th>Rate</th>');
+                headerRow2.append('<th>Amount</th>');
+                thead.append(headerRow2);
+            } else {
+                // Tender + Non-construction: Single row header
+                // Columns: Category/Item | Unit | Working Budget | Uncommitted | Committed
+                var headerRow = $('<tr></tr>');
+                headerRow.append('<th>Category / Item</th>');
+                headerRow.append('<th>Unit</th>');
+                headerRow.append('<th>Working Budget</th>');
+                headerRow.append('<th>Uncommitted</th>');
+                headerRow.append('<th>Committed</th>');
+                thead.append(headerRow);
+            }
+        } else {
+            // EXECUTION MODE: Full columns
+            if (isConstructionType) {
+                // Construction project_type: Two-row header with Uncommitted spanning Qty | Rate | Amount
+                // Columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted (Qty|Rate|Amount) | Committed | Cost to Complete | Invoiced | Fixed on Site
+                var headerRow1 = $('<tr></tr>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Category / Item</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Unit</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Contract Budget</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Working Budget</th>');
+                headerRow1.append('<th colspan="3" style="text-align: center;">Uncommitted</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Committed</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Cost to Complete</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Invoiced</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Fixed on Site</th>');
+                thead.append(headerRow1);
+                
+                var headerRow2 = $('<tr></tr>');
+                headerRow2.append('<th>Qty</th>');
+                headerRow2.append('<th>Rate</th>');
+                headerRow2.append('<th>Amount</th>');
+                thead.append(headerRow2);
+            } else {
+                // Non-construction project_type: Single row header with single Uncommitted
+                // Columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                var headerRow = $('<tr></tr>');
+                headerRow.append('<th>Category / Item</th>');
+                headerRow.append('<th>Unit</th>');
+                headerRow.append('<th>Contract Budget</th>');
+                headerRow.append('<th>Working Budget</th>');
+                headerRow.append('<th>Uncommitted</th>');
+                headerRow.append('<th>Committed</th>');
+                headerRow.append('<th>Cost to Complete</th>');
+                headerRow.append('<th>Invoiced</th>');
+                headerRow.append('<th>Fixed on Site</th>');
+                thead.append(headerRow);
+            }
+        }
+    }
+    
+    function renderTotalsRow(isTender, isConstructionType) {
+        // isTender: controls column visibility (true = reduced columns, false = full columns)
+        // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
+        var tfoot = $(window.currentContractBudgetContainer + ' #totalsRow');
+        tfoot.empty();
+        
+        var row = $('<tr></tr>');
+        
+        if (isTender) {
+            // TENDER MODE: Reduced columns
+            if (isConstructionType) {
+                // Tender + Construction: 7 columns with Qty|Rate|Amount
+                // Category/Item | Unit | Working Budget | Qty | Rate | Amount | Committed
+                row.append('<td><strong>TOTALS</strong></td>');
+                row.append('<td></td>'); // Unit
+                row.append('<td id="totalWorkingBudget">$0.00</td>');
+                row.append('<td></td>'); // Qty
+                row.append('<td></td>'); // Rate
+                row.append('<td id="totalUncommittedAmount">$0.00</td>');
+                row.append('<td id="totalCommitted">$0.00</td>');
+            } else {
+                // Tender + Non-construction: 5 columns
+                // Category/Item | Unit | Working Budget | Uncommitted | Committed
+                row.append('<td><strong>TOTALS</strong></td>');
+                row.append('<td></td>'); // Unit
+                row.append('<td id="totalWorkingBudget">$0.00</td>');
+                row.append('<td id="totalUncommitted">$0.00</td>');
+                row.append('<td id="totalCommitted">$0.00</td>');
+            }
+        } else {
+            // EXECUTION MODE: Full columns
+            if (isConstructionType) {
+                // Construction project_type: 11 columns with Qty|Rate|Amount
+                // Category/Item | Unit | Contract Budget | Working Budget | Qty | Rate | Amount | Committed | Cost to Complete | Invoiced | Fixed on Site
+                row.append('<td><strong>TOTALS</strong></td>');
+                row.append('<td></td>'); // Unit
+                row.append('<td id="totalContractBudget">$0.00</td>');
+                row.append('<td id="totalWorkingBudget">$0.00</td>');
+                row.append('<td></td>'); // Qty
+                row.append('<td></td>'); // Rate
+                row.append('<td id="totalUncommittedAmount">$0.00</td>');
+                row.append('<td id="totalCommitted">$0.00</td>');
+                row.append('<td id="totalCostToComplete">$0.00</td>');
+                row.append('<td id="totalInvoiced">$0.00</td>');
+                row.append('<td id="totalFixedOnSite">$0.00</td>');
+            } else {
+                // Non-construction project_type: 9 columns with single Uncommitted
+                // Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                row.append('<td><strong>TOTALS</strong></td>');
+                row.append('<td></td>'); // Unit
+                row.append('<td id="totalContractBudget">$0.00</td>');
+                row.append('<td id="totalWorkingBudget">$0.00</td>');
+                row.append('<td id="totalUncommitted">$0.00</td>');
+                row.append('<td id="totalCommitted">$0.00</td>');
+                row.append('<td id="totalCostToComplete">$0.00</td>');
+                row.append('<td id="totalInvoiced">$0.00</td>');
+                row.append('<td id="totalFixedOnSite">$0.00</td>');
+            }
+        }
+        
+        tfoot.append(row);
+    }
+    
+    function loadContractBudget(projectPk) {
+        console.log('Loading contract budget for project:', projectPk);
+        
+        // Two separate conditions:
+        // isTender: controls column visibility (true = reduced columns, false = full columns)
+        // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
+        var isTender = window.currentContractBudgetProject && window.currentContractBudgetProject.isTender === true;
+        var isConstructionType = window.currentContractBudgetProject && window.currentContractBudgetProject.project_type === 'construction';
+        
+        console.log('isTender (column visibility):', isTender);
+        console.log('isConstructionType (Uncommitted format):', isConstructionType);
+        
+        // Store these globally for use in other functions
+        window.currentContractBudgetIsTender = isTender;
+        window.currentContractBudgetIsConstructionType = isConstructionType;
+        
+        // Render headers and totals row based on both conditions
+        renderTableHeaders(isTender, isConstructionType);
+        renderTotalsRow(isTender, isConstructionType);
+        
+        // Load categories, items, and committed amounts
+        $.ajax({
+            url: '/get_project_categories/' + projectPk + '/',
+            type: 'GET',
+            success: function(categoriesResponse) {
+                console.log('Categories loaded:', categoriesResponse);
+                
+                // Load items
+                $.ajax({
+                    url: '/get_project_items/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(itemsResponse) {
+                        console.log('Items loaded:', itemsResponse);
+                        
+                        // Load committed amounts
+                        $.ajax({
+                            url: '/core/get_project_committed_amounts/' + projectPk + '/',
+                            type: 'GET',
+                            success: function(committedResponse) {
+                                console.log('Committed amounts loaded:', committedResponse);
+                                renderContractBudgetTable(
+                                    categoriesResponse.categories, 
+                                    itemsResponse.items,
+                                    committedResponse.committed_amounts || {},
+                                    isTender,
+                                    isConstructionType
+                                );
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error loading committed amounts:', error);
+                                // Still render table with empty committed amounts
+                                renderContractBudgetTable(
+                                    categoriesResponse.categories, 
+                                    itemsResponse.items,
+                                    {},
+                                    isTender,
+                                    isConstructionType
+                                );
+                            }
+                        });
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading items:', error);
+                        var colspan = getColspan(isTender, isConstructionType);
+                        $(window.currentContractBudgetContainer + ' #contractBudgetTableBody').html('<tr><td colspan="' + colspan + '" style="text-align: center; color: #dc3545; padding: 20px;">Error loading items</td></tr>');
+                    }
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading categories:', error);
+                var colspan = getColspan(isTender, isConstructionType);
+                $(window.currentContractBudgetContainer + ' #contractBudgetTableBody').html('<tr><td colspan="' + colspan + '" style="text-align: center; color: #dc3545; padding: 20px;">Error loading categories</td></tr>');
+            }
+        });
+    }
+    
+    // Helper function to get colspan based on mode
+    function getColspan(isTender, isConstructionType) {
+        if (isTender) {
+            if (isConstructionType) {
+                return 7;  // Tender + Construction: 7 columns (with Qty|Rate|Amount)
+            } else {
+                return 5;  // Tender + Non-construction: 5 columns
+            }
+        } else {
+            if (isConstructionType) {
+                return 11; // Execution + Construction: 11 columns (with Qty|Rate|Amount)
+            } else {
+                return 9;  // Execution + Non-construction: 9 columns (single Uncommitted)
+            }
+        }
+    }
+    
+    function renderContractBudgetTable(categories, items, committedAmounts, isTender, isConstructionType) {
+        // isTender: controls column visibility (true = reduced columns, false = full columns)
+        // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
+        console.log('renderContractBudgetTable called');
+        console.log('isTender:', isTender, 'isConstructionType:', isConstructionType);
+        console.log('Categories:', categories);
+        console.log('Items:', items);
+        console.log('Committed amounts:', committedAmounts);
+        
+        // Target tbody within current container to avoid template storage
+        var tbody = $(window.currentContractBudgetContainer + ' #contractBudgetTableBody');
+        console.log('Found tbody in', window.currentContractBudgetContainer, ':', tbody.length > 0);
+        
+        tbody.empty();
+        
+        var colspan = getColspan(isTender, isConstructionType);
+        
+        if (!categories || categories.length === 0) {
+            console.log('No categories found');
+            tbody.html('<tr><td colspan="' + colspan + '" style="text-align: center; color: #6c757d; padding: 20px;">No categories yet. Add categories and items in the Items section first.</td></tr>');
+            return;
+        }
+        
+        console.log('Rendering', categories.length, 'categories');
+        
+        // Sort categories by order_in_list
+        categories.sort(function(a, b) {
+            return a.order_in_list - b.order_in_list;
+        });
+        
+        // Render each category and its items
+        categories.forEach(function(category) {
+            // Check if this is the Internal category
+            var isInternal = category.category === 'Internal';
+            
+            // Render category row
+            var categoryRow = $('<tr class="category-row"></tr>');
+            if (isInternal) {
+                categoryRow.addClass('internal-category');
+            }
+            categoryRow.append('<td><strong>' + escapeHtml(category.category) + '</strong></td>');
+            
+            // Add category row cells based on mode
+            categoryRow.append('<td>-</td>'); // Unit (always present)
+            
+            if (isTender) {
+                // TENDER MODE: Reduced columns
+                categoryRow.append('<td class="working-budget-amount">-</td>'); // Working Budget
+                
+                if (isConstructionType) {
+                    // Tender + Construction: Qty | Rate | Amount
+                    categoryRow.append('<td>-</td>'); // Qty
+                    categoryRow.append('<td>-</td>'); // Rate
+                    categoryRow.append('<td>-</td>'); // Amount
+                } else {
+                    // Tender + Non-construction: single Uncommitted
+                    categoryRow.append('<td>-</td>'); // Uncommitted
+                }
+                
+                categoryRow.append('<td class="committed-amount">-</td>'); // Committed
+            } else {
+                // EXECUTION MODE: Full columns
+                categoryRow.append('<td class="contract-budget-amount">-</td>'); // Contract Budget
+                categoryRow.append('<td class="working-budget-amount">-</td>'); // Working Budget
+                
+                if (isConstructionType) {
+                    // Construction: Qty | Rate | Amount
+                    categoryRow.append('<td>-</td>'); // Qty
+                    categoryRow.append('<td>-</td>'); // Rate
+                    categoryRow.append('<td>-</td>'); // Amount
+                } else {
+                    // Non-construction: single Uncommitted
+                    categoryRow.append('<td>-</td>'); // Uncommitted
+                }
+                
+                categoryRow.append('<td class="committed-amount">-</td>'); // Committed
+                categoryRow.append('<td>-</td>'); // Cost to Complete
+                categoryRow.append('<td>-</td>'); // Invoiced
+                categoryRow.append('<td>-</td>'); // Fixed on Site
+            }
+            
+            tbody.append(categoryRow);
+            
+            // Get items for this category
+            var categoryItems = items.filter(function(item) {
+                return item.category__category === category.category;
+            });
+            
+            // Sort items by order_in_list
+            categoryItems.sort(function(a, b) {
+                return a.order_in_list - b.order_in_list;
+            });
+            
+            // Render item rows
+            categoryItems.forEach(function(item) {
+                var itemRow = $('<tr class="item-row"></tr>');
+                
+                // Add internal-item class if this is an Internal category item
+                if (isInternal) {
+                    itemRow.addClass('internal-item');
+                    itemRow.attr('data-is-internal', 'true');
+                }
+                
+                // Store item pk on row for easy access
+                itemRow.attr('data-item-pk', item.costing_pk);
+                
+                // Category / Item column with indent
+                itemRow.append('<td class="indent">' + escapeHtml(item.item) + '</td>');
+                
+                // Unit column (always present)
+                var unitCell = $('<td></td>');
+                unitCell.text(item.unit || '-');
+                itemRow.append(unitCell);
+                
+                // Get amounts from backend data
+                var committedAmount = committedAmounts[item.costing_pk] || 0;
+                var invoicedAmount = item.invoiced_amount || 0;
+                var fixedOnSiteAmount = item.fixed_on_site_amount || 0;
+                
+                if (isTender) {
+                    // ===== TENDER MODE =====
+                    // Reduced columns: Category/Item | Unit | Working Budget | Uncommitted | Committed
+                    
+                    // Working Budget column (calculated: Uncommitted + Committed)
+                    var workingBudgetCell = $('<td class="working-budget-amount"></td>');
+                    workingBudgetCell.attr('data-item-pk', item.costing_pk);
+                    workingBudgetCell.text('$0.00');
+                    itemRow.append(workingBudgetCell);
+                    
+                    // Uncommitted column(s) - depends on isConstructionType
+                    if (isConstructionType) {
+                        // Tender + Construction: Qty | Rate | Amount
+                        if (isInternal) {
+                            // Internal items: show dashes
+                            itemRow.append('<td>-</td>'); // Qty
+                            itemRow.append('<td>-</td>'); // Rate
+                            itemRow.append('<td>-</td>'); // Amount
+                        } else {
+                            // Regular items: editable Qty and Rate, calculated Amount
+                            
+                            // Qty input
+                            var qtyCell = $('<td></td>');
+                            var qtyInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-qty">');
+                            qtyInput.attr('data-item-pk', item.costing_pk);
+                            if (item.uncommitted_qty !== undefined && item.uncommitted_qty !== null) {
+                                qtyInput.val(parseFloat(item.uncommitted_qty).toFixed(2));
+                            }
+                            qtyInput.on('input', function() {
+                                updateUncommittedAmount(item.costing_pk);
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            qtyInput.on('blur', function() {
+                                saveUncommittedConstruction(item.costing_pk);
+                            });
+                            qtyCell.append(qtyInput);
+                            itemRow.append(qtyCell);
+                            
+                            // Rate input
+                            var rateCell = $('<td></td>');
+                            var rateInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-rate">');
+                            rateInput.attr('data-item-pk', item.costing_pk);
+                            if (item.uncommitted_rate !== undefined && item.uncommitted_rate !== null) {
+                                rateInput.val(parseFloat(item.uncommitted_rate).toFixed(2));
+                            }
+                            rateInput.on('input', function() {
+                                updateUncommittedAmount(item.costing_pk);
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            rateInput.on('blur', function() {
+                                saveUncommittedConstruction(item.costing_pk);
+                            });
+                            rateCell.append(rateInput);
+                            itemRow.append(rateCell);
+                            
+                            // Amount (calculated, read-only display)
+                            var amountCell = $('<td class="uncommitted-amount"></td>');
+                            amountCell.attr('data-item-pk', item.costing_pk);
+                            amountCell.text('$0.00');
+                            itemRow.append(amountCell);
+                        }
+                    } else {
+                        // Tender + Non-construction: single Uncommitted input
+                        var uncommittedCell = $('<td></td>');
+                        if (isInternal) {
+                            uncommittedCell.text('-');
+                            uncommittedCell.attr('data-item-pk', item.costing_pk);
+                        } else {
+                            var uncommittedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-input">');
+                            uncommittedInput.attr('data-item-pk', item.costing_pk);
+                            
+                            if (item.uncommitted_amount !== undefined && item.uncommitted_amount !== null) {
+                                uncommittedInput.val(parseFloat(item.uncommitted_amount).toFixed(2));
+                            }
+                            
+                            uncommittedInput.on('input', function() {
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            uncommittedInput.on('blur', function() {
+                                var newUncommitted = parseFloat($(this).val()) || 0;
+                                saveUncommitted(item.costing_pk, newUncommitted);
+                            });
+                            
+                            uncommittedCell.append(uncommittedInput);
+                        }
+                        itemRow.append(uncommittedCell);
+                    }
+                    
+                    // Committed column
+                    var committedCell = $('<td class="committed-amount"></td>');
+                    committedCell.attr('data-item-pk', item.costing_pk);
+                    committedCell.attr('data-committed-amount', committedAmount);
+                    
+                    if (isInternal) {
+                        var committedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="committed-input">');
+                        committedInput.attr('data-item-pk', item.costing_pk);
+                        committedInput.val(committedAmount > 0 ? committedAmount.toFixed(2) : '');
+                        committedInput.on('input', function() {
+                            var newCommitted = parseFloat($(this).val()) || 0;
+                            committedCell.attr('data-committed-amount', newCommitted);
+                            updateWorkingBudget(item.costing_pk);
+                            updateTotals();
+                        });
+                        committedInput.on('blur', function() {
+                            var newCommitted = parseFloat($(this).val()) || 0;
+                            saveInternalCommitted(item.costing_pk, newCommitted);
+                        });
+                        committedCell.append(committedInput);
+                    } else {
+                        committedCell.text('$' + committedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    }
+                    itemRow.append(committedCell);
+                    
+                } else {
+                    // ===== EXECUTION MODE =====
+                    // Full columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                    
+                    // Contract Budget column (read-only, from backend)
+                    var contractBudgetCell = $('<td class="contract-budget-amount"></td>');
+                    contractBudgetCell.attr('data-item-pk', item.costing_pk);
+                    var contractBudgetValue = item.contract_budget || 0;
+                    contractBudgetCell.attr('data-amount', contractBudgetValue);
+                    contractBudgetCell.text('$' + contractBudgetValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    itemRow.append(contractBudgetCell);
+                    
+                    // Working Budget column (calculated: Uncommitted + Committed)
+                    var workingBudgetCell = $('<td class="working-budget-amount"></td>');
+                    workingBudgetCell.attr('data-item-pk', item.costing_pk);
+                    workingBudgetCell.text('$0.00');
+                    itemRow.append(workingBudgetCell);
+                    
+                    // Uncommitted column(s) - depends on isConstructionType
+                    if (isConstructionType) {
+                        // Construction project_type: Qty | Rate | Amount
+                        if (isInternal) {
+                            // Internal items: show dashes
+                            itemRow.append('<td>-</td>'); // Qty
+                            itemRow.append('<td>-</td>'); // Rate
+                            itemRow.append('<td>-</td>'); // Amount
+                        } else {
+                            // Regular items: editable Qty and Rate, calculated Amount
+                            
+                            // Qty input
+                            var qtyCell = $('<td></td>');
+                            var qtyInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-qty">');
+                            qtyInput.attr('data-item-pk', item.costing_pk);
+                            if (item.uncommitted_qty !== undefined && item.uncommitted_qty !== null) {
+                                qtyInput.val(parseFloat(item.uncommitted_qty).toFixed(2));
+                            }
+                            qtyInput.on('input', function() {
+                                updateUncommittedAmount(item.costing_pk);
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            qtyInput.on('blur', function() {
+                                saveUncommittedConstruction(item.costing_pk);
+                            });
+                            qtyCell.append(qtyInput);
+                            itemRow.append(qtyCell);
+                            
+                            // Rate input
+                            var rateCell = $('<td></td>');
+                            var rateInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-rate">');
+                            rateInput.attr('data-item-pk', item.costing_pk);
+                            if (item.uncommitted_rate !== undefined && item.uncommitted_rate !== null) {
+                                rateInput.val(parseFloat(item.uncommitted_rate).toFixed(2));
+                            }
+                            rateInput.on('input', function() {
+                                updateUncommittedAmount(item.costing_pk);
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            rateInput.on('blur', function() {
+                                saveUncommittedConstruction(item.costing_pk);
+                            });
+                            rateCell.append(rateInput);
+                            itemRow.append(rateCell);
+                            
+                            // Amount (calculated, read-only display)
+                            var amountCell = $('<td class="uncommitted-amount"></td>');
+                            amountCell.attr('data-item-pk', item.costing_pk);
+                            amountCell.text('$0.00');
+                            itemRow.append(amountCell);
+                        }
+                    } else {
+                        // Non-construction project_type: single Uncommitted
+                        var uncommittedCell = $('<td></td>');
+                        if (isInternal) {
+                            uncommittedCell.text('-');
+                            uncommittedCell.attr('data-item-pk', item.costing_pk);
+                        } else {
+                            var uncommittedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="uncommitted-input">');
+                            uncommittedInput.attr('data-item-pk', item.costing_pk);
+                            
+                            if (item.uncommitted_amount !== undefined && item.uncommitted_amount !== null) {
+                                uncommittedInput.val(parseFloat(item.uncommitted_amount).toFixed(2));
+                            }
+                            
+                            uncommittedInput.on('input', function() {
+                                updateWorkingBudget(item.costing_pk);
+                                updateTotals();
+                            });
+                            uncommittedInput.on('blur', function() {
+                                var newUncommitted = parseFloat($(this).val()) || 0;
+                                saveUncommitted(item.costing_pk, newUncommitted);
+                            });
+                            
+                            uncommittedCell.append(uncommittedInput);
+                        }
+                        itemRow.append(uncommittedCell);
+                    }
+                    
+                    // Committed column
+                    var committedCell = $('<td class="committed-amount"></td>');
+                    committedCell.attr('data-item-pk', item.costing_pk);
+                    committedCell.attr('data-committed-amount', committedAmount);
+                    
+                    if (isInternal) {
+                        var committedInput = $('<input type="number" step="0.01" min="0" placeholder="0.00" class="committed-input">');
+                        committedInput.attr('data-item-pk', item.costing_pk);
+                        committedInput.val(committedAmount > 0 ? committedAmount.toFixed(2) : '');
+                        committedInput.on('input', function() {
+                            var newCommitted = parseFloat($(this).val()) || 0;
+                            committedCell.attr('data-committed-amount', newCommitted);
+                            updateWorkingBudget(item.costing_pk);
+                            updateTotals();
+                        });
+                        committedInput.on('blur', function() {
+                            var newCommitted = parseFloat($(this).val()) || 0;
+                            saveInternalCommitted(item.costing_pk, newCommitted);
+                        });
+                        committedCell.append(committedInput);
+                    } else {
+                        committedCell.text('$' + committedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    }
+                    itemRow.append(committedCell);
+                    
+                    // Cost to Complete column (calculated: Working Budget - Committed)
+                    var costToCompleteCell = $('<td class="cost-to-complete-amount"></td>');
+                    costToCompleteCell.attr('data-item-pk', item.costing_pk);
+                    costToCompleteCell.text('$0.00');
+                    itemRow.append(costToCompleteCell);
+                    
+                    // Invoiced column (read-only, from backend)
+                    var invoicedCell = $('<td class="invoiced-amount"></td>');
+                    invoicedCell.attr('data-item-pk', item.costing_pk);
+                    invoicedCell.attr('data-amount', invoicedAmount);
+                    invoicedCell.text('$' + invoicedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    itemRow.append(invoicedCell);
+                    
+                    // Fixed on Site column (read-only, from backend)
+                    var fixedOnSiteCell = $('<td class="fixed-on-site-amount"></td>');
+                    fixedOnSiteCell.attr('data-item-pk', item.costing_pk);
+                    fixedOnSiteCell.attr('data-amount', fixedOnSiteAmount);
+                    fixedOnSiteCell.text('$' + fixedOnSiteAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    itemRow.append(fixedOnSiteCell);
+                }
+                
+                tbody.append(itemRow);
+                
+                // Initial calculations
+                if (isConstructionType && !isInternal) {
+                    // For construction type (any mode): calculate initial uncommitted amount from Qty × Rate
+                    updateUncommittedAmount(item.costing_pk);
+                }
+                updateWorkingBudget(item.costing_pk);
+            });
+        });
+        
+        // Calculate initial totals
+        updateTotals();
+    }
+    
+    function updateUncommittedAmount(itemPk) {
+        // For construction projects: calculate Amount = Qty × Rate
+        var qtyInput = $('input.uncommitted-qty[data-item-pk="' + itemPk + '"]');
+        var rateInput = $('input.uncommitted-rate[data-item-pk="' + itemPk + '"]');
+        var amountCell = $('td.uncommitted-amount[data-item-pk="' + itemPk + '"]');
+        
+        var qty = parseFloat(qtyInput.val()) || 0;
+        var rate = parseFloat(rateInput.val()) || 0;
+        var amount = qty * rate;
+        
+        amountCell.text('$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        amountCell.attr('data-amount', amount);
+    }
+    
+    function updateWorkingBudget(itemPk) {
+        // Check if this is an Internal item
+        var itemRow = $('tr.item-row').filter(function() {
+            return $(this).find('[data-item-pk="' + itemPk + '"]').length > 0;
+        });
+        var isInternal = itemRow.attr('data-is-internal') === 'true';
+        
+        // Use global flags set during loadContractBudget
+        var isTender = window.currentContractBudgetIsTender;
+        var isConstructionType = window.currentContractBudgetIsConstructionType;
+        
+        var uncommitted = 0;
+        var committed = 0;
+        
+        if (isInternal) {
+            // For Internal items: uncommitted is always 0, get committed from input value
+            var committedInput = $('input.committed-input[data-item-pk="' + itemPk + '"]');
+            committed = parseFloat(committedInput.val()) || 0;
+        } else {
+            // For regular items: get uncommitted value
+            // In execution mode with construction type: use Qty × Rate from amount cell
+            // Otherwise: use single uncommitted input
+            if (!isTender && isConstructionType) {
+                // Execution + Construction: get from calculated amount cell
+                var amountCell = $('td.uncommitted-amount[data-item-pk="' + itemPk + '"]');
+                uncommitted = parseFloat(amountCell.attr('data-amount')) || 0;
+            } else {
+                // Tender mode OR Execution + Non-construction: get from input field
+                var uncommittedInput = $('input.uncommitted-input[data-item-pk="' + itemPk + '"]');
+                uncommitted = parseFloat(uncommittedInput.val()) || 0;
+            }
+            
+            var committedCell = $('td.committed-amount[data-item-pk="' + itemPk + '"]');
+            committed = parseFloat(committedCell.attr('data-committed-amount')) || 0;
+        }
+        
+        // Calculate working budget = uncommitted + committed
+        var workingBudget = uncommitted + committed;
+        
+        // Update Working Budget cell
+        var workingBudgetCell = $('td.working-budget-amount[data-item-pk="' + itemPk + '"]');
+        workingBudgetCell.text('$' + workingBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        workingBudgetCell.attr('data-amount', workingBudget);
+        
+        // For execution mode, also update Cost to Complete = Working Budget - Committed
+        if (!isTender) {
+            var costToComplete = workingBudget - committed;
+            var costToCompleteCell = $('td.cost-to-complete-amount[data-item-pk="' + itemPk + '"]');
+            costToCompleteCell.text('$' + costToComplete.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            costToCompleteCell.attr('data-amount', costToComplete);
+        }
+    }
+    
+    function updateTotals() {
+        var totalContractBudget = 0;
+        var totalWorkingBudget = 0;
+        var totalUncommitted = 0;
+        var totalCommitted = 0;
+        var totalCostToComplete = 0;
+        var totalInvoiced = 0;
+        var totalFixedOnSite = 0;
+        
+        // Use global flags set during loadContractBudget
+        var isTender = window.currentContractBudgetIsTender;
+        var isConstructionType = window.currentContractBudgetIsConstructionType;
+        
+        // Sum up only item rows (not category rows) - target the one in current container
+        var itemRows = $(window.currentContractBudgetContainer + ' #contractBudgetTableBody tr.item-row');
+        console.log('updateTotals: found', itemRows.length, 'item rows in', window.currentContractBudgetContainer);
+        
+        itemRows.each(function() {
+            var isInternal = $(this).attr('data-is-internal') === 'true';
+            
+            // Working Budget - parse from data attribute
+            var workingBudgetAmount = parseFloat($(this).find('.working-budget-amount').attr('data-amount')) || 0;
+            totalWorkingBudget += workingBudgetAmount;
+            
+            // Uncommitted - handle '-' as 0 for Internal items
+            var uncommittedAmount = 0;
+            if (!isInternal) {
+                if (!isTender && isConstructionType) {
+                    // Execution + Construction: get amount from calculated cell
+                    var amountCell = $(this).find('td.uncommitted-amount');
+                    uncommittedAmount = parseFloat(amountCell.attr('data-amount')) || 0;
+                } else {
+                    // Tender OR Execution + Non-construction: get from input field
+                    var uncommittedInput = $(this).find('input.uncommitted-input');
+                    uncommittedAmount = parseFloat(uncommittedInput.val()) || 0;
+                }
+            }
+            totalUncommitted += uncommittedAmount;
+            
+            // Committed - parse from data attribute
+            var committedAmount = parseFloat($(this).find('.committed-amount').attr('data-committed-amount')) || 0;
+            totalCommitted += committedAmount;
+            
+            // Execution mode only totals
+            if (!isTender) {
+                // Contract Budget
+                var contractBudgetAmount = parseFloat($(this).find('.contract-budget-amount').attr('data-amount')) || 0;
+                totalContractBudget += contractBudgetAmount;
+                
+                // Cost to Complete
+                var costToCompleteAmount = parseFloat($(this).find('.cost-to-complete-amount').attr('data-amount')) || 0;
+                totalCostToComplete += costToCompleteAmount;
+                
+                // Invoiced
+                var invoicedAmount = parseFloat($(this).find('.invoiced-amount').attr('data-amount')) || 0;
+                totalInvoiced += invoicedAmount;
+                
+                // Fixed on Site
+                var fixedOnSiteAmount = parseFloat($(this).find('.fixed-on-site-amount').attr('data-amount')) || 0;
+                totalFixedOnSite += fixedOnSiteAmount;
+            }
+        });
+        
+        console.log('Totals - Working Budget:', totalWorkingBudget, 'Uncommitted:', totalUncommitted, 'Committed:', totalCommitted);
+        
+        // Update totals row (in current container)
+        $(window.currentContractBudgetContainer + ' #totalWorkingBudget').text('$' + totalWorkingBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        $(window.currentContractBudgetContainer + ' #totalCommitted').text('$' + totalCommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        
+        if (isTender) {
+            // Tender mode: reduced columns
+            if (isConstructionType) {
+                // Tender + Construction: uncommitted amount total (from Qty × Rate)
+                $(window.currentContractBudgetContainer + ' #totalUncommittedAmount').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            } else {
+                // Tender + Non-construction: single uncommitted total
+                $(window.currentContractBudgetContainer + ' #totalUncommitted').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            }
+        } else {
+            // Execution mode: full totals
+            $(window.currentContractBudgetContainer + ' #totalContractBudget').text('$' + totalContractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            $(window.currentContractBudgetContainer + ' #totalCostToComplete').text('$' + totalCostToComplete.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            $(window.currentContractBudgetContainer + ' #totalInvoiced').text('$' + totalInvoiced.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            $(window.currentContractBudgetContainer + ' #totalFixedOnSite').text('$' + totalFixedOnSite.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            
+            if (isConstructionType) {
+                // Execution + Construction: uncommitted amount total
+                $(window.currentContractBudgetContainer + ' #totalUncommittedAmount').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            } else {
+                // Execution + Non-construction: single uncommitted total
+                $(window.currentContractBudgetContainer + ' #totalUncommitted').text('$' + totalUncommitted.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            }
+        }
+    }
+    
+    function saveUncommitted(itemPk, uncommittedAmount) {
+        if (!window.currentContractBudgetProject || !window.currentContractBudgetProject.pk) {
+            console.error('No project selected');
+            return;
+        }
+        
+        console.log('Saving uncommitted amount:', itemPk, uncommittedAmount);
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                costing_pk: itemPk,
+                uncommitted: uncommittedAmount,
+                notes: ''
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Uncommitted amount saved successfully');
+                } else {
+                    console.error('Error saving uncommitted amount:', response.message);
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save uncommitted amount:', error);
+                var errorMessage = 'Failed to save uncommitted amount';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    function saveUncommittedConstruction(itemPk) {
+        if (!window.currentContractBudgetProject || !window.currentContractBudgetProject.pk) {
+            console.error('No project selected');
+            return;
+        }
+        
+        // Get qty, rate, and calculated amount
+        var qtyInput = $('input.uncommitted-qty[data-item-pk="' + itemPk + '"]');
+        var rateInput = $('input.uncommitted-rate[data-item-pk="' + itemPk + '"]');
+        var amountCell = $('td.uncommitted-amount[data-item-pk="' + itemPk + '"]');
+        
+        var qty = parseFloat(qtyInput.val()) || 0;
+        var rate = parseFloat(rateInput.val()) || 0;
+        var amount = parseFloat(amountCell.attr('data-amount')) || 0;
+        
+        console.log('Saving uncommitted construction:', itemPk, 'qty:', qty, 'rate:', rate, 'amount:', amount);
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                costing_pk: itemPk,
+                uncommitted_qty: qty,
+                uncommitted_rate: rate,
+                uncommitted: amount,
+                notes: ''
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Uncommitted construction values saved successfully');
+                } else {
+                    console.error('Error saving uncommitted values:', response.message);
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save uncommitted values:', error);
+                var errorMessage = 'Failed to save uncommitted values';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    function saveInternalCommitted(itemPk, committedAmount) {
+        if (!window.currentContractBudgetProject || !window.currentContractBudgetProject.pk) {
+            console.error('No project selected');
+            return;
+        }
+        
+        console.log('Saving Internal item committed:', itemPk, committedAmount);
+        
+        $.ajax({
+            url: '/core/update_internal_committed/',
+            type: 'POST',
+            data: {
+                project_pk: window.currentContractBudgetProject.pk,
+                item_pk: itemPk,
+                committed_amount: committedAmount
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Internal committed amount saved successfully');
+                } else {
+                    console.error('Error saving committed amount:', response.message);
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save committed amount:', error);
+                var errorMessage = 'Failed to save committed amount';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    function escapeHtml(text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+})();
+</script>
