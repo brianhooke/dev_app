@@ -651,8 +651,13 @@ class EmailAttachment(models.Model):
         """Get S3 URL for attachment"""
         return f"s3://{self.s3_bucket}/{self.s3_key}"
     
-    def get_download_url(self):
-        """Generate presigned URL for downloading attachment (or local URL in DEBUG mode)"""
+    def get_download_url(self, inline=True):
+        """Generate presigned URL for viewing/downloading attachment (or local URL in DEBUG mode)
+        
+        Args:
+            inline: If True, sets Content-Disposition to inline for viewing in browser.
+                   If False, sets to attachment for downloading.
+        """
         from django.conf import settings
         
         # For local testing, return media URL
@@ -665,12 +670,22 @@ class EmailAttachment(models.Model):
         
         try:
             s3_client = boto3.client('s3')
+            
+            params = {
+                'Bucket': self.s3_bucket,
+                'Key': self.s3_key
+            }
+            
+            # Set Content-Disposition to inline for viewing in browser (not downloading)
+            if inline:
+                params['ResponseContentDisposition'] = 'inline'
+                # Also set content type for PDFs to help browser display correctly
+                if self.filename and self.filename.lower().endswith('.pdf'):
+                    params['ResponseContentType'] = 'application/pdf'
+            
             url = s3_client.generate_presigned_url(
                 'get_object',
-                Params={
-                    'Bucket': self.s3_bucket,
-                    'Key': self.s3_key
-                },
+                Params=params,
                 ExpiresIn=3600  # URL valid for 1 hour
             )
             return url

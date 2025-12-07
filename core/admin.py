@@ -136,9 +136,19 @@ class Models_3dAdmin(admin.ModelAdmin):
 class Po_globalsAdmin(admin.ModelAdmin):
     list_display = ("reference", "invoicee", "address", "project_address", "ABN", "email", "note1", "note2", "note3")
 
+class Po_ordersForm(forms.ModelForm):
+    class Meta:
+        model = Po_orders
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_nullable_fields_not_required(self, ['pdf', 'project'])
+
 class Po_ordersAdmin(admin.ModelAdmin):
+    form = Po_ordersForm
     list_display = ("po_order_pk", "po_supplier", "project", "unique_id", "pdf", "po_sent", "created_at")
-    readonly_fields = ("unique_id", "created_at", "pdf")
+    readonly_fields = ("unique_id", "created_at")  # Removed pdf from readonly to allow re-uploading
 
 class PoOrderDetailAdmin(admin.ModelAdmin):
     form = PoOrderDetailForm

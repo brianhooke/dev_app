@@ -624,9 +624,10 @@
         $('#billsInboxBtn').click(function(e) {
             e.preventDefault();
             
-            // Update button states
+            // Update button states - reset ALL other buttons
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
             $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Load Bills - Inbox
             loadBillsInbox();
@@ -636,9 +637,10 @@
         $('#billsDirectBtn').click(function(e) {
             e.preventDefault();
             
-            // Update button states
+            // Update button states - reset ALL other buttons
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
             $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Fetch bills data and populate workspace
             $.ajax({
@@ -672,6 +674,12 @@
         $('#billsApprovalsBtn').click(function(e) {
             e.preventDefault();
             
+            // Prevent double-clicks during loading
+            if (window.approvalsLoading) {
+                console.log('Approvals already loading, ignoring click');
+                return;
+            }
+            
             // Update button states for main section
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
             $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
@@ -684,6 +692,10 @@
             
             // Load approvals template if not already loaded
             if ($('#approvalsContent').children().length === 0) {
+                window.approvalsLoading = true;
+                // Show loading indicator
+                $('#approvalsContent').html('<div class="text-center p-4"><i class="fas fa-spinner fa-spin"></i> Loading approvals...</div>');
+                
                 $.ajax({
                     url: '{% url "core:invoices" %}?template=approvals',
                     type: 'GET',
@@ -691,10 +703,12 @@
                         $('#approvalsContent').html(html);
                         // Load approved invoices data
                         loadApprovedInvoices();
+                        window.approvalsLoading = false;
                     },
                     error: function(xhr, status, error) {
                         console.error('Failed to load approvals template:', error);
                         $('#approvalsContent').html('<p class="text-danger text-center p-4">Failed to load approvals section</p>');
+                        window.approvalsLoading = false;
                     }
                 });
             } else {
@@ -707,6 +721,10 @@
         $(document).on('click', '.approvals-nav-btn', function(e) {
             e.preventDefault();
             var mode = $(this).data('mode');
+            
+            // Update button states within the Approvals section nav
+            $('.approvals-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
             
             if (mode === 'inbox') {
                 // Switch back to Inbox
