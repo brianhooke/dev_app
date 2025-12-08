@@ -1551,48 +1551,132 @@
                 allocations: {
                     emptyMessage: 'No allocations for this quote',
                     editable: false,
-                    // Custom read-only allocation row renderer
+                    // Custom read-only allocation row renderer - construction aware
                     renderRow: function(alloc, cfg) {
                         var row = $('<tr>').attr('data-allocation-pk', alloc.quote_allocations_pk);
-                        row.append($('<td>').text(alloc.item_name || '-'));
-                        var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
-                        row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
-                        row.append($('<td>').text(alloc.notes || '-'));
-                        row.append($('<td>')); // Empty cell for delete column
+                        var isConstruction = isQuotesConstructionProject();
+                        
+                        if (isConstruction) {
+                            // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes
+                            row.append($('<td>').text(alloc.item_name || '-'));
+                            row.append($('<td>').text(alloc.unit || '-'));
+                            var qty = alloc.qty ? parseFloat(alloc.qty) : 0;
+                            row.append($('<td>').text(qty.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                            var rate = alloc.rate ? parseFloat(alloc.rate) : 0;
+                            row.append($('<td>').text('$' + rate.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                            var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                            row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                            row.append($('<td>').text(alloc.notes || '-'));
+                            row.append($('<td>')); // Empty for delete column
+                        } else {
+                            // Non-construction: Item | $ Net | Notes
+                            row.append($('<td>').text(alloc.item_name || '-'));
+                            var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                            row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                            row.append($('<td>').text(alloc.notes || '-'));
+                            row.append($('<td>')); // Empty cell for delete column
+                        }
                         return row;
                     },
-                    // Custom editable allocation row renderer (for new/update mode)
+                    // Custom editable allocation row renderer (for new/update mode) - construction aware
                     renderEditableRow: function(allocation, cfg, onChange) {
                         var row = $('<tr>');
+                        var isConstruction = isQuotesConstructionProject();
                         if (allocation) row.attr('data-allocation-pk', allocation.quote_allocations_pk);
                         
-                        // Item dropdown
+                        // Item dropdown (both modes)
                         var itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
                         itemSelect.append($('<option>').val('').text('Select Item...'));
                         (window.quotesCostingItems || window.itemsItems || []).forEach(function(item) {
                             var option = $('<option>').val(item.costing_pk).text(item.item);
+                            option.attr('data-unit', item.unit || ''); // Store unit for construction mode
                             if (allocation && allocation.item_pk === item.costing_pk) option.prop('selected', true);
                             itemSelect.append(option);
                         });
-                        itemSelect.on('change', onChange);
-                        row.append($('<td>').append(itemSelect));
                         
-                        // Amount input
-                        var amountInput = $('<input>')
-                            .attr('type', 'number').attr('step', '0.01')
-                            .addClass('form-control form-control-sm quote-allocation-net-input')
-                            .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
-                            .on('change input', onChange);
-                        row.append($('<td>').append(amountInput));
+                        if (isConstruction) {
+                            // Construction mode: Item | Unit | Qty | $ Rate | $ Amount | Notes | Del
+                            itemSelect.on('change', function() {
+                                var selectedOption = $(this).find('option:selected');
+                                var unit = selectedOption.attr('data-unit') || '';
+                                row.find('.quote-allocation-unit-display').text(unit);
+                                row.find('.quote-allocation-unit-input').val(unit);
+                                onChange();
+                            });
+                            row.append($('<td>').append(itemSelect));
+                            
+                            // Unit (read-only, auto-populated from item)
+                            var selectedUnit = allocation ? (allocation.unit || '') : '';
+                            var unitDisplay = $('<span>').addClass('quote-allocation-unit-display').text(selectedUnit);
+                            var unitInput = $('<input>').attr('type', 'hidden').addClass('quote-allocation-unit-input').val(selectedUnit);
+                            row.append($('<td>').append(unitDisplay).append(unitInput));
+                            
+                            // Qty input
+                            var qtyInput = $('<input>')
+                                .attr('type', 'number').attr('step', '0.01')
+                                .addClass('form-control form-control-sm quote-allocation-qty-input')
+                                .val(allocation && allocation.qty ? parseFloat(allocation.qty).toFixed(2) : '')
+                                .on('change input', function() {
+                                    var qty = parseFloat($(this).val()) || 0;
+                                    var rate = parseFloat(row.find('.quote-allocation-rate-input').val()) || 0;
+                                    var amount = (qty * rate).toFixed(2);
+                                    row.find('.quote-allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                                    row.find('.quote-allocation-net-input').val(amount);
+                                    onChange();
+                                });
+                            row.append($('<td>').append(qtyInput));
+                            
+                            // Rate input
+                            var rateInput = $('<input>')
+                                .attr('type', 'number').attr('step', '0.01')
+                                .addClass('form-control form-control-sm quote-allocation-rate-input')
+                                .val(allocation && allocation.rate ? parseFloat(allocation.rate).toFixed(2) : '')
+                                .on('change input', function() {
+                                    var qty = parseFloat(row.find('.quote-allocation-qty-input').val()) || 0;
+                                    var rate = parseFloat($(this).val()) || 0;
+                                    var amount = (qty * rate).toFixed(2);
+                                    row.find('.quote-allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                                    row.find('.quote-allocation-net-input').val(amount);
+                                    onChange();
+                                });
+                            row.append($('<td>').append(rateInput));
+                            
+                            // Amount (calculated, read-only display)
+                            var calcAmount = allocation && allocation.amount ? parseFloat(allocation.amount) : 0;
+                            var amountDisplay = $('<span>').addClass('quote-allocation-amount-display')
+                                .text('$' + calcAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                            var amountHidden = $('<input>').attr('type', 'hidden')
+                                .addClass('quote-allocation-net-input').val(calcAmount.toFixed(2));
+                            row.append($('<td>').append(amountDisplay).append(amountHidden));
+                            
+                            // Notes input
+                            var notesInput = $('<input>')
+                                .attr('type', 'text')
+                                .addClass('form-control form-control-sm quote-allocation-notes-input')
+                                .val(allocation ? allocation.notes || '' : '');
+                            row.append($('<td>').append(notesInput));
+                        } else {
+                            // Non-construction mode: Item | $ Net | Notes | Del
+                            itemSelect.on('change', onChange);
+                            row.append($('<td>').append(itemSelect));
+                            
+                            // Amount input
+                            var amountInput = $('<input>')
+                                .attr('type', 'number').attr('step', '0.01')
+                                .addClass('form-control form-control-sm quote-allocation-net-input')
+                                .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
+                                .on('change input', onChange);
+                            row.append($('<td>').append(amountInput));
+                            
+                            // Notes input
+                            var notesInput = $('<input>')
+                                .attr('type', 'text')
+                                .addClass('form-control form-control-sm quote-allocation-notes-input')
+                                .val(allocation ? allocation.notes || '' : '');
+                            row.append($('<td>').append(notesInput));
+                        }
                         
-                        // Notes input
-                        var notesInput = $('<input>')
-                            .attr('type', 'text')
-                            .addClass('form-control form-control-sm quote-allocation-notes-input')
-                            .val(allocation ? allocation.notes || '' : '');
-                        row.append($('<td>').append(notesInput));
-                        
-                        // Delete button
+                        // Delete button (both modes)
                         var deleteBtn = $('<button>')
                             .addClass('btn btn-sm btn-danger')
                             .html('<i class="fas fa-times"></i>')
@@ -1659,6 +1743,8 @@
                 type: 'GET',
                 success: function(response) {
                     $('#constructionContentArea').html(response);
+                    // Update headers for construction mode before loading data
+                    updateQuoteAllocationsHeaders();
                     // Now fetch and populate the quotes
                     loadQuotesData();
                 },
@@ -1853,6 +1939,10 @@
             // Clear allocations table and add empty row for new quote
             const allocBody = $('#quoteAllocationsTableBody');
             allocBody.empty();
+            
+            // Update headers based on project type (construction vs non-construction)
+            updateQuoteAllocationsHeaders();
+            
             addQuoteAllocationRow(); // Add one empty row
             
             // Update title
@@ -1920,6 +2010,8 @@
         // Get allocations for new quote from table
         function getNewQuoteAllocations() {
             const allocations = [];
+            const isConstruction = isQuotesConstructionProject();
+            
             $('#quoteAllocationsTableBody tr').each(function() {
                 const row = $(this);
                 const itemPk = row.find('.quote-allocation-item-select').val();
@@ -1927,7 +2019,16 @@
                 const notes = row.find('.quote-allocation-notes-input').val() || '';
                 
                 if (itemPk) {
-                    allocations.push({ item_pk: itemPk, amount, notes, qty: null, unit: '', rate: null });
+                    if (isConstruction) {
+                        // Construction: gather qty, rate, unit
+                        const qty = parseFloat(row.find('.quote-allocation-qty-input').val()) || 0;
+                        const rate = parseFloat(row.find('.quote-allocation-rate-input').val()) || 0;
+                        const unit = row.find('.quote-allocation-unit-input').val() || '';
+                        allocations.push({ item_pk: itemPk, amount, notes, qty, unit, rate });
+                    } else {
+                        // Non-construction: just amount
+                        allocations.push({ item_pk: itemPk, amount, notes, qty: null, unit: '', rate: null });
+                    }
                 }
             });
             return allocations;
@@ -2064,6 +2165,10 @@
             const tbody = $('#quoteAllocationsTableBody');
             tbody.empty();
             
+            // Update headers based on project type (construction vs non-construction)
+            updateQuoteAllocationsHeaders();
+            const colCount = isQuotesConstructionProject() ? 7 : 4;
+            
             if (window.newQuoteMode) {
                 // New quote mode: show editable rows
                 if (!allocations || allocations.length === 0) {
@@ -2079,7 +2184,7 @@
             } else {
                 // View mode: show read-only rows
                 if (!allocations || allocations.length === 0) {
-                    tbody.html('<tr><td colspan="4" style="text-align: center; color: #6c757d; padding: 20px;">No allocations for this quote</td></tr>');
+                    tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; color: #6c757d; padding: 20px;">No allocations for this quote</td></tr>');
                     $('#quoteRemainingNet').text('$0.00').css('color', '#90EE90');
                 } else {
                     allocations.forEach(function(alloc) {
@@ -2094,23 +2199,79 @@
             }
         }
         
+        // Check if current quotes project is construction type
+        function isQuotesConstructionProject() {
+            return window.currentQuotesProject && window.currentQuotesProject.project_type === 'construction';
+        }
+        
+        // Column width definitions for quote allocations table
+        var quoteAllocationsColumnWidths = {
+            construction: ['25%', '10%', '12%', '13%', '13%', '22%', '5%'], // Item, Unit, Qty, Rate, Amount, Notes, Del
+            nonConstruction: ['40%', '25%', '30%', '5%'] // Item, $ Net, Notes, Del
+        };
+        
+        // Update quote allocations table headers and inject CSS for alignment
+        function updateQuoteAllocationsHeaders() {
+            const thead = $('#quoteAllocationsTable thead');
+            if (thead.length === 0) return;
+            
+            const isConstruction = isQuotesConstructionProject();
+            const widths = isConstruction ? quoteAllocationsColumnWidths.construction : quoteAllocationsColumnWidths.nonConstruction;
+            
+            // Clear and rebuild headers with inline widths
+            thead.empty();
+            const headerRow = $('<tr>');
+            
+            if (isConstruction) {
+                const headers = ['Item', 'Unit', 'Qty', '$ Rate', '$ Amount', 'Notes', ''];
+                headers.forEach((h, i) => headerRow.append($('<th>').css('width', widths[i]).text(h)));
+            } else {
+                const headers = ['Item', '$ Net', 'Notes', ''];
+                headers.forEach((h, i) => headerRow.append($('<th>').css('width', widths[i]).text(h)));
+            }
+            thead.append(headerRow);
+            
+            // Inject/update CSS to override nth-child rules for tbody cells
+            let styleId = 'quoteAllocationsColumnStyles';
+            let styleEl = $('#' + styleId);
+            if (styleEl.length === 0) {
+                styleEl = $('<style>').attr('id', styleId);
+                $('head').append(styleEl);
+            }
+            
+            // Build CSS rules for each column
+            let css = '';
+            widths.forEach((w, i) => {
+                css += `#quoteAllocationsTable tbody td:nth-child(${i + 1}) { width: ${w} !important; }\n`;
+            });
+            styleEl.text(css);
+        }
+        
         // Display a read-only quote allocation row (for viewing saved quotes)
         function displayQuoteAllocationRow(allocation) {
             const tbody = $('#quoteAllocationsTableBody');
             const row = $('<tr>').attr('data-allocation-pk', allocation.quote_allocations_pk);
             
-            // 1. Item name (read-only text)
-            row.append($('<td>').text(allocation.item_name || '-'));
-            
-            // 2. $ Net (read-only text)
-            const amount = allocation.amount ? parseFloat(allocation.amount) : 0;
-            row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
-            
-            // 3. Notes (read-only text)
-            row.append($('<td>').text(allocation.notes || '-'));
-            
-            // 4. Empty cell (no delete button in view mode)
-            row.append($('<td>'));
+            if (isQuotesConstructionProject()) {
+                // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes
+                row.append($('<td>').text(allocation.item_name || '-'));
+                row.append($('<td>').text(allocation.unit || '-'));
+                const qty = allocation.qty ? parseFloat(allocation.qty) : 0;
+                row.append($('<td>').text(qty.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                const rate = allocation.rate ? parseFloat(allocation.rate) : 0;
+                row.append($('<td>').text('$' + rate.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                const amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+                row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                row.append($('<td>').text(allocation.notes || '-'));
+                row.append($('<td>')); // Empty for delete column
+            } else {
+                // Non-construction: Item | $ Net | Notes
+                row.append($('<td>').text(allocation.item_name || '-'));
+                const amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+                row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                row.append($('<td>').text(allocation.notes || '-'));
+                row.append($('<td>')); // Empty for delete column
+            }
             
             tbody.append(row);
         }
@@ -2119,6 +2280,7 @@
         function addQuoteAllocationRow(allocation = null) {
             const tbody = $('#quoteAllocationsTableBody');
             const row = $('<tr>');
+            const isConstruction = isQuotesConstructionProject();
             
             if (allocation) {
                 row.attr('data-allocation-pk', allocation.quote_allocations_pk);
@@ -2129,49 +2291,147 @@
             itemSelect.append($('<option>').val('').text('Select Item...'));
             (window.quotesCostingItems || []).forEach(function(item) {
                 const option = $('<option>').val(item.costing_pk).text(item.item);
+                // Store unit as data attribute for construction mode
+                option.attr('data-unit', item.unit || '');
                 if (allocation && allocation.item_pk === item.costing_pk) {
                     option.prop('selected', true);
                 }
                 itemSelect.append(option);
             });
-            itemSelect.on('change', function() {
-                if (window.newQuoteMode) {
-                    updateNewQuoteStillToAllocate();
-                } else {
-                    saveQuoteAllocationRow(row);
-                }
-            });
-            row.append($('<td>').append(itemSelect));
             
-            // 2. $ Net input
-            const netInput = $('<input>')
-                .attr('type', 'number')
-                .attr('step', '0.01')
-                .addClass('form-control form-control-sm quote-allocation-net-input')
-                .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
-                .on('change', function() {
+            if (isConstruction) {
+                // Construction mode: Item | Unit | Qty | $ Rate | $ Amount | Notes | Del
+                
+                // Item dropdown with unit auto-populate
+                itemSelect.on('change', function() {
+                    // Update Unit field when item changes
+                    const selectedOption = $(this).find('option:selected');
+                    const unit = selectedOption.attr('data-unit') || '';
+                    row.find('.quote-allocation-unit-display').text(unit);
+                    row.find('.quote-allocation-unit-input').val(unit);
+                    
                     if (window.newQuoteMode) {
                         updateNewQuoteStillToAllocate();
                     } else {
-                        updateQuoteStillToAllocate();
                         saveQuoteAllocationRow(row);
                     }
                 });
-            row.append($('<td>').append(netInput));
-            
-            // 3. Notes input
-            const notesInput = $('<input>')
-                .attr('type', 'text')
-                .addClass('form-control form-control-sm quote-allocation-notes-input')
-                .val(allocation ? allocation.notes || '' : '')
-                .on('change', function() {
-                    if (!window.newQuoteMode) {
+                row.append($('<td>').append(itemSelect));
+                
+                // 2. Unit (read-only, auto-populated from item)
+                const selectedUnit = allocation ? (allocation.unit || '') : '';
+                const unitDisplay = $('<span>').addClass('quote-allocation-unit-display').text(selectedUnit);
+                const unitInput = $('<input>').attr('type', 'hidden').addClass('quote-allocation-unit-input').val(selectedUnit);
+                row.append($('<td>').append(unitDisplay).append(unitInput));
+                
+                // 3. Qty input
+                const qtyInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-qty-input')
+                    .val(allocation && allocation.qty ? parseFloat(allocation.qty).toFixed(2) : '')
+                    .on('change input', function() {
+                        // Calculate amount = qty * rate
+                        const qty = parseFloat($(this).val()) || 0;
+                        const rate = parseFloat(row.find('.quote-allocation-rate-input').val()) || 0;
+                        const amount = (qty * rate).toFixed(2);
+                        row.find('.quote-allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                        row.find('.quote-allocation-net-input').val(amount);
+                        
+                        if (window.newQuoteMode) {
+                            updateNewQuoteStillToAllocate();
+                        } else {
+                            updateQuoteStillToAllocate();
+                            saveQuoteAllocationRow(row);
+                        }
+                    });
+                row.append($('<td>').append(qtyInput));
+                
+                // 4. $ Rate input
+                const rateInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-rate-input')
+                    .val(allocation && allocation.rate ? parseFloat(allocation.rate).toFixed(2) : '')
+                    .on('change input', function() {
+                        // Calculate amount = qty * rate
+                        const qty = parseFloat(row.find('.quote-allocation-qty-input').val()) || 0;
+                        const rate = parseFloat($(this).val()) || 0;
+                        const amount = (qty * rate).toFixed(2);
+                        row.find('.quote-allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                        row.find('.quote-allocation-net-input').val(amount);
+                        
+                        if (window.newQuoteMode) {
+                            updateNewQuoteStillToAllocate();
+                        } else {
+                            updateQuoteStillToAllocate();
+                            saveQuoteAllocationRow(row);
+                        }
+                    });
+                row.append($('<td>').append(rateInput));
+                
+                // 5. $ Amount (calculated, read-only display but hidden input for data)
+                const calcAmount = allocation && allocation.amount ? parseFloat(allocation.amount) : 0;
+                const amountDisplay = $('<span>').addClass('quote-allocation-amount-display')
+                    .text('$' + calcAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                const amountHidden = $('<input>').attr('type', 'hidden')
+                    .addClass('form-control form-control-sm quote-allocation-net-input')
+                    .val(calcAmount.toFixed(2));
+                row.append($('<td>').append(amountDisplay).append(amountHidden));
+                
+                // 6. Notes input
+                const notesInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm quote-allocation-notes-input')
+                    .val(allocation ? allocation.notes || '' : '')
+                    .on('change', function() {
+                        if (!window.newQuoteMode) {
+                            saveQuoteAllocationRow(row);
+                        }
+                    });
+                row.append($('<td>').append(notesInput));
+                
+            } else {
+                // Non-construction mode: Item | $ Net | Notes | Del
+                itemSelect.on('change', function() {
+                    if (window.newQuoteMode) {
+                        updateNewQuoteStillToAllocate();
+                    } else {
                         saveQuoteAllocationRow(row);
                     }
                 });
-            row.append($('<td>').append(notesInput));
+                row.append($('<td>').append(itemSelect));
+                
+                // 2. $ Net input
+                const netInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-net-input')
+                    .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
+                    .on('change', function() {
+                        if (window.newQuoteMode) {
+                            updateNewQuoteStillToAllocate();
+                        } else {
+                            updateQuoteStillToAllocate();
+                            saveQuoteAllocationRow(row);
+                        }
+                    });
+                row.append($('<td>').append(netInput));
+                
+                // 3. Notes input
+                const notesInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm quote-allocation-notes-input')
+                    .val(allocation ? allocation.notes || '' : '')
+                    .on('change', function() {
+                        if (!window.newQuoteMode) {
+                            saveQuoteAllocationRow(row);
+                        }
+                    });
+                row.append($('<td>').append(notesInput));
+            }
             
-            // 4. Delete button
+            // Delete button (same for both modes)
             const deleteBtn = $('<button>')
                 .addClass('btn btn-sm btn-danger')
                 .html('<i class="fas fa-times"></i>')
@@ -2210,6 +2470,7 @@
                 const itemPk = row.find('.quote-allocation-item-select').val();
                 const net = row.find('.quote-allocation-net-input').val();
                 const notes = row.find('.quote-allocation-notes-input').val();
+                const isConstruction = isQuotesConstructionProject();
                 
                 if (!window.currentSelectedQuote) return;
                 
@@ -2219,6 +2480,13 @@
                     amount: net || 0,
                     notes: notes || ''
                 };
+                
+                // Add construction-specific fields
+                if (isConstruction) {
+                    data.qty = row.find('.quote-allocation-qty-input').val() || '';
+                    data.rate = row.find('.quote-allocation-rate-input').val() || '';
+                    data.unit = row.find('.quote-allocation-unit-input').val() || '';
+                }
                 
                 if (allocationPk) {
                     // Update existing
@@ -5110,6 +5378,8 @@
                 type: 'GET',
                 success: function(response) {
                     $('#tenderContentArea').html(response);
+                    // Update headers based on project type before loading data
+                    updateQuoteAllocationsHeaders();
                     // Now fetch and populate the quotes
                     loadQuotesData();
                 },

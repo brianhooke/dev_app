@@ -611,9 +611,20 @@ def approve_po_claim(request, unique_id):
                     except Costing.DoesNotExist:
                         logger.warning(f"Costing {costing_pk} not found when updating allocation")
         
+        # Recalculate invoice totals from allocations (in case any were modified)
+        from django.db.models import Sum
+        totals = Invoice_allocations.objects.filter(invoice_pk=invoice).aggregate(
+            total_net=Sum('amount'),
+            total_gst=Sum('gst_amount')
+        )
+        invoice.total_net = totals['total_net'] or Decimal('0')
+        invoice.total_gst = totals['total_gst'] or Decimal('0')
+        
         # Update status to approved (but no invoice uploaded yet)
         invoice.invoice_status = 101
         invoice.save()
+        
+        logger.info(f"Updated invoice {invoice.invoice_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
         
         logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.invoice_pk}, modifications: {has_modifications}")
         

@@ -996,7 +996,19 @@ def create_invoice_allocation(request):
             allocation_type=0
         )
         
-        logger.info(f"Created invoice allocation {allocation.invoice_allocations_pk} for invoice {invoice_pk}")
+        # Recalculate parent invoice totals after adding new allocation
+        from django.db.models import Sum
+        from decimal import Decimal
+        invoice = Invoices.objects.get(invoice_pk=invoice_pk)
+        totals = Invoice_allocations.objects.filter(invoice_pk=invoice).aggregate(
+            total_net=Sum('amount'),
+            total_gst=Sum('gst_amount')
+        )
+        invoice.total_net = totals['total_net'] or Decimal('0')
+        invoice.total_gst = totals['total_gst'] or Decimal('0')
+        invoice.save()
+        
+        logger.info(f"Created invoice allocation {allocation.invoice_allocations_pk} for invoice {invoice_pk}, updated totals")
         
         return JsonResponse({
             'status': 'success',
@@ -1030,16 +1042,33 @@ def update_invoice_allocation(request):
             return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
         
         # Update fields if provided
+        amount_changed = False
         if 'amount' in data:
             allocation.amount = data['amount']
+            amount_changed = True
         if 'gst_amount' in data:
             allocation.gst_amount = data['gst_amount']
+            amount_changed = True
         if 'notes' in data:
             allocation.notes = data['notes']
         if 'xero_account_pk' in data:
             allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
         
         allocation.save()
+        
+        # If amount changed, recalculate parent invoice totals
+        if amount_changed:
+            invoice = allocation.invoice_pk
+            from django.db.models import Sum
+            from decimal import Decimal
+            totals = Invoice_allocations.objects.filter(invoice_pk=invoice).aggregate(
+                total_net=Sum('amount'),
+                total_gst=Sum('gst_amount')
+            )
+            invoice.total_net = totals['total_net'] or Decimal('0')
+            invoice.total_gst = totals['total_gst'] or Decimal('0')
+            invoice.save()
+            logger.info(f"Updated invoice {invoice.invoice_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
         
         logger.info(f"Updated invoice allocation {allocation_pk}")
         
@@ -1068,8 +1097,21 @@ def delete_invoice_allocation(request):
         
         try:
             allocation = Invoice_allocations.objects.get(invoice_allocations_pk=allocation_pk)
+            invoice = allocation.invoice_pk  # Store reference before delete
             allocation.delete()
-            logger.info(f"Deleted invoice allocation {allocation_pk}")
+            
+            # Recalculate parent invoice totals after deletion
+            from django.db.models import Sum
+            from decimal import Decimal
+            totals = Invoice_allocations.objects.filter(invoice_pk=invoice).aggregate(
+                total_net=Sum('amount'),
+                total_gst=Sum('gst_amount')
+            )
+            invoice.total_net = totals['total_net'] or Decimal('0')
+            invoice.total_gst = totals['total_gst'] or Decimal('0')
+            invoice.save()
+            
+            logger.info(f"Deleted invoice allocation {allocation_pk}, updated invoice {invoice.invoice_pk} totals")
             return JsonResponse({'status': 'success'})
         except Invoice_allocations.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)

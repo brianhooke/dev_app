@@ -295,15 +295,36 @@ def create_quote_allocation(request):
         amount = request.POST.get('amount', 0)
         notes = request.POST.get('notes', '')
         
+        # Construction-specific fields
+        qty = request.POST.get('qty')
+        rate = request.POST.get('rate')
+        unit = request.POST.get('unit', '')
+        
         quote = Quotes.objects.get(quotes_pk=quote_pk)
         item = Costing.objects.get(costing_pk=item_pk) if item_pk else None
         
-        allocation = Quote_allocations.objects.create(
-            quotes_pk=quote,
-            item=item,
-            amount=Decimal(amount) if amount else Decimal('0'),
-            notes=notes
-        )
+        # Handle construction mode (qty/rate provided)
+        if qty is not None and rate is not None and qty != '' and rate != '':
+            qty_decimal = Decimal(str(qty))
+            rate_decimal = Decimal(str(rate))
+            calc_amount = qty_decimal * rate_decimal
+            
+            allocation = Quote_allocations.objects.create(
+                quotes_pk=quote,
+                item=item,
+                qty=qty_decimal,
+                rate=rate_decimal,
+                unit=unit,
+                amount=calc_amount,
+                notes=notes
+            )
+        else:
+            allocation = Quote_allocations.objects.create(
+                quotes_pk=quote,
+                item=item,
+                amount=Decimal(amount) if amount else Decimal('0'),
+                notes=notes
+            )
         
         return JsonResponse({
             'status': 'success',
@@ -330,9 +351,23 @@ def update_quote_allocation(request, allocation_pk):
         amount = request.POST.get('amount', 0)
         notes = request.POST.get('notes', '')
         
+        # Construction-specific fields
+        qty = request.POST.get('qty')
+        rate = request.POST.get('rate')
+        unit = request.POST.get('unit', '')
+        
         if item_pk:
             allocation.item = Costing.objects.get(costing_pk=item_pk)
-        allocation.amount = Decimal(amount) if amount else Decimal('0')
+        
+        # Handle construction mode (qty/rate provided)
+        if qty is not None and rate is not None and qty != '' and rate != '':
+            allocation.qty = Decimal(str(qty))
+            allocation.rate = Decimal(str(rate))
+            allocation.unit = unit
+            allocation.amount = allocation.qty * allocation.rate
+        else:
+            allocation.amount = Decimal(amount) if amount else Decimal('0')
+            
         allocation.notes = notes
         allocation.save()
         
