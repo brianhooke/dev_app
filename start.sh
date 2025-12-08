@@ -12,14 +12,19 @@ echo "===================================="
 echo "Collecting static files to S3..."
 python manage.py collectstatic --noinput || echo "Collectstatic failed, continuing..."
 
+echo "Creating pre-migration database backup..."
+BACKUP_FILE="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).json"
+python manage.py dumpdata core --natural-foreign --natural-primary -o "$BACKUP_FILE" && \
+    echo "Backup created: $BACKUP_FILE" && \
+    aws s3 cp "$BACKUP_FILE" "s3://${AWS_STORAGE_BUCKET_NAME}/backups/$(basename $BACKUP_FILE)" && \
+    echo "Backup uploaded to S3" || \
+    echo "Backup failed, continuing anyway..."
+
 echo "Running migrations..."
 python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 
 echo "Creating admin superuser..."
 python manage.py create_admin || echo "Admin creation failed, continuing..."
-
-echo "Importing Xero data from environment..."
-python manage.py import_xero_from_env || echo "Xero import failed, continuing..."
 
 echo "Starting gunicorn on port 80..."
 exec gunicorn dev_app.wsgi:application --bind 0.0.0.0:80 --workers 3 --timeout 120 --access-logfile - --error-logfile - --log-level info

@@ -612,22 +612,31 @@
             // Load Inbox by default
             loadBillsInbox();
             
-            // Update button states - Inbox active
+            // Update button states - Inbox active (reset all first)
+            resetAllBillsNavButtons();
             $('#billsInboxBtn').removeClass('btn-outline-primary').addClass('btn-primary');
-            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Scroll to top to show the bills section
             $('html, body').animate({ scrollTop: 0 }, 300);
         });
         
+        // Helper function to reset ALL bills navigation buttons across BOTH sections
+        function resetAllBillsNavButtons() {
+            // Reset main section buttons
+            $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            // Reset approvals section buttons
+            $('.approvals-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        }
+        
         // Handle Inbox button click
         $('#billsInboxBtn').click(function(e) {
             e.preventDefault();
             
-            // Update button states - reset ALL other buttons
+            // Reset ALL buttons, then activate this one
+            resetAllBillsNavButtons();
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
-            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
-            $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Load Bills - Inbox
             loadBillsInbox();
@@ -637,10 +646,9 @@
         $('#billsDirectBtn').click(function(e) {
             e.preventDefault();
             
-            // Update button states - reset ALL other buttons
+            // Reset ALL buttons, then activate this one
+            resetAllBillsNavButtons();
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
-            $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
-            $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
             
             // Fetch bills data and populate workspace
             $.ajax({
@@ -680,10 +688,10 @@
                 return;
             }
             
-            // Update button states for main section
+            // Reset ALL buttons, then activate this one AND the matching one in approvals section
+            resetAllBillsNavButtons();
             $(this).removeClass('btn-outline-primary').addClass('btn-primary');
-            $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
-            $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('.approvals-nav-btn[data-mode="approvals"]').removeClass('btn-outline-primary').addClass('btn-primary');
             
             // Hide main bills section, show approvals section
             $('#billsInboxSection').find('> div:not(:first-child)').hide();
@@ -722,24 +730,24 @@
             e.preventDefault();
             var mode = $(this).data('mode');
             
-            // Update button states within the Approvals section nav
-            $('.approvals-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
-            $(this).removeClass('btn-outline-primary').addClass('btn-primary');
-            
             if (mode === 'inbox') {
-                // Switch back to Inbox
+                // Switch back to Inbox - hide approvals, show main, trigger inbox button
                 $('#billsApprovalsSection').hide();
                 $('#billsInboxSection').css('display', 'flex').show();
                 $('#billsInboxSection').find('> div:not(:first-child)').show();
-                $('#billsInboxBtn').click();
+                $('#billsInboxBtn').click();  // This will call resetAllBillsNavButtons()
             } else if (mode === 'direct') {
-                // Switch to Direct
+                // Switch to Direct - hide approvals, show main, trigger direct button
                 $('#billsApprovalsSection').hide();
                 $('#billsInboxSection').css('display', 'flex').show();
                 $('#billsInboxSection').find('> div:not(:first-child)').show();
-                $('#billsDirectBtn').click();
+                $('#billsDirectBtn').click();  // This will call resetAllBillsNavButtons()
+            } else if (mode === 'approvals') {
+                // Already on approvals - just ensure correct button state
+                resetAllBillsNavButtons();
+                $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+                $('#billsApprovalsBtn').removeClass('btn-outline-primary').addClass('btn-primary');
             }
-            // mode === 'approvals' - already on approvals, do nothing
         });
         
         // Function to load approved invoices
