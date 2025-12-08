@@ -255,6 +255,7 @@ The XERO_ENCRYPTION_KEY must be the same on AWS as when the data was exported.
 DEPLOYMENT HISTORY
 ------------------
 Recent deployments:
+- v103-construction-allocations: Fix unit display (use Costing.unit), column alignment for allocated tables, category optgroups in quote allocation dropdowns
 - v94-projects-card-grid: Projects card grid layout with modal edit/create, tender/execution navigation preserved
 - v78-s3-media: Use S3 for media file storage in Docker/AWS to persist uploads across deployments
 - v77-cleanup: Remove spaceship/alien animations, change SHIFT+B to SHIFT+BIN for DB wipe
