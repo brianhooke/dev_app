@@ -935,11 +935,11 @@ def get_project_invoices(request, project_pk):
                 'invoice_status': inv.invoice_status,
             })
         
-        # Get costing items for this project
+        # Get costing items for this project (include unit_name for construction mode)
         costing_items = list(Costing.objects.filter(
             project_id=project_pk
-        ).select_related('category').values(
-            'costing_pk', 'item', 'category__category'
+        ).select_related('category', 'unit').values(
+            'costing_pk', 'item', 'unit__unit_name', 'category__category'
         ).order_by('category__order_in_list', 'order_in_list'))
         
         return JsonResponse({
@@ -965,16 +965,26 @@ def get_unallocated_invoice_allocations(request, invoice_pk):
     try:
         allocations = Invoice_allocations.objects.filter(
             invoice_pk_id=invoice_pk
-        ).select_related('item').order_by('invoice_allocations_pk')
+        ).select_related('item', 'item__unit').order_by('invoice_allocations_pk')
         
         allocations_data = []
         for alloc in allocations:
+            # Get unit from Costing item's linked Units object if available
+            unit = ''
+            if alloc.item and alloc.item.unit:
+                unit = alloc.item.unit.unit_name  # unit is FK to Units model
+            elif alloc.unit:
+                unit = alloc.unit
+            
             allocations_data.append({
                 'allocation_pk': alloc.invoice_allocations_pk,
                 'item_pk': alloc.item_id,
                 'item_name': alloc.item.item if alloc.item else None,
                 'amount': float(alloc.amount) if alloc.amount else 0,
                 'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
+                'qty': float(alloc.qty) if alloc.qty else None,
+                'unit': unit,
+                'rate': float(alloc.rate) if alloc.rate else None,
                 'notes': alloc.notes or '',
             })
         
@@ -1003,12 +1013,15 @@ def create_unallocated_invoice_allocation(request):
         if not invoice_pk:
             return JsonResponse({'status': 'error', 'message': 'invoice_pk required'}, status=400)
         
-        # Create new allocation with defaults
+        # Create new allocation with defaults (including construction fields)
         allocation = Invoice_allocations.objects.create(
             invoice_pk_id=invoice_pk,
             item_id=data.get('item_pk') or None,
             amount=data.get('amount', 0),
             gst_amount=data.get('gst_amount', 0),
+            qty=data.get('qty') or None,
+            unit=data.get('unit', ''),
+            rate=data.get('rate') or None,
             notes=data.get('notes', ''),
         )
         
@@ -1042,6 +1055,12 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
             allocation.amount = data['amount'] or 0
         if 'gst_amount' in data:
             allocation.gst_amount = data['gst_amount'] or 0
+        if 'qty' in data:
+            allocation.qty = data['qty'] if data['qty'] else None
+        if 'unit' in data:
+            allocation.unit = data['unit'] or ''
+        if 'rate' in data:
+            allocation.rate = data['rate'] if data['rate'] else None
         if 'notes' in data:
             allocation.notes = data['notes'] or ''
         

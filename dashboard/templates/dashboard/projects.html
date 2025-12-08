@@ -1584,14 +1584,23 @@
                         var isConstruction = isQuotesConstructionProject();
                         if (allocation) row.attr('data-allocation-pk', allocation.quote_allocations_pk);
                         
-                        // Item dropdown (both modes)
+                        // Item dropdown with category optgroups (both modes)
                         var itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
                         itemSelect.append($('<option>').val('').text('Select Item...'));
-                        (window.quotesCostingItems || window.itemsItems || []).forEach(function(item) {
+                        
+                        // Populate with costing items, grouped by category
+                        var costingItems = window.quotesCostingItems || window.itemsItems || [];
+                        var currentCategory = null;
+                        costingItems.forEach(function(item) {
+                            // Add category optgroup if category changed
+                            if (item.category__category !== currentCategory) {
+                                currentCategory = item.category__category;
+                                itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
+                            }
                             var option = $('<option>').val(item.costing_pk).text(item.item);
-                            option.attr('data-unit', item.unit || ''); // Store unit for construction mode
+                            option.attr('data-unit', item.unit__unit_name || item.unit || ''); // Store unit for construction mode
                             if (allocation && allocation.item_pk === item.costing_pk) option.prop('selected', true);
-                            itemSelect.append(option);
+                            itemSelect.find('optgroup').last().append(option);
                         });
                         
                         if (isConstruction) {
@@ -2286,17 +2295,26 @@
                 row.attr('data-allocation-pk', allocation.quote_allocations_pk);
             }
             
-            // 1. Item dropdown
+            // 1. Item dropdown with category optgroups
             const itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
             itemSelect.append($('<option>').val('').text('Select Item...'));
-            (window.quotesCostingItems || []).forEach(function(item) {
+            
+            // Populate with costing items, grouped by category
+            const costingItems = window.quotesCostingItems || [];
+            let currentCategory = null;
+            costingItems.forEach(function(item) {
+                // Add category optgroup if category changed
+                if (item.category__category !== currentCategory) {
+                    currentCategory = item.category__category;
+                    itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
+                }
                 const option = $('<option>').val(item.costing_pk).text(item.item);
                 // Store unit as data attribute for construction mode
-                option.attr('data-unit', item.unit || '');
+                option.attr('data-unit', item.unit__unit_name || item.unit || '');
                 if (allocation && allocation.item_pk === item.costing_pk) {
                     option.prop('selected', true);
                 }
-                itemSelect.append(option);
+                itemSelect.find('optgroup').last().append(option);
             });
             
             if (isConstruction) {
@@ -2653,6 +2671,105 @@
         // INVOICES SECTION - Uses AllocationsManager
         // ==========================================
         
+        // Check if current invoices project is construction type
+        function isInvoicesConstructionProject() {
+            return window.currentConstructionProject && window.currentConstructionProject.project_type === 'construction';
+        }
+        
+        // Column width definitions for invoice allocations table
+        var invoiceAllocationsColumnWidths = {
+            construction: ['25%', '8%', '10%', '12%', '12%', '28%', '5%'], // Item, Unit, Qty, Rate, Amount, Notes, Del
+            constructionReadonly: ['26%', '10%', '12%', '14%', '14%', '24%'], // Item, Unit, Qty, Rate, Amount, Notes (no Del)
+            nonConstruction: ['35%', '15%', '15%', '30%', '5%'], // Item, $ Net, $ GST, Notes, Del
+            nonConstructionReadonly: ['35%', '18%', '18%', '29%'] // Item, $ Net, $ GST, Notes (no Del)
+        };
+        
+        // Update invoice allocations table headers and inject CSS for alignment
+        function updateInvoiceAllocationsHeaders(tableId = 'invoiceAllocationsTable') {
+            const thead = $('#' + tableId + ' thead');
+            if (thead.length === 0) return;
+            
+            const isConstruction = isInvoicesConstructionProject();
+            const isAllocated = tableId.includes('allocated'); // Allocated tables are read-only (no delete column)
+            
+            // Select appropriate widths based on construction mode and readonly status
+            let widths;
+            if (isConstruction) {
+                widths = isAllocated ? invoiceAllocationsColumnWidths.constructionReadonly : invoiceAllocationsColumnWidths.construction;
+            } else {
+                widths = isAllocated ? invoiceAllocationsColumnWidths.nonConstructionReadonly : invoiceAllocationsColumnWidths.nonConstruction;
+            }
+            
+            // Clear and rebuild headers with inline widths
+            thead.empty();
+            const headerRow = $('<tr>');
+            
+            if (isConstruction) {
+                // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes | [Del if not readonly]
+                const headers = isAllocated 
+                    ? ['Item', 'Unit', 'Qty', '$ Rate', '$ Amount', 'Notes']
+                    : ['Item', 'Unit', 'Qty', '$ Rate', '$ Amount', 'Notes', ''];
+                headers.forEach((h, i) => headerRow.append($('<th>').css('width', widths[i]).text(h)));
+            } else {
+                // Non-construction: Item | $ Net | $ GST | Notes | [Del if not readonly]
+                const headers = isAllocated 
+                    ? ['Item', '$ Net', '$ GST', 'Notes']
+                    : ['Item', '$ Net', '$ GST', 'Notes', ''];
+                headers.forEach((h, i) => headerRow.append($('<th>').css('width', widths[i]).text(h)));
+            }
+            thead.append(headerRow);
+            
+            // Inject/update CSS to override nth-child rules for tbody cells
+            let styleId = tableId + 'ColumnStyles';
+            let styleEl = $('#' + styleId);
+            if (styleEl.length === 0) {
+                styleEl = $('<style>').attr('id', styleId);
+                $('head').append(styleEl);
+            }
+            
+            // Build CSS rules for each column
+            let css = '';
+            widths.forEach((w, i) => {
+                css += `#${tableId} tbody td:nth-child(${i + 1}) { width: ${w} !important; }\n`;
+            });
+            styleEl.text(css);
+            
+            // Update footer layout for construction mode
+            const footerId = isAllocated ? '#allocatedInvoiceAllocationsFooter' : '#invoiceAllocationsFooter';
+            const footer = $(footerId);
+            
+            if (footer.length) {
+                // Rebuild footer to match new column structure
+                footer.empty();
+                const footerLabel = isAllocated ? 'Total Allocated:' : 'Still to Allocate:';
+                
+                if (isConstruction) {
+                    // Construction footer: Item | Unit | Qty | Rate | Amount (with value) | Notes | [Del]
+                    footer.append($('<div>').css({width: widths[0], padding: '6px 8px'}).html(`<span>${footerLabel}</span>`));
+                    footer.append($('<div>').css({width: widths[1], padding: '6px 8px'}));
+                    footer.append($('<div>').css({width: widths[2], padding: '6px 8px'}));
+                    footer.append($('<div>').css({width: widths[3], padding: '6px 8px'}));
+                    const netSpanId = isAllocated ? 'allocatedTotalNet' : 'invoiceRemainingNet';
+                    footer.append($('<div>').css({width: widths[4], padding: '6px 8px'}).html(`<span id="${netSpanId}" style="color: ${isAllocated ? '#90EE90' : '#ffcccc'};">$0.00</span>`));
+                    footer.append($('<div>').css({width: widths[5], padding: '6px 8px'}));
+                    if (!isAllocated) {
+                        footer.append($('<div>').css({width: widths[6], padding: '6px 8px'}));
+                    }
+                } else {
+                    // Non-construction footer: Item | Net (with value) | GST (with value) | Notes | [Del]
+                    footer.append($('<div>').css({width: widths[0], padding: '6px 8px'}).html(`<span>${footerLabel}</span>`));
+                    const netSpanId = isAllocated ? 'allocatedTotalNet' : 'invoiceRemainingNet';
+                    const gstSpanId = isAllocated ? 'allocatedTotalGst' : 'invoiceRemainingGst';
+                    footer.append($('<div>').css({width: widths[1], padding: '6px 8px'}).html(`<span id="${netSpanId}" style="color: ${isAllocated ? '#90EE90' : '#ffcccc'};">$0.00</span>`));
+                    footer.append($('<div>').css({width: widths[2], padding: '6px 8px'}).html(`<span id="${gstSpanId}" style="color: ${isAllocated ? '#90EE90' : '#ffcccc'};">$0.00</span>`));
+                    footer.append($('<div>').css({width: widths[3], padding: '6px 8px'}));
+                    if (!isAllocated) {
+                        footer.append($('<div>').css({width: widths[4], padding: '6px 8px'}));
+                    }
+                }
+            }
+        }
+        
         // Initialize invoices AllocationsManager configuration
         function initInvoicesAllocationsManager() {
             if (window.invoicesManagerInitialized) return;
@@ -2968,6 +3085,9 @@
         
         // Load existing allocations for an invoice
         function loadInvoiceAllocations(invoicePk) {
+            // Update headers based on project type before loading allocations
+            updateInvoiceAllocationsHeaders('invoiceAllocationsTable');
+            
             $.ajax({
                 url: `/core/get_unallocated_invoice_allocations/${invoicePk}/`,
                 type: 'GET',
@@ -2982,7 +3102,7 @@
                         } else {
                             // Display existing allocations
                             allocations.forEach(function(alloc) {
-                                const row = createInvoiceAllocationRow(alloc.allocation_pk, alloc.item_pk, alloc.amount, alloc.gst_amount, alloc.notes);
+                                const row = createInvoiceAllocationRow(alloc);
                                 $('#invoiceAllocationsTableBody').append(row);
                             });
                         }
@@ -3002,6 +3122,7 @@
         function updateInvoiceStillToAllocate() {
             if (!window.currentSelectedInvoice) return;
             
+            const isConstruction = isInvoicesConstructionProject();
             const totalNet = window.currentSelectedInvoice.total_net;
             const totalGst = window.currentSelectedInvoice.total_gst;
             
@@ -3011,28 +3132,35 @@
             
             $('#invoiceAllocationsTableBody tr').each(function() {
                 allocatedNet += parseFloat($(this).find('.allocation-net-input').val()) || 0;
-                allocatedGst += parseFloat($(this).find('.allocation-gst-input').val()) || 0;
+                if (!isConstruction) {
+                    allocatedGst += parseFloat($(this).find('.allocation-gst-input').val()) || 0;
+                }
             });
             
             const remainingNet = totalNet - allocatedNet;
-            const remainingGst = totalGst - allocatedGst;
+            const remainingGst = isConstruction ? 0 : totalGst - allocatedGst;
             
             // Update display with thousand comma separators (light colors for gradient background)
             $('#invoiceRemainingNet').text('$' + remainingNet.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})).css('color', Math.abs(remainingNet) < 0.01 ? '#90EE90' : '#ffcccc');
-            $('#invoiceRemainingGst').text('$' + remainingGst.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})).css('color', Math.abs(remainingGst) < 0.01 ? '#90EE90' : '#ffcccc');
+            if (!isConstruction) {
+                $('#invoiceRemainingGst').text('$' + remainingGst.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})).css('color', Math.abs(remainingGst) < 0.01 ? '#90EE90' : '#ffcccc');
+            }
             
             // Update Allocate button state for the selected row
             const selectedRow = $('#unallocatedInvoicesTableBody tr.selected-row');
             if (selectedRow.length) {
                 const allocateBtn = selectedRow.find('.allocate-invoice-btn');
-                const isFullyAllocated = Math.abs(remainingNet) < 0.01 && Math.abs(remainingGst) < 0.01;
+                // For construction mode, only check net; for non-construction, check both
+                const isFullyAllocated = isConstruction 
+                    ? Math.abs(remainingNet) < 0.01 
+                    : Math.abs(remainingNet) < 0.01 && Math.abs(remainingGst) < 0.01;
                 
                 // Check if all non-zero allocation rows have an item selected
                 let allItemsSelected = true;
                 $('#invoiceAllocationsTableBody tr').each(function() {
                     const itemVal = $(this).find('.allocation-item-select').val();
                     const netVal = parseFloat($(this).find('.allocation-net-input').val()) || 0;
-                    const gstVal = parseFloat($(this).find('.allocation-gst-input').val()) || 0;
+                    const gstVal = isConstruction ? 0 : parseFloat($(this).find('.allocation-gst-input').val()) || 0;
                     
                     // Only require item for rows with non-zero amounts
                     if ((netVal > 0 || gstVal > 0) && !itemVal) {
@@ -3171,11 +3299,24 @@
                 data: JSON.stringify({
                     invoice_pk: window.currentSelectedInvoice.invoice_pk,
                     amount: 0,
-                    gst_amount: 0
+                    gst_amount: 0,
+                    qty: null,
+                    unit: '',
+                    rate: null
                 }),
                 success: function(response) {
                     if (response.status === 'success') {
-                        const row = createInvoiceAllocationRow(response.allocation_pk, null, 0, 0, '');
+                        // Pass allocation object for construction mode support
+                        const row = createInvoiceAllocationRow({
+                            allocation_pk: response.allocation_pk,
+                            item_pk: null,
+                            amount: 0,
+                            gst_amount: 0,
+                            qty: null,
+                            unit: '',
+                            rate: null,
+                            notes: ''
+                        });
                         $('#invoiceAllocationsTableBody').append(row);
                         updateInvoiceStillToAllocate();
                     }
@@ -3199,8 +3340,27 @@
         });
         
         // Create an invoice allocation row
-        function createInvoiceAllocationRow(allocationPk, itemValue, netAmount, gstAmount, notes) {
-            const row = $('<tr>').attr('data-allocation-pk', allocationPk);
+        // Accepts either an allocation object or individual parameters for backwards compatibility
+        function createInvoiceAllocationRow(allocOrPk, itemValue, netAmount, gstAmount, notes) {
+            // Support both object and individual params
+            let alloc = {};
+            if (typeof allocOrPk === 'object' && allocOrPk !== null) {
+                alloc = allocOrPk;
+            } else {
+                alloc = {
+                    allocation_pk: allocOrPk,
+                    item_pk: itemValue,
+                    amount: netAmount,
+                    gst_amount: gstAmount,
+                    notes: notes,
+                    qty: null,
+                    unit: null,
+                    rate: null
+                };
+            }
+            
+            const row = $('<tr>').attr('data-allocation-pk', alloc.allocation_pk);
+            const isConstruction = isInvoicesConstructionProject();
             
             // Helper function to save allocation to database (debounced)
             let saveTimeout = null;
@@ -3210,12 +3370,29 @@
                     const pk = row.attr('data-allocation-pk');
                     if (!pk) return;
                     
-                    const data = {
-                        item_pk: row.find('.allocation-item-select').val() || null,
-                        amount: parseFloat(row.find('.allocation-net-input').val()) || 0,
-                        gst_amount: parseFloat(row.find('.allocation-gst-input').val()) || 0,
-                        notes: row.find('.allocation-notes-input').val() || ''
-                    };
+                    let data;
+                    if (isConstruction) {
+                        // Construction mode: save qty, rate, unit, amount (calculated)
+                        const qty = parseFloat(row.find('.allocation-qty-input').val()) || 0;
+                        const rate = parseFloat(row.find('.allocation-rate-input').val()) || 0;
+                        data = {
+                            item_pk: row.find('.allocation-item-select').val() || null,
+                            qty: qty,
+                            rate: rate,
+                            unit: row.find('.allocation-unit-input').val() || '',
+                            amount: qty * rate,
+                            gst_amount: 0, // Not used in construction mode
+                            notes: row.find('.allocation-notes-input').val() || ''
+                        };
+                    } else {
+                        // Non-construction mode: save net and gst
+                        data = {
+                            item_pk: row.find('.allocation-item-select').val() || null,
+                            amount: parseFloat(row.find('.allocation-net-input').val()) || 0,
+                            gst_amount: parseFloat(row.find('.allocation-gst-input').val()) || 0,
+                            notes: row.find('.allocation-notes-input').val() || ''
+                        };
+                    }
                     
                     $.ajax({
                         url: `/core/update_unallocated_invoice_allocation/${pk}/`,
@@ -3246,89 +3423,167 @@
                     itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
                 }
                 const option = $('<option>').val(item.costing_pk).text(item.item);
-                if (itemValue && item.costing_pk == itemValue) {
+                // Store unit as data attribute for construction mode
+                option.attr('data-unit', item.unit__unit_name || item.unit || '');
+                if (alloc.item_pk && item.costing_pk == alloc.item_pk) {
                     option.prop('selected', true);
                 }
                 itemSelect.find('optgroup').last().append(option);
             });
             
-            // Save on change and update validation
-            itemSelect.on('change', function() {
-                saveAllocation();
-                updateInvoiceStillToAllocate();
-            });
-            
-            row.append($('<td>').append(itemSelect));
-            
-            // 2. $ Net input
-            const netInput = $('<input>')
-                .attr('type', 'number')
-                .attr('step', '0.01')
-                .attr('min', '0')
-                .addClass('form-control form-control-sm allocation-net-input')
-                .val(netAmount || '')
-                .on('input', function() {
-                    let value = $(this).val();
-                    if (parseFloat(value) < 0) {
-                        $(this).val(0);
-                        return;
-                    }
-                    if (value.includes('.')) {
-                        const parts = value.split('.');
-                        if (parts[1] && parts[1].length > 2) {
-                            $(this).val(parseFloat(value).toFixed(2));
-                        }
-                    }
-                    // Auto-calculate GST as 10%
-                    const gstInputEl = $(this).closest('tr').find('.allocation-gst-input');
-                    if (!gstInputEl.data('manually-edited')) {
-                        const netVal = parseFloat($(this).val());
-                        if (!isNaN(netVal)) {
-                            gstInputEl.val((netVal * 0.1).toFixed(2));
-                        }
-                    }
-                    updateInvoiceStillToAllocate();
+            if (isConstruction) {
+                // Construction mode: Item | Unit | Qty | $ Rate | $ Amount | Notes | Del
+                
+                // Item dropdown with unit auto-populate
+                itemSelect.on('change', function() {
+                    const selectedOption = $(this).find('option:selected');
+                    const unit = selectedOption.attr('data-unit') || '';
+                    row.find('.allocation-unit-display').text(unit);
+                    row.find('.allocation-unit-input').val(unit);
                     saveAllocation();
-                });
-            row.append($('<td>').append(netInput));
-            
-            // 3. $ GST input
-            const gstInput = $('<input>')
-                .attr('type', 'number')
-                .attr('step', '0.01')
-                .attr('min', '0')
-                .addClass('form-control form-control-sm allocation-gst-input')
-                .val(gstAmount || '')
-                .on('focus', function() {
-                    $(this).data('manually-edited', true);
-                })
-                .on('input', function() {
-                    let value = $(this).val();
-                    if (parseFloat(value) < 0) {
-                        $(this).val(0);
-                        return;
-                    }
-                    if (value.includes('.')) {
-                        const parts = value.split('.');
-                        if (parts[1] && parts[1].length > 2) {
-                            $(this).val(parseFloat(value).toFixed(2));
-                        }
-                    }
                     updateInvoiceStillToAllocate();
-                    saveAllocation();
                 });
-            row.append($('<td>').append(gstInput));
+                row.append($('<td>').append(itemSelect));
+                
+                // 2. Unit (read-only, auto-populated from item)
+                const selectedUnit = alloc.unit || '';
+                const unitDisplay = $('<span>').addClass('allocation-unit-display').text(selectedUnit);
+                const unitInput = $('<input>').attr('type', 'hidden').addClass('allocation-unit-input').val(selectedUnit);
+                row.append($('<td>').append(unitDisplay).append(unitInput));
+                
+                // 3. Qty input
+                const qtyInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .addClass('form-control form-control-sm allocation-qty-input')
+                    .val(alloc.qty ? parseFloat(alloc.qty).toFixed(2) : '')
+                    .on('change input', function() {
+                        // Calculate amount = qty * rate
+                        const qty = parseFloat($(this).val()) || 0;
+                        const rate = parseFloat(row.find('.allocation-rate-input').val()) || 0;
+                        const amount = (qty * rate).toFixed(2);
+                        row.find('.allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                        row.find('.allocation-net-input').val(amount);
+                        updateInvoiceStillToAllocate();
+                        saveAllocation();
+                    });
+                row.append($('<td>').append(qtyInput));
+                
+                // 4. $ Rate input
+                const rateInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .addClass('form-control form-control-sm allocation-rate-input')
+                    .val(alloc.rate ? parseFloat(alloc.rate).toFixed(2) : '')
+                    .on('change input', function() {
+                        // Calculate amount = qty * rate
+                        const qty = parseFloat(row.find('.allocation-qty-input').val()) || 0;
+                        const rate = parseFloat($(this).val()) || 0;
+                        const amount = (qty * rate).toFixed(2);
+                        row.find('.allocation-amount-display').text('$' + parseFloat(amount).toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                        row.find('.allocation-net-input').val(amount);
+                        updateInvoiceStillToAllocate();
+                        saveAllocation();
+                    });
+                row.append($('<td>').append(rateInput));
+                
+                // 5. $ Amount (calculated, read-only display but hidden input for data)
+                const calcAmount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                const amountDisplay = $('<span>').addClass('allocation-amount-display')
+                    .text('$' + calcAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                const amountHidden = $('<input>').attr('type', 'hidden')
+                    .addClass('allocation-net-input').val(calcAmount.toFixed(2));
+                row.append($('<td>').append(amountDisplay).append(amountHidden));
+                
+                // 6. Notes input
+                const notesInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm allocation-notes-input')
+                    .attr('placeholder', 'Notes...')
+                    .val(alloc.notes || '')
+                    .on('blur', saveAllocation);
+                row.append($('<td>').append(notesInput));
+                
+            } else {
+                // Non-construction mode: Item | $ Net | $ GST | Notes | Del
+                
+                // Save on change and update validation
+                itemSelect.on('change', function() {
+                    saveAllocation();
+                    updateInvoiceStillToAllocate();
+                });
+                row.append($('<td>').append(itemSelect));
+                
+                // 2. $ Net input
+                const netInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm allocation-net-input')
+                    .val(alloc.amount || '')
+                    .on('input', function() {
+                        let value = $(this).val();
+                        if (parseFloat(value) < 0) {
+                            $(this).val(0);
+                            return;
+                        }
+                        if (value.includes('.')) {
+                            const parts = value.split('.');
+                            if (parts[1] && parts[1].length > 2) {
+                                $(this).val(parseFloat(value).toFixed(2));
+                            }
+                        }
+                        // Auto-calculate GST as 10%
+                        const gstInputEl = $(this).closest('tr').find('.allocation-gst-input');
+                        if (!gstInputEl.data('manually-edited')) {
+                            const netVal = parseFloat($(this).val());
+                            if (!isNaN(netVal)) {
+                                gstInputEl.val((netVal * 0.1).toFixed(2));
+                            }
+                        }
+                        updateInvoiceStillToAllocate();
+                        saveAllocation();
+                    });
+                row.append($('<td>').append(netInput));
+                
+                // 3. $ GST input
+                const gstInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm allocation-gst-input')
+                    .val(alloc.gst_amount || '')
+                    .on('focus', function() {
+                        $(this).data('manually-edited', true);
+                    })
+                    .on('input', function() {
+                        let value = $(this).val();
+                        if (parseFloat(value) < 0) {
+                            $(this).val(0);
+                            return;
+                        }
+                        if (value.includes('.')) {
+                            const parts = value.split('.');
+                            if (parts[1] && parts[1].length > 2) {
+                                $(this).val(parseFloat(value).toFixed(2));
+                            }
+                        }
+                        updateInvoiceStillToAllocate();
+                        saveAllocation();
+                    });
+                row.append($('<td>').append(gstInput));
+                
+                // 4. Notes input
+                const notesInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm allocation-notes-input')
+                    .attr('placeholder', 'Notes...')
+                    .val(alloc.notes || '')
+                    .on('blur', saveAllocation);
+                row.append($('<td>').append(notesInput));
+            }
             
-            // 4. Notes input
-            const notesInput = $('<input>')
-                .attr('type', 'text')
-                .addClass('form-control form-control-sm allocation-notes-input')
-                .attr('placeholder', 'Notes...')
-                .val(notes || '')
-                .on('blur', saveAllocation);
-            row.append($('<td>').append(notesInput));
-            
-            // 5. Delete button
+            // Delete button (both modes)
             const deleteBtn = $('<button>')
                 .addClass('btn btn-sm btn-danger delete-allocation-btn')
                 .html('<i class="fas fa-times"></i>')
@@ -4012,6 +4267,9 @@
         
         // Load allocations for an allocated invoice (read-only display)
         function loadAllocatedInvoiceAllocations(invoicePk) {
+            // Update headers based on project type before loading allocations
+            updateInvoiceAllocationsHeaders('allocatedInvoiceAllocationsTable');
+            
             $.ajax({
                 url: `/core/get_unallocated_invoice_allocations/${invoicePk}/`,
                 type: 'GET',
@@ -4021,24 +4279,43 @@
                         const tbody = $('#allocatedInvoiceAllocationsTableBody');
                         tbody.empty();
                         
+                        const isConstruction = isInvoicesConstructionProject();
                         let totalNet = 0;
                         let totalGst = 0;
                         
                         allocations.forEach(function(alloc) {
                             const row = $('<tr>');
-                            row.append($('<td>').text(alloc.item_name || '-'));
-                            row.append($('<td>').text('$' + (alloc.amount || 0).toFixed(2)));
-                            row.append($('<td>').text('$' + (alloc.gst_amount || 0).toFixed(2)));
-                            row.append($('<td>').text(alloc.notes || '-'));
-                            tbody.append(row);
                             
-                            totalNet += alloc.amount || 0;
-                            totalGst += alloc.gst_amount || 0;
+                            if (isConstruction) {
+                                // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes
+                                row.append($('<td>').text(alloc.item_name || '-'));
+                                row.append($('<td>').text(alloc.unit || '-'));
+                                const qty = alloc.qty ? parseFloat(alloc.qty) : 0;
+                                row.append($('<td>').text(qty.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                                const rate = alloc.rate ? parseFloat(alloc.rate) : 0;
+                                row.append($('<td>').text('$' + rate.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                                const amount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                                row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                                row.append($('<td>').text(alloc.notes || '-'));
+                                totalNet += amount;
+                            } else {
+                                // Non-construction: Item | $ Net | $ GST | Notes
+                                row.append($('<td>').text(alloc.item_name || '-'));
+                                row.append($('<td>').text('$' + (alloc.amount || 0).toFixed(2)));
+                                row.append($('<td>').text('$' + (alloc.gst_amount || 0).toFixed(2)));
+                                row.append($('<td>').text(alloc.notes || '-'));
+                                totalNet += alloc.amount || 0;
+                                totalGst += alloc.gst_amount || 0;
+                            }
+                            
+                            tbody.append(row);
                         });
                         
                         // Update totals
                         $('#allocatedTotalNet').text('$' + totalNet.toFixed(2));
-                        $('#allocatedTotalGst').text('$' + totalGst.toFixed(2));
+                        if (!isConstruction) {
+                            $('#allocatedTotalGst').text('$' + totalGst.toFixed(2));
+                        }
                     }
                 },
                 error: function(xhr, status, error) {

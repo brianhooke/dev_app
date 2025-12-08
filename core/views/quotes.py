@@ -253,17 +253,24 @@ def get_quote_allocations_for_quote(request, quote_pk):
     """Get all allocations for a specific quote."""
     try:
         quote = Quotes.objects.get(quotes_pk=quote_pk)
-        allocations = Quote_allocations.objects.filter(quotes_pk=quote).select_related('item')
+        allocations = Quote_allocations.objects.filter(quotes_pk=quote).select_related('item', 'item__unit')
         
         allocations_data = []
         for alloc in allocations:
+            # Get unit from Costing item's linked Units object if available
+            unit = ''
+            if alloc.item and alloc.item.unit:
+                unit = alloc.item.unit.unit_name  # unit is FK to Units model
+            elif alloc.unit:
+                unit = alloc.unit
+            
             allocations_data.append({
                 'quote_allocations_pk': alloc.quote_allocations_pk,
                 'item_pk': alloc.item.costing_pk if alloc.item else None,
                 'item_name': alloc.item.item if alloc.item else None,
                 'amount': float(alloc.amount) if alloc.amount else 0,
                 'qty': float(alloc.qty) if alloc.qty else None,
-                'unit': alloc.unit,
+                'unit': unit,
                 'rate': float(alloc.rate) if alloc.rate else None,
                 'notes': alloc.notes,
             })
@@ -808,34 +815,31 @@ def get_quote_allocations_by_quotes(request):
                 'message': 'No quote IDs provided'
             }, status=400)
         
-        # Fetch allocations for these quotes
+        # Fetch allocations for these quotes with nested unit relationship
         allocations = Quote_allocations.objects.filter(
             quotes_pk_id__in=quote_ids
-        ).select_related('item', 'quotes_pk').values(
-            'quote_allocations_pk',
-            'quotes_pk_id',
-            'item__costing_pk',
-            'item__item',
-            'amount',
-            'qty',
-            'unit',
-            'rate',
-            'notes'
-        )
+        ).select_related('item', 'item__unit', 'quotes_pk')
         
         # Format response
         allocations_list = []
         for alloc in allocations:
+            # Get unit from Costing item's linked Units object if available
+            unit = ''
+            if alloc.item and alloc.item.unit:
+                unit = alloc.item.unit.unit_name  # unit is FK to Units model
+            elif alloc.unit:
+                unit = alloc.unit
+            
             allocations_list.append({
-                'quote_allocation_pk': alloc['quote_allocations_pk'],
-                'quote_pk': alloc['quotes_pk_id'],
-                'item_pk': alloc['item__costing_pk'],
-                'item_name': alloc['item__item'],
-                'amount': str(alloc['amount']),
-                'qty': str(alloc['qty']) if alloc['qty'] else '0',
-                'unit': alloc['unit'] or '',
-                'rate': str(alloc['rate']) if alloc['rate'] else '0',
-                'notes': alloc['notes'] or ''
+                'quote_allocation_pk': alloc.quote_allocations_pk,
+                'quote_pk': alloc.quotes_pk_id,
+                'item_pk': alloc.item.costing_pk if alloc.item else None,
+                'item_name': alloc.item.item if alloc.item else None,
+                'amount': str(alloc.amount) if alloc.amount else '0',
+                'qty': str(alloc.qty) if alloc.qty else '0',
+                'unit': unit,
+                'rate': str(alloc.rate) if alloc.rate else '0',
+                'notes': alloc.notes or ''
             })
         
         logger.info(f"Retrieved {len(allocations_list)} allocations for {len(quote_ids)} quotes")
