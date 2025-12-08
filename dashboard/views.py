@@ -1761,11 +1761,13 @@ def upload_items_csv(request, project_pk):
         }, status=500)
 
 
-def generate_po_html(project, supplier, items, total_amount, po_url=None):
+def generate_po_html(project, supplier, items, total_amount, po_url=None, is_construction=False):
     """
     Generate HTML for PO PDF with professional formatting.
     Shared between email and download endpoints.
     Dynamically scales row height based on number of items.
+    For construction projects, shows: Description | Units | Qty | Rate | Amount | Quote #
+    For non-construction projects, shows: Description | Amount | Quote #
     """
     # Dynamic scaling based on number of items to fit on one A4 page
     # 1-10 items: Full padding (12px), large font (12px) - comfortable spacing
@@ -1914,24 +1916,71 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
         <table>
             <thead>
                 <tr>
+    '''
+    
+    if is_construction:
+        # Construction: Description | Units | Qty | Rate | Amount | Quote #
+        html_content += '''
+                    <th style="width: 28%;">Description</th>
+                    <th style="width: 10%;">Units</th>
+                    <th class="amount" style="width: 12%;">Qty</th>
+                    <th class="amount" style="width: 14%;">Rate</th>
+                    <th class="amount" style="width: 16%;">Amount</th>
+                    <th style="width: 20%;">Quote #</th>
+        '''
+    else:
+        # Non-construction: Description | Amount | Quote #
+        html_content += '''
                     <th style="width: 50%;">Description</th>
                     <th class="amount" style="width: 25%;">Amount</th>
                     <th style="width: 25%;">Quote #</th>
+        '''
+    
+    html_content += '''
                 </tr>
             </thead>
             <tbody>
     '''
     
     for item in items:
-        html_content += f'''
+        if is_construction:
+            qty_str = f"{item['qty']:,.2f}" if item.get('qty') else ''
+            rate_str = f"${item['rate']:,.2f}" if item.get('rate') else ''
+            html_content += f'''
+                <tr>
+                    <td style="width: 28%;">{item['description']}</td>
+                    <td style="width: 10%;">{item.get('unit', '')}</td>
+                    <td class="amount" style="width: 12%;">{qty_str}</td>
+                    <td class="amount" style="width: 14%;">{rate_str}</td>
+                    <td class="amount" style="width: 16%;">${item['amount']:,.2f}</td>
+                    <td style="width: 20%;">{item.get('quote_number', '')}</td>
+                </tr>
+            '''
+        else:
+            html_content += f'''
                 <tr>
                     <td style="width: 50%;">{item['description']}</td>
                     <td class="amount" style="width: 25%;">${item['amount']:,.2f}</td>
                     <td style="width: 25%;">{item['quote_numbers']}</td>
                 </tr>
-        '''
+            '''
     
-    html_content += f'''
+    if is_construction:
+        html_content += f'''
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td style="width: 28%;">TOTAL</td>
+                    <td style="width: 10%;"></td>
+                    <td style="width: 12%;"></td>
+                    <td style="width: 14%;"></td>
+                    <td class="amount" style="width: 16%;">${total_amount:,.2f}</td>
+                    <td style="width: 20%;"></td>
+                </tr>
+            </tfoot>
+        </table>'''
+    else:
+        html_content += f'''
             </tbody>
             <tfoot>
                 <tr>
@@ -1940,8 +1989,9 @@ def generate_po_html(project, supplier, items, total_amount, po_url=None):
                     <td style="width: 25%;"></td>
                 </tr>
             </tfoot>
-        </table>
-        
+        </table>'''
+    
+    html_content += '''
         <div class="footer">
     '''
     
@@ -2026,32 +2076,54 @@ def preview_po(request, project_pk, supplier_pk):
         if not quotes.exists():
             return HttpResponse('<html><body style="font-family: Arial; padding: 20px; color: #666; text-align: center;"><p>No quotes found for this supplier</p></body></html>')
         
-        # Group allocations by item
-        items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+        # Check if construction project - needs different formatting
+        is_construction = project.project_type == 'construction'
         
-        for quote in quotes:
-            for allocation in quote.quote_allocations.all():
-                item_name = allocation.item.item
-                items_map[item_name]['amount'] += allocation.amount
-                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
-        
-        # Convert to list
-        items = [
-            {
-                'description': item_name,
-                'amount': float(data['amount']),
-                'quote_numbers': ', '.join(data['quote_numbers'])
-            }
-            for item_name, data in items_map.items()
-        ]
+        if is_construction:
+            # Construction: Keep individual allocations with qty/unit/rate
+            items = []
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    # Get unit name from costing item
+                    unit_name = ''
+                    if allocation.item and allocation.item.unit:
+                        unit_name = allocation.item.unit.unit_name if hasattr(allocation.item.unit, 'unit_name') else str(allocation.item.unit)
+                    
+                    items.append({
+                        'description': allocation.item.item,
+                        'unit': unit_name,
+                        'qty': float(allocation.qty) if allocation.qty else None,
+                        'rate': float(allocation.rate) if allocation.rate else None,
+                        'amount': float(allocation.amount),
+                        'quote_number': quote.supplier_quote_number or ''
+                    })
+        else:
+            # Non-construction: Group allocations by item
+            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+            
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    item_name = allocation.item.item
+                    items_map[item_name]['amount'] += allocation.amount
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+            
+            # Convert to list
+            items = [
+                {
+                    'description': item_name,
+                    'amount': float(data['amount']),
+                    'quote_numbers': ', '.join(data['quote_numbers'])
+                }
+                for item_name, data in items_map.items()
+            ]
         
         # Calculate total
         total_amount = sum(item['amount'] for item in items)
         
         # Generate HTML with a placeholder URL to show the full format
         # The actual URL will be generated when the email is sent
-        html_content = generate_po_html(project, supplier, items, total_amount, po_url="[URL will be generated when email is sent]")
+        html_content = generate_po_html(project, supplier, items, total_amount, po_url="[URL will be generated when email is sent]", is_construction=is_construction)
         
         return HttpResponse(html_content)
         
@@ -2093,26 +2165,48 @@ def send_po_email(request, project_pk, supplier_pk):
                 'message': 'No quotes found for this supplier'
             }, status=404)
         
-        # Group allocations by item
-        from collections import defaultdict
-        items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+        # Check if construction project - needs different formatting
+        is_construction = project.project_type == 'construction'
         
-        for quote in quotes:
-            for allocation in quote.quote_allocations.all():
-                item_name = allocation.item.item
-                items_map[item_name]['amount'] += allocation.amount
-                if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                    items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
-        
-        # Convert to list
-        items = [
-            {
-                'description': item_name,
-                'amount': float(data['amount']),
-                'quote_numbers': ', '.join(data['quote_numbers'])
-            }
-            for item_name, data in items_map.items()
-        ]
+        if is_construction:
+            # Construction: Keep individual allocations with qty/unit/rate
+            items = []
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    # Get unit name from costing item
+                    unit_name = ''
+                    if allocation.item and allocation.item.unit:
+                        unit_name = allocation.item.unit.unit_name if hasattr(allocation.item.unit, 'unit_name') else str(allocation.item.unit)
+                    
+                    items.append({
+                        'description': allocation.item.item,
+                        'unit': unit_name,
+                        'qty': float(allocation.qty) if allocation.qty else None,
+                        'rate': float(allocation.rate) if allocation.rate else None,
+                        'amount': float(allocation.amount),
+                        'quote_number': quote.supplier_quote_number or ''
+                    })
+        else:
+            # Non-construction: Group allocations by item
+            from collections import defaultdict
+            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
+            
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    item_name = allocation.item.item
+                    items_map[item_name]['amount'] += allocation.amount
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
+                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+            
+            # Convert to list
+            items = [
+                {
+                    'description': item_name,
+                    'amount': float(data['amount']),
+                    'quote_numbers': ', '.join(data['quote_numbers'])
+                }
+                for item_name, data in items_map.items()
+            ]
         
         # Calculate total
         total_amount = sum(item['amount'] for item in items)
@@ -2156,7 +2250,7 @@ def send_po_email(request, project_pk, supplier_pk):
         po_url = f"{scheme}://{host}/po/{unique_id}/"
         
         # Generate HTML for PDF using shared function with clickable URL
-        html_content = generate_po_html(project, supplier, items, total_amount, po_url)
+        html_content = generate_po_html(project, supplier, items, total_amount, po_url, is_construction)
         
         # Convert HTML to PDF
         pdf_buffer = BytesIO()

@@ -5351,23 +5351,8 @@
                 // Add class to tbody to trigger dimming effect
                 $(`#${contentAreaId} #poSuppliersTableBody`).addClass('has-selection');
                 
-                console.log('Supplier row clicked:', supplierName, '(PK:', supplierPk, '), Sent:', poSent);
-                
-                // If PO was sent and we have a PDF URL, display the stored PDF
-                // Otherwise, generate a preview
-                if (poSent && pdfUrl) {
-                    console.log('Displaying stored PO PDF:', pdfUrl);
-                    $(`#${contentAreaId} #poPlaceholder`).hide();
-                    $(`#${contentAreaId} #poPreviewFrame`).attr('src', pdfUrl).show();
-                    $(`#${contentAreaId} #poViewerFooter`).addClass('visible');
-                    
-                    // Store current supplier info for download
-                    $(`#${contentAreaId} #downloadPOBtn`).data('supplierPk', supplierPk);
-                    $(`#${contentAreaId} #downloadPOBtn`).data('supplierName', supplierName);
-                } else {
-                    // Generate PO preview for unsent POs
-                    generatePODocument(projectObj, supplierPk, supplierName, contentAreaId);
-                }
+                // Generate preview on-the-fly (supports construction columns)
+                generatePODocument(projectObj, supplierPk, supplierName, contentAreaId);
             });
             
             // PO Update button handler - convert row to editable inputs
@@ -5488,9 +5473,7 @@
         };
         
         function generatePODocument(projectObj, supplierPk, supplierName, contentAreaId) {
-            console.log('Loading PO preview for supplier:', supplierName);
-            
-            // Load the full PO preview in the iframe
+            // Load the PO preview in the iframe
             var previewUrl = `/preview_po/${projectObj.pk}/${supplierPk}/`;
             
             $(`#${contentAreaId} #poPlaceholder`).hide();
@@ -5513,8 +5496,6 @@
                 alert('Please select a supplier first');
                 return;
             }
-            
-            console.log('Downloading PO for supplier:', supplierName);
             
             // Disable button and show loading
             button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Generating...');
