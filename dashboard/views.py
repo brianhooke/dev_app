@@ -2772,8 +2772,12 @@ def get_action_items(request):
     try:
         action_items = []
         
-        # 1. Bills in Inbox (status -2)
-        inbox_count = Invoices.objects.filter(invoice_status=-2).count()
+        # 1. Bills in Inbox (status -2) - exclude archived projects
+        inbox_count = Invoices.objects.filter(
+            invoice_status=-2
+        ).exclude(
+            project__archived=1
+        ).count()
         if inbox_count > 0:
             action_items.append({
                 'type': 'inbox',
@@ -2787,8 +2791,8 @@ def get_action_items(request):
                 'action_type': 'bills_inbox',
             })
         
-        # 2. Bills to be Allocated (status 0, grouped by project)
-        unallocated = Invoices.objects.filter(invoice_status=0).select_related('project')
+        # 2. Bills to be Allocated (status 0, grouped by project) - exclude archived projects
+        unallocated = Invoices.objects.filter(invoice_status=0).exclude(project__archived=1).select_related('project')
         unallocated_by_project = {}
         for inv in unallocated:
             project_name = inv.project.project if inv.project else 'Unassigned'
@@ -2813,8 +2817,8 @@ def get_action_items(request):
                 'project_pk': project_pk,
             })
         
-        # 3. Bills to be Approved (status 1 or 102, grouped by project)
-        to_approve = Invoices.objects.filter(invoice_status__in=[1, 102]).select_related('project')
+        # 3. Bills to be Approved (status 1 or 102, grouped by project) - exclude archived projects
+        to_approve = Invoices.objects.filter(invoice_status__in=[1, 102]).exclude(project__archived=1).select_related('project')
         approve_by_project = {}
         for inv in to_approve:
             project_name = inv.project.project if inv.project else 'Unassigned'
@@ -2839,8 +2843,8 @@ def get_action_items(request):
                 'project_pk': project_pk,
             })
         
-        # 4. Approved Bills ready to send to Xero (status 2 or 103)
-        ready_for_xero = Invoices.objects.filter(invoice_status__in=[2, 103]).count()
+        # 4. Approved Bills ready to send to Xero (status 2 or 103) - exclude archived projects
+        ready_for_xero = Invoices.objects.filter(invoice_status__in=[2, 103]).exclude(project__archived=1).count()
         if ready_for_xero > 0:
             action_items.append({
                 'type': 'xero',
@@ -2854,8 +2858,8 @@ def get_action_items(request):
                 'action_type': 'bills_approvals',
             })
         
-        # 5. Supplier Progress Claims awaiting Approval (status 100)
-        pending_claims = Invoices.objects.filter(invoice_status=100).select_related('project', 'contact_pk')
+        # 5. Supplier Progress Claims awaiting Approval (status 100) - exclude archived projects
+        pending_claims = Invoices.objects.filter(invoice_status=100).exclude(project__archived=1).select_related('project', 'contact_pk')
         claims_by_supplier = {}
         for inv in pending_claims:
             supplier_name = inv.contact_pk.name if inv.contact_pk else 'Unknown Supplier'
