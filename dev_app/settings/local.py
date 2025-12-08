@@ -58,6 +58,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Media files - use S3 in Docker/AWS, local filesystem otherwise
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 
+# Debug S3 configuration
+print(f"[SETTINGS DEBUG] AWS_STORAGE_BUCKET_NAME: {AWS_STORAGE_BUCKET_NAME}")
+print(f"[SETTINGS DEBUG] /app exists: {os.path.exists('/app')}")
+print(f"[SETTINGS DEBUG] S3 will be used: {bool(AWS_STORAGE_BUCKET_NAME and os.path.exists('/app'))}")
+
 if AWS_STORAGE_BUCKET_NAME and os.path.exists('/app'):
     # Running in Docker on AWS - use S3 for media files
     AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
@@ -85,6 +90,10 @@ else:
     PROJECT_NAME = '123 Fake Street'
     LETTERHEAD_PATH = os.path.join(MEDIA_ROOT, 'letterhead/letterhead.pdf')
     BACKGROUND_IMAGE_PATH = os.path.join(MEDIA_ROOT, 'backgrounds', 'my_bg.jpg')
+
+# Debug final media configuration
+print(f"[SETTINGS DEBUG] Final MEDIA_URL: {MEDIA_URL}")
+print(f"[SETTINGS DEBUG] DEFAULT_FILE_STORAGE: {globals().get('DEFAULT_FILE_STORAGE', 'django.core.files.storage.FileSystemStorage')}")
 
 LOGGING = {
     'version': 1,
