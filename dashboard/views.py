@@ -2121,9 +2121,17 @@ def preview_po(request, project_pk, supplier_pk):
         # Calculate total
         total_amount = sum(item['amount'] for item in items)
         
-        # Generate HTML with a placeholder URL to show the full format
-        # The actual URL will be generated when the email is sent
-        html_content = generate_po_html(project, supplier, items, total_amount, po_url="[URL will be generated when email is sent]", is_construction=is_construction)
+        # Check if PO has been sent - if so, use the actual URL
+        po_url = "[URL will be generated when email is sent]"
+        existing_po = Po_orders.objects.filter(project=project, po_supplier=supplier, po_sent=True).first()
+        if existing_po and existing_po.unique_id:
+            scheme = 'https' if request.is_secure() else 'http'
+            host = request.get_host()
+            if 'mason.build' in host or 'elasticbeanstalk.com' in host:
+                scheme = 'https'
+            po_url = f"{scheme}://{host}/po/{existing_po.unique_id}/"
+        
+        html_content = generate_po_html(project, supplier, items, total_amount, po_url=po_url, is_construction=is_construction)
         
         return HttpResponse(html_content)
         
@@ -2268,7 +2276,9 @@ def send_po_email(request, project_pk, supplier_pk):
         # Collect unique quote numbers from items (in order of appearance)
         quote_numbers_in_order = []
         for item in items:
-            for qn in item['quote_numbers'].split(', '):
+            # Construction uses 'quote_number' (singular), non-construction uses 'quote_numbers' (plural)
+            qn_value = item.get('quote_number', '') if is_construction else item.get('quote_numbers', '')
+            for qn in qn_value.split(', '):
                 qn = qn.strip()
                 if qn and qn not in quote_numbers_in_order:
                     quote_numbers_in_order.append(qn)
