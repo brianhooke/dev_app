@@ -261,7 +261,7 @@ Costing.objects.create(
     order_in_list=1,
     xero_account_code='5000',
     contract_budget=Decimal('5000.00'),
-    uncommitted=Decimal('0.00'),
+    uncommitted_amount=Decimal('0.00'),
     fixed_on_site=Decimal('0.00'),
     sc_invoiced=Decimal('0.00'),
     sc_paid=Decimal('0.00')
@@ -274,7 +274,7 @@ Costing.objects.create(
     order_in_list=2,
     xero_account_code='5001',
     contract_budget=Decimal('3000.00'),
-    uncommitted=Decimal('0.00'),
+    uncommitted_amount=Decimal('0.00'),
     fixed_on_site=Decimal('0.00'),
     sc_invoiced=Decimal('0.00'),
     sc_paid=Decimal('0.00')
@@ -288,7 +288,7 @@ Costing.objects.create(
     order_in_list=1,
     xero_account_code='5100',
     contract_budget=Decimal('4000.00'),
-    uncommitted=Decimal('0.00'),
+    uncommitted_amount=Decimal('0.00'),
     fixed_on_site=Decimal('0.00'),
     sc_invoiced=Decimal('0.00'),
     sc_paid=Decimal('0.00')
@@ -301,7 +301,7 @@ Costing.objects.create(
     order_in_list=2,
     xero_account_code='5101',
     contract_budget=Decimal('2000.00'),
-    uncommitted=Decimal('0.00'),
+    uncommitted_amount=Decimal('0.00'),
     fixed_on_site=Decimal('0.00'),
     sc_invoiced=Decimal('0.00'),
     sc_paid=Decimal('0.00')
@@ -315,7 +315,7 @@ Costing.objects.create(
     order_in_list=1,
     xero_account_code='5200',
     contract_budget=Decimal('8000.00'),
-    uncommitted=Decimal('0.00'),
+    uncommitted_amount=Decimal('0.00'),
     fixed_on_site=Decimal('0.00'),
     sc_invoiced=Decimal('0.00'),
     sc_paid=Decimal('0.00')

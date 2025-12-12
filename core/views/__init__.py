@@ -28,8 +28,8 @@ from .pos import (
     send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_invoice_pdf, get_po_table_data_for_invoice
 )
 
-# Claims views
-from .claims import (
+# Claims views - now imported from construction app for backward compatibility
+from construction.views.claims import (
     associate_sc_claims_with_hc_claim, update_fixedonsite,
     update_hc_claim_data, get_claim_table, send_hc_claim_to_xero,
     delete_variation, create_variation, post_progress_claim_data,

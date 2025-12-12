@@ -45,7 +45,7 @@ from core.models import Contacts, SPVData, XeroInstances, Invoices, Projects, In
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 from django.utils import timezone
-from io import StringIO, TextIOWrapper, BytesIO
+from io import StringIO, BytesIO
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -57,7 +57,7 @@ except ImportError:
 # Import helpers from core.views.xero
 from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
 # Import validators
-from .validators import validate_email, validate_bsb, validate_account_number, validate_abn, validate_required_field
+from ..validators import validate_email, validate_bsb, validate_account_number, validate_abn, validate_required_field
 
 logger = logging.getLogger(__name__)
 
