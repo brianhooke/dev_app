@@ -2,29 +2,35 @@
 DJANGO PROJECT - COMPREHENSIVE CODE QUALITY REFACTOR
 ================================================================================
 Project: dev_app
-Status: Phase 1 Starting
-Last Updated: 2025-12-12
+Status: Phase 6 In Progress
+Last Updated: 2025-12-13
 Version: v99 (after completion)
 
 ================================================================================
-CODEBASE METRICS (Current State)
+CODEBASE METRICS (Updated 2025-12-13)
 ================================================================================
 
+**Before Refactor:** ~117,000 lines
+**After Phases 1-3:** ~84,000 lines (28% reduction!)
+
 **Largest Files (Lines):**
-- dashboard/views.py              3,013 lines  ⚠️ CRITICAL - needs splitting
+- dashboard/views/_all.py         3,013 lines  ✅ SPLIT (in views/ package)
 - projects.html                   6,486 lines  ⚠️ CRITICAL - needs componentizing
 - bills.html                      2,204 lines  ⚠️ HIGH - needs componentizing
 - po_public.html                  1,624 lines  ⚠️ HIGH
 - core/views/pos.py               1,386 lines  ⚠️ HIGH
 - core/views/bills.py             1,324 lines  ⚠️ HIGH
-- core/views/main.py              1,088 lines  ⚠️ MEDIUM
+- core/views/main.py              1,065 lines  ⚠️ MEDIUM (cleaned)
 - contract_budget.html            1,064 lines  ⚠️ MEDIUM
 - dashboard.html                  1,095 lines  ⚠️ MEDIUM
-- invoices_4.js                     976 lines  ⚠️ MEDIUM
+- invoices_4.js                     976 lines  ⚠️ MEDIUM (migration target)
 - documents.js                    1,011 lines  ⚠️ MEDIUM
 - core/models.py                    693 lines  ✅ OK
 
-**Total Project Lines:** ~117,000 (excluding dependencies)
+**JS Duplication Target:**
+- quotes_1.js + quotes_2.js         584 lines → quotes_section.js
+- invoices_1-6.js                 2,083 lines → invoices_section.js
+- allocations_manager.js            579 lines (reusable, currently unused)
 
 ================================================================================
 PHASE 1: DEAD CODE ANALYSIS ✅ COMPLETE
@@ -237,32 +243,59 @@ Status: ⏳ PENDING
 **Deliverable:** Security issues fixed, audit passed
 
 ================================================================================
-PHASE 6: FRONTEND CLEANUP
+PHASE 6: FRONTEND CLEANUP - AllocationsManager Migration
 ================================================================================
-Status: ⏳ PENDING
+Status: ⏳ IN PROGRESS (2025-12-13)
 
-**Objectives:**
-- Organize JS into modules
-- Reduce global variable pollution
-- Remove unused CSS
-- Standardize naming conventions
+**KEY DISCOVERY: Two Allocation Systems Exist**
+
+1. **Modal System (Active):** build.html uses quotes_modals.html, invoices_modals.html
+   - JS: quotes_1.js, quotes_2.js, invoices_1-6.js (2,667 lines)
+   - Pattern: Create DOM dynamically in modals
+   
+2. **Standalone Pages (Partial):** /quotes/, /invoices/ use reusable_allocations_section.html
+   - JS: allocations_manager.js (579 lines) - EXISTS BUT UNUSED!
+   - Pattern: Embedded sections with class-based manager
+
+**Migration Strategy:**
+- Comment out legacy JS (don't delete) for rollback capability
+- Activate AllocationsManager for both systems
+- Final cleanup: Remove commented code after all bugs fixed
+
+**Rollback Commit:** `ca8c3b9` (2025-12-13)
+
+**Proof of Concept Created:**
+- quotes_section.js - Activates AllocationsManager for quotes
+
+**Files to Migrate (comment out, not delete):**
+- quotes_1.js (490 lines) → quotes_section.js
+- quotes_2.js (94 lines) → quotes_section.js  
+- invoices_1-6.js (2,083 lines) → invoices_section.js
 
 **Checks:**
-6.1. [ ] Consolidate JS files (remove versioned duplicates)
-6.2. [ ] Use ES6 modules or namespaces
-6.3. [ ] Remove window.* global assignments where possible
-6.4. [ ] Consistent function naming (camelCase)
-6.5. [ ] Remove inline <script> blocks
-6.6. [ ] Move inline styles to CSS classes
-6.7. [ ] Remove unused CSS rules
-6.8. [ ] Consistent event handler patterns
+6.1. [x] Created ALLOCATIONS_MANAGER_MIGRATION.md documentation
+6.2. [x] Created quotes_section.js proof of concept
+6.3. [ ] Consolidate JS files (remove versioned duplicates)
+6.4. [ ] Use ES6 modules or namespaces
+6.5. [ ] Remove window.* global assignments where possible
+6.6. [ ] Consistent function naming (camelCase)
+6.7. [ ] Remove inline <script> blocks
+6.8. [ ] Move inline styles to CSS classes
+6.9. [ ] Remove unused CSS rules
+6.10. [ ] Consistent event handler patterns
 
 **File Consolidation Plan:**
+- quotes_1.js + quotes_2.js → quotes_section.js (via AllocationsManager)
+- invoices_1-6.js → invoices_section.js (via AllocationsManager)
 - hc_claims.js + hc_claims_3.js → hc_claims.js
-- invoices.js + invoices_4.js → invoices.js
 - Remove staticfiles/ duplicates (use collectstatic)
 
-**Deliverable:** Clean, modular frontend code
+**Final Cleanup (ONLY after all bugs fixed):**
+- Search for `/* LEGACY:` in all JS files
+- Remove commented legacy code blocks
+- Commit as "Cleanup: Remove legacy allocation JS"
+
+**Deliverable:** Clean, modular frontend code with unified AllocationsManager
 
 ================================================================================
 PHASE 7: TEMPLATE ORGANIZATION

@@ -758,6 +758,40 @@ def quotes_view(request):
     return render(request, 'core/quotes.html', context)
 
 
+def quotes_standalone_test(request, project_pk):
+    """
+    TEST PAGE: Standalone quotes page using AllocationsManager.
+    Access at: /quotes/test/<project_pk>/
+    """
+    from core.models import Projects, Costing
+    import json
+    
+    project = Projects.objects.get(project_pk=project_pk)
+    costings = list(Costing.objects.filter(project=project).values(
+        'costing_pk', 'item', 'category__category_name'
+    ))
+    
+    context = {
+        'main_table_title': 'Quotes',
+        'main_table_columns': [
+            {'header': 'Supplier', 'width': '30%'},
+            {'header': '$ Net', 'width': '20%'},
+            {'header': 'Quote #', 'width': '25%'},
+            {'header': 'Save', 'width': '15%'},
+            {'header': 'Del', 'width': '10%'},
+        ],
+        'allocations_columns': [
+            {'header': 'Item', 'width': '40%'},
+            {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Notes', 'width': '35%'},
+            {'header': '', 'width': '5%', 'align': 'center'},
+        ],
+        'project_pk': project_pk,
+        'costings': json.dumps(costings),
+    }
+    return render(request, 'core/quotes_standalone.html', context)
+
+
 def get_project_invoices(request, project_pk):
     """
     Get invoices for a project filtered by status.
