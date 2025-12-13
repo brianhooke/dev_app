@@ -12,12 +12,18 @@
 
 $(document).ready(function() {
     // Only initialize if we're on a page with the invoice section
-    // Check for both new template ID and legacy ID
     if ($('#invoiceMainTableBody').length === 0 && $('#unallocatedInvoicesTableBody').length === 0) {
         return;
     }
     
-    console.log('Initializing invoices section with AllocationsManager...');
+    // Skip auto-initialization if running within Projects page (which has its own loadUnallocatedInvoices)
+    // The Projects page uses projects_scripts.html which handles invoice loading
+    if (window.loadUnallocatedInvoices || window.populateUnallocatedInvoicesTable) {
+        console.log('Invoices section: Skipping auto-init (running within Projects page)');
+        return;
+    }
+    
+    console.log('Initializing invoices section with AllocationsManager (standalone)...');
     
     // Determine which ID pattern to use (new template or legacy mapped)
     var useLegacyIds = $('#unallocatedInvoicesTableBody').length > 0;

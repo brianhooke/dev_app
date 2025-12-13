@@ -17,7 +17,14 @@ $(document).ready(function() {
         return;
     }
     
-    console.log('Initializing quotes section with AllocationsManager...');
+    // Skip auto-initialization if running within Projects page (which has its own loadQuotesData)
+    // The Projects page uses projects_scripts.html which handles quotes loading
+    if (window.loadQuotesData || window.initQuotesAllocationsManager) {
+        console.log('Quotes section: Skipping auto-init (running within Projects page)');
+        return;
+    }
+    
+    console.log('Initializing quotes section with AllocationsManager (standalone)...');
     
     // Get project PK from page context, current project, or URL
     var projectPk = window.projectPk || 
