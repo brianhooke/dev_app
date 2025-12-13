@@ -19,8 +19,12 @@ $(document).ready(function() {
     
     console.log('Initializing quotes section with AllocationsManager...');
     
-    // Get project PK from URL or page context
-    var projectPk = window.projectPk || getProjectPkFromUrl();
+    // Get project PK from page context, current project, or URL
+    var projectPk = window.projectPk || 
+                    (window.currentQuotesProject && window.currentQuotesProject.pk) ||
+                    (window.currentConstructionProject && window.currentConstructionProject.pk) ||
+                    (window.currentProject && window.currentProject.pk) ||
+                    getProjectPkFromUrl();
     
     AllocationsManager.init({
         sectionId: 'quote',
