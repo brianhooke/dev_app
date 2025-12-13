@@ -119,14 +119,9 @@ Optional context variables:
         transition: background-color 0.15s ease, opacity 0.15s ease;
         background-color: var(--color-bg-surface);
     }
-    
-    /* Zebra striping - every second row darker (VERY visible contrast) */
-    #{{ section_id }}MainTable tbody tr:nth-child(even):not(:hover):not(.selected-row) {
-        background-color: #e8ecf0 !important;
-    }
 
     #{{ section_id }}MainTable tbody tr:hover {
-        background-color: #dce3eb;
+        background-color: var(--color-bg-muted);
     }
     
     /* When there's a selected row, dim all non-selected rows */
@@ -195,22 +190,9 @@ Optional context variables:
         background-color: var(--color-bg-surface);
         transition: background-color 0.15s ease;
     }
-    
-    /* Zebra striping - every second row darker (VERY visible contrast) */
-    #{{ section_id }}AllocationsTable tbody tr:nth-child(even):not(:hover),
-    #{{ section_id }}AllocationsTableBody tr:nth-child(even):not(:hover) {
-        background-color: #e8ecf0 !important;
-    }
-    
-    /* Odd rows white */
-    #{{ section_id }}AllocationsTable tbody tr:nth-child(odd),
-    #{{ section_id }}AllocationsTableBody tr:nth-child(odd) {
-        background-color: #ffffff;
-    }
 
-    #{{ section_id }}AllocationsTable tbody tr:hover,
-    #{{ section_id }}AllocationsTableBody tr:hover {
-        background-color: #dce3eb !important;
+    #{{ section_id }}AllocationsTable tbody tr:hover {
+        background-color: var(--color-bg-muted);
     }
     
     #{{ section_id }}AllocationsTable tbody td {
