@@ -60,8 +60,8 @@
   }
   
   /* Zebra striping - every second row darker */
-  .reusable-table tbody tr:nth-child(even) {
-    background-color: var(--color-bg-muted);
+  .reusable-table tbody tr:nth-child(even):not(:hover) {
+    background-color: var(--color-bg-muted) !important;
   }
   
   .reusable-table tbody tr:hover {

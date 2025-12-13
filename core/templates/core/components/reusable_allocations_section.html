@@ -115,8 +115,8 @@ Optional context variables:
     }
     
     /* Zebra striping - every second row darker */
-    #{{ section_id }}MainTable tbody tr:nth-child(even) {
-        background-color: var(--color-bg-muted);
+    #{{ section_id }}MainTable tbody tr:nth-child(even):not(:hover):not(.selected-row) {
+        background-color: var(--color-bg-muted) !important;
     }
 
     #{{ section_id }}MainTable tbody tr:hover {
@@ -191,8 +191,8 @@ Optional context variables:
     }
     
     /* Zebra striping - every second row darker */
-    #{{ section_id }}AllocationsTable tbody tr:nth-child(even) {
-        background-color: var(--color-bg-muted);
+    #{{ section_id }}AllocationsTable tbody tr:nth-child(even):not(:hover) {
+        background-color: var(--color-bg-muted) !important;
     }
 
     #{{ section_id }}AllocationsTable tbody tr:hover {

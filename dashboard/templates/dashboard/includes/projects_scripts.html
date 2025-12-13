@@ -2157,6 +2157,10 @@
         // Load unallocated invoices data
         // Made global so invoices_section.js can detect it and skip auto-init
         window.loadUnallocatedInvoices = function loadUnallocatedInvoices() {
+            if (!window.currentConstructionProject || !window.currentConstructionProject.pk) {
+                console.error('No construction project available for loading unallocated invoices');
+                return;
+            }
             const projectPk = window.currentConstructionProject.pk;
             console.log('Loading unallocated invoices for project:', projectPk);
             
