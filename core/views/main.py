@@ -75,24 +75,14 @@ def main(request, division):
     quote_allocations_sums_dict = quote_service.get_quote_allocations_sums_dict()
     committed_values = {pk: amount for pk, amount in Committed()}
     costings = costing_service.enrich_costings_with_committed(costings, committed_values)
-    print('\n=== DEBUG: Invoice Allocations ===')    
-    all_allocations = Invoice_allocations.objects.all().select_related('invoice_pk', 'item')
-    print('\nAll Invoice Allocations:')
-    for alloc in all_allocations:
-        print(f"Invoice {alloc.invoice_pk.invoice_pk} - Item {alloc.item.costing_pk}: Amount {alloc.amount}")
     invoice_allocations_sums_dict = bill_service.get_invoice_allocations_sums_dict()
     paid_invoice_allocations_dict = bill_service.get_paid_invoice_allocations_dict()
-    print('\ninvoice_allocations_sums_dict:', invoice_allocations_sums_dict)
-    print('\npaid_invoice_allocations_dict:', paid_invoice_allocations_dict)
     costings = costing_service.enrich_costings_with_bill_data(
         costings, 
         invoice_allocations_sums_dict, 
         paid_invoice_allocations_dict
     )
     category_totals = costing_service.calculate_category_totals(costings, field='sc_invoiced')
-    print('\nCategory Totals:')
-    for cat, total in category_totals.items():
-        print(f"Category '{cat}': Total {total}")
     items = costing_service.get_items_list(costings)
     committed_quotes_list = quote_service.get_committed_quotes_list(division)
     committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)

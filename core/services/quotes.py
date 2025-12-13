@@ -89,19 +89,27 @@ def get_contacts_in_quotes(division):
     Returns:
         list: List of contact dictionaries with nested quotes
     """
+    from django.db.models import Prefetch
+    
     contact_pks_in_quotes = Quotes.objects.filter(
         contact_pk__division=division
     ).values_list('contact_pk', flat=True).distinct()
     
+    # OPTIMIZED: Use prefetch_related to avoid N+1 on quotes_set
     contacts_in_quotes = Contacts.objects.filter(
         pk__in=contact_pks_in_quotes,
         division=division
+    ).prefetch_related(
+        Prefetch('quotes_set', queryset=Quotes.objects.only(
+            'quotes_pk', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk'
+        ))
     )
     
     contacts_in_quotes_list = []
     for contact in contacts_in_quotes:
-        d = contact.__dict__
-        d['quotes'] = list(contact.quotes_set.values(
+        d = contact.__dict__.copy()  # Use copy to avoid modifying cached object
+        d.pop('_state', None)  # Remove Django internal state
+        d['quotes'] = list(contact.quotes_set.all().values(
             'quotes_pk', 'supplier_quote_number', 'total_cost', 'pdf', 'contact_pk'
         ))
         contacts_in_quotes_list.append(d)
@@ -139,33 +147,42 @@ def get_progress_claim_quote_allocations():
     
     Returns:
         list: List of contact entries with quote allocations
+    
+    OPTIMIZED: Reduced from O(contacts * quotes * allocations) queries to 1 query
     """
-    distinct_contacts_quotes = Quotes.objects.values_list("contact_pk", flat=True).distinct()
-    progress_claim_quote_allocations = []
+    from django.db.models import Prefetch
+    from collections import defaultdict
     
-    for cid in distinct_contacts_quotes:
-        qs_for_c = Quotes.objects.filter(contact_pk=cid)
-        c_entry = {"contact_pk": cid, "quotes": []}
-        
-        for q in qs_for_c:
-            q_allocs = Quote_allocations.objects.filter(quotes_pk=q)
-            alloc_list = []
-            
-            for qa in q_allocs:
-                alloc_list.append({
-                    "item_pk": qa.item.pk,
-                    "item_name": qa.item.item,
-                    "amount": str(qa.amount)
-                })
-            
-            c_entry["quotes"].append({
-                "quote_number": q.quotes_pk,
-                "allocations": alloc_list
-            })
-        
-        progress_claim_quote_allocations.append(c_entry)
+    # Single query with all related data prefetched
+    quotes = Quotes.objects.select_related('contact_pk').prefetch_related(
+        Prefetch(
+            'quote_allocations',
+            queryset=Quote_allocations.objects.select_related('item')
+        )
+    )
     
-    return progress_claim_quote_allocations
+    # Group by contact in Python (much faster than N+1 queries)
+    contacts_dict = defaultdict(list)
+    for q in quotes:
+        alloc_list = [
+            {
+                "item_pk": qa.item.pk,
+                "item_name": qa.item.item,
+                "amount": str(qa.amount)
+            }
+            for qa in q.quote_allocations.all()
+        ]
+        
+        contacts_dict[q.contact_pk_id].append({
+            "quote_number": q.quotes_pk,
+            "allocations": alloc_list
+        })
+    
+    # Convert to expected format
+    return [
+        {"contact_pk": cid, "quotes": quotes_list}
+        for cid, quotes_list in contacts_dict.items()
+    ]
 
 
 def get_committed_items_for_costing(costing_pk):

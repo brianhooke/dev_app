@@ -22,9 +22,10 @@ def get_costings_for_division(division):
     Returns:
         list: List of costing dictionaries with category metadata
     """
+    # OPTIMIZED: Added select_related to avoid N+1 queries on category
     costings = Costing.objects.filter(
         category__division=division
-    ).order_by('category__order_in_list', 'category__category', 'item')
+    ).select_related('category').order_by('category__order_in_list', 'category__category', 'item')
     
     costings_data = []
     for costing in costings:

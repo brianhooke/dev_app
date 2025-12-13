@@ -1,3 +1,16 @@
+/**
+ * LEGACY: quotes_2.js
+ * ====================
+ * STATUS: Marked for migration to AllocationsManager
+ * ROLLBACK COMMIT: ca8c3b9
+ * 
+ * This file handles the "Committed Quotes" modal list functionality.
+ * Uses Bootstrap modal pattern with dynamic row population.
+ * 
+ * DO NOT DELETE until modal migration is complete and tested.
+ * See: ALLOCATIONS_MANAGER_MIGRATION.md for full plan.
+ */
+
 // Initialize the committed quotes functionality when the document is ready
 $(document).ready(function() {
     // Show modal when dropdown option is selected

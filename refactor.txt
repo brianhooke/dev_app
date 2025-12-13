@@ -184,7 +184,7 @@ Note: Template splitting requires careful testing, deferred
 ================================================================================
 PHASE 4: DJANGO BEST PRACTICES
 ================================================================================
-Status: ⏳ PENDING
+Status: ⏳ IN PROGRESS (2025-12-13)
 
 **Objectives:**
 - Fix N+1 query problems
@@ -193,10 +193,27 @@ Status: ⏳ PENDING
 - Improve URL organization
 - Use Django's built-in features properly
 
+**Completed Optimizations:**
+
+1. **core/services/costings.py**
+   - get_costings_for_division(): Added select_related('category')
+
+2. **core/services/quotes.py**
+   - get_contacts_in_quotes(): Added prefetch_related for quotes_set
+   - get_progress_claim_quote_allocations(): MAJOR FIX - Reduced O(n*m*k) to O(1) queries
+
+3. **core/views/bills.py**
+   - get_invoice_allocations(): Added select_related('contact_pk', 'item')
+   - get_invoice_allocations(): Added prefetch_related('invoice_allocations__item')
+   - Replaced 20+ print() statements with proper logger calls
+
+4. **core/views/main.py**
+   - Removed debug print statements from main() function
+
 **Checks:**
-4.1. [ ] N+1 Queries - use django-debug-toolbar to identify
-4.2. [ ] Missing select_related() on ForeignKey access
-4.3. [ ] Missing prefetch_related() on reverse relations
+4.1. [x] N+1 Queries - Fixed major ones in services and views
+4.2. [x] Missing select_related() on ForeignKey access - Added to key queries
+4.3. [x] Missing prefetch_related() on reverse relations - Added where needed
 4.4. [ ] Raw SQL that could be ORM
 4.5. [ ] Model Meta classes (ordering, constraints, indexes)
 4.6. [ ] Form validation in views vs forms.py

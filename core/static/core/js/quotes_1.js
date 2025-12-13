@@ -1,3 +1,20 @@
+/**
+ * LEGACY: quotes_1.js
+ * ====================
+ * STATUS: Marked for migration to AllocationsManager
+ * ROLLBACK COMMIT: ca8c3b9
+ * 
+ * This file creates the quote entry/update modal dynamically.
+ * The modal-based pattern differs from AllocationsManager's section-based approach.
+ * 
+ * MIGRATION PLAN:
+ * 1. Extend AllocationsManager to support modal creation, OR
+ * 2. Create a ModalQuotesManager class that uses AllocationsManager internally
+ * 
+ * DO NOT DELETE until modal migration is complete and tested.
+ * See: ALLOCATIONS_MANAGER_MIGRATION.md for full plan.
+ */
+
 // Initialize itemsData - will be set from window.itemsData when needed
 var itemsData = [];
 var itemsDataElement = document.getElementById('items-data');
