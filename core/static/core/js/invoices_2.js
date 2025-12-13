@@ -1,3 +1,15 @@
+/* LEGACY: invoices_2.js
+ * ======================
+ * This file is marked for migration to AllocationsManager.
+ * New implementation: invoices_section.js
+ * 
+ * DO NOT DELETE until all functionality is verified in the new implementation.
+ * See: ALLOCATIONS_MANAGER_MIGRATION.md for migration status.
+ * 
+ * This file handles: Existing Invoices Modal (modal system in build.html)
+ * Note: Modal system is separate from reusable_allocations_section system
+ */
+
 document.addEventListener('DOMContentLoaded', function() {
     // Handle "Existing Invoices" dropdown selection
     document.getElementById('claimsDropdownInvoices').addEventListener('change', function(e) {

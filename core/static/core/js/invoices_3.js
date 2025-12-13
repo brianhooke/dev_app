@@ -1,3 +1,15 @@
+/* LEGACY: invoices_3.js
+ * ======================
+ * This file is marked for migration to AllocationsManager.
+ * New implementation: invoices_section.js
+ * 
+ * DO NOT DELETE until all functionality is verified in the new implementation.
+ * See: ALLOCATIONS_MANAGER_MIGRATION.md for migration status.
+ * 
+ * This file handles: Select Invoice Type Modal (Progress Claim or Direct Cost)
+ * Note: Modal system is separate from reusable_allocations_section system
+ */
+
 // Select Invoice Type Modal JS (Progress Claim or Direct Cost)
 document.addEventListener('DOMContentLoaded', function() {
     // Get all required invoice info & pass to either directCostAllocationInvoices or progressClaimModalData
