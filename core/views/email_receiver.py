@@ -12,12 +12,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# API secret key for Lambda authentication
-# Temporary hardcoded for testing
-HARDCODED_KEY = '05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e'
-API_SECRET_KEY = getattr(settings, 'EMAIL_API_SECRET_KEY', 'change-me-in-production')
-# Use hardcoded key temporarily
-API_SECRET_KEY = HARDCODED_KEY
+# API secret key for Lambda authentication - MUST be set in environment/settings
+API_SECRET_KEY = getattr(settings, 'EMAIL_API_SECRET_KEY', None)
+if not API_SECRET_KEY:
+    logger.warning("EMAIL_API_SECRET_KEY not configured - email API will reject all requests")
 
 
 @csrf_exempt
@@ -30,14 +28,7 @@ def receive_email(request):
     # Verify API key
     api_key = request.headers.get('X-API-Secret', '')
     
-    # Temporary debug logging
-    logger.error(f"DEBUG: Configured API_SECRET_KEY (first 20 chars): {API_SECRET_KEY[:20]}...")
-    logger.error(f"DEBUG: Configured API_SECRET_KEY length: {len(API_SECRET_KEY)}")
-    logger.error(f"DEBUG: Request api_key (first 20 chars): {api_key[:20] if api_key else 'NONE'}...")
-    logger.error(f"DEBUG: Request api_key length: {len(api_key)}")
-    logger.error(f"DEBUG: Keys match: {api_key == API_SECRET_KEY}")
-    
-    if api_key != API_SECRET_KEY:
+    if not API_SECRET_KEY or api_key != API_SECRET_KEY:
         logger.warning(f"Unauthorized email API access attempt - keys don't match")
         return JsonResponse({
             'status': 'error',
