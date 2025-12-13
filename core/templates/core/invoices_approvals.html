@@ -1,5 +1,6 @@
 <!-- Approvals Section Template -->
-<!-- Uses reusable allocations section for approved invoices awaiting Xero submission -->
+<!-- Uses reusable allocations section with AllocationsManager (readonly view) -->
+{% load static %}
 
 {% include "core/components/reusable_allocations_section.html" with section_id="approvals" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" readonly=readonly %}
 
@@ -10,42 +11,6 @@
         font-size: 10px;
         padding: 2px 6px;
         margin: 0 2px;
-    }
-    
-    /* Re-apply compact table styles */
-    #approvalsMainTable {
-        font-size: 12px;
-    }
-    
-    #approvalsMainTable th {
-        padding: 6px 5px !important;
-        font-size: 11px;
-        white-space: nowrap;
-        vertical-align: middle;
-    }
-    
-    #approvalsMainTable td {
-        padding: 4px 5px !important;
-        font-size: 11px;
-        vertical-align: middle;
-    }
-    
-    #approvalsMainTable .form-control-sm {
-        font-size: 11px;
-        padding: 3px 5px;
-        height: 28px;
-        min-height: 28px;
-    }
-    
-    #approvalsMainTable input[type="text"],
-    #approvalsMainTable input[type="number"] {
-        font-size: 11px;
-        padding: 3px 5px;
-        height: 28px;
-    }
-    
-    #approvalsMainTableFooter td {
-        font-size: 11px;
     }
     
     /* Truncate long text in specific columns to 2 lines with ellipsis */
@@ -69,3 +34,7 @@
         padding: 4px 8px !important;
     }
 </style>
+
+<!-- Load AllocationsManager and Approvals Section JS -->
+<script src="{% static 'core/js/allocations_manager.js' %}"></script>
+<script src="{% static 'core/js/invoices_approvals_section.js' %}"></script>
