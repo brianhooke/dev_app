@@ -15,6 +15,11 @@
  * - api: { loadData, loadAllocations, saveAllocation, deleteAllocation }
  */
 
+// Prevent re-initialization when loaded via AJAX (preserves existing configs)
+if (typeof window.AllocationsManager !== 'undefined' && window.AllocationsManager._initialized) {
+    console.log('AllocationsManager: Already initialized, skipping re-init');
+} else {
+
 var AllocationsManager = (function() {
     'use strict';
     
@@ -573,6 +578,12 @@ var AllocationsManager = (function() {
         setNewMode: setNewMode,
         setEditMode: setEditMode,
         getConfig: getConfig,
-        getState: getState
+        getState: getState,
+        _initialized: true
     };
 })();
+
+// Mark as initialized to prevent AJAX reload from wiping configs
+window.AllocationsManager = AllocationsManager;
+
+} // End of re-init guard
