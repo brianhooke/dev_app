@@ -55,7 +55,7 @@ def receive_email(request):
         received_at_str = data.get('received_at')
         try:
             received_at = datetime.fromisoformat(received_at_str.replace('Z', '+00:00'))
-        except:
+        except (ValueError, AttributeError, TypeError):
             received_at = datetime.utcnow()
         
         # Create email record

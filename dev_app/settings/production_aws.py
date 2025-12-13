@@ -22,12 +22,13 @@ ALLOWED_HOSTS = [
     '*',  # Temporary for initial deployment
 ]
 
-# Security settings - temporarily relaxed for initial deployment
-CSRF_COOKIE_SECURE = False  # Set to True after HTTPS is configured
-SESSION_COOKIE_SECURE = False  # Set to True after HTTPS is configured
-SECURE_SSL_REDIRECT = False  # Set to True after HTTPS is configured
+# Security settings - HTTPS enabled via ALB
+CSRF_COOKIE_SECURE = True  # Secure cookies over HTTPS
+SESSION_COOKIE_SECURE = True  # Secure cookies over HTTPS
+SECURE_SSL_REDIRECT = False  # ALB handles HTTPS redirect, not Django
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust ALB's X-Forwarded-Proto
 X_FRAME_OPTIONS = 'DENY'
 
 # Session Configuration for OAuth flows

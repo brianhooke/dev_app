@@ -123,7 +123,7 @@ def parse_xero_validation_errors(response):
             if 'ValidationErrors' in element and len(element['ValidationErrors']) > 0:
                 validation_errors = [err['Message'] for err in element['ValidationErrors']]
                 return 'Xero validation error: ' + '; '.join(validation_errors)
-    except:
+    except (ValueError, KeyError, TypeError, IndexError):
         pass
     return None
 
