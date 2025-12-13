@@ -10,7 +10,31 @@
     [id$="AllocationsTableBody"] tr:hover {
         background-color: #eef2f7 !important;
     }
+    
+    /* DEBUG: More specific selectors as fallback */
+    #quoteAllocationsTableBody tr:nth-child(even),
+    #invoiceAllocationsTableBody tr:nth-child(even),
+    #allocatedInvoiceAllocationsTableBody tr:nth-child(even) {
+        background-color: #f8f9fa !important;
+    }
 </style>
+
+<script>
+    // DEBUG: Log when zebra styles should apply
+    window.debugZebraStripes = function() {
+        var tbody = document.querySelector('[id$="AllocationsTableBody"]');
+        if (tbody) {
+            console.log('Found allocation tbody:', tbody.id);
+            console.log('Row count:', tbody.querySelectorAll('tr').length);
+            tbody.querySelectorAll('tr').forEach(function(tr, i) {
+                var bg = window.getComputedStyle(tr).backgroundColor;
+                console.log('Row', i+1, '(' + (i % 2 === 0 ? 'odd' : 'even') + '):', bg);
+            });
+        } else {
+            console.log('No allocation tbody found');
+        }
+    };
+</script>
 
 <script>
     $(document).ready(function() {
