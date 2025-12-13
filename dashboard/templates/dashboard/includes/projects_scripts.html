@@ -1,3 +1,17 @@
+<!-- Global zebra stripe styles for all allocation tables -->
+<style>
+    /* Zebra striping for ALL allocations tables - regardless of section */
+    [id$="AllocationsTableBody"] tr:nth-child(even) {
+        background-color: #f8f9fa !important;
+    }
+    [id$="AllocationsTableBody"] tr:nth-child(odd) {
+        background-color: #ffffff !important;
+    }
+    [id$="AllocationsTableBody"] tr:hover {
+        background-color: #eef2f7 !important;
+    }
+</style>
+
 <script>
     $(document).ready(function() {
         // Function to reset tender view state (make it global so other scripts can call it)

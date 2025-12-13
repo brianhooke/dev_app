@@ -197,12 +197,20 @@ Optional context variables:
     }
     
     /* Zebra striping - every second row darker */
-    #{{ section_id }}AllocationsTable tbody tr:nth-child(even):not(:hover) {
+    #{{ section_id }}AllocationsTable tbody tr:nth-child(even):not(:hover),
+    #{{ section_id }}AllocationsTableBody tr:nth-child(even):not(:hover) {
         background-color: var(--color-bg-muted) !important;
     }
+    
+    /* Fallback zebra stripes using odd rows as well */
+    #{{ section_id }}AllocationsTable tbody tr:nth-child(odd),
+    #{{ section_id }}AllocationsTableBody tr:nth-child(odd) {
+        background-color: var(--color-bg-surface);
+    }
 
-    #{{ section_id }}AllocationsTable tbody tr:hover {
-        background-color: var(--color-bg-muted);
+    #{{ section_id }}AllocationsTable tbody tr:hover,
+    #{{ section_id }}AllocationsTableBody tr:hover {
+        background-color: #eef2f7 !important;
     }
     
     #{{ section_id }}AllocationsTable tbody td {
