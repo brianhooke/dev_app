@@ -149,11 +149,17 @@ Large JS Files (>500 lines):
 Note: JS consolidation deferred to Phase 6
 
 Large Templates (>500 lines):
-- projects.html: 6,486 lines → FUTURE: Extract sections into includes
-- bills.html: 2,204 lines → FUTURE: Extract modals into includes
+- projects.html: 6,486 lines → ✅ SPLIT (707 HTML + 5781 JS include)
+- bills.html: 2,204 lines → ✅ SPLIT (231 HTML + 1975 JS include)
 - po_public.html: 1,624 lines → FUTURE: Extract into components
 - dashboard.html: 1,096 lines → FUTURE: Extract sections
-Note: Template splitting requires careful testing, deferred
+
+**Template Splitting (2025-12-13):**
+Created dashboard/templates/dashboard/includes/:
+- bills_scripts.html (1,975 lines) - Extracted from bills.html
+- projects_scripts.html (5,781 lines) - Extracted from projects.html
+
+Main templates now use {% include %} for scripts, improving maintainability
 
 **Actions Taken:**
 
