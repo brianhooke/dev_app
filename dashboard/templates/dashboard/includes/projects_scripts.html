@@ -789,7 +789,8 @@
         // ==========================================
         
         // Initialize quotes AllocationsManager configuration
-        function initQuotesAllocationsManager() {
+        // Made global so quotes_section.js can detect it and skip auto-init
+        window.initQuotesAllocationsManager = function initQuotesAllocationsManager() {
             if (window.quotesManagerInitialized) return;
             
             AllocationsManager.init({
@@ -1066,7 +1067,8 @@
         }
         
         // Load quotes data for the current project (shared for Construction & Tender)
-        function loadQuotesData() {
+        // Made global so quotes_section.js can detect it and skip auto-init
+        window.loadQuotesData = function loadQuotesData() {
             const projectPk = window.currentQuotesProject ? window.currentQuotesProject.pk : 
                               (window.currentConstructionProject ? window.currentConstructionProject.pk : 
                                window.currentTenderProject ? window.currentTenderProject.pk : null);
@@ -2153,7 +2155,8 @@
         }
         
         // Load unallocated invoices data
-        function loadUnallocatedInvoices() {
+        // Made global so invoices_section.js can detect it and skip auto-init
+        window.loadUnallocatedInvoices = function loadUnallocatedInvoices() {
             const projectPk = window.currentConstructionProject.pk;
             console.log('Loading unallocated invoices for project:', projectPk);
             
@@ -2181,7 +2184,8 @@
         }
         
         // Populate unallocated invoices table
-        function populateUnallocatedInvoicesTable(invoices, suppliers) {
+        // Made global so invoices_section.js can detect it and skip auto-init
+        window.populateUnallocatedInvoicesTable = function populateUnallocatedInvoicesTable(invoices, suppliers) {
             const tbody = $('#unallocatedInvoicesTableBody');
             tbody.empty();
             tbody.removeClass('has-selection');
