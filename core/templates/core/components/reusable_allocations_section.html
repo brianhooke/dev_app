@@ -44,6 +44,12 @@ Optional context variables:
         background: var(--color-bg-surface);
     }
 
+    /* Left panel - vertical separator */
+    .{{ section_id }}-left-panel {
+        border-right: 1px solid var(--color-border);
+        padding-right: 12px;
+    }
+
     /* Table title bar */
     .{{ section_id }}-table-title {
         background: var(--color-bg-muted);
@@ -280,7 +286,7 @@ Optional context variables:
 <div class="{{ section_id }}-container" style="height: 100%; display: flex; flex-direction: column;">
     <div style="display: flex; flex: 1; overflow: hidden; gap: 12px;">
         <!-- Left side: Main Table (top 2/3) and Allocations (bottom 1/3) (60%) -->
-        <div style="width: 60%; display: flex; flex-direction: column; height: 100%; gap: 12px;">
+        <div class="{{ section_id }}-left-panel" style="width: 60%; display: flex; flex-direction: column; height: 100%; gap: 12px;">
             <!-- Main Table Container -->
             <div class="{{ section_id }}-table-container" style="flex: 2; display: flex; flex-direction: column; overflow: hidden;">
                 {% if main_table_title %}
