@@ -2927,6 +2927,10 @@
         
         // Load allocated invoices data
         function loadAllocatedInvoices() {
+            if (!window.currentConstructionProject || !window.currentConstructionProject.pk) {
+                console.error('No construction project available for loading allocated invoices');
+                return;
+            }
             const projectPk = window.currentConstructionProject.pk;
             console.log('Loading allocated invoices for project:', projectPk);
             

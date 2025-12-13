@@ -113,6 +113,11 @@ Optional context variables:
         transition: background-color 0.15s ease, opacity 0.15s ease;
         background-color: var(--color-bg-surface);
     }
+    
+    /* Zebra striping - every second row darker */
+    #{{ section_id }}MainTable tbody tr:nth-child(even) {
+        background-color: var(--color-bg-muted);
+    }
 
     #{{ section_id }}MainTable tbody tr:hover {
         background-color: var(--color-bg-muted);
@@ -183,6 +188,11 @@ Optional context variables:
         table-layout: fixed;
         background-color: var(--color-bg-surface);
         transition: background-color 0.15s ease;
+    }
+    
+    /* Zebra striping - every second row darker */
+    #{{ section_id }}AllocationsTable tbody tr:nth-child(even) {
+        background-color: var(--color-bg-muted);
     }
 
     #{{ section_id }}AllocationsTable tbody tr:hover {
