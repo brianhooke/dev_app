@@ -210,12 +210,19 @@ Status: ⏳ IN PROGRESS (2025-12-13)
 4. **core/views/main.py**
    - Removed debug print statements from main() function
 
+5. **core/models.py - Database Indexes**
+   - Invoices: Added indexes on invoice_status, contact_pk, project, invoice_type, created_at
+   - Invoice_allocations: Added indexes on invoice_pk, item
+   - Costing: Added indexes on (project, category), category; added default ordering
+   - Quote_allocations: Added indexes on quotes_pk, item
+   - Migration: 0036_add_performance_indexes.py
+
 **Checks:**
 4.1. [x] N+1 Queries - Fixed major ones in services and views
 4.2. [x] Missing select_related() on ForeignKey access - Added to key queries
 4.3. [x] Missing prefetch_related() on reverse relations - Added where needed
-4.4. [ ] Raw SQL that could be ORM
-4.5. [ ] Model Meta classes (ordering, constraints, indexes)
+4.4. [x] Raw SQL that could be ORM - Reviewed, all raw SQL is legitimate (db wipe, diagnostics)
+4.5. [x] Model Meta classes (ordering, constraints, indexes) - Added indexes to key models
 4.6. [ ] Form validation in views vs forms.py
 4.7. [ ] Class-based views where appropriate
 4.8. [ ] Middleware optimization

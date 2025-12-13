@@ -268,6 +268,14 @@ class Costing(models.Model):
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['project', 'category']),
+            models.Index(fields=['category']),
+        ]
+        ordering = ['category__order_in_list', 'order_in_list']
+    
     def __str__(self):
         return f"{self.item} (Category: {self.category})"
 
@@ -296,6 +304,13 @@ class Quote_allocations(models.Model):
     notes = models.CharField(max_length=1000, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['quotes_pk']),
+            models.Index(fields=['item']),
+        ]
+    
     def __str__(self):
         return f"Quote Allocation - PK: {self.quote_allocations_pk}, Quote PK: {self.quotes_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}"
 
@@ -355,6 +370,16 @@ class Invoices(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['invoice_status']),
+            models.Index(fields=['contact_pk']),
+            models.Index(fields=['project']),
+            models.Index(fields=['invoice_type']),
+            models.Index(fields=['-created_at']),
+        ]
+        ordering = ['-created_at']
+    
     def __str__(self):
         if self.total_net:
             return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
@@ -378,6 +403,12 @@ class Invoice_allocations(models.Model):
     xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['invoice_pk']),
+            models.Index(fields=['item']),
+        ]
     
     def __str__(self):
         return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
