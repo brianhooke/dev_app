@@ -1,0 +1,340 @@
+{% comment %}
+Reusable Table Styles
+=====================
+This file contains ONLY the CSS styles for reusable tables.
+Include this file when you need the styles without the HTML structure.
+
+For a complete table with HTML structure, use reusable_table.html instead.
+{% endcomment %}
+
+<style>
+  /* ========================================
+     CSS Variables for consistent theming
+     ======================================== */
+  :root {
+    /* Colors */
+    --color-bg-surface: #ffffff;
+    --color-bg-muted: #f8f9fa;
+    --color-border: #e2e8f0;
+    --color-text: #1e293b;
+    --color-text-muted: #64748b;
+    --color-danger: rgba(239, 68, 68, 1);
+    --color-success: rgba(34, 197, 94, 1);
+    --color-warning: rgba(245, 158, 11, 1);
+    --color-accent: #3b82f6;
+    --color-selected: rgba(59, 130, 246, 0.12);
+    --color-selected-border: rgba(59, 130, 246, 0.4);
+    
+    /* Row & Button Sizing - all sizes derive from row height */
+    --rt-row-height: 28px;
+    --rt-row-padding: 2px 8px;
+    --rt-font-size: 12px;
+    --rt-btn-height: calc(var(--rt-row-height) - 6px);  /* 22px */
+    --rt-btn-padding: 1px 6px;
+    --rt-btn-font-size: 11px;
+    --rt-icon-size: 11px;
+    --rt-input-height: calc(var(--rt-row-height) - 4px);  /* 24px */
+  }
+
+  /* ========================================
+     CENTRALIZED BUTTON DEFINITIONS
+     All buttons in tables use these styles
+     ======================================== */
+  
+  /* Base table action button - used for all icon buttons in rows */
+  .rt-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--rt-btn-height);
+    min-width: var(--rt-btn-height);
+    padding: var(--rt-btn-padding);
+    font-size: var(--rt-btn-font-size);
+    line-height: 1;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    vertical-align: middle;
+  }
+  
+  .rt-btn i {
+    font-size: var(--rt-icon-size);
+    line-height: 1;
+  }
+  
+  /* Icon-only button (square) */
+  .rt-btn-icon {
+    width: var(--rt-btn-height);
+    padding: 0;
+  }
+  
+  /* Delete/Remove button */
+  .rt-btn-delete {
+    background: transparent;
+    color: var(--color-text-muted);
+    border-color: transparent;
+  }
+  
+  .rt-btn-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+  }
+  
+  /* Save/Confirm button */
+  .rt-btn-save {
+    background: var(--color-success);
+    color: white;
+    border-color: var(--color-success);
+  }
+  
+  .rt-btn-save:hover {
+    background: rgba(34, 197, 94, 0.85);
+  }
+  
+  /* Edit button */
+  .rt-btn-edit {
+    background: transparent;
+    color: var(--color-accent);
+    border-color: transparent;
+  }
+  
+  .rt-btn-edit:hover {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--color-accent);
+  }
+  
+  /* View/Info button */
+  .rt-btn-view {
+    background: transparent;
+    color: var(--color-text-muted);
+    border-color: transparent;
+  }
+  
+  .rt-btn-view:hover {
+    background: var(--color-bg-muted);
+    color: var(--color-text);
+  }
+  
+  /* Warning/Caution button */
+  .rt-btn-warning {
+    background: transparent;
+    color: var(--color-warning);
+    border-color: transparent;
+  }
+  
+  .rt-btn-warning:hover {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: var(--color-warning);
+  }
+
+  /* ========================================
+     TABLE CONTAINER & STRUCTURE
+     ======================================== */
+
+  /* Table container wrapper */
+  .reusable-table-container {
+    margin-bottom: 15px;
+    border: 1px solid black;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--color-bg-surface);
+  }
+
+  /* Table title bar */
+  .reusable-table-title {
+    padding: 0 0 4px 0;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .reusable-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--rt-font-size);
+  }
+  
+  .reusable-table th {
+    padding: 6px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--rt-font-size);
+    background: var(--color-bg-muted);
+    color: var(--color-text);
+    white-space: nowrap;
+    line-height: 1.4;
+    border: none;
+    border-bottom: 1px solid black;
+    height: var(--rt-row-height);
+    vertical-align: middle;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .reusable-table tbody tr {
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+    background-color: var(--color-bg-surface);
+    cursor: pointer;
+  }
+  
+  .reusable-table tbody tr:hover {
+    background-color: var(--color-bg-muted);
+  }
+  
+  .reusable-table tbody tr.category-row {
+    cursor: pointer;
+    background-color: var(--color-bg-muted);
+    font-weight: 600;
+  }
+  
+  .reusable-table tbody tr.category-row:hover {
+    background-color: #eef2f7;
+  }
+  
+  .reusable-table td {
+    padding: 6px 12px;
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    line-height: 1.4;
+    vertical-align: middle;
+    color: var(--color-text);
+    height: var(--rt-row-height);
+    font-size: var(--rt-font-size);
+    /* Single-line constraint with ellipsis for overflow */
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reusable-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* ========================================
+     ROW SELECTION STYLING
+     ======================================== */
+  
+  /* Highlight the selected row */
+  .reusable-table tbody tr.selected-row {
+    background-color: var(--color-selected) !important;
+    box-shadow: inset 3px 0 0 var(--color-accent);
+  }
+
+  /* ========================================
+     INPUT STYLING WITHIN TABLES
+     ======================================== */
+  
+  .reusable-table .form-control-sm {
+    font-size: var(--rt-font-size);
+    padding: 2px 6px;
+    height: var(--rt-input-height);
+    min-height: var(--rt-input-height);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+  }
+  
+  .reusable-table input[type="text"],
+  .reusable-table input[type="number"],
+  .reusable-table select {
+    font-size: var(--rt-font-size);
+    padding: 2px 6px;
+    height: var(--rt-input-height);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+  }
+  
+  .reusable-table input:focus,
+  .reusable-table select:focus {
+    border-color: var(--color-accent);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+  
+  /* Compact buttons in reusable tables */
+  .reusable-table .btn-sm {
+    height: var(--rt-btn-height);
+    padding: var(--rt-btn-padding);
+    font-size: var(--rt-btn-font-size);
+    line-height: 1;
+    border-radius: 3px;
+  }
+  
+  .reusable-table .btn-sm i {
+    font-size: var(--rt-icon-size);
+  }
+  
+  .reusable-table .dropdown-arrow {
+    display: inline-block;
+    margin-left: 6px;
+    transition: transform 0.2s ease;
+    color: var(--color-text-muted);
+  }
+  
+  .reusable-table .dropdown-arrow.rotated {
+    transform: rotate(-90deg);
+  }
+
+  /* ========================================
+     ROW STATE STYLING
+     ======================================== */
+
+  /* Muted secondary values */
+  .reusable-table .text-muted {
+    color: var(--color-text-muted);
+  }
+
+  /* Error/warning row highlighting */
+  .reusable-table tbody tr.row-error {
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  .reusable-table tbody tr.row-error td {
+    color: var(--color-danger);
+  }
+
+  /* Success row highlighting */
+  .reusable-table tbody tr.row-success {
+    background: rgba(34, 197, 94, 0.15);
+  }
+
+  /* ========================================
+     FOOTER STYLING
+     ======================================== */
+  
+  .reusable-table-footer {
+    background: var(--color-bg-muted);
+    border-top: 1px solid black;
+    font-weight: 600;
+    font-size: var(--rt-font-size);
+    color: var(--color-text);
+    padding: 4px 0;
+  }
+
+  .reusable-table-footer .footer-value {
+    font-weight: 700;
+  }
+
+  .reusable-table-footer .footer-value.remaining {
+    color: var(--color-danger);
+  }
+
+  .reusable-table-footer .footer-value.complete {
+    color: var(--color-success);
+  }
+  
+  .reusable-table #totalRow {
+    background: var(--color-bg-muted);
+    font-weight: 600;
+  }
+  
+  .reusable-table #totalRow td {
+    color: var(--color-text);
+    border-bottom: none;
+    border-top: 1px solid black;
+  }
+</style>

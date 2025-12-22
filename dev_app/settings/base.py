@@ -30,12 +30,11 @@ XERO_ENCRYPTION_KEY = os.environ.get('XERO_ENCRYPTION_KEY', 'yGUzgEzWkkCsHnb_lof
 # Email API secret key for Lambda authentication
 EMAIL_API_SECRET_KEY = os.environ.get('EMAIL_API_SECRET_KEY', 'change-me-in-production-use-strong-random-key')
 
-ALLOWED_HOSTS = ['herokuapp.com', 'mason.build', 'app.mason.build', '*.elasticbeanstalk.com', '*']
+ALLOWED_HOSTS = ['herokuapp.com', 'app.mason.build', '*.elasticbeanstalk.com', 'localhost', '127.0.0.1']
 
 # CSRF trusted origins for HTTPS
 CSRF_TRUSTED_ORIGINS = [
     'https://app.mason.build',
-    'https://mason.build',
     'https://*.elasticbeanstalk.com',
 ]
 
@@ -55,15 +54,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'dashboard',
-    'general',
-    'development',
     'construction',
-    'precast',
-    'pods',
-    # 'xeroapi',
 ]
 
 MIDDLEWARE = [
+    'dev_app.middleware.CanonicalHostRedirectMiddleware',  # Redirect mason.build to landing page
     # 'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

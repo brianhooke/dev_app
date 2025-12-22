@@ -5,9 +5,6 @@ This package contains view functions for the core app.
 All views are re-exported here for backward compatibility.
 """
 
-# Dashboard views
-from .main import main, homepage_view, build_view
-
 # Quote views
 from .quotes import (
     commit_data, update_quote, delete_quote, get_quote_allocations,
@@ -38,7 +35,7 @@ from construction.views.claims import (
 
 # Document views
 from .documents import (
-    drawings, drawings_view, model_viewer_view, create_plan,
+    create_plan,
     upload_design_pdf, get_design_pdf_url, upload_report_pdf,
     get_report_pdf_url, alphanumeric_sort_key
 )
@@ -53,8 +50,7 @@ from .project_type import (
 from .main import (
     create_contacts, send_test_email, send_test_email_view,
     upload_categories, upload_costings, update_contract_budget_amounts,
-    upload_letterhead, update_contacts, xeroapi, make_api_request,
-    mark_sent_to_boutique, test_contact_id, upload_margin_category_and_lines,
+    upload_letterhead, update_contacts, upload_margin_category_and_lines,
     invoices_view, get_project_invoices, update_allocated_invoice,
     get_unallocated_invoice_allocations, create_unallocated_invoice_allocation,
     update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation,

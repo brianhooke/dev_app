@@ -18,8 +18,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!
 
 # Security Settings
 ALLOWED_HOSTS = [
+    'app.mason.build',  # Production domain
     '.elasticbeanstalk.com',  # AWS Elastic Beanstalk domain
-    '*',  # Temporary for initial deployment
 ]
 
 # Security settings - HTTPS enabled via ALB

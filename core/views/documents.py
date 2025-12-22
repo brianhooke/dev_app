@@ -12,13 +12,8 @@ import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import bills as bill_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
-from ..services import invoices as invoice_service
-from ..services import costings as costing_service
-from ..services import contacts as contact_service
-from ..services import aggregations as aggregation_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -68,47 +63,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
 
-def drawings(request):
-    return render(request, 'core/drawings.html')
-def drawings_view(request):
-    def sort_key(x):
-        try:
-            return int(x)
-        except ValueError:
-            return x
-    design_categories = DesignCategories.objects.all().order_by('design_category')
-    report_categories = ReportCategories.objects.all().order_by('report_category')
-    for category in design_categories:
-        plan_pdfs = PlanPdfs.objects.filter(design_category=category).order_by('plan_number')
-        plan_numbers = list(sorted(set(plan_pdfs.values_list('plan_number', flat=True)), key=alphanumeric_sort_key))    
-        category.plan_numbers = plan_numbers
-        category.file_paths = list(plan_pdfs.values_list('file', flat=True))
-        rev_numbers_dict = {}
-        for plan_number in plan_numbers:
-            rev_numbers = plan_pdfs.filter(plan_number=plan_number).values_list('rev_number', flat=True)
-            rev_numbers_dict[plan_number] = sorted(rev_numbers, key=lambda x: (isinstance(x, str), x))
-            category.rev_numbers = json.dumps(rev_numbers_dict)
-    for category in report_categories:
-        report_pdfs = ReportPdfs.objects.filter(report_category=category).order_by('report_reference')
-        report_references = list(sorted(set(report_pdfs.values_list('report_reference', flat=True)), key=sort_key))
-        category.report_references = report_references
-        category.file_paths = list(report_pdfs.values_list('file', flat=True))
-    context = {
-        'design_categories': design_categories,
-        'report_categories': report_categories,
-        'current_page': 'drawings',
-        'project_name': settings.PROJECT_NAME,
-    }
-    return render(request, 'core/drawings.html', context)
-def model_viewer_view(request):
-    model_path = '3d/model.dae'
-    full_path = os.path.join(settings.MEDIA_URL, model_path)
-    logging.info(f'Full path to the model file: {full_path}')
-    context = {'model_path': full_path,
-               'current_page': 'model_viewer',
-               'project_name': settings.PROJECT_NAME,
-               }  
-    return render(request, 'core/model_viewer.html', context)
 @csrf_exempt
 def create_plan(request):
     if request.method == 'POST':

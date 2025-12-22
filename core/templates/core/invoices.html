@@ -1,20 +1,745 @@
-<!-- Invoices Unallocated Section Template -->
-<!-- Uses reusable allocations section with AllocationsManager -->
+<!-- Invoices Section Template (Consolidated) -->
+<!-- Handles: unallocated, allocated, and approvals views based on template_type -->
 {% load static %}
 
+{% if template_type == 'approvals' %}
+{% include "core/components/reusable_allocations_section.html" with section_id="approvals" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" readonly=readonly %}
+{% elif template_type == 'allocated' %}
+{% include "core/components/reusable_allocations_section.html" with section_id="allocatedInvoice" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" readonly=readonly %}
+{% else %}
 {% include "core/components/reusable_allocations_section.html" with section_id="invoice" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Invoice Allocations" viewer_placeholder_text="Click on an invoice to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
+{% endif %}
 
-<!-- Load AllocationsManager and Invoice Section JS -->
+<!-- Section-specific CSS -->
+<style>
+{% if template_type == 'approvals' %}
+    /* Approvals-specific styling */
+    .approvals-action-btn {
+        font-size: 10px;
+        padding: 2px 6px;
+        margin: 0 2px;
+    }
+    .truncate-2-lines {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-height: 2.6em;
+        line-height: 1.3em;
+        word-break: break-word;
+    }
+    .approvals-send-btn,
+    .approvals-return-btn {
+        min-height: 2.6em;
+        line-height: 1.2em;
+        white-space: normal;
+        padding: 4px 8px !important;
+    }
+{% elif template_type == 'allocated' %}
+    /* Allocated invoice-specific styling */
+    .allocated-action-btn {
+        font-size: 10px;
+        padding: 2px 6px;
+        margin: 0 2px;
+    }
+{% endif %}
+</style>
+
+<!-- Load AllocationsManager (shared) -->
 <script src="{% static 'core/js/allocations_manager.js' %}"></script>
-<script src="{% static 'core/js/invoices_section.js' %}"></script>
 
-<!-- Pass project PK to JavaScript (if available from context) -->
+<!-- Pass project PK to JavaScript -->
 <script>
-    // Project PK may come from various sources:
-    // 1. Direct template context (standalone page)
-    // 2. window.currentConstructionProject (within projects view)
-    // 3. URL parameters
     if ('{{ project_pk }}' && '{{ project_pk }}' !== 'None') {
         window.projectPk = '{{ project_pk }}';
     }
+    window.invoiceTemplateType = '{{ template_type }}';
+</script>
+
+<!-- Inlined JavaScript for all invoice sections -->
+<script>
+$(document).ready(function() {
+    var templateType = window.invoiceTemplateType || 'unallocated';
+    
+    // =========================================================================
+    // APPROVALS SECTION
+    // =========================================================================
+    if (templateType === 'approvals') {
+        if ($('#approvalsMainTableBody').length === 0) return;
+        
+        console.log('Initializing approvals section with AllocationsManager...');
+        var sectionId = 'approvals';
+        
+        AllocationsManager.init({
+            sectionId: sectionId,
+            mainTable: {
+                emptyMessage: 'No approved invoices awaiting Xero submission.',
+                showFooter: true,
+                footerTotals: [
+                    { colIndex: 4, valueKey: 'total_gross' },
+                    { colIndex: 5, valueKey: 'total_net' },
+                    { colIndex: 6, valueKey: 'total_gst' }
+                ],
+                renderRow: function(invoice, index, cfg) {
+                    var row = $('<tr>')
+                        .attr('data-pk', invoice.invoice_pk)
+                        .attr('data-invoice-pk', invoice.invoice_pk)
+                        .attr('data-pdf-url', invoice.pdf_url || invoice.attachment_url || '');
+                    
+                    row.append($('<td>').addClass('truncate-2-lines').text(invoice.project_name || '-'));
+                    row.append($('<td>').addClass('truncate-2-lines').text(invoice.xero_instance || '-'));
+                    row.append($('<td>').addClass('truncate-2-lines').text(invoice.xero_account || '-'));
+                    row.append($('<td>').addClass('truncate-2-lines').text(invoice.supplier_name || invoice.contact_name || '-'));
+                    
+                    var grossAmount = parseFloat(invoice.total_gross) || 0;
+                    row.append($('<td>').text('$' + grossAmount.toFixed(2)));
+                    var netAmount = parseFloat(invoice.total_net) || 0;
+                    row.append($('<td>').text('$' + netAmount.toFixed(2)));
+                    var gstAmount = parseFloat(invoice.total_gst) || 0;
+                    row.append($('<td>').text('$' + gstAmount.toFixed(2)));
+                    
+                    var sendBtn = $('<button>')
+                        .addClass('btn btn-sm btn-success approvals-action-btn approvals-send-btn')
+                        .html('<i class="fas fa-paper-plane"></i> Send')
+                        .attr('title', 'Send to Xero')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            sendToXero(invoice.invoice_pk);
+                        });
+                    row.append($('<td>').addClass('text-center').append(sendBtn));
+                    
+                    var returnBtn = $('<button>')
+                        .addClass('btn btn-sm btn-warning approvals-action-btn approvals-return-btn')
+                        .html('<i class="fas fa-undo"></i> Return')
+                        .attr('title', 'Return to Project')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            returnToProject(invoice.invoice_pk);
+                        });
+                    row.append($('<td>').addClass('text-center').append(returnBtn));
+                    
+                    return row;
+                },
+                onRowSelect: function(row, pk, cfg) {
+                    console.log('Approved invoice selected:', pk);
+                    loadInvoiceAllocationsReadonly(pk, sectionId);
+                }
+            },
+            allocations: {
+                emptyMessage: 'No allocations for this invoice.',
+                editable: false,
+                renderRow: function(allocation, cfg) {
+                    var row = $('<tr>');
+                    row.append($('<td>').text(allocation.item_name || allocation.item || '-'));
+                    var netAmount = parseFloat(allocation.amount || 0);
+                    row.append($('<td>').text('$' + netAmount.toFixed(2)));
+                    var gstAmount = parseFloat(allocation.gst || 0);
+                    row.append($('<td>').text('$' + gstAmount.toFixed(2)));
+                    row.append($('<td>').text(allocation.notes || ''));
+                    return row;
+                }
+            },
+            api: {
+                loadData: '/get_approved_invoices/',
+                loadAllocations: function(invoicePk) {
+                    return '/get_invoice_allocations/' + invoicePk + '/';
+                }
+            }
+        });
+        
+        loadApprovalsData();
+        
+        function loadApprovalsData() {
+            $.ajax({
+                url: '/get_approved_invoices/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        AllocationsManager.renderMainTable(sectionId, response.invoices || []);
+                    } else {
+                        console.error('Error loading approved invoices:', response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load approved invoices:', error);
+                }
+            });
+        }
+        
+        function sendToXero(invoicePk) {
+            if (!confirm('Send this invoice to Xero?')) return;
+            $.ajax({
+                url: '/send_invoice_to_xero/' + invoicePk + '/',
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice sent to Xero successfully.');
+                        loadApprovalsData();
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to send invoice to Xero'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to send invoice to Xero: ' + error);
+                }
+            });
+        }
+        
+        function returnToProject(invoicePk) {
+            if (!confirm('Return this invoice to the project?')) return;
+            $.ajax({
+                url: '/return_invoice_to_project/' + invoicePk + '/',
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice returned to project.');
+                        loadApprovalsData();
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to return invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to return invoice: ' + error);
+                }
+            });
+        }
+    }
+    
+    // =========================================================================
+    // ALLOCATED INVOICES SECTION
+    // =========================================================================
+    else if (templateType === 'allocated') {
+        if ($('#allocatedInvoiceMainTableBody').length === 0) return;
+        
+        console.log('Initializing allocated invoices section with AllocationsManager...');
+        var sectionId = 'allocatedInvoice';
+        var projectPk = window.projectPk || getProjectPkFromUrl();
+        
+        AllocationsManager.init({
+            sectionId: sectionId,
+            mainTable: {
+                emptyMessage: 'No allocated invoices found for this project.',
+                showFooter: true,
+                footerTotals: [
+                    { colIndex: 2, valueKey: 'total_net' },
+                    { colIndex: 3, valueKey: 'total_gst' }
+                ],
+                renderRow: function(invoice, index, cfg) {
+                    var row = $('<tr>')
+                        .attr('data-pk', invoice.invoice_pk)
+                        .attr('data-invoice-pk', invoice.invoice_pk)
+                        .attr('data-pdf-url', invoice.pdf_url || invoice.attachment_url || '');
+                    
+                    row.append($('<td>').text(invoice.supplier_name || invoice.contact_name || '-'));
+                    
+                    var invoiceNumberInput = $('<input>')
+                        .attr('type', 'text')
+                        .addClass('form-control form-control-sm invoice-number-input')
+                        .val(invoice.invoice_number || '')
+                        .attr('placeholder', 'Invoice #');
+                    row.append($('<td>').append(invoiceNumberInput));
+                    
+                    var netAmount = parseFloat(invoice.total_net) || 0;
+                    row.append($('<td>').text('$' + netAmount.toFixed(2)));
+                    
+                    var gstInput = $('<input>')
+                        .attr('type', 'number')
+                        .attr('step', '0.01')
+                        .addClass('form-control form-control-sm gst-input')
+                        .val(invoice.total_gst !== null ? invoice.total_gst : '')
+                        .attr('placeholder', '0.00');
+                    row.append($('<td>').append(gstInput));
+                    
+                    var isProgressClaim = invoice.is_progress_claim || invoice.invoice_type === 2;
+                    var pcCheckbox = $('<input>')
+                        .attr('type', 'checkbox')
+                        .addClass('form-check-input')
+                        .prop('checked', isProgressClaim)
+                        .prop('disabled', true);
+                    row.append($('<td>').addClass('text-center').append(pcCheckbox));
+                    
+                    var unallocateBtn = $('<button>')
+                        .addClass('btn btn-sm btn-warning allocated-action-btn')
+                        .html('<i class="fas fa-undo"></i>')
+                        .attr('title', 'Unallocate')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            unallocateInvoice(invoice.invoice_pk);
+                        });
+                    row.append($('<td>').addClass('text-center').append(unallocateBtn));
+                    
+                    var approveBtn = $('<button>')
+                        .addClass('btn btn-sm btn-success allocated-action-btn')
+                        .html('<i class="fas fa-check"></i>')
+                        .attr('title', 'Approve')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            approveInvoice(invoice.invoice_pk);
+                        });
+                    row.append($('<td>').addClass('text-center').append(approveBtn));
+                    
+                    var saveBtn = $('<button>')
+                        .addClass('btn btn-sm btn-primary allocated-action-btn')
+                        .html('<i class="fas fa-save"></i>')
+                        .attr('title', 'Save Changes')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            saveInvoiceChanges(invoice.invoice_pk, row);
+                        });
+                    row.append($('<td>').addClass('text-center').append(saveBtn));
+                    
+                    return row;
+                },
+                onRowSelect: function(row, pk, cfg) {
+                    console.log('Allocated invoice selected:', pk);
+                    loadInvoiceAllocationsReadonly(pk, sectionId);
+                }
+            },
+            allocations: {
+                emptyMessage: 'No allocations for this invoice.',
+                editable: false,
+                renderRow: function(allocation, cfg) {
+                    var row = $('<tr>');
+                    row.append($('<td>').text(allocation.item_name || allocation.item || '-'));
+                    var netAmount = parseFloat(allocation.amount || 0);
+                    row.append($('<td>').text('$' + netAmount.toFixed(2)));
+                    var gstAmount = parseFloat(allocation.gst || 0);
+                    row.append($('<td>').text('$' + gstAmount.toFixed(2)));
+                    row.append($('<td>').text(allocation.notes || ''));
+                    return row;
+                }
+            },
+            api: {
+                loadData: function(projectPk) {
+                    return '/get_allocated_invoices/' + projectPk + '/';
+                },
+                loadAllocations: function(invoicePk) {
+                    return '/get_invoice_allocations/' + invoicePk + '/';
+                }
+            }
+        });
+        
+        if (projectPk) loadAllocatedInvoiceData(projectPk);
+        
+        function loadAllocatedInvoiceData(projectPk) {
+            $.ajax({
+                url: '/get_allocated_invoices/' + projectPk + '/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        AllocationsManager.renderMainTable(sectionId, response.invoices || []);
+                    } else {
+                        console.error('Error loading allocated invoices:', response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load allocated invoices:', error);
+                }
+            });
+        }
+        
+        function unallocateInvoice(invoicePk) {
+            if (!confirm('Are you sure you want to unallocate this invoice?')) return;
+            $.ajax({
+                url: '/unallocate_invoice/' + invoicePk + '/',
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice unallocated successfully.');
+                        if (projectPk) loadAllocatedInvoiceData(projectPk);
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to unallocate invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to unallocate invoice: ' + error);
+                }
+            });
+        }
+        
+        function approveInvoice(invoicePk) {
+            $.ajax({
+                url: '/approve_invoice/' + invoicePk + '/',
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice approved successfully.');
+                        if (projectPk) loadAllocatedInvoiceData(projectPk);
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to approve invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to approve invoice: ' + error);
+                }
+            });
+        }
+        
+        function saveInvoiceChanges(invoicePk, row) {
+            var invoiceNumber = row.find('.invoice-number-input').val();
+            var totalGst = row.find('.gst-input').val();
+            $.ajax({
+                url: '/update_allocated_invoice/' + invoicePk + '/',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: JSON.stringify({ invoice_number: invoiceNumber, total_gst: totalGst }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice updated successfully.');
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to update invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to update invoice: ' + error);
+                }
+            });
+        }
+    }
+    
+    // =========================================================================
+    // UNALLOCATED INVOICES SECTION (default)
+    // =========================================================================
+    else {
+        if ($('#invoiceMainTableBody').length === 0 && $('#unallocatedInvoicesTableBody').length === 0) return;
+        
+        // Skip if running within Projects page
+        if (window.loadUnallocatedInvoices || window.populateUnallocatedInvoicesTable) {
+            console.log('Invoices section: Skipping auto-init (running within Projects page)');
+            return;
+        }
+        
+        console.log('Initializing invoices section with AllocationsManager (standalone)...');
+        
+        var useLegacyIds = $('#unallocatedInvoicesTableBody').length > 0;
+        var sectionId = useLegacyIds ? 'unallocatedInvoices' : 'invoice';
+        var projectPk = window.projectPk || getProjectPkFromUrl();
+        var suppliers = window.invoiceSectionSuppliers || [];
+        
+        AllocationsManager.init({
+            sectionId: sectionId,
+            idOverrides: useLegacyIds ? {
+                mainTable: 'unallocatedInvoicesTable',
+                mainTableBody: 'unallocatedInvoicesTableBody',
+                mainTableFooter: 'unallocatedInvoicesTableFooter',
+                allocationsTableBody: 'invoiceAllocationsTableBody',
+                viewer: 'invoiceViewer',
+                addAllocationBtn: 'addInvoiceAllocationBtn'
+            } : null,
+            mainTable: {
+                emptyMessage: 'No unallocated invoices found for this project.',
+                showFooter: true,
+                footerTotals: [
+                    { colIndex: 2, valueKey: 'total_net' },
+                    { colIndex: 3, valueKey: 'total_gst' }
+                ],
+                renderRow: function(invoice, index, cfg) {
+                    var row = $('<tr>')
+                        .attr('data-pk', invoice.invoice_pk)
+                        .attr('data-invoice-pk', invoice.invoice_pk)
+                        .attr('data-pdf-url', invoice.pdf_url || invoice.attachment_url || '');
+                    
+                    var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
+                    supplierSelect.append($('<option>').val('').text('Select Supplier...'));
+                    var suppliersList = cfg.data.suppliers || suppliers || [];
+                    suppliersList.forEach(function(supplier) {
+                        var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
+                        if (invoice.supplier_pk === supplier.contact_pk) option.prop('selected', true);
+                        supplierSelect.append(option);
+                    });
+                    row.append($('<td>').append(supplierSelect));
+                    
+                    var invoiceNumberInput = $('<input>')
+                        .attr('type', 'text')
+                        .addClass('form-control form-control-sm invoice-number-input')
+                        .val(invoice.invoice_number || '')
+                        .attr('placeholder', 'Invoice #');
+                    row.append($('<td>').append(invoiceNumberInput));
+                    
+                    var netInput = $('<input>')
+                        .attr('type', 'number')
+                        .attr('step', '0.01')
+                        .attr('min', '0')
+                        .addClass('form-control form-control-sm net-input')
+                        .val(invoice.total_net !== null ? invoice.total_net : '')
+                        .attr('placeholder', '0.00')
+                        .on('input', function() { handleNetInput($(this)); });
+                    row.append($('<td>').append(netInput));
+                    
+                    var gstInput = $('<input>')
+                        .attr('type', 'number')
+                        .attr('step', '0.01')
+                        .attr('min', '0')
+                        .addClass('form-control form-control-sm gst-input')
+                        .val(invoice.total_gst !== null ? invoice.total_gst : '')
+                        .attr('placeholder', '0.00')
+                        .on('focus', function() { $(this).data('manually-edited', true); })
+                        .on('input', function() { limitToTwoDecimals($(this)); });
+                    row.append($('<td>').append(gstInput));
+                    
+                    var allocateBtn = $('<button>')
+                        .addClass('btn btn-sm btn-primary')
+                        .html('<i class="fas fa-check"></i> Allocate')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            allocateInvoice(invoice.invoice_pk, row);
+                        });
+                    row.append($('<td>').addClass('text-center').append(allocateBtn));
+                    
+                    var deleteBtn = $('<button>')
+                        .addClass('btn btn-sm btn-danger')
+                        .html('<i class="fas fa-trash"></i>')
+                        .on('click', function(e) {
+                            e.stopPropagation();
+                            deleteInvoice(invoice.invoice_pk);
+                        });
+                    row.append($('<td>').addClass('text-center').append(deleteBtn));
+                    
+                    return row;
+                },
+                onRowSelect: function(row, pk, cfg) {
+                    console.log('Invoice selected:', pk);
+                    loadInvoiceAllocationsEditable(pk);
+                }
+            },
+            allocations: {
+                emptyMessage: 'No allocations. Click "+ Add Row" to allocate costs.',
+                editable: true,
+                renderEditableRow: function(allocation, cfg, onChange) {
+                    var row = $('<tr>');
+                    if (allocation) row.attr('data-allocation-pk', allocation.invoice_allocations_pk || allocation.pk);
+                    
+                    var itemSelect = $('<select>').addClass('form-control form-control-sm invoice-allocation-item-select');
+                    itemSelect.append($('<option>').val('').text('Select Item...'));
+                    var costingItems = cfg.data.costingItems || window.invoiceCostingItems || window.costings || [];
+                    costingItems.forEach(function(item) {
+                        var option = $('<option>')
+                            .val(item.costing_pk || item.pk)
+                            .text(item.item || item.name);
+                        if (allocation && allocation.item_pk == (item.costing_pk || item.pk)) option.prop('selected', true);
+                        itemSelect.append(option);
+                    });
+                    itemSelect.on('change', onChange);
+                    row.append($('<td>').append(itemSelect));
+                    
+                    var netInput = $('<input>')
+                        .attr('type', 'number')
+                        .attr('step', '0.01')
+                        .addClass('form-control form-control-sm invoice-allocation-net-input')
+                        .val(allocation ? parseFloat(allocation.amount || 0).toFixed(2) : '')
+                        .on('change input', onChange);
+                    row.append($('<td>').append(netInput));
+                    
+                    var gstInput = $('<input>')
+                        .attr('type', 'number')
+                        .attr('step', '0.01')
+                        .addClass('form-control form-control-sm invoice-allocation-gst-input')
+                        .val(allocation ? parseFloat(allocation.gst || 0).toFixed(2) : '')
+                        .on('change input', onChange);
+                    row.append($('<td>').append(gstInput));
+                    
+                    var notesInput = $('<input>')
+                        .attr('type', 'text')
+                        .addClass('form-control form-control-sm invoice-allocation-notes-input')
+                        .val(allocation ? allocation.notes || '' : '');
+                    row.append($('<td>').append(notesInput));
+                    
+                    var deleteBtn = $('<button>')
+                        .addClass('btn btn-sm btn-danger')
+                        .html('<i class="fas fa-times"></i>')
+                        .on('click', function() { row.remove(); onChange(); });
+                    row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+                    
+                    return row;
+                },
+                calculateRemaining: function(sectionId, cfg) {
+                    var selectedRow = $('#' + sectionId + 'MainTableBody tr.selected-row, #unallocatedInvoicesTableBody tr.selected-row').first();
+                    if (selectedRow.length === 0) return { net: 0, gst: 0 };
+                    
+                    var invoiceNet = parseFloat(selectedRow.find('.net-input').val()) || 0;
+                    var invoiceGst = parseFloat(selectedRow.find('.gst-input').val()) || 0;
+                    var allocatedNet = 0, allocatedGst = 0;
+                    
+                    $('#' + sectionId + 'AllocationsTableBody tr, #invoiceAllocationsTableBody tr').each(function() {
+                        allocatedNet += parseFloat($(this).find('.invoice-allocation-net-input').val()) || 0;
+                        allocatedGst += parseFloat($(this).find('.invoice-allocation-gst-input').val()) || 0;
+                    });
+                    
+                    return { net: (invoiceNet - allocatedNet).toFixed(2), gst: (invoiceGst - allocatedGst).toFixed(2) };
+                }
+            },
+            api: {
+                loadData: function(projectPk) { return '/get_unallocated_invoices/' + projectPk + '/'; },
+                loadAllocations: function(invoicePk) { return '/get_invoice_allocations/' + invoicePk + '/'; }
+            }
+        });
+        
+        if (projectPk) loadInvoiceData(projectPk);
+        
+        function loadInvoiceData(projectPk) {
+            $.ajax({
+                url: '/get_unallocated_invoices/' + projectPk + '/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        suppliers = response.suppliers || [];
+                        window.invoiceSectionSuppliers = suppliers;
+                        if (response.costings) window.invoiceCostingItems = response.costings;
+                        var cfg = AllocationsManager.getConfig(sectionId);
+                        if (cfg) {
+                            cfg.data.suppliers = suppliers;
+                            cfg.data.costingItems = response.costings || [];
+                        }
+                        AllocationsManager.renderMainTable(sectionId, response.invoices || []);
+                    } else {
+                        console.error('Error loading invoices:', response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load invoices:', error);
+                }
+            });
+        }
+        
+        function loadInvoiceAllocationsEditable(invoicePk) {
+            $.ajax({
+                url: '/get_invoice_allocations/' + invoicePk + '/',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        AllocationsManager.renderAllocations(sectionId, response.allocations || []);
+                        updateRemainingDisplay();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load allocations:', error);
+                }
+            });
+        }
+        
+        function handleNetInput($input) {
+            var value = $input.val();
+            if (parseFloat(value) < 0) { $input.val(0); return; }
+            limitToTwoDecimals($input);
+            var gstInput = $input.closest('tr').find('.gst-input');
+            if (!gstInput.data('manually-edited')) {
+                var netValue = parseFloat($input.val());
+                if (!isNaN(netValue)) gstInput.val((netValue * 0.1).toFixed(2));
+            }
+        }
+        
+        function limitToTwoDecimals($input) {
+            var value = $input.val();
+            if (value.includes('.')) {
+                var parts = value.split('.');
+                if (parts[1] && parts[1].length > 2) $input.val(parseFloat(value).toFixed(2));
+            }
+        }
+        
+        function updateRemainingDisplay() {
+            var cfg = AllocationsManager.getConfig(sectionId);
+            if (cfg && cfg.allocations.calculateRemaining) {
+                var remaining = cfg.allocations.calculateRemaining(sectionId, cfg);
+                $('#' + sectionId + 'RemainingNet, #invoiceRemainingNet').text('$' + remaining.net);
+                $('#' + sectionId + 'RemainingGst, #invoiceRemainingGst').text('$' + remaining.gst);
+            }
+        }
+        
+        function allocateInvoice(invoicePk, row) {
+            var supplierPk = row.find('.supplier-select').val();
+            var invoiceNumber = row.find('.invoice-number-input').val();
+            var totalNet = row.find('.net-input').val();
+            var totalGst = row.find('.gst-input').val();
+            
+            if (!supplierPk) { alert('Please select a supplier.'); return; }
+            
+            var allocations = [];
+            $('#' + sectionId + 'AllocationsTableBody tr, #invoiceAllocationsTableBody tr').each(function() {
+                var itemPk = $(this).find('.invoice-allocation-item-select').val();
+                var net = $(this).find('.invoice-allocation-net-input').val();
+                var gst = $(this).find('.invoice-allocation-gst-input').val();
+                var notes = $(this).find('.invoice-allocation-notes-input').val();
+                if (itemPk && (net || gst)) {
+                    allocations.push({ item_pk: itemPk, amount: net || 0, gst: gst || 0, notes: notes || '' });
+                }
+            });
+            
+            $.ajax({
+                url: '/allocate_invoice/',
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({
+                    invoice_pk: invoicePk,
+                    supplier_pk: supplierPk,
+                    invoice_number: invoiceNumber,
+                    total_net: totalNet,
+                    total_gst: totalGst,
+                    allocations: allocations
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Invoice allocated successfully!');
+                        if (projectPk) loadInvoiceData(projectPk);
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to allocate invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to allocate invoice: ' + error);
+                }
+            });
+        }
+        
+        function deleteInvoice(invoicePk) {
+            if (!confirm('Are you sure you want to delete this invoice?')) return;
+            $.ajax({
+                url: '/delete_invoice/' + invoicePk + '/',
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        if (projectPk) loadInvoiceData(projectPk);
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to delete invoice'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to delete invoice: ' + error);
+                }
+            });
+        }
+    }
+    
+    // =========================================================================
+    // SHARED HELPER FUNCTIONS
+    // =========================================================================
+    function getProjectPkFromUrl() {
+        var match = window.location.pathname.match(/\/project\/(\d+)/);
+        if (!match) match = window.location.pathname.match(/\/invoices\/(\d+)/);
+        return match ? match[1] : null;
+    }
+    
+    function loadInvoiceAllocationsReadonly(invoicePk, sectionId) {
+        $.ajax({
+            url: '/get_invoice_allocations/' + invoicePk + '/',
+            method: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    AllocationsManager.renderAllocations(sectionId, response.allocations || [], true);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load allocations:', error);
+            }
+        });
+    }
+});
 </script>

@@ -18,12 +18,8 @@ urlpatterns = [
     # Core app - main application logic (with prefix)
     path('core/', include(('core.urls', 'core'), namespace='core')),
     
-    # PROJECT_TYPE apps with namespaces
-    path('development/', include(('development.urls', 'development'), namespace='development')),
+    # Construction app (project_type specific features)
     path('construction/', include(('construction.urls', 'construction'), namespace='construction')),
-    path('precast/', include(('precast.urls', 'precast'), namespace='precast')),
-    path('pods/', include(('pods.urls', 'pods'), namespace='pods')),
-    path('general/', include(('general.urls', 'general'), namespace='general')),
     
     # Authentication URLs (for testing and future use)
     path('accounts/', include('django.contrib.auth.urls')),

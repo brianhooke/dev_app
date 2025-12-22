@@ -12,13 +12,8 @@ import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import bills as bill_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
-from ..services import invoices as invoice_service
-from ..services import costings as costing_service
-from ..services import contacts as contact_service
-from ..services import aggregations as aggregation_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid

@@ -22,7 +22,6 @@ def create_project(request):
     - project_type: str (optional, default='general')
     - xero_instance_pk: int (optional)
     - xero_sales_account: str (optional)
-    - background: file (optional)
     """
     try:
         # Get form data
@@ -71,21 +70,6 @@ def create_project(request):
             contracts_admin_emails=contracts_admin_emails
         )
         
-        # Handle background image upload
-        if 'background' in request.FILES:
-            background_file = request.FILES['background']
-            
-            # Validate file type
-            allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp']
-            file_ext = background_file.name.split('.')[-1].lower()
-            if file_ext not in allowed_extensions:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Invalid file type. Allowed: {", ".join(allowed_extensions)}'
-                }, status=400)
-            
-            project.background = background_file
-        
         project.save()
         
         logger.info(f"Created project: {project.project} (pk={project.projects_pk})")
@@ -115,12 +99,6 @@ def create_project(request):
         )
         logger.info(f"Created Margin item in Internal category for project {project.projects_pk}")
         
-        # Generate background URL - use relative URL for media files
-        background_url = ''
-        if project.background:
-            # Use just the path, not absolute URI - browser will resolve relative to current host
-            background_url = project.background.url
-        
         # Return project data
         return JsonResponse({
             'status': 'success',
@@ -133,7 +111,6 @@ def create_project(request):
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
-                'background_url': background_url,
                 'project_status': project.project_status
             }
         })
@@ -176,15 +153,6 @@ def get_projects(request):
                     # If account not found, just show the code
                     sales_account_display = project.xero_sales_account
             
-            # Generate background URL - use relative URL for media files
-            background_url = ''
-            if project.background:
-                # Use just the path, not absolute URI - browser will resolve relative to current host
-                background_url = project.background.url
-                logger.info(f"Project '{project.project}' background URL: {background_url}")
-            else:
-                logger.info(f"Project '{project.project}' has no background image")
-            
             projects_data.append({
                 'projects_pk': project.projects_pk,
                 'project': project.project,
@@ -197,7 +165,6 @@ def get_projects(request):
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
-                'background_url': background_url,
                 'project_status': project.project_status
             })
         
@@ -226,7 +193,6 @@ def update_project(request, project_pk):
     - manager: str (optional)
     - manager_email: str (optional)
     - contracts_admin_emails: str (optional)
-    - background: file (optional)
     """
     try:
         # Get the project
@@ -282,25 +248,6 @@ def update_project(request, project_pk):
         elif 'contracts_admin_emails' in request.POST:
             project.contracts_admin_emails = None
         
-        # Handle background image upload if provided
-        if 'background' in request.FILES:
-            background_file = request.FILES['background']
-            
-            # Validate file type
-            allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp']
-            file_ext = background_file.name.split('.')[-1].lower()
-            if file_ext not in allowed_extensions:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Invalid file type. Allowed: {", ".join(allowed_extensions)}'
-                }, status=400)
-            
-            # Delete old background if exists
-            if project.background:
-                project.background.delete(save=False)
-            
-            project.background = background_file
-        
         project.save()
         
         logger.info(f"Updated project: {project.project} (pk={project.projects_pk})")
@@ -318,12 +265,6 @@ def update_project(request, project_pk):
                 # If account not found, just show the code
                 sales_account_display = project.xero_sales_account
         
-        # Generate background URL - use relative URL for media files
-        background_url = ''
-        if project.background:
-            # Use just the path, not absolute URI - browser will resolve relative to current host
-            background_url = project.background.url
-        
         # Return updated project data
         return JsonResponse({
             'status': 'success',
@@ -340,7 +281,6 @@ def update_project(request, project_pk):
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
-                'background_url': background_url,
                 'project_status': project.project_status
             }
         })

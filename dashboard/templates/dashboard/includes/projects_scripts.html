@@ -105,12 +105,10 @@
                 console.log(`📁 Project: ${project.project}`);
                 
                 const typeClass = project.project_type || 'general';
-                const hasBackground = project.background_url ? 'has-bg' : '';
-                const backgroundStyle = project.background_url ? `background-image: url('${project.background_url}');` : '';
                 
                 const card = $(`
                     <div class="project-card" data-project-pk="${project.projects_pk}">
-                        <div class="card-header ${hasBackground}" style="${backgroundStyle}">
+                        <div class="card-header">
                             <h5 class="card-title">${project.project}</h5>
                         </div>
                         <div class="card-body">
@@ -153,7 +151,6 @@
                 card.data('original-manager-email', project.manager_email || '');
                 card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
                 card.data('xero-instance-pk', project.xero_instance_pk);
-                card.data('background-url', project.background_url || '');
                 card.data('project-type', project.project_type);
                 
                 grid.append(card);
@@ -204,8 +201,7 @@
                 manager_email: card.data('original-manager-email'),
                 contracts_admin_emails: card.data('original-contracts-admin-emails'),
                 xero_instance_pk: card.data('xero-instance-pk'),
-                xero_sales_account: card.data('original-sales-account'),
-                background_url: card.data('background-url')
+                xero_sales_account: card.data('original-sales-account')
             };
             openProjectModal(project, false);
         });
@@ -224,7 +220,6 @@
                 if (createMode) {
                     // Create mode
                     $('#projectModalTitle').text('New Project');
-                    $('#projectModalHeader').removeClass('has-bg').css('background-image', '');
                     
                     // Clear all fields
                     $('#modalProjectName').val('');
@@ -234,7 +229,6 @@
                     $('#modalContractsAdminEmails').val('');
                     $('#modalXeroInstance').val('');
                     $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
-                    $('#modalBackgroundImage').val('');
                     
                     // Enable all inputs for create mode
                     enableFormInputs(true);
@@ -247,14 +241,6 @@
                 } else {
                     // View mode
                     $('#projectModalTitle').text(project.project);
-                    
-                    // Set header background
-                    if (project.background_url) {
-                        $('#projectModalHeader').addClass('has-bg')
-                            .css('background-image', `url('${project.background_url}')`);
-                    } else {
-                        $('#projectModalHeader').removeClass('has-bg').css('background-image', '');
-                    }
                     
                     // Populate fields
                     $('#modalProjectName').val(project.project);
@@ -360,7 +346,6 @@
             $('#modalContractsAdminEmails').prop('disabled', !enable);
             $('#modalXeroInstance').prop('disabled', !enable);
             $('#modalSalesAccount').prop('disabled', !enable);
-            $('#modalBackgroundImage').prop('disabled', !enable);
         }
         
         // Validation
@@ -416,11 +401,6 @@
             formData.append('manager_email', $('#modalManagerEmail').val().trim());
             formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
             
-            const bgFile = $('#modalBackgroundImage')[0].files[0];
-            if (bgFile) {
-                formData.append('background', bgFile);
-            }
-            
             const btn = $(this);
             btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
             
@@ -458,11 +438,6 @@
             formData.append('manager', $('#modalManager').val().trim());
             formData.append('manager_email', $('#modalManagerEmail').val().trim());
             formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
-            
-            const bgFile = $('#modalBackgroundImage')[0].files[0];
-            if (bgFile) {
-                formData.append('background', bgFile);
-            }
             
             const btn = $(this);
             btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Creating...');
@@ -587,7 +562,6 @@
             const manager = row.find('.add-manager').val().trim();
             const managerEmail = row.find('.add-manager-email').val().trim();
             const contractsAdminEmails = row.find('.add-contracts-admin-emails').val().trim();
-            const backgroundFile = row.find('.add-background-image')[0].files[0];
             
             // Validate required fields
             if (!projectName) {
@@ -618,9 +592,6 @@
             }
             if (contractsAdminEmails) {
                 formData.append('contracts_admin_emails', contractsAdminEmails);
-            }
-            if (backgroundFile) {
-                formData.append('background', backgroundFile);
             }
             // Note: project_status will default to 0 (Tender) in the backend
             
@@ -684,12 +655,10 @@
             
             const projectPk = row.data('project-pk');
             const projectName = card.length ? card.find('.card-title').text() : row.find('.project-name').text();
-            const backgroundUrl = row.data('background-url');
             const xeroInstancePk = row.data('xero-instance-pk');
             const projectType = row.data('project-type');
             
             console.log(`Opening construction view for project: ${projectName} (pk=${projectPk})`);
-            console.log(`Background URL: ${backgroundUrl}`);
             console.log(`Xero Instance PK: ${xeroInstancePk}`);
             console.log(`Project Type: ${projectType}`);
             
@@ -697,26 +666,9 @@
             window.currentConstructionProject = {
                 pk: projectPk,
                 name: projectName,
-                backgroundUrl: backgroundUrl,
                 xero_instance_pk: xeroInstancePk,
                 project_type: projectType
             };
-            
-            // Apply background image to workspace if it exists
-            if (backgroundUrl) {
-                $('#dynamicContentArea').css({
-                    'background-image': `url(${backgroundUrl})`,
-                    'background-size': 'cover',
-                    'background-position': 'center center',
-                    'background-repeat': 'no-repeat',
-                    'position': 'relative'
-                });
-                
-                // Add overlay to darken/fade the background
-                if ($('#dynamicContentArea').find('.workspace-background-overlay').length === 0) {
-                    $('#dynamicContentArea').prepend('<div class="workspace-background-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.85); pointer-events: none; z-index: 0;"></div>');
-                }
-            }
             
             // Hide projects header and grid
             $('#projectsHeader').hide();
@@ -804,15 +756,18 @@
                         var pdfUrl = quote.pdf_url || '';
                         var row = $('<tr>').attr('data-pk', quote.quotes_pk).attr('data-quote-pk', quote.quotes_pk).attr('data-pdf-url', pdfUrl);
                         
-                        // 1. Supplier
-                        row.append($('<td>').text(quote.supplier_name || '-'));
+                        // 1. Supplier (with title for tooltip on overflow)
+                        var supplierName = quote.supplier_name || '-';
+                        row.append($('<td>').text(supplierName).attr('title', supplierName));
                         
                         // 2. $ Net
                         var netAmount = quote.total_cost ? parseFloat(quote.total_cost) : 0;
-                        row.append($('<td>').text('$' + netAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
+                        var netText = '$' + netAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        row.append($('<td>').text(netText).attr('title', netText));
                         
-                        // 3. Quote #
-                        row.append($('<td>').text(quote.supplier_quote_number || '-'));
+                        // 3. Quote # (with title for tooltip on overflow)
+                        var quoteNum = quote.supplier_quote_number || '-';
+                        row.append($('<td>').text(quoteNum).attr('title', quoteNum));
                         
                         // 4. Update button
                         var updateBtn = $('<button>')
@@ -840,8 +795,10 @@
                     },
                     // Custom row selection handler
                     onRowSelect: function(row, pk, cfg) {
-                        // Hide Add Row button in view mode
+                        // Hide Add Row and Save buttons in view mode
                         $('#quoteAddAllocationBtn').hide();
+                        $('#quoteSaveAllocationsBtn').hide();
+                        window.editingQuotePk = null;
                     }
                 },
                 allocations: {
@@ -849,12 +806,14 @@
                     editable: false,
                     // Custom read-only allocation row renderer - construction aware
                     renderRow: function(alloc, cfg) {
-                        var row = $('<tr>').attr('data-allocation-pk', alloc.quote_allocations_pk);
+                        var row = $('<tr>')
+                            .attr('data-allocation-pk', alloc.quote_allocations_pk)
+                            .attr('data-item-pk', alloc.item_pk || alloc.item);
                         var isConstruction = isQuotesConstructionProject();
                         
                         if (isConstruction) {
                             // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes
-                            row.append($('<td>').text(alloc.item_name || '-'));
+                            row.append($('<td>').attr('data-item-pk', alloc.item_pk || alloc.item).text(alloc.item_name || '-'));
                             row.append($('<td>').text(alloc.unit || '-'));
                             var qty = alloc.qty ? parseFloat(alloc.qty) : 0;
                             row.append($('<td>').text(qty.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
@@ -866,7 +825,7 @@
                             row.append($('<td>')); // Empty for delete column
                         } else {
                             // Non-construction: Item | $ Net | Notes
-                            row.append($('<td>').text(alloc.item_name || '-'));
+                            row.append($('<td>').attr('data-item-pk', alloc.item_pk || alloc.item).text(alloc.item_name || '-'));
                             var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
                             row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
                             row.append($('<td>').text(alloc.notes || '-'));
@@ -1516,7 +1475,7 @@
             nonConstruction: ['40%', '25%', '30%', '5%'] // Item, $ Net, Notes, Del
         };
         
-        // Update quote allocations table headers and inject CSS for alignment
+        // Update quote allocations table headers and footer for alignment
         function updateQuoteAllocationsHeaders() {
             const thead = $('#quoteAllocationsTable thead');
             if (thead.length === 0) return;
@@ -1551,16 +1510,36 @@
                 css += `#quoteAllocationsTable tbody td:nth-child(${i + 1}) { width: ${w} !important; }\n`;
             });
             styleEl.text(css);
+            
+            // Update footer to match column structure
+            const footer = $('#quoteAllocationsFooter');
+            if (footer.length) {
+                footer.empty();
+                // For construction: value goes under "$ Amount" (index 4)
+                // For non-construction: value goes under "$ Net" (index 1)
+                const valueIndex = isConstruction ? 4 : 1;
+                widths.forEach((w, i) => {
+                    const div = $('<div>').css({ 'width': w, 'padding': '4px 8px' });
+                    if (i === 0) {
+                        div.append($('<span>').attr('id', 'quoteAllocationFooterLabel').text('Still to Allocate:'));
+                    } else if (i === valueIndex) {
+                        div.append($('<span>').attr('id', 'quoteRemainingNet').addClass('footer-value remaining').text('$0.00'));
+                    }
+                    footer.append(div);
+                });
+            }
         }
         
         // Display a read-only quote allocation row (for viewing saved quotes)
         function displayQuoteAllocationRow(allocation) {
             const tbody = $('#quoteAllocationsTableBody');
-            const row = $('<tr>').attr('data-allocation-pk', allocation.quote_allocations_pk);
+            const row = $('<tr>')
+                .attr('data-allocation-pk', allocation.quote_allocations_pk)
+                .attr('data-item-pk', allocation.item_pk || allocation.item);
             
             if (isQuotesConstructionProject()) {
                 // Construction: Item | Unit | Qty | $ Rate | $ Amount | Notes
-                row.append($('<td>').text(allocation.item_name || '-'));
+                row.append($('<td>').attr('data-item-pk', allocation.item_pk || allocation.item).text(allocation.item_name || '-'));
                 row.append($('<td>').text(allocation.unit || '-'));
                 const qty = allocation.qty ? parseFloat(allocation.qty) : 0;
                 row.append($('<td>').text(qty.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
@@ -1572,7 +1551,7 @@
                 row.append($('<td>')); // Empty for delete column
             } else {
                 // Non-construction: Item | $ Net | Notes
-                row.append($('<td>').text(allocation.item_name || '-'));
+                row.append($('<td>').attr('data-item-pk', allocation.item_pk || allocation.item).text(allocation.item_name || '-'));
                 const amount = allocation.amount ? parseFloat(allocation.amount) : 0;
                 row.append($('<td>').text('$' + amount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2})));
                 row.append($('<td>').text(allocation.notes || '-'));
@@ -1608,7 +1587,8 @@
                 const option = $('<option>').val(item.costing_pk).text(item.item);
                 // Store unit as data attribute for construction mode
                 option.attr('data-unit', item.unit__unit_name || item.unit || '');
-                if (allocation && allocation.item_pk === item.costing_pk) {
+                // Use == for type coercion (item_pk may be string, costing_pk may be number)
+                if (allocation && allocation.item_pk == item.costing_pk) {
                     option.prop('selected', true);
                 }
                 itemSelect.find('optgroup').last().append(option);
@@ -1888,33 +1868,196 @@
             });
         }
         
-        // Open quote update modal (placeholder - uses existing QuotesEntry)
+        // Open quote for editing - selects the row and makes allocations editable
         function openQuoteUpdateModal(quote) {
-            console.log('Opening update modal for quote:', quote);
-            // This uses the existing QuotesEntry module
-            QuotesEntry.init({
-                pdfUrl: quote.pdf_url,
-                pdfDataUrl: null,
-                containerSelector: '#constructionContentArea',
-                projectPk: window.currentConstructionProject.pk,
-                projectType: window.currentConstructionProject.project_type,
-                suppliers: window.constructionProjectContacts,
-                items: window.itemsItems,
-                existingQuote: quote,
-                onSave: function(response) {
-                    console.log('Quote updated:', response);
-                    loadConstructionQuotesSection();
-                },
-                onCancel: function() {
-                    loadConstructionQuotesSection();
+            console.log('Opening quote for editing:', quote);
+            
+            // Find and click the row to select it and load allocations
+            var row = $('#quoteMainTableBody tr[data-pk="' + quote.quotes_pk + '"]');
+            if (row.length) {
+                row.click();
+            }
+            
+            // Store current quote for editing
+            window.currentSelectedQuote = quote;
+            window.editingQuotePk = quote.quotes_pk;
+            
+            // Show Add Row button and Save button for edit mode
+            $('#quoteAddAllocationBtn').show();
+            $('#quoteSaveAllocationsBtn').show();
+            
+            // Wait for allocations to load, then make them editable
+            setTimeout(function() {
+                makeQuoteAllocationsEditable();
+                validateQuoteUpdateMode();
+            }, 300);
+        }
+        
+        // Make quote allocations editable (convert read-only rows to input rows)
+        function makeQuoteAllocationsEditable() {
+            var tbody = $('#quoteAllocationsTableBody');
+            var rows = tbody.find('tr');
+            var isConstruction = isQuotesConstructionProject();
+            
+            // Clear and rebuild with editable rows
+            var allocations = [];
+            rows.each(function() {
+                var row = $(this);
+                var alloc = {
+                    quote_allocations_pk: row.attr('data-allocation-pk'),
+                    item_pk: row.find('td').eq(0).attr('data-item-pk') || row.attr('data-item-pk'),
+                    item_name: row.find('td').eq(0).text(),
+                    amount: parseFloat(row.find('td').eq(isConstruction ? 4 : 1).text().replace(/[^0-9.-]/g, '')) || 0,
+                    notes: row.find('td').eq(isConstruction ? 5 : 2).text() || ''
+                };
+                if (isConstruction) {
+                    alloc.unit = row.find('td').eq(1).text();
+                    alloc.qty = parseFloat(row.find('td').eq(2).text()) || 0;
+                    alloc.rate = parseFloat(row.find('td').eq(3).text().replace(/[^0-9.-]/g, '')) || 0;
                 }
+                allocations.push(alloc);
             });
+            
+            // Rebuild as editable
+            tbody.empty();
+            allocations.forEach(function(alloc) {
+                addQuoteAllocationRow(alloc);
+            });
+            
+            // Update footer label
+            $('#quoteAllocationFooterLabel').text('Still to Allocate:');
+            updateQuoteStillToAllocate();
         }
         
         // Add allocation button handler
         $(document).on('click', '#quoteAddAllocationBtn', function() {
             addQuoteAllocationRow();
+            validateQuoteUpdateMode();
         });
+        
+        // Validate quote update mode and update Save button state
+        function validateQuoteUpdateMode() {
+            if (!window.editingQuotePk) return false;
+            
+            var isConstruction = isQuotesConstructionProject();
+            var allValid = true;
+            var hasRows = false;
+            
+            // Check each allocation row
+            $('#quoteAllocationsTableBody tr').each(function() {
+                hasRows = true;
+                var row = $(this);
+                var itemPk = row.find('.quote-allocation-item-select').val();
+                var amount = parseFloat(row.find('.quote-allocation-net-input').val()) || 0;
+                
+                // If amount is non-zero, item must be selected
+                if (amount !== 0 && !itemPk) {
+                    allValid = false;
+                }
+            });
+            
+            // Check still to allocate is $0.00
+            var stillToAllocateText = $('#quoteRemainingNet').text().replace(/[^0-9.-]/g, '');
+            var stillToAllocate = parseFloat(stillToAllocateText) || 0;
+            var isFullyAllocated = Math.abs(stillToAllocate) < 0.01;
+            
+            var isValid = hasRows && allValid && isFullyAllocated;
+            
+            // Update Save button appearance
+            var saveBtn = $('#quoteSaveAllocationsBtn');
+            if (isValid) {
+                saveBtn.removeClass('btn-secondary').addClass('btn-success');
+            } else {
+                saveBtn.removeClass('btn-success').addClass('btn-secondary');
+            }
+            
+            return isValid;
+        }
+        
+        // Listen for changes in allocation rows to update validation
+        $(document).on('change input', '#quoteAllocationsTableBody input, #quoteAllocationsTableBody select', function() {
+            if (window.editingQuotePk) {
+                updateQuoteStillToAllocate();
+                validateQuoteUpdateMode();
+            }
+        });
+        
+        // Save quote allocations button handler
+        $(document).on('click', '#quoteSaveAllocationsBtn', function() {
+            if (!validateQuoteUpdateMode()) {
+                alert('Please ensure all rows with amounts have an item selected and allocations sum to the quote total.');
+                return;
+            }
+            saveQuoteAllocations();
+        });
+        
+        // Save quote allocations to server
+        function saveQuoteAllocations() {
+            if (!window.editingQuotePk || !window.currentSelectedQuote) {
+                alert('No quote selected for update.');
+                return;
+            }
+            
+            var isConstruction = isQuotesConstructionProject();
+            var allocations = [];
+            
+            $('#quoteAllocationsTableBody tr').each(function() {
+                var row = $(this);
+                var itemPk = row.find('.quote-allocation-item-select').val();
+                var amount = parseFloat(row.find('.quote-allocation-net-input').val()) || 0;
+                var notes = row.find('.quote-allocation-notes-input').val() || '';
+                
+                if (itemPk) {
+                    var alloc = {
+                        item: itemPk,
+                        amount: amount,
+                        notes: notes
+                    };
+                    if (isConstruction) {
+                        alloc.unit = row.find('.quote-allocation-unit-input').val() || '';
+                        alloc.qty = parseFloat(row.find('.quote-allocation-qty-input').val()) || 0;
+                        alloc.rate = parseFloat(row.find('.quote-allocation-rate-input').val()) || 0;
+                    }
+                    allocations.push(alloc);
+                }
+            });
+            
+            var saveBtn = $('#quoteSaveAllocationsBtn');
+            saveBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+            
+            $.ajax({
+                url: '/core/update_quote/',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: JSON.stringify({
+                    quote_id: window.editingQuotePk,
+                    quote_number: window.currentSelectedQuote.supplier_quote_number,
+                    total_cost: window.currentSelectedQuote.total_cost,
+                    supplier: window.currentSelectedQuote.supplier_pk,
+                    line_items: allocations
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Quote updated successfully!');
+                        // Reset edit mode
+                        window.editingQuotePk = null;
+                        $('#quoteSaveAllocationsBtn').hide();
+                        // Reload quotes to show updated data
+                        loadQuotesData();
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to update quote'));
+                    }
+                    saveBtn.prop('disabled', false).text('Save');
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to save quote: ' + error);
+                    saveBtn.prop('disabled', false).text('Save');
+                }
+            });
+        }
         
         // Load construction documents section for CONSTRUCTION
         function loadConstructionDocumentsSection() {
@@ -2180,7 +2323,7 @@
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load invoices:', error);
-                    $('#unallocatedInvoicesTableBody').html(`
+                    $('#invoiceMainTableBody').html(`
                         <tr><td colspan="5" style="text-align: center; color: #dc3545;">Failed to load invoices</td></tr>
                     `);
                 }
@@ -2190,7 +2333,7 @@
         // Populate unallocated invoices table
         // Made global so invoices_section.js can detect it and skip auto-init
         window.populateUnallocatedInvoicesTable = function populateUnallocatedInvoicesTable(invoices, suppliers) {
-            const tbody = $('#unallocatedInvoicesTableBody');
+            const tbody = $('#invoiceMainTableBody');
             tbody.empty();
             tbody.removeClass('has-selection');
             
@@ -2333,13 +2476,13 @@
                 totalNet += invoice.total_net || 0;
                 totalGst += invoice.total_gst || 0;
             });
-            $('#unallocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
-            $('#unallocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
-            $('#unallocatedInvoicesTableFooter').show();
+            $('#invoiceFooterCol4').text('$' + totalNet.toFixed(2));
+            $('#invoiceFooterCol5').text('$' + totalGst.toFixed(2));
+            $('#invoiceMainTableFooter').show();
             
             // Auto-select the first row on page load
             setTimeout(function() {
-                const firstRow = $('#unallocatedInvoicesTableBody tr').first();
+                const firstRow = $('#invoiceMainTableBody tr').first();
                 console.log('Auto-selecting first row:', firstRow.length, 'invoice_pk:', firstRow.attr('data-invoice-pk'), 'pdf_url:', firstRow.attr('data-pdf-url'));
                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                     selectInvoiceRow(firstRow);
@@ -2355,7 +2498,7 @@
                 return;
             }
             
-            const tbody = $('#unallocatedInvoicesTableBody');
+            const tbody = $('#invoiceMainTableBody');
             tbody.find('tr').removeClass('selected-row');
             row.addClass('selected-row');
             tbody.addClass('has-selection');
@@ -2450,7 +2593,7 @@
             }
             
             // Update Allocate button state for the selected row
-            const selectedRow = $('#unallocatedInvoicesTableBody tr.selected-row');
+            const selectedRow = $('#invoiceMainTableBody tr.selected-row');
             if (selectedRow.length) {
                 const allocateBtn = selectedRow.find('.allocate-invoice-btn');
                 // For construction mode, only check net; for non-construction, check both
@@ -2546,20 +2689,20 @@
                                 recalculateFooterTotals();
                                 
                                 // Select next available row or show placeholder
-                                const firstRow = $('#unallocatedInvoicesTableBody tr').first();
+                                const firstRow = $('#invoiceMainTableBody tr').first();
                                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                                     selectInvoiceRow(firstRow);
                                 } else {
                                     // No more invoices
-                                    $('#unallocatedInvoicesTableBody').html(`
+                                    $('#invoiceMainTableBody').html(`
                                         <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
                                             No unallocated invoices found for this project.
                                         </td></tr>
                                     `);
-                                    $('#unallocatedInvoicesTableBody').removeClass('has-selection');
+                                    $('#invoiceMainTableBody').removeClass('has-selection');
                                     $('#invoicePdfViewer').hide();
                                     $('#invoiceViewerPlaceholder').show();
-                                    $('#unallocatedInvoicesTableFooter').hide();
+                                    $('#invoiceMainTableFooter').hide();
                                 }
                             });
                         } else {
@@ -2582,13 +2725,13 @@
             let totalNet = 0;
             let totalGst = 0;
             
-            $('#unallocatedInvoicesTableBody tr').each(function() {
+            $('#invoiceMainTableBody tr').each(function() {
                 totalNet += parseFloat($(this).find('.net-input').val()) || 0;
                 totalGst += parseFloat($(this).find('.gst-input').val()) || 0;
             });
             
-            $('#unallocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
-            $('#unallocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
+            $('#invoiceFooterCol4').text('$' + totalNet.toFixed(2));
+            $('#invoiceFooterCol5').text('$' + totalGst.toFixed(2));
         }
         
         // Add a new allocation row (creates in database first)
@@ -2916,7 +3059,7 @@
         }
         
         // Update invoice totals when net/gst inputs change in the main table
-        $(document).on('input', '#unallocatedInvoicesTable .net-input, #unallocatedInvoicesTable .gst-input', function() {
+        $(document).on('input', '#invoiceMainTable .net-input, #invoiceMainTable .gst-input', function() {
             const row = $(this).closest('tr');
             if (row.hasClass('selected-row') && window.currentSelectedInvoice) {
                 window.currentSelectedInvoice.total_net = parseFloat(row.find('.net-input').val()) || 0;
@@ -2951,7 +3094,7 @@
                 },
                 error: function(xhr, status, error) {
                     console.error('Failed to load allocated invoices:', error);
-                    $('#allocatedInvoicesTableBody').html(`
+                    $('#allocatedInvoiceMainTableBody').html(`
                         <tr><td colspan="7" style="text-align: center; color: #dc3545;">Failed to load invoices</td></tr>
                     `);
                 }
@@ -2965,7 +3108,7 @@
         
         // Populate allocated invoices table
         function populateAllocatedInvoicesTable(invoices, suppliers) {
-            const tbody = $('#allocatedInvoicesTableBody');
+            const tbody = $('#allocatedInvoiceMainTableBody');
             tbody.empty();
             tbody.removeClass('has-selection');
             
@@ -3166,13 +3309,13 @@
                 totalNet += invoice.total_net || 0;
                 totalGst += invoice.total_gst || 0;
             });
-            $('#allocatedInvoicesNetTotal').text('$' + formatAllocatedMoney(totalNet));
-            $('#allocatedInvoicesGstTotal').text('$' + formatAllocatedMoney(totalGst));
-            $('#allocatedInvoicesTableFooter').show();
+            $('#allocatedInvoiceFooterCol3').text('$' + formatAllocatedMoney(totalNet));
+            $('#allocatedInvoiceFooterCol4').text('$' + formatAllocatedMoney(totalGst));
+            $('#allocatedInvoiceMainTableFooter').show();
             
             // Auto-select the first row
             setTimeout(function() {
-                const firstRow = $('#allocatedInvoicesTableBody tr').first();
+                const firstRow = $('#allocatedInvoiceMainTableBody tr').first();
                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                     selectAllocatedInvoiceRow(firstRow);
                 }
@@ -3537,7 +3680,7 @@
                 return;
             }
             
-            const tbody = $('#allocatedInvoicesTableBody');
+            const tbody = $('#allocatedInvoiceMainTableBody');
             
             tbody.find('tr').removeClass('selected-row');
             row.addClass('selected-row');
@@ -3708,29 +3851,29 @@
                 // Recalculate footer totals
                 let totalNet = 0;
                 let totalGst = 0;
-                $('#allocatedInvoicesTableBody tr').each(function() {
+                $('#allocatedInvoiceMainTableBody tr').each(function() {
                     const netText = $(this).find('td:eq(2)').text().replace('$', '');
                     const gstText = $(this).find('td:eq(3)').text().replace('$', '');
                     totalNet += parseFloat(netText) || 0;
                     totalGst += parseFloat(gstText) || 0;
                 });
-                $('#allocatedInvoicesNetTotal').text('$' + totalNet.toFixed(2));
-                $('#allocatedInvoicesGstTotal').text('$' + totalGst.toFixed(2));
+                $('#allocatedInvoiceFooterCol3').text('$' + totalNet.toFixed(2));
+                $('#allocatedInvoiceFooterCol4').text('$' + totalGst.toFixed(2));
                 
                 // Select next available row or show placeholder
-                const firstRow = $('#allocatedInvoicesTableBody tr').first();
+                const firstRow = $('#allocatedInvoiceMainTableBody tr').first();
                 if (firstRow.length && firstRow.attr('data-invoice-pk')) {
                     selectAllocatedInvoiceRow(firstRow);
                 } else {
-                    $('#allocatedInvoicesTableBody').html(`
+                    $('#allocatedInvoiceMainTableBody').html(`
                         <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">
                             No allocated invoices found for this project.
                         </td></tr>
                     `);
-                    $('#allocatedInvoicesTableBody').removeClass('has-selection');
+                    $('#allocatedInvoiceMainTableBody').removeClass('has-selection');
                     $('#allocatedInvoicePdfViewer').hide();
                     $('#allocatedInvoiceViewerPlaceholder').show();
-                    $('#allocatedInvoicesTableFooter').hide();
+                    $('#allocatedInvoiceMainTableFooter').hide();
                 }
             });
         }
@@ -4444,6 +4587,10 @@
             var poHtml = $('#poTemplateStorage').html();
             $(`#${contentAreaId}`).html(poHtml);
             
+            // Append the download button footer to the viewer section
+            var footerHtml = $(`#${contentAreaId} #poViewerFooterTemplate`).html();
+            $(`#${contentAreaId} #poViewerSection`).append(footerHtml);
+            
             console.log('PO section loaded for project:', projectObj.pk, 'in container:', contentAreaId);
             
             // Load suppliers from project quotes with contact details
@@ -4500,7 +4647,22 @@
             
             // Helper function to populate PO table with status
             function populatePOTable(suppliers, poStatus, projectObj, contentAreaId) {
-                var tbody = $(`#${contentAreaId} #poSuppliersTableBody`);
+                // Set up table headers (since template doesn't define columns for POs)
+                var thead = $(`#${contentAreaId} #poMainTable thead tr`);
+                if (thead.children().length === 0) {
+                    thead.html(`
+                        <th style="width: 25%;">Supplier</th>
+                        <th style="width: 10%;">First Name</th>
+                        <th style="width: 10%;">Last Name</th>
+                        <th style="width: 20%;">Email</th>
+                        <th style="width: 12%;">Amount</th>
+                        <th style="width: 5%;">Sent</th>
+                        <th style="width: 10%;">Update</th>
+                        <th style="width: 8%;">Email</th>
+                    `);
+                }
+                
+                var tbody = $(`#${contentAreaId} #poMainTableBody`);
                 tbody.empty();
                 
                 if (suppliers.length === 0) {
@@ -4534,25 +4696,28 @@
                             .attr('data-po-sent', isSent ? 'true' : 'false')
                             .attr('data-pdf-url', pdfUrl || '');
                         
-                        row.append('<td class="po-supplier-name">' + escapeHtml(supplier.name) + '</td>');
+                        row.append('<td class="po-supplier-name" title="' + escapeHtml(supplier.name) + '">' + escapeHtml(supplier.name) + '</td>');
                         
-                        // Display first name
+                        // Display first name (with tooltip)
+                        var firstName = supplier.first_name || '-';
                         var firstNameDisplay = supplier.first_name ? 
                             escapeHtml(supplier.first_name) : 
                             '<span style="color: #999; font-style: italic;">-</span>';
-                        row.append('<td class="po-first-name">' + firstNameDisplay + '</td>');
+                        row.append('<td class="po-first-name" title="' + escapeHtml(firstName) + '">' + firstNameDisplay + '</td>');
                         
-                        // Display last name
+                        // Display last name (with tooltip)
+                        var lastName = supplier.last_name || '-';
                         var lastNameDisplay = supplier.last_name ? 
                             escapeHtml(supplier.last_name) : 
                             '<span style="color: #999; font-style: italic;">-</span>';
-                        row.append('<td class="po-last-name">' + lastNameDisplay + '</td>');
+                        row.append('<td class="po-last-name" title="' + escapeHtml(lastName) + '">' + lastNameDisplay + '</td>');
                         
-                        // Display email address
+                        // Display email address (with tooltip)
+                        var email = supplier.email || 'No email';
                         var emailDisplay = supplier.email ? 
                             escapeHtml(supplier.email) : 
                             '<span style="color: #999; font-style: italic;">No email</span>';
-                        row.append('<td class="po-email">' + emailDisplay + '</td>');
+                        row.append('<td class="po-email" title="' + escapeHtml(email) + '">' + emailDisplay + '</td>');
                         
                         // Display amount
                         var formattedAmount = supplierTotal.toLocaleString('en-AU', {
@@ -4627,12 +4792,23 @@
                         style: 'currency',
                         currency: 'AUD'
                     });
-                    $(`#${contentAreaId} #poTotalAmount`).text(formattedGrandTotal);
-                    $(`#${contentAreaId} #poSuppliersTableFooter`).show();
+                    // Set up footer row
+                    var tfoot = $(`#${contentAreaId} #poMainTableFooter`);
+                    tfoot.find('tr').html(`
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"><strong>TOTAL</strong></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px; text-align: right;">${formattedGrandTotal}</td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                        <td style="border-top: 2px solid var(--color-border); padding: 4px 8px;"></td>
+                    `);
+                    tfoot.show();
                     
                     // Auto-select first row (triggers click to load PDF and apply selection styling)
                     setTimeout(function() {
-                        $(`#${contentAreaId} #poSuppliersTableBody tr:first`).trigger('click');
+                        $(`#${contentAreaId} #poMainTableBody tr:first`).trigger('click');
                     }, 100);
                 }
                 
@@ -4640,7 +4816,7 @@
             }
             
             // Attach click handler for supplier row selection
-            $(`#${contentAreaId}`).off('click', '#poSuppliersTableBody tr').on('click', '#poSuppliersTableBody tr', function() {
+            $(`#${contentAreaId}`).off('click', '#poMainTableBody tr').on('click', '#poMainTableBody tr', function() {
                 var row = $(this);
                 var supplierPk = row.attr('data-supplier-pk');
                 var supplierName = row.attr('data-supplier-name');
@@ -4650,13 +4826,13 @@
                 if (!supplierPk) return; // Skip if no supplier data
                 
                 // Remove previous selection styling
-                $(`#${contentAreaId} #poSuppliersTableBody tr`).removeClass('selected-row');
+                $(`#${contentAreaId} #poMainTableBody tr`).removeClass('selected-row');
                 
                 // Add selection styling to clicked row
                 row.addClass('selected-row');
                 
                 // Add class to tbody to trigger dimming effect
-                $(`#${contentAreaId} #poSuppliersTableBody`).addClass('has-selection');
+                $(`#${contentAreaId} #poMainTableBody`).addClass('has-selection');
                 
                 // Generate preview on-the-fly (supports construction columns)
                 generatePODocument(projectObj, supplierPk, supplierName, contentAreaId);
@@ -4783,8 +4959,8 @@
             // Load the PO preview in the iframe
             var previewUrl = `/preview_po/${projectObj.pk}/${supplierPk}/`;
             
-            $(`#${contentAreaId} #poPlaceholder`).hide();
-            $(`#${contentAreaId} #poPreviewFrame`).attr('src', previewUrl).show();
+            $(`#${contentAreaId} #poViewerPlaceholder`).hide();
+            $(`#${contentAreaId} #poPdfViewer`).attr('src', previewUrl).show();
             $(`#${contentAreaId} #poViewerFooter`).addClass('visible');
             
             // Store current supplier info for download

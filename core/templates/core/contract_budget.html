@@ -1,5 +1,9 @@
 <!-- Working Budget Template -->
+<!-- Inherit base table styles -->
+{% include "core/components/reusable_table_styles.html" %}
+
 <style>
+    /* Contract Budget specific styles - extends reusable_table_styles */
     .contract-budget-container {
         height: 100%;
         display: flex;
@@ -7,23 +11,6 @@
         padding: 0;
         position: relative;
         overflow-y: auto;
-    }
-    
-    .contract-budget-container .table-wrapper {
-        flex: 0 0 auto;
-        position: relative;
-    }
-    
-    
-    /* Category row styling */
-    .contract-budget-container .reusable-table tr.category-row {
-        background-color: #f9f9f9;
-        font-weight: 600;
-        color: #495057;
-    }
-    
-    .contract-budget-container .reusable-table tr.category-row:hover {
-        background-color: #ececec;
     }
     
     /* Internal category styling - purple */
@@ -49,30 +36,10 @@
         padding-left: 30px;
     }
     
-    /* Compact inputs for contract budget */
+    /* Compact inputs for contract budget - override base to right-align */
     .contract-budget-container .reusable-table input[type="number"] {
         width: 100%;
-        padding: 3px 5px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        font-size: 11px;
         text-align: right;
-    }
-    
-    .contract-budget-container .reusable-table input[type="number"]:focus {
-        outline: none;
-        border-color: #007bff;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-    }
-    
-    .contract-budget-container .reusable-table .budget-amount {
-        text-align: right;
-        font-weight: 500;
-    }
-    
-    .contract-budget-container .reusable-table .committed-amount {
-        text-align: right;
-        color: #6c757d;
     }
     
     /* Right-align all data cells except first column (Category/Item) */
@@ -84,22 +51,19 @@
         text-align: left;
     }
     
-    .contract-budget-container .reusable-table .working-budget-amount {
-        text-align: right;
-    }
-    
-    /* Totals row styling - using tfoot for perfect alignment */
+    /* Totals row styling - use tfoot for sub-heading alignment */
     .contract-budget-container .reusable-table tfoot tr {
-        background: var(--gradient-primary);
-        color: white;
-        font-weight: bold;
+        background: var(--color-bg-muted);
+        font-weight: 600;
     }
     
     .contract-budget-container .reusable-table tfoot td {
-        padding: 6px 6px;
+        padding: 6px 12px;
         text-align: right;
-        font-size: 12px;
-        color: white;
+        font-size: var(--rt-font-size);
+        color: var(--color-text);
+        border-top: 2px solid var(--color-border);
+        border-bottom: none;
     }
     
     .contract-budget-container .reusable-table tfoot td:first-child {
@@ -108,7 +72,8 @@
 </style>
 
 <div class="contract-budget-container">
-    <div class="table-wrapper">
+    <!-- Wrap in reusable-table-container for black border -->
+    <div class="reusable-table-container">
         <table class="reusable-table" id="contractBudgetTable">
             <thead id="contractBudgetTableHead">
                 <!-- Table headers will be rendered by JavaScript based on project type -->
@@ -144,76 +109,90 @@
         }
     }, 100);
     
+    // Column width definitions
+    var columnWidths = {
+        // Execution + Construction (11 cols): Category/Item | Unit | Contract Budget | Working Budget | Qty | Rate | Amount | Committed | Cost to Complete | Invoiced | Fixed on Site
+        executionConstruction: ['20%', '6%', '9%', '9%', '7%', '7%', '9%', '9%', '8%', '8%', '8%'],
+        // Execution + Non-construction (9 cols): Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+        executionNonConstruction: ['24%', '8%', '10%', '10%', '10%', '10%', '10%', '9%', '9%'],
+        // Tender + Construction (7 cols): Category/Item | Unit | Working Budget | Qty | Rate | Amount | Committed
+        tenderConstruction: ['28%', '8%', '12%', '10%', '10%', '12%', '12%'],
+        // Tender + Non-construction (5 cols): Category/Item | Unit | Working Budget | Uncommitted | Committed
+        tenderNonConstruction: ['32%', '10%', '18%', '20%', '20%']
+    };
+    
     function renderTableHeaders(isTender, isConstructionType) {
         // isTender: controls column visibility (true = reduced columns, false = full columns)
         // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
         var thead = $(window.currentContractBudgetContainer + ' #contractBudgetTableHead');
         thead.empty();
         
+        var widths;
+        
         if (isTender) {
             // TENDER MODE: Reduced columns
             if (isConstructionType) {
                 // Tender + Construction: Two-row header with Uncommitted spanning Qty | Rate | Amount
-                // Columns: Category/Item | Unit | Working Budget | Uncommitted (Qty|Rate|Amount) | Committed
+                widths = columnWidths.tenderConstruction;
                 var headerRow1 = $('<tr></tr>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Category / Item</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Unit</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Working Budget</th>');
-                headerRow1.append('<th colspan="3" style="text-align: center;">Uncommitted</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Committed</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[0] + ';">Category / Item</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[1] + ';">Unit</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[2] + ';">Working Budget</th>');
+                headerRow1.append('<th colspan="3" style="text-align: center; width: ' + (parseInt(widths[3]) + parseInt(widths[4]) + parseInt(widths[5])) + '%;">Uncommitted</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[6] + ';">Committed</th>');
                 thead.append(headerRow1);
                 
                 var headerRow2 = $('<tr></tr>');
-                headerRow2.append('<th>Qty</th>');
-                headerRow2.append('<th>Rate</th>');
-                headerRow2.append('<th>Amount</th>');
+                headerRow2.append('<th style="width: ' + widths[3] + ';">Qty</th>');
+                headerRow2.append('<th style="width: ' + widths[4] + ';">Rate</th>');
+                headerRow2.append('<th style="width: ' + widths[5] + ';">Amount</th>');
                 thead.append(headerRow2);
             } else {
                 // Tender + Non-construction: Single row header
-                // Columns: Category/Item | Unit | Working Budget | Uncommitted | Committed
+                widths = columnWidths.tenderNonConstruction;
                 var headerRow = $('<tr></tr>');
-                headerRow.append('<th>Category / Item</th>');
-                headerRow.append('<th>Unit</th>');
-                headerRow.append('<th>Working Budget</th>');
-                headerRow.append('<th>Uncommitted</th>');
-                headerRow.append('<th>Committed</th>');
+                headerRow.append('<th style="width: ' + widths[0] + ';">Category / Item</th>');
+                headerRow.append('<th style="width: ' + widths[1] + ';">Unit</th>');
+                headerRow.append('<th style="width: ' + widths[2] + ';">Working Budget</th>');
+                headerRow.append('<th style="width: ' + widths[3] + ';">Uncommitted</th>');
+                headerRow.append('<th style="width: ' + widths[4] + ';">Committed</th>');
                 thead.append(headerRow);
             }
         } else {
             // EXECUTION MODE: Full columns
             if (isConstructionType) {
                 // Construction project_type: Two-row header with Uncommitted spanning Qty | Rate | Amount
-                // Columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted (Qty|Rate|Amount) | Committed | Cost to Complete | Invoiced | Fixed on Site
+                widths = columnWidths.executionConstruction;
                 var headerRow1 = $('<tr></tr>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Category / Item</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Unit</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Contract Budget</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Working Budget</th>');
-                headerRow1.append('<th colspan="3" style="text-align: center;">Uncommitted</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Committed</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Cost to Complete</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Invoiced</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle;">Fixed on Site</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[0] + ';">Category / Item</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[1] + ';">Unit</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[2] + ';">Contract Budget</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[3] + ';">Working Budget</th>');
+                headerRow1.append('<th colspan="3" style="text-align: center; width: ' + (parseInt(widths[4]) + parseInt(widths[5]) + parseInt(widths[6])) + '%;">Uncommitted</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[7] + ';">Committed</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[8] + ';">Cost to Complete</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[9] + ';">Invoiced</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[10] + ';">Fixed on Site</th>');
                 thead.append(headerRow1);
                 
                 var headerRow2 = $('<tr></tr>');
-                headerRow2.append('<th>Qty</th>');
-                headerRow2.append('<th>Rate</th>');
-                headerRow2.append('<th>Amount</th>');
+                headerRow2.append('<th style="width: ' + widths[4] + ';">Qty</th>');
+                headerRow2.append('<th style="width: ' + widths[5] + ';">Rate</th>');
+                headerRow2.append('<th style="width: ' + widths[6] + ';">Amount</th>');
                 thead.append(headerRow2);
             } else {
                 // Non-construction project_type: Single row header with single Uncommitted
-                // Columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                widths = columnWidths.executionNonConstruction;
                 var headerRow = $('<tr></tr>');
-                headerRow.append('<th>Category / Item</th>');
-                headerRow.append('<th>Unit</th>');
-                headerRow.append('<th>Contract Budget</th>');
-                headerRow.append('<th>Working Budget</th>');
-                headerRow.append('<th>Uncommitted</th>');
-                headerRow.append('<th>Committed</th>');
-                headerRow.append('<th>Cost to Complete</th>');
-                headerRow.append('<th>Invoiced</th>');
-                headerRow.append('<th>Fixed on Site</th>');
+                headerRow.append('<th style="width: ' + widths[0] + ';">Category / Item</th>');
+                headerRow.append('<th style="width: ' + widths[1] + ';">Unit</th>');
+                headerRow.append('<th style="width: ' + widths[2] + ';">Contract Budget</th>');
+                headerRow.append('<th style="width: ' + widths[3] + ';">Working Budget</th>');
+                headerRow.append('<th style="width: ' + widths[4] + ';">Uncommitted</th>');
+                headerRow.append('<th style="width: ' + widths[5] + ';">Committed</th>');
+                headerRow.append('<th style="width: ' + widths[6] + ';">Cost to Complete</th>');
+                headerRow.append('<th style="width: ' + widths[7] + ';">Invoiced</th>');
+                headerRow.append('<th style="width: ' + widths[8] + ';">Fixed on Site</th>');
                 thead.append(headerRow);
             }
         }

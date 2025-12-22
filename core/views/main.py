@@ -16,13 +16,8 @@ import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import bills as bill_service
 from ..services import quotes as quote_service
 from ..services import pos as pos_service
-from ..services import invoices as invoice_service
-from ..services import costings as costing_service
-from ..services import contacts as contact_service
-from ..services import aggregations as aggregation_service
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 import uuid
@@ -67,250 +62,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def main(request, division):
-    costings = costing_service.get_costings_for_division(division)
-    contacts_list = contact_service.get_checked_contacts(division)
-    contacts_unfiltered_list = contact_service.get_all_contacts(division)
-    quote_allocations = quote_service.get_quote_allocations_for_division(division)
-    quote_allocations_sums_dict = quote_service.get_quote_allocations_sums_dict()
-    committed_values = {pk: amount for pk, amount in Committed()}
-    costings = costing_service.enrich_costings_with_committed(costings, committed_values)
-    invoice_allocations_sums_dict = bill_service.get_invoice_allocations_sums_dict()
-    paid_invoice_allocations_dict = bill_service.get_paid_invoice_allocations_dict()
-    costings = costing_service.enrich_costings_with_bill_data(
-        costings, 
-        invoice_allocations_sums_dict, 
-        paid_invoice_allocations_dict
-    )
-    category_totals = costing_service.calculate_category_totals(costings, field='sc_invoiced')
-    items = costing_service.get_items_list(costings)
-    committed_quotes_list = quote_service.get_committed_quotes_list(division)
-    committed_quotes_json = json.dumps(committed_quotes_list, cls=DjangoJSONEncoder)
-    quote_allocations_json = json.dumps(list(quote_allocations), cls=DjangoJSONEncoder)
-    contacts_in_quotes_list = quote_service.get_contacts_in_quotes(division)
-    contacts_not_in_quotes_list = quote_service.get_contacts_not_in_quotes(division)
-    totals = aggregation_service.calculate_dashboard_totals(costings)
-    total_contract_budget = totals['total_contract_budget']
-    total_uncommitted = totals['total_uncommitted']
-    total_committed = totals['total_committed']
-    total_forecast_budget = totals['total_forecast_budget']
-    total_sc_invoiced = totals['total_sc_invoiced']
-    total_fixed_on_site = totals['total_fixed_on_site']
-    total_sc_paid = totals['total_sc_paid']
-    total_c2c = totals['total_c2c']
-    po_globals = pos_service.get_po_globals()
-    po_orders_list = pos_service.get_po_orders_list(division)
-    invoices_list = bill_service.get_invoices_list(division)
-    invoices_unallocated_list = bill_service.get_unallocated_invoices(division)
-    invoices_allocated_list = bill_service.get_allocated_invoices(division)
-    sc_totals_dict = bill_service.get_invoice_totals_by_hc_claim()
-    hc_claims_list, approved_claims_list = invoice_service.get_hc_claims_list(sc_totals_dict)
-    hc_claims_json = json.dumps(hc_claims_list, cls=DjangoJSONEncoder)
-    approved_claims_json = json.dumps(approved_claims_list, cls=DjangoJSONEncoder)
-    hc_variations_list = invoice_service.get_hc_variations_list()
-    hc_variations_json = json.dumps(hc_variations_list, cls=DjangoJSONEncoder)
-    hc_variation_allocations_list = invoice_service.get_hc_variation_allocations_list()
-    hc_variation_allocations_json = json.dumps(hc_variation_allocations_list, cls=DjangoJSONEncoder)
-    current_hc_claim = invoice_service.get_current_hc_claim()
-    current_hc_claim_display_id = current_hc_claim.display_id if current_hc_claim else None
-    current_hc_claim_date = current_hc_claim.date if current_hc_claim else None
-    hc_claim_wip_adjustments = invoice_service.get_hc_claim_wip_adjustments(current_hc_claim)
-    if current_hc_claim:
-        for c in costings:
-            c['hc_prev_invoiced'] = 0
-            c['hc_this_claim_invoices'] = 0
-            if c['category_order_in_list'] == -1 and current_hc_claim:
-                hc_alloc = HC_claim_allocations.objects.filter(
-                    hc_claim_pk=current_hc_claim,
-                    item=c['costing_pk']
-                ).first()
-                if hc_alloc:
-                    c['hc_this_claim_invoices'] = hc_alloc.sc_invoiced
-            else:
-                hc_this, hc_prev = bill_service.calculate_hc_claim_invoices(
-                    c['costing_pk'], 
-                    current_hc_claim
-                )
-                c['hc_this_claim_invoices'] = hc_this
-                c['hc_prev_invoiced'] = hc_prev
-    else:
-        for c in costings:
-            c['hc_prev_invoiced'] = 0
-            c['hc_this_claim_invoices'] = 0
-    for c in costings:
-        c['hc_prev_fixedonsite'] = 0
-    if current_hc_claim:
-        for c in costings:
-            prev_alloc = (
-                HC_claim_allocations.objects
-                .filter(item=c['costing_pk'], hc_claim_pk__lt=current_hc_claim.hc_claim_pk)
-                .order_by('-hc_claim_pk')
-                .first()
-            )
-            c['hc_prev_fixedonsite'] = prev_alloc.fixed_on_site if prev_alloc else 0
-    else:
-        for c in costings:
-            c['hc_prev_fixedonsite'] = 0
-    for c in costings:
-        c['hc_prev_claimed'] = 0
-        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
-        for al in allocs:
-            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
-            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
-                c['hc_prev_claimed'] += al.hc_claimed
-    for c in costings:
-        c['qs_claimed'] = 0
-        allocs = HC_claim_allocations.objects.filter(item=c['costing_pk'])
-        for al in allocs:
-            hcc = HC_claims.objects.get(hc_claim_pk=al.hc_claim_pk.pk)
-            if current_hc_claim and hcc.hc_claim_pk < current_hc_claim.pk:
-                c['qs_claimed'] += al.qs_claimed
-    for c in costings:
-        c['qs_this_claim'] = min(c['fixed_on_site'],c['contract_budget']-(c['committed']+c['uncommitted']-(c['hc_prev_invoiced']+c['hc_this_claim_invoices']))-c['qs_claimed'])
-    spv_data = SPVData.objects.first()
-    progress_claim_quote_allocations = quote_service.get_progress_claim_quote_allocations()
-    progress_claim_invoice_allocations = bill_service.get_progress_claim_invoice_allocations()
-    contract_budget_totals = costing_service.get_contract_budget_totals(division)
-    claim_category_totals = (HC_claim_allocations.objects.filter(category__division=division)
-        .values('hc_claim_pk', 'hc_claim_pk__display_id', 'category__invoice_category')
-        .annotate(
-            total_hc_claimed=Sum('hc_claimed'),
-            total_qs_claimed=Sum('qs_claimed'),
-            total_contract_budget=Sum('contract_budget'),
-            max_order=Max('category__order_in_list'),
-            latest_category=Max('category__category')
-        ).order_by('hc_claim_pk', 'max_order'))
-    claim_category_totals_dict = {}
-    claim_category_totals_dict[0] = {
-        "display_id": "Contract Budget",
-        "categories": [{
-            "categories_pk": None,
-            "category": i['category__invoice_category'],
-            "total_hc_claimed": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0,
-            "total_qs_claimed": 0.0
-        } for i in contract_budget_totals]
-    }
-    for i in claim_category_totals:
-        pk = i['hc_claim_pk']
-        if pk not in claim_category_totals_dict:
-            claim_category_totals_dict[pk] = {
-                "display_id": i['hc_claim_pk__display_id'],
-                "categories": []
-            }
-        claim_category_totals_dict[pk]["categories"].append({
-            "categories_pk": None,
-            "category": i['category__invoice_category'],
-            "total_hc_claimed": float(i['total_hc_claimed']) if i['total_hc_claimed'] else 0.0,
-            "total_qs_claimed": float(i['total_qs_claimed']) if i['total_qs_claimed'] else 0.0,
-            "total_contract_budget": float(i['total_contract_budget']) if i['total_contract_budget'] else 0.0
-        })
-    claim_category_totals_list = [{'hc_claim_pk': k, **v} for k, v in claim_category_totals_dict.items()]
-    claim_category_totals_json = json.dumps(claim_category_totals_list)
-    base_table_dropdowns = {}
-    costing_pks = Costing.objects.filter(category__division=division).values_list('costing_pk', flat=True)
-    for costing_pk in costing_pks:
-        base_table_dropdowns[costing_pk] = {
-            "committed": {},
-            "invoiced_direct": {},
-            "invoiced_all": {},
-            "uncommitted": 0.0
-        }
-        costing = Costing.objects.get(costing_pk=costing_pk)
-        is_margin = costing.category.order_in_list == -1
-        committed_items, total_committed = quote_service.get_committed_items_for_costing(costing_pk)
-        if committed_items:
-            base_table_dropdowns[costing_pk]["committed"] = committed_items
-        base_table_dropdowns[costing_pk]["uncommitted"] = float(costing.contract_budget) - total_committed
-        invoice_directs = Invoice_allocations.objects.filter(
-            item_id=costing_pk,
-            invoice_pk__invoice_division=division
-        ).filter(
-            Q(allocation_type=1) | 
-            Q(allocation_type=0, invoice_pk__invoice_type=1)
-        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-        base_table_dropdowns[costing_pk]["invoiced_direct"] = [{
-            "supplier": invoice.invoice_pk.contact_pk.contact_name,
-            "supplier_original": invoice.invoice_pk.contact_pk.contact_name,
-            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-            "amount": float(invoice.amount)
-        } for invoice in invoice_directs]
-        invoice_alls = Invoice_allocations.objects.filter(
-            item_id=costing_pk,
-            invoice_pk__invoice_division=division
-        ).select_related('invoice_pk__contact_pk').order_by('invoice_pk__invoice_date')
-        base_table_dropdowns[costing_pk]["invoiced_all"] = [{
-            "supplier": invoice.invoice_pk.contact_pk.contact_name,
-            "supplier_original": invoice.invoice_pk.contact_pk.contact_name,
-            "date": invoice.invoice_pk.invoice_date.strftime('%d/%m/%Y'),
-            "invoice_num": invoice.invoice_pk.supplier_invoice_number,
-            "amount": float(invoice.amount)
-        } for invoice in invoice_alls]
-        hc_claims_data = HC_claims.objects.filter(
-            status__gt=0,
-            hc_claim_allocations__item=costing_pk
-        ).annotate(
-            total_sc_invoiced=Sum('hc_claim_allocations__sc_invoiced', 
-                                filter=Q(hc_claim_allocations__item=costing_pk))
-        ).values('display_id', 'date', 'total_sc_invoiced')
-        if hc_claims_data.exists():
-            hc_claims_items = [{
-                "supplier": f"HC Claim {claim['display_id']}",
-                "supplier_original": f"HC Claim {claim['display_id']}",
-                "date": claim['date'].strftime('%d/%m/%Y'),
-                "invoice_num": str(claim['display_id']),
-                "amount": float(claim['total_sc_invoiced'])
-            } for claim in hc_claims_data]
-            base_table_dropdowns[costing_pk]["invoiced_all"].extend(hc_claims_items)
-    for pk in costing_pks:
-        costing = Costing.objects.get(costing_pk=pk)
-    context = {
-        "division": division,
-        "costings": costings,
-        "contacts_in_quotes": contacts_in_quotes_list,
-        "contacts_not_in_quotes": contacts_not_in_quotes_list,
-        "contacts": contacts_list,
-        "contacts_unfiltered": contacts_unfiltered_list,
-        "committed_values": committed_values,
-        "items": items,
-        "hc_claim_wip_adjustments": hc_claim_wip_adjustments,
-        "committed_quotes": committed_quotes_json,
-        "quote_allocations": quote_allocations_json,
-        "current_page": "build" if division == 2 else "quotes",
-        "project_name": settings.PROJECT_NAME,
-        "is_homepage": division == 1,
-        "totals": {
-            "total_contract_budget": total_contract_budget,
-            "total_forecast_budget": total_forecast_budget,
-            "total_uncommitted": total_uncommitted,
-            "total_committed": total_committed,
-            "total_sc_invoiced": total_sc_invoiced,
-            "total_fixed_on_site": total_fixed_on_site,
-            "total_sc_paid": total_sc_paid,
-            "total_c2c": total_c2c
-        },
-        "po_globals": po_globals,
-        "po_orders": po_orders_list,
-        "invoices": invoices_list,
-        "invoices_unallocated": invoices_unallocated_list,
-        "invoices_allocated": invoices_allocated_list,
-        "hc_claims": hc_claims_json,
-        "approved_claims": approved_claims_json,
-        "hc_variations": hc_variations_json,
-        "hc_variation_allocations": hc_variation_allocations_json,
-        "current_hc_claim_display_id": current_hc_claim_display_id,
-        "current_hc_claim_date": current_hc_claim_date,
-        "spv_data": spv_data,
-        "progress_claim_quote_allocations_json": json.dumps(progress_claim_quote_allocations),
-        "progress_claim_invoice_allocations_json": json.dumps(progress_claim_invoice_allocations),
-        "claim_category_totals": claim_category_totals_json,
-        "base_table_dropdowns_json": json.dumps(base_table_dropdowns).replace('"', '\"')
-    }
-    return render(request,"core/homepage.html" if division == 1 else "core/build.html",context)
-def homepage_view(request):
-    return main(request, 1)
-def build_view(request):
-    return main(request, 2)
+
 @csrf_exempt
 def create_contacts(request):
     if request.method == 'POST':
@@ -530,41 +282,6 @@ def update_contacts(request):
         return JsonResponse({'message': 'Contacts updated successfully'})
     else:
         return JsonResponse({'error': 'Invalid request method'}, status=400)
-def xeroapi(request):
-  template = loader.get_template('homepage.html')
-  return HttpResponse(template.render())
-@limits(calls=60, period=60)
-@sleep_and_retry
-
-def make_api_request(url, headers):
-    response = requests.get(url, headers=headers)
-    return response
-
-@csrf_exempt
-def mark_sent_to_boutique(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        invoice_pk = data.get('invoice_pk')
-        try:
-            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
-            invoice.invoice_status = 4
-            invoice.save()
-            return JsonResponse({"status": "success", "message": f"Invoice {invoice_pk} marked as sent to boutique."}, status=200)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"status": "error", "message": "Invoice does not exist."}, status=400)
-    else:
-        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
-@csrf_exempt
-def test_contact_id(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        invoice_pk = data.get('invoice_pk')
-        try:
-            invoice = Invoices.objects.get(invoice_pk=invoice_pk)
-        except Invoices.DoesNotExist:
-            return JsonResponse({"error": "No invoice found with the provided invoice_pk."}, status=400)
-        contact = invoice.contact_pk
-        return JsonResponse({'contact_id': contact.xero_contact_id})
 @csrf_exempt
 def upload_margin_category_and_lines(request):
     if request.method == 'POST':
@@ -633,6 +350,7 @@ def invoices_view(request):
     if template_type == 'approvals':
         # Approvals - invoices approved and ready to send to Xero (status 2 or 103)
         context = {
+            'template_type': 'approvals',
             'main_table_title': 'Approved Invoices',
             'main_table_columns': [
                 {'header': 'Project', 'width': '15%'},
@@ -653,11 +371,12 @@ def invoices_view(request):
             ],
             'readonly': True,
         }
-        return render(request, 'core/invoices_approvals.html', context)
+        return render(request, 'core/invoices.html', context)
     
     if template_type == 'allocated':
         # Allocated invoices - read-only display with Unallocate/Approve buttons
         context = {
+            'template_type': 'allocated',
             'main_table_title': 'Invoices',
             'main_table_columns': [
                 {'header': 'Supplier', 'width': '15%'},
@@ -677,10 +396,11 @@ def invoices_view(request):
             ],
             'readonly': True,
         }
-        return render(request, 'core/invoices_allocated.html', context)
+        return render(request, 'core/invoices.html', context)
     
     # Unallocated invoices - editable with Allocate/Delete buttons
     context = {
+        'template_type': 'unallocated',
         'main_table_title': 'Invoices',
         'main_table_columns': [
             {'header': 'Supplier', 'width': '25%'},
@@ -732,10 +452,10 @@ def quotes_view(request):
     context = {
         'main_table_title': 'Quotes',
         'main_table_columns': [
-            {'header': 'Supplier', 'width': '30%'},
-            {'header': '$ Net', 'width': '20%'},
-            {'header': 'Quote #', 'width': '25%'},
-            {'header': 'Save', 'width': '15%'},
+            {'header': 'Supplier', 'width': '50%'},
+            {'header': '$ Net', 'width': '15%'},
+            {'header': 'Quote #', 'width': '15%'},
+            {'header': 'Save', 'width': '10%'},
             {'header': 'Del', 'width': '10%'},
         ],
         'allocations_columns': [
@@ -746,40 +466,6 @@ def quotes_view(request):
         ],
     }
     return render(request, 'core/quotes.html', context)
-
-
-def quotes_standalone_test(request, project_pk):
-    """
-    TEST PAGE: Standalone quotes page using AllocationsManager.
-    Access at: /quotes/test/<project_pk>/
-    """
-    from core.models import Projects, Costing
-    import json
-    
-    project = Projects.objects.get(project_pk=project_pk)
-    costings = list(Costing.objects.filter(project=project).values(
-        'costing_pk', 'item', 'category__category_name'
-    ))
-    
-    context = {
-        'main_table_title': 'Quotes',
-        'main_table_columns': [
-            {'header': 'Supplier', 'width': '30%'},
-            {'header': '$ Net', 'width': '20%'},
-            {'header': 'Quote #', 'width': '25%'},
-            {'header': 'Save', 'width': '15%'},
-            {'header': 'Del', 'width': '10%'},
-        ],
-        'allocations_columns': [
-            {'header': 'Item', 'width': '40%'},
-            {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
-            {'header': 'Notes', 'width': '35%'},
-            {'header': '', 'width': '5%', 'align': 'center'},
-        ],
-        'project_pk': project_pk,
-        'costings': json.dumps(costings),
-    }
-    return render(request, 'core/quotes_standalone.html', context)
 
 
 def get_project_invoices(request, project_pk):
@@ -865,6 +551,60 @@ def get_project_invoices(request, project_pk):
         return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
     except Exception as e:
         logger.error(f'Error in get_project_invoices: {str(e)}')
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def get_allocated_invoices(request, project_pk):
+    """
+    Get allocated invoices (status != 0) for a project.
+    """
+    try:
+        # Get invoices with status != 0 (allocated)
+        # Include status=1 (allocated) and status=102 (PO claim invoices)
+        invoices = Invoices.objects.filter(
+            project_id=project_pk,
+            invoice_status__in=[1, 102]
+        ).select_related('contact_pk', 'email_attachment').order_by('-invoice_pk')
+        
+        # Build response data
+        invoices_data = []
+        for inv in invoices:
+            pdf_url = None
+            if inv.pdf:
+                try:
+                    pdf_url = inv.pdf.url
+                except Exception as e:
+                    logger.error(f'Error getting PDF URL for invoice {inv.invoice_pk}: {str(e)}')
+            
+            attachment_url = None
+            if inv.email_attachment:
+                try:
+                    attachment_url = inv.email_attachment.get_download_url()
+                except Exception as e:
+                    logger.error(f'Error getting attachment URL for invoice {inv.invoice_pk}: {str(e)}')
+            
+            invoices_data.append({
+                'invoice_pk': inv.invoice_pk,
+                'supplier_pk': inv.contact_pk.contact_pk if inv.contact_pk else None,
+                'supplier_name': inv.contact_pk.name if inv.contact_pk else None,
+                'invoice_number': inv.supplier_invoice_number or '',
+                'total_net': float(inv.total_net) if inv.total_net else None,
+                'total_gst': float(inv.total_gst) if inv.total_gst else None,
+                'pdf_url': pdf_url,
+                'attachment_url': attachment_url,
+                'invoice_status': inv.invoice_status,
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'invoices': invoices_data,
+            'project_pk': project_pk,
+        })
+        
+    except Projects.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+    except Exception as e:
+        logger.error(f'Error in get_allocated_invoices: {str(e)}')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
