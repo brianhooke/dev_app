@@ -8,7 +8,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dev_app.settings.local")
 # Initialize Django
 django.setup()
 
-from core.models import Quotes, Quote_allocations, Invoices, Invoice_allocations
+from core.models import Quotes, Quote_allocations, Bills, Bill_allocations
 
 
 def build_data_structures():
@@ -52,15 +52,15 @@ def build_data_structures():
         
         progress_claim_quote_allocations.append(contact_entry)
     
-    # 2) progress_claim_invoice_allocations
-    #    For each unique contact_pk in Invoices (where invoice_status != 0),
-    #    collect invoice allocations. Sort the invoices by invoice_date ascending.
-    progress_claim_invoice_allocations = []
+    # 2) progress_claim_bill_allocations
+    #    For each unique contact_pk in Invoices (where bill_status != 0),
+    #    collect invoice allocations. Sort the invoices by bill_date ascending.
+    progress_claim_bill_allocations = []
     
-    # Distinct contact_pks from Invoices where invoice_status != 0
+    # Distinct contact_pks from Invoices where bill_status != 0
     distinct_contacts_invoices = (
-        Invoices.objects
-        .exclude(invoice_status=0)
+        Bills.objects
+        .exclude(bill_status=0)
         .values_list("contact_pk", flat=True)
         .distinct()
     )
@@ -68,10 +68,10 @@ def build_data_structures():
     for contact_id in distinct_contacts_invoices:
         # Gather all relevant invoices for this contact
         invoices_for_contact = (
-            Invoices.objects
+            Bills.objects
             .filter(contact_pk=contact_id)
-            .exclude(invoice_status=0)
-            .order_by("invoice_date")
+            .exclude(bill_status=0)
+            .order_by("bill_date")
         )
         
         contact_entry = {
@@ -81,12 +81,12 @@ def build_data_structures():
         
         for inv in invoices_for_contact:
             # Get invoice allocations
-            i_allocs = Invoice_allocations.objects.filter(invoice_pk=inv)
+            i_allocs = Bill_allocations.objects.filter(bill_pk=inv)
             
             # Build item list, determining the invoice_allocation_type
             allocation_list = []
             for ia in i_allocs:
-                if inv.invoice_type == 2 and ia.allocation_type == 0:
+                if inv.bill_type == 2 and ia.allocation_type == 0:
                     allocation_type_str = "progress_claim"
                 else:
                     allocation_type_str = "direct_cost"
@@ -98,14 +98,14 @@ def build_data_structures():
                 })
             
             invoice_dict = {
-                "invoice_number": inv.invoice_pk,
+                "bill_number": inv.bill_pk,
                 "allocations": allocation_list
             }
             contact_entry["invoices"].append(invoice_dict)
         
-        progress_claim_invoice_allocations.append(contact_entry)
+        progress_claim_bill_allocations.append(contact_entry)
     
-    return progress_claim_quote_allocations, progress_claim_invoice_allocations
+    return progress_claim_quote_allocations, progress_claim_bill_allocations
 
 
 def main():

@@ -65,11 +65,11 @@ class Command(BaseCommand):
         errors = 0
         
         # Import models that have file fields
-        from core.models import Invoices, Quotes, Po_orders
+        from core.models import Bills, Quotes, Po_orders
         
         # Migrate Invoice PDFs
         self.stdout.write('\n--- Migrating Invoice PDFs ---')
-        for invoice in Invoices.objects.exclude(Q(attachment_url__isnull=True) | Q(attachment_url='')):
+        for invoice in Bills.objects.exclude(Q(attachment_url__isnull=True) | Q(attachment_url='')):
             url = invoice.attachment_url
             if url and url.startswith('/media/') or (url and 'pdfs/' in url and not url.startswith('http')):
                 result = self.migrate_file(s3_client, bucket_name, media_location, url, dry_run)

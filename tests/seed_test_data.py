@@ -13,8 +13,8 @@ django.setup()
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from core.models import (
-    XeroInstances, Contacts, Projects, Invoices, 
-    Invoice_allocations, XeroAccounts, ReceivedEmail, EmailAttachment
+    XeroInstances, Contacts, Projects, Bills, 
+    Bill_allocations, XeroAccounts, ReceivedEmail, EmailAttachment
 )
 from decimal import Decimal
 
@@ -23,7 +23,7 @@ User = get_user_model()
 print("🌱 Seeding test database...")
 
 # Check if data already exists
-if Invoices.objects.exists() or User.objects.filter(username='testuser').exists():
+if Bills.objects.exists() or User.objects.filter(username='testuser').exists():
     print("  ⚠️  Data already exists! Use 'npm run test:reset' to wipe and recreate.")
     print("  Exiting without changes...")
     exit(0)
@@ -117,14 +117,14 @@ attachment1 = EmailAttachment.objects.create(
     file_size=1024
 )
 
-invoice1 = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
+invoice1 = Bills.objects.create(
+    bill_status=-2,  # Inbox
     received_email=email1,
     email_attachment=attachment1,
     xero_instance=None,
     contact_pk=None,
     project=None,
-    supplier_invoice_number='',
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
@@ -146,23 +146,23 @@ attachment2 = EmailAttachment.objects.create(
     s3_key='test/invoice2.pdf'
 )
 
-invoice2 = Invoices.objects.create(
-    invoice_pk=2,
-    invoice_status=0,  # Direct
+invoice2 = Bills.objects.create(
+    bill_pk=2,
+    bill_status=0,  # Direct
     received_email=email2,
     email_attachment=attachment2,
     xero_instance=xero_instance,
     contact_pk=supplier1,
     project=None,
-    supplier_invoice_number='INV-002',
+    supplier_bill_number='INV-002',
     total_net=Decimal('100.00'),
     total_gst=Decimal('10.00')
 )
 
 # Create allocation for invoice2
-allocation1 = Invoice_allocations.objects.create(
-    invoice_allocations_pk=1,
-    invoice_pk=invoice2,
+allocation1 = Bill_allocations.objects.create(
+    bill_allocations_pk=1,
+    bill_pk=invoice2,
     xero_account=account1,
     amount=Decimal('100.00'),
     gst_amount=Decimal('10.00'),
@@ -186,15 +186,15 @@ attachment3 = EmailAttachment.objects.create(
     s3_key='test/invoice3.pdf'
 )
 
-invoice3 = Invoices.objects.create(
-    invoice_pk=3,
-    invoice_status=0,  # Direct
+invoice3 = Bills.objects.create(
+    bill_pk=3,
+    bill_status=0,  # Direct
     received_email=email3,
     email_attachment=attachment3,
     xero_instance=xero_instance,
     contact_pk=supplier2,
     project=None,
-    supplier_invoice_number='INV-003',
+    supplier_bill_number='INV-003',
     total_net=Decimal('200.00'),
     total_gst=Decimal('20.00')
 )
@@ -216,15 +216,15 @@ attachment4 = EmailAttachment.objects.create(
     s3_key='test/invoice4.pdf'
 )
 
-invoice4 = Invoices.objects.create(
-    invoice_pk=4,
-    invoice_status=-2,  # Inbox
+invoice4 = Bills.objects.create(
+    bill_pk=4,
+    bill_status=-2,  # Inbox
     received_email=email4,
     email_attachment=attachment4,
     xero_instance=None,
     contact_pk=None,
     project=None,
-    supplier_invoice_number='',
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
@@ -235,7 +235,7 @@ print(f"   - Xero Instances: {XeroInstances.objects.count()}")
 print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Projects: {Projects.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
-print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")
-print(f"   - Invoices (Direct): {Invoices.objects.filter(invoice_status=0).count()}")
-print(f"   - Allocations: {Invoice_allocations.objects.count()}")
+print(f"   - Invoices (Inbox): {Bills.objects.filter(bill_status=-2).count()}")
+print(f"   - Invoices (Direct): {Bills.objects.filter(bill_status=0).count()}")
+print(f"   - Allocations: {Bill_allocations.objects.count()}")
 print("\n🎭 Ready for Playwright tests!")

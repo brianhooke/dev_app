@@ -11,7 +11,7 @@ django.setup()
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.files.base import ContentFile
-from core.models import XeroInstances, Contacts, XeroAccounts, Invoices, Projects, Categories, Costing
+from core.models import XeroInstances, Contacts, XeroAccounts, Bills, Projects, Categories, Costing
 from decimal import Decimal
 from reportlab.pdfgen import canvas
 from io import BytesIO
@@ -21,7 +21,7 @@ User = get_user_model()
 print("🌱 Seeding test database (simplified)...")
 
 # Check if data exists
-if Invoices.objects.exists():
+if Bills.objects.exists():
     print("  ⚠️  Data exists! Use 'npm run test:reset' to wipe.")
     exit(0)
 
@@ -156,69 +156,69 @@ project4 = Projects.objects.create(
 )
 
 # Invoices - 6 in Inbox (enough for all tests that click Send), 2 in Direct (with PDFs)
-invoice1 = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice1 = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice1.pdf.save('test_invoice_1.pdf', create_fake_pdf('Test Invoice 1 - Inbox'))
 
-invoice2 = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice2 = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice2.pdf.save('test_invoice_2.pdf', create_fake_pdf('Test Invoice 2 - Inbox'))
 
-invoice3_inbox = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice3_inbox = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice3_inbox.pdf.save('test_invoice_3_inbox.pdf', create_fake_pdf('Test Invoice 3 - Inbox'))
 
-invoice4_inbox = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice4_inbox = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice4_inbox.pdf.save('test_invoice_4_inbox.pdf', create_fake_pdf('Test Invoice 4 - Inbox'))
 
-invoice5_inbox = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice5_inbox = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice5_inbox.pdf.save('test_invoice_5_inbox.pdf', create_fake_pdf('Test Invoice 5 - Inbox'))
 
-invoice6_inbox = Invoices.objects.create(
-    invoice_status=-2,  # Inbox
-    supplier_invoice_number='',
+invoice6_inbox = Bills.objects.create(
+    bill_status=-2,  # Inbox
+    supplier_bill_number='',
     total_net=None,
     total_gst=None
 )
 invoice6_inbox.pdf.save('test_invoice_6_inbox.pdf', create_fake_pdf('Test Invoice 6 - Inbox'))
 
-invoice3 = Invoices.objects.create(
-    invoice_status=0,  # Direct
+invoice3 = Bills.objects.create(
+    bill_status=0,  # Direct
     xero_instance=xero,
     contact_pk=supplier1,
-    supplier_invoice_number='INV-001',
+    supplier_bill_number='INV-001',
     total_net=Decimal('100.00'),
     total_gst=Decimal('10.00')
 )
 invoice3.pdf.save('test_invoice_3.pdf', create_fake_pdf('Test Invoice 3 - Direct'))
 
-invoice4 = Invoices.objects.create(
-    invoice_status=0,  # Direct
+invoice4 = Bills.objects.create(
+    bill_status=0,  # Direct
     xero_instance=xero,
     contact_pk=supplier2,
-    supplier_invoice_number='INV-002',
+    supplier_bill_number='INV-002',
     total_net=Decimal('200.00'),
     total_gst=Decimal('20.00')
 )
@@ -328,8 +328,8 @@ print(f"   - Projects (Active): {Projects.objects.filter(archived=0).count()}")
 print(f"   - Projects (Archived): {Projects.objects.filter(archived=1).count()}")
 print(f"   - Suppliers: {Contacts.objects.count()}")
 print(f"   - Xero Accounts: {XeroAccounts.objects.count()}")
-print(f"   - Invoices (Inbox): {Invoices.objects.filter(invoice_status=-2).count()}")
-print(f"   - Invoices (Direct): {Invoices.objects.filter(invoice_status=0).count()}")
+print(f"   - Invoices (Inbox): {Bills.objects.filter(bill_status=-2).count()}")
+print(f"   - Invoices (Direct): {Bills.objects.filter(bill_status=0).count()}")
 print(f"   - Categories: {Categories.objects.count()}")
 print(f"   - Items (Costings): {Costing.objects.count()}")
 print("\n🎭 Ready for Playwright tests!")

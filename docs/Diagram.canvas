@@ -1,0 +1,7 @@
+{
+	"nodes":[
+		{"id":"41385b7f5d804260","type":"text","text":"**Allocations Layout:**\n- allocations_layout.html\n- allocations_layout.js","x":-680,"y":-330,"width":240,"height":120},
+		{"id":"f32828cc6b99cb5d","type":"text","text":"[[ALLOCATIONS_LAYOUT]]\n","x":-260,"y":-360,"width":250,"height":60}
+	],
+	"edges":[]
+}

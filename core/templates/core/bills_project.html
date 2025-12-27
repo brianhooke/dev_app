@@ -1,0 +1,930 @@
+<!-- Project Bills Section Template -->
+<!-- Uses reusable allocations section with AllocationsManager for Projects view -->
+<!-- Self-contained: all logic in this file (Gold Standard pattern) -->
+{% load static %}
+
+{% include "core/components/allocations_layout.html" with section_id="bill" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Bill Allocations" viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
+
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
+
+<!-- Pass context to JavaScript -->
+<script>
+    (function() {
+        var pk = '{{ project_pk }}';
+        var xeroPk = '{{ xero_instance_pk }}';
+        // Handle None, null, empty string
+        window.billProjectPk = (pk && pk !== 'None' && pk !== 'null' && pk !== '') ? pk : null;
+        window.billXeroInstancePk = (xeroPk && xeroPk !== 'None' && xeroPk !== 'null' && xeroPk !== '') ? xeroPk : null;
+        window.billTemplateType = '{{ template_type }}';
+        window.billIsConstruction = {{ is_construction|yesno:"true,false" }};
+        // Column widths from Python context (single source of truth)
+        window.billAllocationWidths = [{% for col in allocations_columns %}'{{ col.width }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    })();
+</script>
+
+<!-- Self-contained Bills Section JS -->
+<script>
+$(document).ready(function() {
+    if ($('#billMainTableBody').length === 0) return;
+    
+    // Get project_pk from view context, or fall back to global construction project
+    var projectPk = window.billProjectPk || 
+                    (window.currentConstructionProject ? window.currentConstructionProject.pk : null);
+    var templateType = window.billTemplateType || 'unallocated';
+    
+    if (!projectPk) {
+        console.error('Bills section: No project_pk provided');
+        return;
+    }
+    
+    // Store for use in functions
+    window.billProjectPk = projectPk;
+    
+    console.log('Initializing bills section for project:', projectPk, 'template:', templateType);
+    
+    // Store for callbacks
+    var currentSelectedBill = null;
+    var billCostingItems = [];
+    var billSectionSuppliers = [];
+    
+    
+    // Update bill allocations table styling (uses shared utility for column widths)
+    function updateBillAllocationsTableStyle() {
+        var widths = window.billAllocationWidths || [];
+        Utils.applyColumnStyles('bill', widths, { addEditableClass: true });
+        
+        // Update footer label based on mode
+        var isAllocated = templateType === 'allocated';
+        var footerLabel = isAllocated ? 'Total Allocated:' : 'Still to Allocate:';
+        $('#billAllocationFooterLabel').text(footerLabel);
+    }
+    
+    // Initialize AllocationsManager for bills
+    AllocationsManager.init({
+        sectionId: 'bill',
+        features: {
+            saveRowBtn: false,
+            deleteRowBtn: false,
+            constructionMode: window.billIsConstruction || false,
+            gstField: true,
+            confirmDelete: true,
+            reloadAfterDelete: false,
+            showSaveButton: false,        // Bills don't show Save in allocations footer
+            alwaysShowAddButton: true     // Bills always show Add Row button
+        },
+        data: {
+            pkField: 'bill_pk'
+        },
+        mainTable: {
+            emptyMessage: 'No unallocated bills found for this project.',
+            showFooter: true,
+            footerTotals: [
+                { colIndex: 3, valueKey: 'total_net' },
+                { colIndex: 4, valueKey: 'total_gst' }
+            ],
+            // Custom row renderer for unallocated bills (supplier dropdown, inputs, buttons)
+            renderRow: function(bill, index, cfg) {
+                var suppliers = cfg.data.suppliers || billSectionSuppliers || [];
+                var pdfUrl = bill.pdf_url || bill.attachment_url || '';
+                var row = $('<tr>').attr('data-pk', bill.bill_pk).attr('data-bill-pk', bill.bill_pk).attr('data-pdf-url', pdfUrl);
+                
+                // 1. Supplier dropdown
+                var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
+                supplierSelect.append($('<option>').val('').text('Select Supplier...'));
+                suppliers.forEach(function(supplier) {
+                    var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
+                    if (bill.supplier_pk === supplier.contact_pk) option.prop('selected', true);
+                    supplierSelect.append(option);
+                });
+                row.append($('<td>').append(supplierSelect));
+                
+                // 2. Bill # input
+                var billNumberInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm bill-number-input')
+                    .val(bill.bill_number || '')
+                    .attr('placeholder', 'Bill #');
+                row.append($('<td>').append(billNumberInput));
+                
+                // 3. $ Net input
+                var netInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm net-input')
+                    .val(bill.total_net !== null ? bill.total_net : '')
+                    .attr('placeholder', '0.00')
+                    .on('input', function() {
+                        var value = $(this).val();
+                        if (parseFloat(value) < 0) { $(this).val(0); return; }
+                        if (value.includes('.')) {
+                            var parts = value.split('.');
+                            if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
+                        }
+                        var gstInputEl = $(this).closest('tr').find('.gst-input');
+                        if (!gstInputEl.data('manually-edited')) {
+                            var netValue = parseFloat($(this).val());
+                            if (!isNaN(netValue)) gstInputEl.val((netValue * 0.1).toFixed(2));
+                        }
+                    });
+                row.append($('<td>').append(netInput));
+                
+                // 4. $ GST input
+                var gstInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm gst-input')
+                    .val(bill.total_gst !== null ? bill.total_gst : '')
+                    .attr('placeholder', '0.00')
+                    .on('focus', function() { $(this).data('manually-edited', true); })
+                    .on('input', function() {
+                        var value = $(this).val();
+                        if (parseFloat(value) < 0) { $(this).val(0); return; }
+                        if (value.includes('.')) {
+                            var parts = value.split('.');
+                            if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
+                        }
+                    });
+                row.append($('<td>').append(gstInput));
+                
+                // 5. Allocate button
+                var allocateBtn = $('<button>')
+                    .addClass('btn btn-sm btn-secondary allocate-bill-btn')
+                    .text('Allocate')
+                    .css('font-size', '10px')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .prop('disabled', true)
+                    .attr('title', 'Allocate bill (enabled when fully allocated)');
+                row.append($('<td>').css('text-align', 'center').append(allocateBtn));
+                
+                // 6. Delete button
+                var deleteBtn = $('<button>')
+                    .addClass('btn btn-sm btn-danger delete-bill-btn')
+                    .html('<i class="fas fa-trash"></i>')
+                    .attr('data-bill-pk', bill.bill_pk);
+                row.append($('<td>').append(deleteBtn));
+                
+                return row;
+            },
+            onRowSelect: function(row, pk, cfg) {
+                // Set currentSelectedBill for bill-specific logic
+                currentSelectedBill = {
+                    bill_pk: pk,
+                    total_net: parseFloat(row.find('.net-input').val()) || 0,
+                    total_gst: parseFloat(row.find('.gst-input').val()) || 0
+                };
+                // Set currentItem for shared updateStillToAllocate
+                cfg.data.currentItem = currentSelectedBill;
+                // Enable edit mode so footer shows "still to allocate"
+                AllocationsManager.setEditMode('bill', true);
+                // Apply column widths
+                updateBillAllocationsTableStyle();
+            },
+            // Called after allocations are loaded
+            onAllocationsLoaded: function(sectionId, allocations) {
+                // If no allocations, create a blank row
+                if (!allocations || allocations.length === 0) {
+                    addNewAllocationRow();
+                }
+                AllocationsManager.updateStillToAllocate('bill');
+            }
+        },
+        allocations: {
+            emptyMessage: 'No allocations for this bill',
+            editable: true,
+            renderEditableRow: function(allocation, cfg, onChange) {
+                return AllocationsManager.createEditableAllocationRow({
+                    sectionId: 'bill',
+                    allocation: allocation,
+                    isConstruction: Utils.isConstructionProject('bill'),
+                    costingItems: billCostingItems,
+                    onUpdate: function() {
+                        AllocationsManager.updateStillToAllocate('bill');
+                    },
+                    api: {
+                        save: '/core/update_unallocated_invoice_allocation/{pk}/',
+                        delete: '/core/delete_unallocated_invoice_allocation/{pk}/'
+                    }
+                });
+            },
+            onUpdate: function(sectionId, totals) {
+                // Update Allocate button state based on allocation totals
+                updateAllocateButtonState(totals);
+            }
+        },
+        api: {
+            loadAllocations: '/core/get_unallocated_bill_allocations/{pk}/',
+            createAllocation: '/core/create_unallocated_invoice_allocation/',
+            loadData: '/core/get_project_bills/{pk}/?status=0'
+        }
+    });
+    
+    // Load data based on template type
+    if (templateType === 'allocated') {
+        loadAllocatedBills();
+    } else {
+        // Use shared loadData for unallocated bills
+        AllocationsManager.loadData('bill', { projectPk: projectPk }, function(response) {
+            billCostingItems = response.costing_items || [];
+            billSectionSuppliers = response.suppliers || [];
+            console.log('Loaded bills:', (response.bills || []).length);
+            console.log('Loaded costing items:', billCostingItems.length);
+        });
+    }
+    
+    // Note: loadUnallocatedBills and populateUnallocatedBillsTable replaced by:
+    // - AllocationsManager.loadData() with loadData API
+    // - mainTable.renderRow callback for custom row rendering
+    // - Shared populateMainTable handles footer totals and auto-select
+    
+    // Note: selectBillRow and loadBillAllocations replaced by:
+    // - Shared AllocationsManager.selectRow() with onRowSelect callback
+    // - Shared AllocationsManager.loadAllocations() with onAllocationsLoaded callback
+    
+    // Update Allocate button state based on allocation totals (called by onUpdate callback)
+    function updateAllocateButtonState(totals) {
+        if (!currentSelectedBill) return;
+        
+        var isConstruction = Utils.isConstructionProject('bill');
+        var selectedRow = $('#billMainTableBody tr.selected-row');
+        if (!selectedRow.length) return;
+        
+        var allocateBtn = selectedRow.find('.allocate-bill-btn');
+        var isFullyAllocated = isConstruction 
+            ? Math.abs(totals.remainingNet) < 0.01 
+            : Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
+        
+        // Check all items with amounts have an item selected
+        var allItemsSelected = true;
+        $('#billAllocationsTableBody tr').each(function() {
+            var itemVal = $(this).find('.bill-allocation-item-select').val();
+            var netVal = parseFloat($(this).find('.bill-allocation-net-input').val()) || 0;
+            if (netVal > 0 && !itemVal) { allItemsSelected = false; return false; }
+        });
+        
+        var canAllocate = isFullyAllocated && allItemsSelected;
+        if (canAllocate) {
+            allocateBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+        } else {
+            allocateBtn.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+        }
+    }
+    
+    // Add new allocation row
+    // Note: Bills uses a custom function (not shared addAllocationRow) because allocations
+    // must be created in the database FIRST via AJAX. This gives the row a real allocation_pk
+    // which enables auto-save on change. Quotes uses the shared function which adds UI-only
+    // rows that may be batch-saved later.
+    function addNewAllocationRow() {
+        if (!currentSelectedBill) return;
+        
+        $.ajax({
+            url: '/core/create_unallocated_invoice_allocation/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                bill_pk: currentSelectedBill.bill_pk,
+                amount: 0,
+                gst_amount: 0,
+                qty: null,
+                unit: '',
+                rate: null
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    var row = AllocationsManager.createEditableAllocationRow({
+                        sectionId: 'bill',
+                        allocation: {
+                            allocation_pk: response.allocation_pk,
+                            item_pk: null,
+                            amount: 0,
+                            gst_amount: 0,
+                            qty: null,
+                            unit: '',
+                            rate: null,
+                            notes: ''
+                        },
+                        isConstruction: Utils.isConstructionProject('bill'),
+                        costingItems: billCostingItems,
+                        onUpdate: function() { AllocationsManager.updateStillToAllocate('bill'); },
+                        api: {
+                            save: '/core/update_unallocated_invoice_allocation/{pk}/',
+                            delete: '/core/delete_unallocated_invoice_allocation/{pk}/'
+                        }
+                    });
+                    $('#billAllocationsTableBody').append(row);
+                    AllocationsManager.updateStillToAllocate('bill');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error creating allocation:', error);
+            }
+        });
+    }
+    
+    // Allocate bill
+    function allocateBill(btn) {
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        
+        var originalText = btn.text();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        // Delete zero-value rows first
+        var zeroRowsToDelete = [];
+        $('#billAllocationsTableBody tr').each(function() {
+            var pk = $(this).attr('data-allocation-pk');
+            var netVal = parseFloat($(this).find('.bill-allocation-net-input').val()) || 0;
+            var gstVal = parseFloat($(this).find('.bill-allocation-gst-input').val()) || 0;
+            if (pk && Math.abs(netVal) < 0.01 && Math.abs(gstVal) < 0.01) zeroRowsToDelete.push(pk);
+        });
+        
+        var deletePromises = zeroRowsToDelete.map(function(pk) {
+            return $.ajax({ url: '/core/delete_unallocated_invoice_allocation/' + pk + '/', type: 'POST' });
+        });
+        
+        $.when.apply($, deletePromises).always(function() {
+            $.ajax({
+                url: '/core/allocate_bill/' + billPk + '/',
+                type: 'POST',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        row.fadeOut(300, function() {
+                            $(this).remove();
+                            $('#billAllocationsTableBody').empty();
+                            currentSelectedBill = null;
+                            recalculateFooterTotals();
+                            
+                            var firstRow = $('#billMainTableBody tr').first();
+                            if (firstRow.length && firstRow.attr('data-pk')) {
+                                AllocationsManager.selectRow('bill', firstRow);
+                            } else {
+                                $('#billMainTableBody').html('<tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">No unallocated bills found for this project.</td></tr>');
+                                $('#billMainTableBody').removeClass('has-selection');
+                                $('#billPdfViewer').hide();
+                                $('#billViewerPlaceholder').show();
+                                $('#billMainTableFooter').hide();
+                            }
+                        });
+                    } else {
+                        btn.prop('disabled', false).text(originalText).addClass('btn-success');
+                        alert('Failed to allocate bill: ' + response.message);
+                    }
+                },
+                error: function() {
+                    btn.prop('disabled', false).text(originalText).addClass('btn-success');
+                    alert('Failed to allocate bill. Please try again.');
+                }
+            });
+        });
+    }
+    
+    // Recalculate footer totals (uses utils.js)
+    function recalculateFooterTotals() {
+        Utils.recalculateFooterTotals('bill', [
+            { colIndex: 3, inputSelector: '.net-input' },
+            { colIndex: 4, inputSelector: '.gst-input' }
+        ]);
+    }
+    
+    // ========================================
+    // ALLOCATED BILLS FUNCTIONS (Phase 2)
+    // ========================================
+    
+    
+    // Load allocated bills data
+    function loadAllocatedBills() {
+        console.log('Loading allocated bills for project:', projectPk);
+        
+        $.ajax({
+            url: '/core/get_project_bills/' + projectPk + '/?status=1',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Loaded allocated bills:', response.bills.length);
+                    populateAllocatedBillsTable(response.bills, response.suppliers);
+                } else {
+                    console.error('Error loading allocated bills:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load allocated bills:', error);
+                $('#billMainTableBody').html('<tr><td colspan="8" style="text-align: center; color: #dc3545;">Failed to load bills</td></tr>');
+            }
+        });
+    }
+    
+    // Populate allocated bills table
+    function populateAllocatedBillsTable(bills, suppliers) {
+        var tbody = $('#billMainTableBody');
+        tbody.empty();
+        tbody.removeClass('has-selection');
+        
+        if (bills.length === 0) {
+            tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
+            return;
+        }
+        
+        bills.forEach(function(bill) {
+            var pdfUrl = bill.pdf_url || bill.attachment_url || '';
+            var isPOClaim = bill.bill_status === 102;
+            var row = $('<tr>').attr('data-bill-pk', bill.bill_pk).attr('data-pdf-url', pdfUrl).attr('data-bill-status', bill.bill_status);
+            
+            // 1. Supplier (read-only)
+            row.append($('<td>').text(bill.supplier_name || 'Unknown'));
+            
+            // 2. Bill #
+            var billNumCell = $('<td>');
+            if (isPOClaim) {
+                var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
+                if (hasBillNumber) {
+                    billNumCell.addClass('allocated-bill-number-cell').text(bill.bill_number).attr('data-value', bill.bill_number);
+                } else {
+                    var billNumInput = $('<input>').attr('type', 'text').addClass('form-control form-control-sm allocated-bill-number-input').val('').attr('data-original-value', '')
+                        .on('input', function(e) { e.stopPropagation(); updateAllocatedSaveButtonState(row); })
+                        .on('click', function(e) { e.stopPropagation(); });
+                    billNumCell.append(billNumInput);
+                }
+            } else {
+                billNumCell.text(bill.bill_number || '-');
+            }
+            row.append(billNumCell);
+            
+            // 3. $ Net (read-only)
+            row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
+            
+            // 4. $ GST
+            var gstCell = $('<td>');
+            if (isPOClaim) {
+                var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
+                var gstRawValue = bill.total_gst ? parseFloat(bill.total_gst).toFixed(2) : '0.00';
+                if (hasBillNumber) {
+                    gstCell.addClass('allocated-gst-cell').text('$' + Utils.formatMoney(bill.total_gst)).attr('data-value', gstRawValue);
+                } else {
+                    var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').attr('min', '0')
+                        .addClass('form-control form-control-sm allocated-gst-input').css({'width': '70px'})
+                        .val(gstRawValue).attr('data-original-value', gstRawValue)
+                        .on('click', function(e) { e.stopPropagation(); });
+                    gstCell.append(gstInput);
+                }
+            } else {
+                gstCell.text('$' + Utils.formatMoney(bill.total_gst));
+            }
+            row.append(gstCell);
+            
+            // 5. Progress Claim column
+            var poCell = $('<td>').css('text-align', 'center');
+            if (isPOClaim) {
+                poCell.append($('<i>').addClass('fas fa-check').css({'color': '#28a745', 'margin-right': '4px'}));
+                var viewLink = $('<a>').attr('href', '#').addClass('po-view-link').css({'color': '#007bff', 'cursor': 'pointer', 'text-decoration': 'underline'})
+                    .text('view').attr('data-bill-pk', bill.bill_pk)
+                    .on('click', function(e) { e.preventDefault(); e.stopPropagation(); showPOTableForBill(bill.bill_pk, bill.bill_pk); });
+                poCell.append(viewLink);
+            }
+            row.append(poCell);
+            
+            // 6. Unallocate button
+            var unallocateBtn = $('<button>').addClass('btn btn-sm allocated-action-btn').text('Unallocate').attr('data-bill-pk', bill.bill_pk);
+            if (isPOClaim) {
+                unallocateBtn.addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
+            } else {
+                unallocateBtn.addClass('btn-warning').on('click', function(e) { e.stopPropagation(); unallocateBill($(this)); });
+            }
+            row.append($('<td>').css('text-align', 'center').append(unallocateBtn));
+            
+            // 7. Approve button
+            var approveBtn = $('<button>').addClass('btn btn-sm allocated-action-btn allocated-approve-btn').text('Approve').attr('data-bill-pk', bill.bill_pk)
+                .on('click', function(e) { e.stopPropagation(); if (!$(this).prop('disabled')) approveBill($(this)); });
+            if (isPOClaim) {
+                var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
+                if (hasBillNumber) {
+                    approveBtn.addClass('btn-success').prop('disabled', false);
+                } else {
+                    approveBtn.addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
+                }
+            } else {
+                approveBtn.addClass('btn-success').prop('disabled', false);
+            }
+            row.append($('<td>').css('text-align', 'center').append(approveBtn));
+            
+            // 8. Save/Edit button - only for PO claims
+            if (isPOClaim) {
+                var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
+                var saveEditBtn = $('<button>').addClass('btn btn-sm allocated-action-btn allocated-save-btn').attr('data-bill-pk', bill.bill_pk).attr('data-mode', hasBillNumber ? 'edit' : 'save');
+                if (hasBillNumber) {
+                    saveEditBtn.addClass('btn-info').text('Edit').prop('disabled', false).on('click', function(e) { e.stopPropagation(); enableEditMode(row); });
+                } else {
+                    saveEditBtn.addClass('btn-secondary').text('Save').prop('disabled', true).on('click', function(e) { e.stopPropagation(); saveAllocatedBill($(this)); });
+                }
+                row.append($('<td>').css('text-align', 'center').append(saveEditBtn));
+                if (!hasBillNumber) updateAllocatedSaveButtonState(row);
+            } else {
+                row.append($('<td>').css('text-align', 'center').text('-'));
+            }
+            
+            // Row click handler
+            row.on('click', function(e) {
+                if ($(e.target).closest('.allocated-action-btn, .po-view-link, input').length) return;
+                selectAllocatedBillRow($(this));
+            });
+            
+            tbody.append(row);
+        });
+        
+        // Calculate and show footer totals
+        var totalNet = 0, totalGst = 0;
+        bills.forEach(function(bill) { totalNet += bill.total_net || 0; totalGst += bill.total_gst || 0; });
+        $('#billFooterCol3').text('$' + Utils.formatMoney(totalNet));
+        $('#billFooterCol4').text('$' + Utils.formatMoney(totalGst));
+        $('#billMainTableFooter').show();
+        
+        // Auto-select first row
+        setTimeout(function() {
+            var firstRow = $('#billMainTableBody tr').first();
+            if (firstRow.length && firstRow.attr('data-bill-pk')) selectAllocatedBillRow(firstRow);
+        }, 100);
+    }
+    
+    // Update Save button state based on Bill # field
+    function updateAllocatedSaveButtonState(row) {
+        var billNumInput = row.find('.allocated-bill-number-input');
+        var saveBtn = row.find('.allocated-save-btn');
+        var hasBillNumber = billNumInput.length && billNumInput.val().trim() !== '';
+        if (hasBillNumber) {
+            saveBtn.removeClass('btn-secondary btn-info').addClass('btn-success').prop('disabled', false);
+        } else {
+            saveBtn.removeClass('btn-success btn-info').addClass('btn-secondary').prop('disabled', true);
+        }
+    }
+    
+    // Enable edit mode for a PO claim row
+    function enableEditMode(row) {
+        var billNumCell = row.find('.allocated-bill-number-cell');
+        var gstCell = row.find('.allocated-gst-cell');
+        var saveBtn = row.find('.allocated-save-btn');
+        var approveBtn = row.find('.allocated-approve-btn');
+        var currentBillNum = billNumCell.attr('data-value') || '';
+        var currentGst = gstCell.attr('data-value') || '0.00';
+        
+        var billNumInput = $('<input>').attr('type', 'text').addClass('form-control form-control-sm allocated-bill-number-input').val(currentBillNum).attr('data-original-value', currentBillNum)
+            .on('input', function(e) { e.stopPropagation(); updateAllocatedSaveButtonState(row); })
+            .on('click', function(e) { e.stopPropagation(); });
+        billNumCell.removeClass('allocated-bill-number-cell').empty().append(billNumInput);
+        
+        var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').attr('min', '0').addClass('form-control form-control-sm allocated-gst-input').css({'width': '70px'}).val(currentGst).attr('data-original-value', currentGst)
+            .on('click', function(e) { e.stopPropagation(); });
+        gstCell.removeClass('allocated-gst-cell').empty().append(gstInput);
+        
+        saveBtn.attr('data-mode', 'save').text('Save').removeClass('btn-info btn-success').addClass('btn-secondary').prop('disabled', true).off('click')
+            .on('click', function(e) { e.stopPropagation(); saveAllocatedBill($(this)); });
+        approveBtn.removeClass('btn-success').addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
+        updateAllocatedSaveButtonState(row);
+    }
+    
+    // Save allocated bill changes
+    function saveAllocatedBill(btn) {
+        var row = btn.closest('tr');
+        var billPk = row.attr('data-bill-pk');
+        var billNumber = row.find('.allocated-bill-number-input').val().trim();
+        var totalGst = parseFloat(row.find('.allocated-gst-input').val()) || 0;
+        
+        if (totalGst === 0 && !confirm('Are you sure GST is $0.00 for this Bill?')) return;
+        
+        btn.prop('disabled', true).text('Saving...');
+        
+        $.ajax({
+            url: '/core/update_allocated_bill/' + billPk + '/',
+            type: 'POST',
+            data: JSON.stringify({ bill_number: billNumber, total_gst: totalGst.toFixed(2) }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    btn.text('Saved!').addClass('btn-success');
+                    setTimeout(function() {
+                        var billNumCell = row.find('.allocated-bill-number-input').parent();
+                        var gstCell = row.find('.allocated-gst-input').parent();
+                        billNumCell.addClass('allocated-bill-number-cell').attr('data-value', billNumber).empty().text(billNumber);
+                        gstCell.addClass('allocated-gst-cell').attr('data-value', totalGst.toFixed(2)).empty().text('$' + Utils.formatMoney(totalGst));
+                        btn.attr('data-mode', 'edit').text('Edit').removeClass('btn-success btn-secondary btn-danger').addClass('btn-info').prop('disabled', false).off('click')
+                            .on('click', function(e) { e.stopPropagation(); enableEditMode(row); });
+                        row.find('.allocated-approve-btn').removeClass('btn-secondary').addClass('btn-success').prop('disabled', false).css('opacity', '1');
+                    }, 1500);
+                } else {
+                    btn.text('Error').removeClass('btn-success').addClass('btn-danger');
+                    setTimeout(function() { btn.text('Save').removeClass('btn-danger'); updateAllocatedSaveButtonState(row); }, 2000);
+                }
+            },
+            error: function() {
+                btn.text('Error').removeClass('btn-success').addClass('btn-danger');
+                setTimeout(function() { btn.text('Save').removeClass('btn-danger'); updateAllocatedSaveButtonState(row); }, 2000);
+            }
+        });
+    }
+    
+    // Select an allocated bill row
+    // Note: Custom function (not shared selectRow) because allocated bills have unique requirements:
+    // - Custom CSS fixes for placeholder centering
+    // - Calls loadAllocatedBillAllocations which renders read-only rows with construction-specific columns
+    // - Part of PO claim workflow with Edit/Save modes, Approve buttons
+    function selectAllocatedBillRow(row) {
+        if (row.hasClass('selected-row')) return;
+        var tbody = $('#billMainTableBody');
+        tbody.find('tr').removeClass('selected-row');
+        row.addClass('selected-row');
+        tbody.addClass('has-selection');
+        
+        var billPk = row.attr('data-bill-pk');
+        loadAllocatedBillAllocations(billPk);
+        
+        // Restore centering for PDF/placeholder
+        $('#billViewerPlaceholder').parent().css({'align-items': 'center', 'justify-content': 'center'});
+        $('#billViewerPlaceholder').css({'width': '', 'height': '', 'text-align': 'center'});
+        
+        var pdfUrl = row.attr('data-pdf-url');
+        if (pdfUrl && pdfUrl !== 'null' && pdfUrl !== '') {
+            $('#billPdfViewer').attr('src', pdfUrl).show();
+            $('#billViewerPlaceholder').hide();
+        } else {
+            $('#billPdfViewer').hide();
+            $('#billViewerPlaceholder').html('<i class="fas fa-file-pdf" style="font-size: 64px; margin-bottom: 10px; color: #ccc;"></i><p>No PDF attached to this bill</p>').show();
+        }
+    }
+    
+    // Load allocations for an allocated bill (read-only)
+    // Note: Custom function (not shared loadAllocations) because:
+    // - Renders custom read-only rows with construction-specific columns (Item/Unit/Qty/Rate/Amount vs Item/Net/GST)
+    // - Manual footer total calculation (Total Allocated, not Still to Allocate)
+    // - Different column structure than editable allocations
+    function loadAllocatedBillAllocations(billPk) {
+        // Apply column widths and footer styling
+        updateBillAllocationsTableStyle();
+        
+        $.ajax({
+            url: '/core/get_unallocated_bill_allocations/' + billPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    var allocations = response.allocations;
+                    var tbody = $('#billAllocationsTableBody');
+                    tbody.empty();
+                    var isConstruction = Utils.isConstructionProject('bill');
+                    var totalNet = 0, totalGst = 0;
+                    
+                    allocations.forEach(function(alloc) {
+                        var row = $('<tr>');
+                        if (isConstruction) {
+                            row.append($('<td>').text(alloc.item_name || '-'));
+                            row.append($('<td>').text(alloc.unit || '-'));
+                            var qty = alloc.qty ? parseFloat(alloc.qty) : 0;
+                            row.append($('<td>').text(Utils.formatMoney(qty)));
+                            var rate = alloc.rate ? parseFloat(alloc.rate) : 0;
+                            row.append($('<td>').text('$' + Utils.formatMoney(rate)));
+                            var amount = alloc.amount ? parseFloat(alloc.amount) : 0;
+                            row.append($('<td>').text('$' + Utils.formatMoney(amount)));
+                            row.append($('<td>').text(alloc.notes || '-'));
+                            totalNet += amount;
+                        } else {
+                            row.append($('<td>').text(alloc.item_name || '-'));
+                            row.append($('<td>').text('$' + (alloc.amount || 0).toFixed(2)));
+                            row.append($('<td>').text('$' + (alloc.gst_amount || 0).toFixed(2)));
+                            row.append($('<td>').text(alloc.notes || '-'));
+                            totalNet += alloc.amount || 0;
+                            totalGst += alloc.gst_amount || 0;
+                        }
+                        tbody.append(row);
+                    });
+                    
+                    $('#billTotalNet').text('$' + totalNet.toFixed(2));
+                    if (!isConstruction) $('#billTotalGst').text('$' + totalGst.toFixed(2));
+                }
+            },
+            error: function(xhr, status, error) { console.error('Failed to load allocations:', error); }
+        });
+    }
+    
+    // Unallocate bill
+    function unallocateBill(btn) {
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        var originalText = btn.text();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/unallocate_bill/' + billPk + '/',
+            type: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    removeAllocatedBillRow(row);
+                } else {
+                    btn.prop('disabled', false).text(originalText);
+                    alert('Failed to unallocate bill: ' + response.message);
+                }
+            },
+            error: function() { btn.prop('disabled', false).text(originalText); alert('Failed to unallocate bill. Please try again.'); }
+        });
+    }
+    
+    // Approve bill
+    function approveBill(btn) {
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        var currentStatus = parseInt(row.attr('data-bill-status')) || 1;
+        var originalText = btn.text();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/approve_bill/' + billPk + '/',
+            type: 'POST',
+            data: JSON.stringify({ current_status: currentStatus }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.status === 'success') {
+                    removeAllocatedBillRow(row);
+                } else {
+                    btn.prop('disabled', false).text(originalText);
+                    alert('Failed to approve bill: ' + response.message);
+                }
+            },
+            error: function() { btn.prop('disabled', false).text(originalText); alert('Failed to approve bill. Please try again.'); }
+        });
+    }
+    
+    // Remove an allocated bill row
+    function removeAllocatedBillRow(row) {
+        row.fadeOut(300, function() {
+            $(this).remove();
+            $('#billAllocationsTableBody').empty();
+            $('#billTotalNet').text('$0.00');
+            $('#billTotalGst').text('$0.00');
+            
+            var totalNet = 0, totalGst = 0;
+            $('#billMainTableBody tr').each(function() {
+                var netText = $(this).find('td:eq(2)').text().replace('$', '').replace(/,/g, '');
+                var gstText = $(this).find('td:eq(3)').text().replace('$', '').replace(/,/g, '');
+                totalNet += parseFloat(netText) || 0;
+                totalGst += parseFloat(gstText) || 0;
+            });
+            $('#billFooterCol3').text('$' + Utils.formatMoney(totalNet));
+            $('#billFooterCol4').text('$' + Utils.formatMoney(totalGst));
+            
+            var firstRow = $('#billMainTableBody tr').first();
+            if (firstRow.length && firstRow.attr('data-bill-pk')) {
+                selectAllocatedBillRow(firstRow);
+            } else {
+                $('#billMainTableBody').html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
+                $('#billMainTableBody').removeClass('has-selection');
+                $('#billPdfViewer').hide();
+                $('#billViewerPlaceholder').show();
+                $('#billMainTableFooter').hide();
+            }
+        });
+    }
+    
+    // Show PO table for bill
+    function showPOTableForBill(billPk, currentBillPk) {
+        $.ajax({
+            url: '/core/get_po_table_data_for_bill/' + billPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    renderPOTableInViewer(response, currentBillPk);
+                } else {
+                    $('#billPdfViewer').hide();
+                    $('#billViewerPlaceholder').html('<i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 10px; color: #dc3545;"></i><p style="color: #dc3545;">' + (response.message || 'Error loading PO data') + '</p>').show();
+                }
+            },
+            error: function() {
+                $('#billPdfViewer').hide();
+                $('#billViewerPlaceholder').html('<i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 10px; color: #dc3545;"></i><p style="color: #dc3545;">Failed to load PO data</p>').show();
+            }
+        });
+    }
+    
+    // Render PO table in viewer
+    function renderPOTableInViewer(data, currentBillPk) {
+        var isConstruction = data.is_construction;
+        var items = data.items;
+        var claims = data.individual_claims || [];
+        
+                
+        var currentClaimNumber = null, currentClaimAllocations = {};
+        for (var i = 0; i < claims.length; i++) {
+            if (claims[i].bill_pk === currentBillPk) {
+                currentClaimNumber = claims[i].claim_number;
+                currentClaimAllocations = claims[i].allocations || {};
+                break;
+            }
+        }
+        
+        var tableHtml = '<div style="padding: 6px; background: white; height: 100%; overflow-y: auto; overflow-x: auto;">' +
+            '<div style="margin-bottom: 6px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px;">' +
+            '<div style="font-size: 11px; font-weight: 600; color: #2c3e50; margin-bottom: 2px;">Payment Schedule</div>' +
+            '<div style="font-size: 9px; color: #6c757d;"><strong>' + data.supplier_name + '</strong> - ' + data.project_name + '</div>' +
+            (currentClaimNumber ? '<div style="font-size: 10px; font-weight: 700; color: #dc3545; margin-top: 3px;">Progress Claim ' + currentClaimNumber + '</div>' : '') +
+            '</div>' +
+            '<table class="table table-sm" style="font-size: 9px; margin-bottom: 0; table-layout: fixed; width: 100%;">' +
+            '<thead style="background: #34495e; color: white; font-size: 8px;"><tr>' +
+            '<th rowspan="2" style="padding: 3px 2px; width: ' + (isConstruction ? '20%' : '35%') + '; vertical-align: middle;">Description</th>' +
+            '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: ' + (isConstruction ? '14%' : '22%') + '; vertical-align: middle;">Contract $</th>' +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: center; width: 8%; vertical-align: middle;">Units</th>' : '') +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 8%; vertical-align: middle;">Qty</th>' : '') +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 12%; vertical-align: middle;">Rate</th>' : '') +
+            '<th colspan="2" style="padding: 3px 2px; text-align: center; width: ' + (isConstruction ? '26%' : '43%') + '; background: #dc3545;">This Claim</th>' +
+            '</tr><tr><th style="padding: 3px 2px; text-align: right; background: #dc3545;">%</th><th style="padding: 3px 2px; text-align: right; background: #dc3545;">$</th></tr></thead><tbody>';
+        
+        var totalContractSum = 0, totalThisClaim = 0, totalAllClaims = 0, totalStillToClaim = 0;
+        
+        items.forEach(function(item) {
+            totalContractSum += item.contract_sum || 0;
+            totalAllClaims += item.previous_claims || 0;
+            totalStillToClaim += item.still_to_claim || 0;
+            var thisClaimAmount = currentClaimAllocations[item.description] || 0;
+            totalThisClaim += thisClaimAmount;
+            var thisClaimPercent = item.contract_sum > 0 ? (thisClaimAmount / item.contract_sum * 100) : 0;
+            
+            tableHtml += '<tr><td style="padding: 3px 2px; word-break: break-word;">' + item.description + '</td>' +
+                '<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$' + Utils.formatMoney(item.contract_sum || 0) + '</td>' +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: center;">' + (item.unit || '-') + '</td>' : '') +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: right;">' + Utils.formatQty(item.contract_qty || 0) + '</td>' : '') +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$' + Utils.formatMoney(item.contract_rate || 0) + '</td>' : '') +
+                '<td style="padding: 3px 2px; text-align: right; color: #dc3545;">' + thisClaimPercent.toFixed(0) + '%</td>' +
+                '<td style="padding: 3px 2px; text-align: right; font-weight: 600; color: #dc3545; white-space: nowrap;">$' + Utils.formatMoney(thisClaimAmount) + '</td></tr>';
+        });
+        
+        tableHtml += '<tr style="background: #f8f9fa; font-weight: 700; border-top: 1px solid #34495e;">' +
+            '<td style="padding: 4px 2px;"><strong>TOTAL</strong></td>' +
+            '<td style="padding: 4px 2px; text-align: right;">$' + Utils.formatMoney(totalContractSum) + '</td>' +
+            (isConstruction ? '<td></td><td></td><td></td>' : '') +
+            '<td style="padding: 4px 2px; text-align: right; color: #dc3545;">' + (totalContractSum > 0 ? ((totalThisClaim / totalContractSum) * 100).toFixed(0) : 0) + '%</td>' +
+            '<td style="padding: 4px 2px; text-align: right; color: #dc3545;">$' + Utils.formatMoney(totalThisClaim) + '</td></tr></tbody></table>' +
+            '<div style="height: 36px;"></div>' +
+            '<div style="margin-bottom: 6px;"><div style="font-size: 10px; font-weight: 600; color: #2c3e50;">All Claims To Date</div></div>' +
+            '<table class="table table-sm" style="font-size: 9px; margin-bottom: 0; table-layout: fixed; width: 100%;">' +
+            '<thead style="background: #34495e; color: white; font-size: 8px;"><tr>' +
+            '<th rowspan="2" style="padding: 3px 2px; width: ' + (isConstruction ? '16%' : '24%') + '; vertical-align: middle;">Description</th>' +
+            '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: ' + (isConstruction ? '12%' : '16%') + '; vertical-align: middle;">Contract $</th>' +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: center; width: 6%; vertical-align: middle;">Units</th>' : '') +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 5%; vertical-align: middle;">Qty</th>' : '') +
+            (isConstruction ? '<th rowspan="2" style="padding: 3px 2px; text-align: right; width: 9%; vertical-align: middle;">Rate</th>' : '') +
+            '<th colspan="2" style="padding: 3px 2px; text-align: center; width: ' + (isConstruction ? '20%' : '30%') + ';">All Claims</th>' +
+            '<th colspan="2" style="padding: 3px 2px; text-align: center; width: ' + (isConstruction ? '20%' : '30%') + ';">Remaining</th>' +
+            '</tr><tr><th style="padding: 3px 2px; text-align: right;">%</th><th style="padding: 3px 2px; text-align: right;">$</th>' +
+            '<th style="padding: 3px 2px; text-align: right;">%</th><th style="padding: 3px 2px; text-align: right;">$</th></tr></thead><tbody>';
+        
+        items.forEach(function(item) {
+            var remainingPercent = item.contract_sum > 0 ? ((item.still_to_claim || 0) / item.contract_sum * 100) : 0;
+            tableHtml += '<tr><td style="padding: 3px 2px; word-break: break-word;">' + item.description + '</td>' +
+                '<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$' + Utils.formatMoney(item.contract_sum || 0) + '</td>' +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: center;">' + (item.unit || '-') + '</td>' : '') +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: right;">' + Utils.formatQty(item.contract_qty || 0) + '</td>' : '') +
+                (isConstruction ? '<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$' + Utils.formatMoney(item.contract_rate || 0) + '</td>' : '') +
+                '<td style="padding: 3px 2px; text-align: right;">' + (item.complete_percent || 0).toFixed(0) + '%</td>' +
+                '<td style="padding: 3px 2px; text-align: right; white-space: nowrap;">$' + Utils.formatMoney(item.previous_claims || 0) + '</td>' +
+                '<td style="padding: 3px 2px; text-align: right;">' + remainingPercent.toFixed(0) + '%</td>' +
+                '<td style="padding: 3px 2px; text-align: right; font-weight: 600; white-space: nowrap;">$' + Utils.formatMoney(item.still_to_claim || 0) + '</td></tr>';
+        });
+        
+        tableHtml += '<tr style="background: #f8f9fa; font-weight: 700; border-top: 1px solid #34495e;">' +
+            '<td style="padding: 4px 2px;"><strong>TOTAL</strong></td>' +
+            '<td style="padding: 4px 2px; text-align: right;">$' + Utils.formatMoney(totalContractSum) + '</td>' +
+            (isConstruction ? '<td></td><td></td><td></td>' : '') +
+            '<td style="padding: 4px 2px; text-align: right;">' + (totalContractSum > 0 ? ((totalAllClaims / totalContractSum) * 100).toFixed(0) : 0) + '%</td>' +
+            '<td style="padding: 4px 2px; text-align: right;">$' + Utils.formatMoney(totalAllClaims) + '</td>' +
+            '<td style="padding: 4px 2px; text-align: right;">' + (totalContractSum > 0 ? ((totalStillToClaim / totalContractSum) * 100).toFixed(0) : 0) + '%</td>' +
+            '<td style="padding: 4px 2px; text-align: right; font-weight: 600;">$' + Utils.formatMoney(totalStillToClaim) + '</td></tr></tbody></table></div>';
+        
+        $('#billPdfViewer').hide();
+        $('#billViewerPlaceholder').parent().css({'align-items': 'flex-start', 'justify-content': 'center'});
+        $('#billViewerPlaceholder').css({'width': '100%', 'height': '100%', 'text-align': 'center'}).html(tableHtml).show();
+    }
+    
+    // Event handlers
+    $(document).on('click', '#addBillAllocationBtn', function(e) {
+        e.preventDefault();
+        if (!currentSelectedBill) { alert('Please select a bill first'); return; }
+        addNewAllocationRow();
+    });
+    
+    $(document).on('click', '.allocate-bill-btn', function(e) {
+        e.stopPropagation();
+        allocateBill($(this));
+    });
+    
+    $(document).on('input', '#billMainTable .net-input, #billMainTable .gst-input', function() {
+        var row = $(this).closest('tr');
+        if (row.hasClass('selected-row') && currentSelectedBill) {
+            currentSelectedBill.total_net = parseFloat(row.find('.net-input').val()) || 0;
+            currentSelectedBill.total_gst = parseFloat(row.find('.gst-input').val()) || 0;
+            // Update currentItem for shared function
+            var cfg = AllocationsManager.getConfig('bill');
+            if (cfg && cfg.data) {
+                cfg.data.currentItem = currentSelectedBill;
+            }
+            AllocationsManager.updateStillToAllocate('bill');
+        }
+    });
+});
+</script>

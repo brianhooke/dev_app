@@ -1,67 +1,94 @@
 """
-Pos-related views.
-"""
+PO (Purchase Order) related views.
 
-import csv
-from decimal import Decimal, InvalidOperation
-from django.template import loader
-from ..forms import CSVUploadForm
-from django.http import HttpResponse, JsonResponse
-from ..models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
+Template Rendering:
+1. po_view - Render PO section template (supports project_pk query param)
+
+PO Creation:
+2. create_po_order - Create new PO order from supplier and line items
+
+PDF Generation:
+3. generate_po_pdf - Generate PO PDF document with letterhead
+4. generate_po_pdf_bytes - Generate PO PDF as bytes (for email attachment)
+5. wrap_text - Helper: Wrap text for PDF layout
+
+Email:
+6. send_po_email - Send PO email to supplier with PDF and quote attachments
+7. send_po_email_view - View handler for sending PO email (POST endpoint)
+
+Public PO Pages (Supplier Access):
+8. view_po_by_unique_id - Public landing page for suppliers to view PO and submit claims
+9. view_po_pdf_by_unique_id - Serve saved PDF for PO via unique_id
+
+Progress Claims:
+10. submit_po_claim - Submit or update a progress claim (creates Invoice with status=100)
+11. approve_po_claim - Approve pending progress claim (status 100 -> 101)
+12. upload_bill_pdf - Upload invoice PDF for approved claim (status 101 -> 102)
+
+Data Retrieval:
+13. get_po_table_data_for_invoice - Get PO table data for invoice (allocated bills view)
+14. get_quotes_by_supplier - Get quotes filtered by supplier
+"""
 import json
-from django.shortcuts import render
-from django.forms.models import model_to_dict
-from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import quotes as quote_service
-from ..services import pos as pos_service
-from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import get_object_or_404
-import uuid
-from django.core.files.base import ContentFile
-import base64
-from django.conf import settings
-from PyPDF2 import PdfReader, PdfWriter
-import os
 import logging
+import ssl
+from datetime import date
 from io import BytesIO
+
+import requests
+from django.conf import settings
 from django.core.files.storage import default_storage
-from datetime import datetime, date, timedelta
-import re
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.db import connection
-from collections import defaultdict
+from django.core.mail import EmailMessage
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
+from django.views.decorators.csrf import csrf_exempt
+from PyPDF2 import PdfReader, PdfWriter
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from io import BytesIO
-from django.core.mail import EmailMessage
-from urllib.parse import urljoin
-import textwrap
-from django.core import serializers
-from reportlab.lib import colors
-import requests
-from decimal import Decimal
-from ratelimit import limits, sleep_and_retry
-from urllib.request import urlretrieve
-from django.shortcuts import render
-from django.http import JsonResponse, HttpResponseBadRequest
-from django.forms.models import model_to_dict
-from django.db.models import Sum
-from ..models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
-import json
-from django.db.models import Q, Sum
-import ssl
-import urllib.request
-from django.core.exceptions import ValidationError
-from ..formulas import Committed
-from django.core.serializers.json import DjangoJSONEncoder
-from django.db import transaction
+
+from ..models import Letterhead, Po_globals, Po_orders, Po_order_detail, Projects
+from ..services import pos as pos_service
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
+
+
+def po_view(request):
+    """Render the PO section template with column configuration.
+    
+    Accepts project_pk as query parameter to enable self-contained operation.
+    Example: /core/po/?project_pk=123
+    """
+    project_pk = request.GET.get('project_pk')
+    xero_instance_pk = None
+    
+    if project_pk:
+        try:
+            project = Projects.objects.get(pk=project_pk)
+            xero_instance_pk = project.xero_instance_id if project.xero_instance else None
+        except Projects.DoesNotExist:
+            pass
+    
+    context = {
+        'project_pk': project_pk,
+        'xero_instance_pk': xero_instance_pk,
+        'main_table_columns': [
+            {'header': 'Supplier', 'width': '25%'},
+            {'header': 'First Name', 'width': '10%'},
+            {'header': 'Last Name', 'width': '10%'},
+            {'header': 'Email', 'width': '20%'},
+            {'header': 'Amount', 'width': '12%'},
+            {'header': 'Sent', 'width': '4%'},
+            {'header': 'Update', 'width': '12%'},
+            {'header': 'Email', 'width': '7%'},
+        ],
+    }
+    return render(request, 'core/po.html', context)
+
 
 @csrf_exempt
 def create_po_order(request):
@@ -221,9 +248,6 @@ def generate_po_pdf(request, po_order_pk):
     response.write(merged_buffer.getvalue())
     merged_buffer.close()
     return response
-@csrf_exempt
-def view_po_pdf(request, po_order_pk):
-    return render(request, 'core/view_po_pdf.html', {'po_order_pk': po_order_pk})
 def wrap_text(text, max_length):
     words = text.split(' ')
     lines = []
@@ -379,16 +403,16 @@ def view_po_by_unique_id(request, unique_id):
                     if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
                         items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
         
-        # Get previous approved claims (invoice_status = 102, approved AND invoice uploaded)
-        from core.models import Invoice_allocations, Invoices
-        completed_invoices = Invoices.objects.filter(
+        # Get previous approved claims (bill_status = 102, approved AND invoice uploaded)
+        from core.models import Bill_allocations, Bills
+        completed_invoices = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            invoice_status=102
-        ).order_by('invoice_date', 'invoice_pk')
+            bill_status=102
+        ).order_by('bill_date', 'bill_pk')
         
         # Build list of individual claims for expandable view
-        individual_claims = []  # List of {claim_number, invoice_pk, allocations_by_item}
+        individual_claims = []  # List of {claim_number, bill_pk, allocations_by_item}
         claim_number = 1
         
         # Calculate previous claims by item (only status 102)
@@ -401,11 +425,11 @@ def view_po_by_unique_id(request, unique_id):
             
             claim_data = {
                 'claim_number': claim_number,
-                'invoice_pk': invoice.invoice_pk,
+                'bill_pk': invoice.bill_pk,
                 'invoice_pdf_url': invoice_pdf_url,
                 'allocations': {}  # item_name -> {amount, percent}
             }
-            allocations = Invoice_allocations.objects.filter(invoice_pk=invoice)
+            allocations = Bill_allocations.objects.filter(bill_pk=invoice)
             for alloc in allocations:
                 if alloc.item:
                     item_name = alloc.item.item
@@ -419,32 +443,32 @@ def view_po_by_unique_id(request, unique_id):
             individual_claims.append(claim_data)
             claim_number += 1
         
-        # Check for pending claim (invoice_status = 100)
-        pending_invoice = Invoices.objects.filter(
+        # Check for pending claim (bill_status = 100)
+        pending_invoice = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            invoice_status=100
+            bill_status=100
         ).first()
         
-        # Check for approved claim awaiting invoice upload (invoice_status = 101)
-        approved_invoice = Invoices.objects.filter(
+        # Check for approved claim awaiting invoice upload (bill_status = 101)
+        approved_invoice = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            invoice_status=101
+            bill_status=101
         ).first()
         
         pending_claims_by_item = {}
         approved_claims_by_item = {}
         
         if pending_invoice:
-            allocations = Invoice_allocations.objects.filter(invoice_pk=pending_invoice)
+            allocations = Bill_allocations.objects.filter(bill_pk=pending_invoice)
             for alloc in allocations:
                 if alloc.item:
                     item_name = alloc.item.item
                     pending_claims_by_item[item_name] = float(alloc.amount)
         
         if approved_invoice:
-            allocations = Invoice_allocations.objects.filter(invoice_pk=approved_invoice)
+            allocations = Bill_allocations.objects.filter(bill_pk=approved_invoice)
             for alloc in allocations:
                 if alloc.item:
                     item_name = alloc.item.item
@@ -512,8 +536,8 @@ def view_po_by_unique_id(request, unique_id):
             'project': project,
             'items': items,
             'is_construction': is_construction,
-            'pending_invoice_pk': pending_invoice.invoice_pk if pending_invoice else None,
-            'approved_invoice_pk': approved_invoice.invoice_pk if approved_invoice else None,
+            'pending_bill_pk': pending_invoice.bill_pk if pending_invoice else None,
+            'approved_bill_pk': approved_invoice.bill_pk if approved_invoice else None,
             'has_pending_claim': pending_invoice is not None,
             'has_approved_claim': approved_invoice is not None,
             'previous_claims_count': len(individual_claims),
@@ -531,7 +555,7 @@ def view_po_by_unique_id(request, unique_id):
 def approve_po_claim(request, unique_id):
     """
     Approve a pending progress claim for a PO.
-    Updates invoice_status from 100 to 101.
+    Updates bill_status from 100 to 101.
     If claim was edited before approval, updates allocations and sends comparison email.
     """
     if request.method != 'POST':
@@ -539,7 +563,7 @@ def approve_po_claim(request, unique_id):
     
     try:
         import json
-        from core.models import Invoices, Invoice_allocations, Costing
+        from core.models import Bills, Bill_allocations, Costing
         from decimal import Decimal
         
         po_order = Po_orders.objects.get(unique_id=unique_id)
@@ -547,22 +571,22 @@ def approve_po_claim(request, unique_id):
         project = po_order.project
         
         data = json.loads(request.body)
-        pending_invoice_pk = data.get('pending_invoice_pk')
+        pending_bill_pk = data.get('pending_bill_pk')
         is_edit_claim_mode = data.get('is_edit_claim_mode', False)
         approved_claims = data.get('approved_claims', [])
         
-        if not pending_invoice_pk:
+        if not pending_bill_pk:
             return JsonResponse({'status': 'error', 'message': 'No pending invoice specified'}, status=400)
         
         # Get the pending invoice
         try:
-            invoice = Invoices.objects.get(
-                invoice_pk=pending_invoice_pk,
+            invoice = Bills.objects.get(
+                bill_pk=pending_bill_pk,
                 project=project,
                 contact_pk=supplier,
-                invoice_status=100
+                bill_status=100
             )
-        except Invoices.DoesNotExist:
+        except Bills.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Pending invoice not found'}, status=404)
         
         # Track if any values were modified
@@ -594,8 +618,8 @@ def approve_po_claim(request, unique_id):
                 if costing_pk and abs(submitted_amount - approved_amount) > Decimal('0.01'):
                     try:
                         costing = Costing.objects.get(costing_pk=costing_pk)
-                        allocation = Invoice_allocations.objects.filter(
-                            invoice_pk=invoice,
+                        allocation = Bill_allocations.objects.filter(
+                            bill_pk=invoice,
                             item=costing
                         ).first()
                         
@@ -608,7 +632,7 @@ def approve_po_claim(request, unique_id):
         
         # Recalculate invoice totals from allocations (in case any were modified)
         from django.db.models import Sum
-        totals = Invoice_allocations.objects.filter(invoice_pk=invoice).aggregate(
+        totals = Bill_allocations.objects.filter(bill_pk=invoice).aggregate(
             total_net=Sum('amount'),
             total_gst=Sum('gst_amount')
         )
@@ -616,12 +640,12 @@ def approve_po_claim(request, unique_id):
         invoice.total_gst = totals['total_gst'] or Decimal('0')
         
         # Update status to approved (but no invoice uploaded yet)
-        invoice.invoice_status = 101
+        invoice.bill_status = 101
         invoice.save()
         
-        logger.info(f"Updated invoice {invoice.invoice_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
+        logger.info(f"Updated invoice {invoice.bill_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
         
-        logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.invoice_pk}, modifications: {has_modifications}")
+        logger.info(f"Progress claim approved for PO {unique_id}, Invoice {invoice.bill_pk}, modifications: {has_modifications}")
         
         # Send notification email to supplier
         if supplier.email:
@@ -793,7 +817,7 @@ Regards,
         return JsonResponse({
             'status': 'success',
             'message': 'Claim approved successfully',
-            'invoice_pk': invoice.invoice_pk
+            'bill_pk': invoice.bill_pk
         })
         
     except Po_orders.DoesNotExist:
@@ -807,7 +831,7 @@ Regards,
 def submit_po_claim(request, unique_id):
     """
     Submit or update a progress claim for a PO.
-    Creates/updates Invoice with status=100 and Invoice_allocations.
+    Creates/updates Invoice with status=100 and Bill_allocations.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
@@ -815,7 +839,7 @@ def submit_po_claim(request, unique_id):
     try:
         import json
         from datetime import date
-        from core.models import Invoice_allocations, Invoices, Costing
+        from core.models import Bill_allocations, Bills, Costing
         
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
@@ -823,7 +847,7 @@ def submit_po_claim(request, unique_id):
         
         data = json.loads(request.body)
         claims = data.get('claims', [])
-        pending_invoice_pk = data.get('pending_invoice_pk')
+        pending_bill_pk = data.get('pending_bill_pk')
         
         if not claims:
             return JsonResponse({'status': 'error', 'message': 'No claims provided'}, status=400)
@@ -832,19 +856,19 @@ def submit_po_claim(request, unique_id):
         is_resubmission = False
         
         # Check if updating existing pending invoice or creating new
-        if pending_invoice_pk:
+        if pending_bill_pk:
             try:
-                invoice = Invoices.objects.get(
-                    invoice_pk=pending_invoice_pk,
+                invoice = Bills.objects.get(
+                    bill_pk=pending_bill_pk,
                     project=project,
                     contact_pk=supplier,
-                    invoice_status=100
+                    bill_status=100
                 )
                 # This is a resubmission
                 is_resubmission = True
                 # Delete existing allocations to replace with new ones
-                Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
-            except Invoices.DoesNotExist:
+                Bill_allocations.objects.filter(bill_pk=invoice).delete()
+            except Bills.DoesNotExist:
                 # Pending invoice not found, create new
                 invoice = None
         else:
@@ -852,12 +876,12 @@ def submit_po_claim(request, unique_id):
         
         # Create new invoice if needed
         if not invoice:
-            invoice = Invoices.objects.create(
+            invoice = Bills.objects.create(
                 project=project,
                 contact_pk=supplier,
-                invoice_status=100,  # Submitted awaiting approval
-                invoice_type=2,  # Progress Claim
-                invoice_date=date.today(),
+                bill_status=100,  # Submitted awaiting approval
+                bill_type=2,  # Progress Claim
+                bill_date=date.today(),
                 total_net=Decimal('0'),
                 total_gst=Decimal('0')
             )
@@ -871,8 +895,8 @@ def submit_po_claim(request, unique_id):
             if amount > 0 and costing_pk:
                 try:
                     costing = Costing.objects.get(costing_pk=costing_pk)
-                    Invoice_allocations.objects.create(
-                        invoice_pk=invoice,
+                    Bill_allocations.objects.create(
+                        bill_pk=invoice,
                         item=costing,
                         amount=amount,
                         gst_amount=Decimal('0.00'),
@@ -889,7 +913,7 @@ def submit_po_claim(request, unique_id):
         invoice.total_gst = Decimal('0.00')
         invoice.save()
         
-        logger.info(f"Progress claim submitted for PO {unique_id}, Invoice {invoice.invoice_pk}")
+        logger.info(f"Progress claim submitted for PO {unique_id}, Invoice {invoice.bill_pk}")
         
         # Send notification emails to contracts admin team
         if project.contracts_admin_emails:
@@ -980,7 +1004,7 @@ This is an automated notification from the Mason Build platform.
         return JsonResponse({
             'status': 'success',
             'message': 'Claim submitted for approval',
-            'invoice_pk': invoice.invoice_pk
+            'bill_pk': invoice.bill_pk
         })
         
     except Po_orders.DoesNotExist:
@@ -991,16 +1015,16 @@ This is an automated notification from the Mason Build platform.
 
 
 @csrf_exempt
-def upload_invoice_pdf(request, unique_id):
+def upload_bill_pdf(request, unique_id):
     """
     Upload invoice PDF for an approved claim.
-    Updates invoice_status from 101 to 102.
+    Updates bill_status from 101 to 102.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
     
     try:
-        from core.models import Invoices
+        from core.models import Bills
         
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
@@ -1008,12 +1032,12 @@ def upload_invoice_pdf(request, unique_id):
         
         # Get the approved invoice (status 101)
         try:
-            invoice = Invoices.objects.get(
+            invoice = Bills.objects.get(
                 project=project,
                 contact_pk=supplier,
-                invoice_status=101
+                bill_status=101
             )
-        except Invoices.DoesNotExist:
+        except Bills.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'No approved claim awaiting invoice upload'}, status=404)
         
         # Check if PDF file was uploaded
@@ -1028,10 +1052,10 @@ def upload_invoice_pdf(request, unique_id):
         
         # Save the PDF
         invoice.pdf = pdf_file
-        invoice.invoice_status = 102  # Approved and invoice uploaded
+        invoice.bill_status = 102  # Approved and invoice uploaded
         invoice.save()
         
-        logger.info(f"Invoice PDF uploaded for PO {unique_id}, Invoice {invoice.invoice_pk}, status updated to 102")
+        logger.info(f"Invoice PDF uploaded for PO {unique_id}, Invoice {invoice.bill_pk}, status updated to 102")
         
         # Send notification emails to contracts admin team
         if project.contracts_admin_emails:
@@ -1121,7 +1145,7 @@ This is an automated notification from the Mason Build platform.
         return JsonResponse({
             'status': 'success',
             'message': 'Invoice uploaded successfully',
-            'invoice_pk': invoice.invoice_pk
+            'bill_pk': invoice.bill_pk
         })
         
     except Po_orders.DoesNotExist:
@@ -1187,7 +1211,7 @@ def view_po_pdf_by_unique_id(request, unique_id):
         return HttpResponse(f'Error: {str(e)}', status=500)
 
 
-def get_po_table_data_for_invoice(request, invoice_pk):
+def get_po_table_data_for_invoice(request, bill_pk):
     """
     Get PO table data for an invoice (used in allocated invoices view).
     Returns the same data as the PO public page table.
@@ -1196,14 +1220,14 @@ def get_po_table_data_for_invoice(request, invoice_pk):
     
     try:
         # Get the invoice
-        invoice = Invoices.objects.select_related('contact_pk', 'project').get(invoice_pk=invoice_pk)
+        invoice = Bills.objects.select_related('contact_pk', 'project').get(bill_pk=bill_pk)
         supplier = invoice.contact_pk
         project = invoice.project
         
-        logger.info(f"get_po_table_data_for_invoice: invoice_pk={invoice_pk}, supplier={supplier}, project={project}")
+        logger.info(f"get_po_table_data_for_invoice: bill_pk={bill_pk}, supplier={supplier}, project={project}")
         
         if not supplier or not project:
-            logger.warning(f"Invoice {invoice_pk} missing supplier ({supplier}) or project ({project})")
+            logger.warning(f"Invoice {bill_pk} missing supplier ({supplier}) or project ({project})")
             return JsonResponse({'status': 'error', 'message': 'Invoice missing supplier or project'}, status=400)
         
         # Find the PO for this supplier/project
@@ -1271,12 +1295,12 @@ def get_po_table_data_for_invoice(request, invoice_pk):
                     if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
                         items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
         
-        # Get all approved claims (invoice_status = 102)
-        completed_invoices = Invoices.objects.filter(
+        # Get all approved claims (bill_status = 102)
+        completed_invoices = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            invoice_status=102
-        ).order_by('invoice_date', 'invoice_pk')
+            bill_status=102
+        ).order_by('bill_date', 'bill_pk')
         
         # Build list of individual claims
         individual_claims = []
@@ -1291,11 +1315,11 @@ def get_po_table_data_for_invoice(request, invoice_pk):
             
             claim_data = {
                 'claim_number': claim_number,
-                'invoice_pk': inv.invoice_pk,
+                'bill_pk': inv.bill_pk,
                 'invoice_pdf_url': invoice_pdf_url,
                 'allocations': {}
             }
-            allocations = Invoice_allocations.objects.filter(invoice_pk=inv)
+            allocations = Bill_allocations.objects.filter(bill_pk=inv)
             for alloc in allocations:
                 if alloc.item:
                     item_name = alloc.item.item
@@ -1372,11 +1396,38 @@ def get_po_table_data_for_invoice(request, invoice_pk):
             'individual_claims': individual_claims,
         })
         
-    except Invoices.DoesNotExist:
-        logger.error(f'Invoice not found: {invoice_pk}')
+    except Bills.DoesNotExist:
+        logger.error(f'Invoice not found: {bill_pk}')
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         import traceback
-        logger.error(f'Error in get_po_table_data_for_invoice for invoice {invoice_pk}: {e}')
+        logger.error(f'Error in get_po_table_data_for_invoice for invoice {bill_pk}: {e}')
         logger.error(traceback.format_exc())
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def get_quotes_by_supplier(request):
+    supplier_name = request.GET.get('supplier', '')
+    contact = Contacts.objects.filter(contact_name=supplier_name).first()
+    if not contact:
+        return JsonResponse({"error": "Supplier not found"}, status=404)
+    quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
+        Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  
+    )
+    quotes_data = []
+    for quote in quotes:
+        quote_info = {
+            "quotes_pk": quote.quotes_pk,
+            "supplier_quote_number": quote.supplier_quote_number,
+            "total_cost": str(quote.total_cost),  
+            "quote_allocations": [
+                {
+                    "quote_allocations_pk": allocation.quote_allocations_pk,
+                    "item": allocation.item.item,  
+                    "amount": str(allocation.amount),
+                    "notes": allocation.notes or ""
+                } for allocation in quote.fetched_allocations  
+            ]
+        }
+        quotes_data.append(quote_info)
+    return JsonResponse(quotes_data, safe=False)

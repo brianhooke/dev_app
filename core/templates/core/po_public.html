@@ -428,17 +428,17 @@
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.5);
         }
         
-        .doc-btn-invoice {
+        .doc-btn-bill {
             background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
             color: white;
         }
         
-        .doc-btn-invoice:hover {
+        .doc-btn-bill:hover {
             transform: scale(1.05);
             box-shadow: 0 2px 6px rgba(155, 89, 182, 0.4);
         }
         
-        .doc-btn-invoice.active {
+        .doc-btn-bill.active {
             box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.5);
         }
         
@@ -628,15 +628,15 @@
                             <td></td>
                             <td></td>
                             <td></td>
-                            <!-- Individual claim invoice buttons (hidden by default) -->
+                            <!-- Individual claim bill buttons (hidden by default) -->
                             {% for claim in individual_claims %}
                             <td colspan="2" class="individual-claim-col" data-claim="{{ claim.claim_number }}" style="text-align: center;">
-                                {% if claim.invoice_pdf_url %}
-                                <button class="doc-btn doc-btn-invoice" onclick="showInvoice('{{ claim.invoice_pdf_url }}', {{ claim.claim_number }})">
-                                    <i class="fas fa-file-invoice"></i> Invoice
+                                {% if claim.bill_pdf_url %}
+                                <button class="doc-btn doc-btn-bill" onclick="showBill('{{ claim.bill_pdf_url }}', {{ claim.claim_number }})">
+                                    <i class="fas fa-file-bill"></i> Bill
                                 </button>
                                 {% else %}
-                                <span style="font-size: 9px; color: #999;">No invoice</span>
+                                <span style="font-size: 9px; color: #999;">No bill</span>
                                 {% endif %}
                             </td>
                             {% endfor %}
@@ -669,18 +669,18 @@
                     </button>
                 </div>
                 
-                <!-- Upload Invoice Section (shown when claim approved but invoice not uploaded) -->
-                <div class="upload-invoice-section" id="uploadInvoiceSection" style="display: none; margin-top: 20px; padding: 20px; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
+                <!-- Upload Bill Section (shown when claim approved but bill not uploaded) -->
+                <div class="upload-bill-section" id="uploadBillSection" style="display: none; margin-top: 20px; padding: 20px; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
                     <div style="text-align: center;">
                         <p style="margin: 0 0 15px 0; color: #155724; font-weight: 600; font-size: 16px;">
                             <i class="fas fa-check-circle"></i> Your claim has been approved!
                         </p>
                         <p style="margin: 0 0 20px 0; color: #155724;">
-                            Please upload your invoice PDF to complete the process.
+                            Please upload your bill PDF to complete the process.
                         </p>
-                        <input type="file" id="invoicePdfInput" accept=".pdf" style="display: none;">
-                        <button class="btn btn-success" id="uploadInvoiceBtn" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%);">
-                            <i class="fas fa-upload"></i> Upload Invoice PDF
+                        <input type="file" id="billPdfInput" accept=".pdf" style="display: none;">
+                        <button class="btn btn-success" id="uploadBillBtn" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%);">
+                            <i class="fas fa-upload"></i> Upload Bill PDF
                         </button>
                     </div>
                 </div>
@@ -705,8 +705,8 @@
     <script>
         const hasPendingClaim = {{ has_pending_claim|yesno:"true,false" }};
         const hasApprovedClaim = {{ has_approved_claim|yesno:"true,false" }};
-        const pendingInvoicePk = {{ pending_invoice_pk|default:"null" }};
-        const approvedInvoicePk = {{ approved_invoice_pk|default:"null" }};
+        const pendingBillPk = {{ pending_bill_pk|default:"null" }};
+        const approvedBillPk = {{ approved_bill_pk|default:"null" }};
         const uniqueId = '{{ po_order.unique_id }}';
         const isConstruction = {{ is_construction|yesno:"true,false" }};
         const previousClaimsCount = {{ previous_claims_count|default:"0" }};
@@ -731,18 +731,18 @@
             currentDocType = 'po';
         }
         
-        // Show Invoice in the viewer
-        function showInvoice(invoiceUrl, claimNumber) {
+        // Show Bill in the viewer
+        function showBill(billUrl, claimNumber) {
             const iframe = document.querySelector('.pdf-viewer iframe');
-            iframe.src = invoiceUrl;
+            iframe.src = billUrl;
             
             // Update button states
             document.querySelectorAll('.doc-btn').forEach(btn => btn.classList.remove('active'));
             event.target.closest('.doc-btn').classList.add('active');
             
             // Update header
-            document.querySelector('.pdf-header').innerHTML = '<i class="fas fa-file-invoice"></i> Claim ' + claimNumber + ' Invoice';
-            currentDocType = 'invoice-' + claimNumber;
+            document.querySelector('.pdf-header').innerHTML = '<i class="fas fa-file-bill"></i> Claim ' + claimNumber + ' Bill';
+            currentDocType = 'bill-' + claimNumber;
         }
         
         // Toggle individual claims expansion
@@ -980,7 +980,7 @@
                 saveCurrentClaimValues();
             } else if (hasApprovedClaim) {
                 // Approved claim: show upload section, hide all other buttons
-                document.getElementById('uploadInvoiceSection').style.display = 'block';
+                document.getElementById('uploadBillSection').style.display = 'block';
                 document.getElementById('submitForApprovalBtn').style.display = 'none';
                 document.getElementById('editUnapprovedBtn').style.display = 'none';
                 document.getElementById('editClaimBtn').style.display = 'none';
@@ -1373,7 +1373,7 @@
                     },
                     body: JSON.stringify({
                         claims: claims,
-                        pending_invoice_pk: pendingInvoicePk
+                        pending_bill_pk: pendingBillPk
                     })
                 });
                 
@@ -1475,7 +1475,7 @@
         document.getElementById('approveBtn').addEventListener('click', async function() {
             if (this.disabled) return;
             
-            if (!pendingInvoicePk) {
+            if (!pendingBillPk) {
                 alert('No pending claim to approve');
                 return;
             }
@@ -1538,7 +1538,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        pending_invoice_pk: pendingInvoicePk,
+                        pending_bill_pk: pendingBillPk,
                         is_edit_claim_mode: isEditClaimMode,
                         approved_claims: approvedClaims
                     })
@@ -1562,13 +1562,13 @@
             }
         });
         
-        // Upload Invoice button handler
-        document.getElementById('uploadInvoiceBtn').addEventListener('click', function() {
-            document.getElementById('invoicePdfInput').click();
+        // Upload Bill button handler
+        document.getElementById('uploadBillBtn').addEventListener('click', function() {
+            document.getElementById('billPdfInput').click();
         });
         
         // Handle file selection
-        document.getElementById('invoicePdfInput').addEventListener('change', async function(e) {
+        document.getElementById('billPdfInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
             
@@ -1580,21 +1580,21 @@
             }
             
             // Confirm upload
-            if (!confirm(`Upload invoice: ${file.name}?`)) {
+            if (!confirm(`Upload bill: ${file.name}?`)) {
                 this.value = '';
                 return;
             }
             
             // Show uploading state
-            const uploadBtn = document.getElementById('uploadInvoiceBtn');
+            const uploadBtn = document.getElementById('uploadBillBtn');
             uploadBtn.disabled = true;
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
             
             try {
                 const formData = new FormData();
-                formData.append('invoice_pdf', file);
+                formData.append('bill_pdf', file);
                 
-                const response = await fetch(`/po/${uniqueId}/upload-invoice/`, {
+                const response = await fetch(`/po/${uniqueId}/upload-bill/`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1602,18 +1602,18 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    alert('Invoice uploaded successfully!');
+                    alert('Bill uploaded successfully!');
                     window.location.reload();
                 } else {
                     alert('Error: ' + data.message);
                     uploadBtn.disabled = false;
-                    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Invoice PDF';
+                    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Bill PDF';
                 }
             } catch (error) {
-                console.error('Error uploading invoice:', error);
-                alert('Error uploading invoice. Please try again.');
+                console.error('Error uploading bill:', error);
+                alert('Error uploading bill. Please try again.');
                 uploadBtn.disabled = false;
-                uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Invoice PDF';
+                uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Bill PDF';
             }
             
             // Clear file input

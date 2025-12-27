@@ -1,199 +1,387 @@
 <!-- Quotes Section Template -->
-<!-- Uses reusable allocations section with AllocationsManager -->
+<!-- SELF-CONTAINED: All quote logic is in this file - does not depend on projects_scripts.html -->
 {% load static %}
 
-{% include "core/components/reusable_allocations_section.html" with section_id="quote" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Quote Allocations" viewer_placeholder_text="Click on a quote to view the PDF" viewer_placeholder_icon="fas fa-file-alt" %}
+{% include "core/components/allocations_layout.html" with section_id="quote" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Quote Allocations" viewer_placeholder_text="Click on a quote to view the PDF" viewer_placeholder_icon="fas fa-file-alt" %}
 
-<!-- Load AllocationsManager (shared) -->
-<script src="{% static 'core/js/allocations_manager.js' %}"></script>
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
 
-<!-- Pass project PK to JavaScript -->
+<!-- Pass context to JavaScript -->
 <script>
     if ('{{ project_pk }}' && '{{ project_pk }}' !== 'None') {
         window.projectPk = '{{ project_pk }}';
     }
+    window.quoteIsConstruction = {{ is_construction|yesno:"true,false" }};
 </script>
 
-<!-- Inlined Quotes Section JS -->
+<!-- Self-Contained Quotes Section JS -->
 <script>
-$(document).ready(function() {
-    if ($('#quoteMainTableBody').length === 0) return;
+(function() {
+    'use strict';
     
-    // Skip if running within Projects page
-    if (window.loadQuotesData || window.initQuotesAllocationsManager) {
-        console.log('Quotes section: Skipping auto-init (running within Projects page)');
+    // Wait for DOM and ensure we have the table
+    if ($('#quoteMainTableBody').length === 0) {
+        console.log('Quotes section: Table not found, skipping init');
         return;
     }
     
-    console.log('Initializing quotes section with AllocationsManager (standalone)...');
+    console.log('Quotes section: Self-initializing...');
     
+    // Get project info from various sources
     var projectPk = window.projectPk || 
                     (window.currentQuotesProject && window.currentQuotesProject.pk) ||
                     (window.currentConstructionProject && window.currentConstructionProject.pk) ||
                     (window.currentProject && window.currentProject.pk) ||
-                    getProjectPkFromUrl();
+                    Utils.getProjectPkFromUrl();
     
+    var isConstruction = window.quoteIsConstruction || 
+                         (window.currentQuotesProject && window.currentQuotesProject.project_type === 'construction') ||
+                         false;
+    
+    // State
+    window.newQuoteMode = false;
+    window.newQuotePdfData = null;
+    window.newQuotePdfUrl = null;
+    window.newQuoteAllocations = [];
+    window.currentSelectedQuote = null;
+    window.editingQuotePk = null;
+    
+    
+    // Initialize AllocationsManager
     AllocationsManager.init({
         sectionId: 'quote',
+        features: {
+            saveRowBtn: true,
+            deleteRowBtn: true,
+            constructionMode: isConstruction,
+            gstField: false,
+            confirmDelete: true,
+            reloadAfterDelete: true,
+            showSaveButton: true,
+            alwaysShowAddButton: false
+        },
+        data: {
+            pkField: 'quotes_pk'
+        },
         mainTable: {
-            emptyMessage: 'No quotes found. Click "Add Quote" to create one.',
+            emptyMessage: 'No quotes found. Click "+ New Quote" to create one.',
             showFooter: true,
             footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
             renderRow: function(quote, index, cfg) {
+                var pdfUrl = quote.pdf_url || '';
                 var row = $('<tr>')
                     .attr('data-pk', quote.quotes_pk)
-                    .attr('data-pdf-url', quote.pdf_url || quote.pdf || '');
+                    .attr('data-quote-pk', quote.quotes_pk)
+                    .attr('data-pdf-url', pdfUrl);
                 
-                row.append($('<td>').text(quote.supplier_name || quote.contact_pk__contact_name || '-'));
+                // Supplier
+                var supplierName = quote.supplier_name || '-';
+                row.append($('<td>').text(supplierName).attr('title', supplierName));
                 
-                var netAmount = parseFloat(quote.total_cost) || 0;
-                var formattedNet = '$' + netAmount.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                row.append($('<td>').text(formattedNet));
-                row.append($('<td>').text(quote.supplier_quote_number || '-'));
+                // $ Net
+                var netAmount = quote.total_cost ? parseFloat(quote.total_cost) : 0;
+                var netText = '$' + Utils.formatMoney(netAmount);
+                row.append($('<td>').text(netText));
                 
-                var saveBtn = $('<button>')
-                    .addClass('btn btn-sm btn-success')
-                    .html('<i class="fas fa-save"></i>')
-                    .on('click', function(e) {
-                        e.stopPropagation();
-                        saveQuote(quote.quotes_pk);
-                    });
-                row.append($('<td>').addClass('text-center').append(saveBtn));
+                // Quote #
+                var quoteNum = quote.supplier_quote_number || '-';
+                row.append($('<td>').text(quoteNum).attr('title', quoteNum));
                 
-                var deleteBtn = $('<button>')
-                    .addClass('btn btn-sm btn-danger')
-                    .html('<i class="fas fa-trash"></i>')
-                    .on('click', function(e) {
-                        e.stopPropagation();
-                        deleteQuote(quote.quotes_pk, quote.supplier_quote_number);
-                    });
-                row.append($('<td>').addClass('text-center').append(deleteBtn));
+                // Update button
+                if (cfg.features.saveRowBtn) {
+                    row.append($('<td>').append(AllocationsManager.createUpdateButton(quote, cfg)));
+                }
+                
+                // Delete button
+                if (cfg.features.deleteRowBtn) {
+                    row.append($('<td>').append(AllocationsManager.createDeleteButton(quote, cfg)));
+                }
                 
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Quote selected:', pk);
-                AllocationsManager.setEditMode('quote', true);
+                console.log('Quote row selected:', pk);
+                // If we were in edit mode, cancel it (switch to read-only view)
+                if (window.editingQuotePk) {
+                    console.log('Cancelling edit mode - user clicked another row');
+                    AllocationsManager.setEditMode('quote', false);
+                }
+                window.editingQuotePk = null;
+                window.currentSelectedQuote = cfg.data.currentItem;
             }
         },
         allocations: {
-            emptyMessage: 'No allocations. Click "+ Add Row" to allocate costs.',
+            emptyMessage: 'No allocations for this quote',
             editable: true,
-            renderEditableRow: function(allocation, cfg, onChange) {
-                var row = $('<tr>');
-                if (allocation) row.attr('data-allocation-pk', allocation.quote_allocations_pk || allocation.pk);
-                
-                var itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
-                itemSelect.append($('<option>').val('').text('Select Item...'));
-                var costingItems = cfg.data.costingItems || window.quoteCostingItems || window.costings || [];
-                costingItems.forEach(function(item) {
-                    var option = $('<option>')
-                        .val(item.costing_pk || item.pk)
-                        .attr('data-costing-id', item.costing_pk || item.pk)
-                        .text(item.item || item.name);
-                    if (allocation && allocation.item_pk == (item.costing_pk || item.pk)) option.prop('selected', true);
-                    itemSelect.append(option);
-                });
-                itemSelect.on('change', onChange);
-                row.append($('<td>').append(itemSelect));
-                
-                var amountInput = $('<input>')
-                    .attr('type', 'number')
-                    .attr('step', '0.01')
-                    .addClass('form-control form-control-sm quote-allocation-amount-input')
-                    .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
-                    .on('change input', onChange);
-                row.append($('<td>').append(amountInput));
-                
-                var notesInput = $('<input>')
-                    .attr('type', 'text')
-                    .addClass('form-control form-control-sm quote-allocation-notes-input')
-                    .val(allocation ? allocation.notes || '' : '');
-                row.append($('<td>').append(notesInput));
-                
-                var deleteBtn = $('<button>')
-                    .addClass('btn btn-sm btn-danger')
-                    .html('<i class="fas fa-times"></i>')
-                    .on('click', function() {
-                        row.remove();
-                        onChange();
-                        if (window.adjustAllocationsHeight && window.adjustAllocationsHeight['quote']) {
-                            window.adjustAllocationsHeight['quote']();
-                        }
-                    });
-                row.append($('<td>').css('text-align', 'center').append(deleteBtn));
-                
-                return row;
+            renderRow: function(alloc, cfg) {
+                return renderQuoteAllocationRow(alloc, false);
             },
-            onUpdate: function(sectionId, totals) {
-                console.log('Quote allocations updated:', totals);
+            renderEditableRow: function(allocation, cfg, onChange) {
+                return renderQuoteAllocationRow(allocation, true, onChange);
+            },
+            onUpdate: function(sectionId, data) {
+                // Enable/disable Save button based on remainingNet
+                var saveBtn = $('#' + sectionId + 'SaveAllocationsBtn');
+                if (saveBtn.length) {
+                    var isValid = Math.abs(data.remainingNet) < 0.01;
+                    saveBtn.prop('disabled', !isValid);
+                    saveBtn.css('opacity', isValid ? '1' : '0.5');
+                }
             }
         },
         api: {
-            loadData: '/get_project_quotes/{pk}/',
-            loadAllocations: function(quotePk) {
-                return '/get_allocations_for_quote/' + quotePk + '/';
+            loadAllocations: '/core/get_allocations_for_quote/{pk}/',
+            save: '/core/save_quote_allocations/',
+            delete: '/core/delete_quote/'
+        },
+        callbacks: {
+            onUpdate: function(item, cfg, row) {
+                openQuoteForEditing(item);
+            },
+            onAllocationsLoaded: function(sectionId, allocations) {
+                console.log('Quote allocations loaded:', allocations.length);
+            },
+            onSave: function(itemPk, allocations, cfg) {
+                // Validate allocations before saving
+                var result = AllocationsManager.updateStillToAllocate('quote');
+                if (!result) {
+                    alert('Unable to calculate allocation totals.');
+                    return false;
+                }
+                
+                // Check if all allocations have an item selected
+                for (var i = 0; i < allocations.length; i++) {
+                    if (!allocations[i].item_pk) {
+                        alert('Please select an item for all allocation rows.');
+                        return false;
+                    }
+                }
+                
+                // Check if still to allocate is zero (within tolerance)
+                if (Math.abs(result.remainingNet) > 0.01) {
+                    alert('Still to Allocate must be $0.00. Current: $' + result.remainingNet.toFixed(2));
+                    return false;
+                }
+                
+                return true; // Continue with save
+            },
+            onSaveSuccess: function(response, itemPk, cfg) {
+                alert('Quote allocations saved successfully!');
+                AllocationsManager.setEditMode('quote', false);
+                window.editingQuotePk = null;
+                // Reload allocations to show saved state
+                AllocationsManager.loadAllocations('quote', itemPk);
             }
         }
     });
     
-    if (projectPk) AllocationsManager.loadData('quote', { projectPk: projectPk });
+    // Apply column widths using shared utility
+    (function applyColumnWidths() {
+        var isConstr = Utils.isConstructionProject('quote');
+        var widths = isConstr 
+            ? ['22%', '8%', '10%', '10%', '15%', '30%', '5%']  // Item, Unit, Qty, Rate, Amount, Notes, Delete
+            : ['40%', '20%', '35%', '5%'];  // Item, Net, Notes, Delete
+        Utils.applyColumnStyles('quote', widths);
+    })();
     
-    function getProjectPkFromUrl() {
-        var match = window.location.pathname.match(/\/project\/(\d+)/);
-        return match ? match[1] : null;
+    // Render a quote allocation row (read-only or editable)
+    function renderQuoteAllocationRow(allocation, editable, onChange) {
+        var row = $('<tr>');
+        var isConstr = Utils.isConstructionProject('quote');
+        
+        if (allocation) {
+            row.attr('data-allocation-pk', allocation.quote_allocations_pk || allocation.pk);
+            row.attr('data-item-pk', allocation.item_pk);
+        }
+        
+        if (editable) {
+            // Item dropdown
+            var itemSelect = $('<select>').addClass('form-control form-control-sm quote-allocation-item-select');
+            itemSelect.append($('<option>').val('').text('Select Item...'));
+            
+            var costingItems = window.quotesCostingItems || window.itemsItems || [];
+            var currentCategory = null;
+            costingItems.forEach(function(item) {
+                if (item.category__category !== currentCategory) {
+                    currentCategory = item.category__category;
+                    itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
+                }
+                var option = $('<option>').val(item.costing_pk).text(item.item);
+                option.attr('data-unit', item.unit__unit_name || item.unit || '');
+                if (allocation && allocation.item_pk == item.costing_pk) option.prop('selected', true);
+                itemSelect.find('optgroup').last().append(option);
+            });
+            
+            if (isConstr) {
+                // Construction: Item | Unit | Qty | Rate | Amount | Notes | Del
+                itemSelect.on('change', function() {
+                    var unit = $(this).find('option:selected').attr('data-unit') || '';
+                    row.find('.quote-allocation-unit-display').text(unit);
+                    if (onChange) onChange();
+                });
+                row.append($('<td>').append(itemSelect));
+                
+                var unitVal = allocation ? (allocation.unit || '') : '';
+                row.append($('<td>').append($('<span>').addClass('quote-allocation-unit-display').text(unitVal)));
+                
+                var qtyInput = $('<input>').attr('type', 'number').attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-qty-input')
+                    .val(allocation && allocation.qty ? parseFloat(allocation.qty).toFixed(2) : '')
+                    .on('input', function() {
+                        updateRowAmount(row);
+                        if (onChange) onChange();
+                    });
+                row.append($('<td>').append(qtyInput));
+                
+                var rateInput = $('<input>').attr('type', 'number').attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-rate-input')
+                    .val(allocation && allocation.rate ? parseFloat(allocation.rate).toFixed(2) : '')
+                    .on('input', function() {
+                        updateRowAmount(row);
+                        if (onChange) onChange();
+                    });
+                row.append($('<td>').append(rateInput));
+                
+                var amountVal = allocation && allocation.amount ? parseFloat(allocation.amount) : 0;
+                var amountDisplay = $('<span>').addClass('quote-allocation-amount-display')
+                    .text('$' + Utils.formatMoney(amountVal));
+                var amountHidden = $('<input>').attr('type', 'hidden').addClass('quote-allocation-net-input').val(amountVal.toFixed(2));
+                row.append($('<td>').append(amountDisplay).append(amountHidden));
+                
+                var notesInput = $('<input>').attr('type', 'text')
+                    .addClass('form-control form-control-sm quote-allocation-notes-input')
+                    .val(allocation ? allocation.notes || '' : '');
+                row.append($('<td>').append(notesInput));
+            } else {
+                // Non-construction: Item | Amount | Notes | Del
+                itemSelect.on('change', function() { if (onChange) onChange(); });
+                row.append($('<td>').append(itemSelect));
+                
+                var amountInput = $('<input>').attr('type', 'number').attr('step', '0.01')
+                    .addClass('form-control form-control-sm quote-allocation-net-input')
+                    .val(allocation ? parseFloat(allocation.amount).toFixed(2) : '')
+                    .on('input', function() { if (onChange) onChange(); });
+                row.append($('<td>').append(amountInput));
+                
+                var notesInput = $('<input>').attr('type', 'text')
+                    .addClass('form-control form-control-sm quote-allocation-notes-input')
+                    .val(allocation ? allocation.notes || '' : '');
+                row.append($('<td>').append(notesInput));
+            }
+            
+            // Delete button
+            var deleteBtn = $('<button>').addClass('btn btn-sm btn-danger').html('<i class="fas fa-times"></i>')
+                .on('click', function() {
+                    row.remove();
+                    if (onChange) onChange();
+                });
+            row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+        } else {
+            // Read-only mode
+            if (isConstr) {
+                row.append($('<td>').text(allocation.item_name || '-'));
+                row.append($('<td>').text(allocation.unit || '-'));
+                row.append($('<td>').text(allocation.qty ? parseFloat(allocation.qty).toFixed(2) : '0.00'));
+                var rate = allocation.rate ? parseFloat(allocation.rate) : 0;
+                row.append($('<td>').text('$' + Utils.formatMoney(rate)));
+                var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+                row.append($('<td>').text('$' + Utils.formatMoney(amount)));
+                row.append($('<td>').text(allocation.notes || '-'));
+                row.append($('<td>')); // Empty for delete column
+            } else {
+                row.append($('<td>').text(allocation.item_name || '-'));
+                var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+                row.append($('<td>').text('$' + Utils.formatMoney(amount)));
+                row.append($('<td>').text(allocation.notes || '-'));
+                row.append($('<td>')); // Empty for delete column
+            }
+        }
+        
+        return row;
     }
     
-    function saveQuote(quotePk) {
-        var allocations = AllocationsManager.getAllocations('quote');
-        if (!allocations || allocations.length === 0) {
-            alert('Please add at least one allocation.');
+    // Update row amount from qty * rate (construction mode)
+    function updateRowAmount(row) {
+        var qty = parseFloat(row.find('.quote-allocation-qty-input').val()) || 0;
+        var rate = parseFloat(row.find('.quote-allocation-rate-input').val()) || 0;
+        var amount = qty * rate;
+        row.find('.quote-allocation-amount-display').text('$' + Utils.formatMoney(amount));
+        row.find('.quote-allocation-net-input').val(amount.toFixed(2));
+    }
+    
+    // Open quote for editing
+    function openQuoteForEditing(quote) {
+        console.log('Opening quote for editing:', quote);
+        
+        // Set edit mode BEFORE anything else
+        AllocationsManager.setEditMode('quote', true);
+        
+        window.currentSelectedQuote = quote;
+        window.editingQuotePk = quote.quotes_pk;
+        
+        // Select the row (will load allocations)
+        var row = $('#quoteMainTableBody tr[data-pk="' + quote.quotes_pk + '"]');
+        if (row.length) {
+            if (!row.hasClass('selected-row')) {
+                // Row not selected - select it (this will load allocations with editMode: true)
+                AllocationsManager.selectRow('quote', row);
+            } else {
+                // Row already selected - reload allocations with editMode: true
+                AllocationsManager.loadAllocations('quote', quote.quotes_pk);
+            }
+        }
+    }
+    
+    // Load quotes data
+    function loadQuotesData() {
+        var pk = projectPk || (window.currentQuotesProject && window.currentQuotesProject.pk);
+        if (!pk) {
+            console.error('No project PK for loading quotes');
             return;
         }
         
+        console.log('Loading quotes for project:', pk);
+        
+        // Load items first
         $.ajax({
-            url: '/update_quote/',
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            data: JSON.stringify({
-                quote_id: quotePk,
-                allocations: allocations.map(function(a) {
-                    return { item: a.item_pk, amount: a.amount, notes: a.notes };
-                })
-            }),
+            url: '/core/get_project_items/' + pk + '/',
+            type: 'GET',
             success: function(response) {
                 if (response.status === 'success') {
-                    alert('Quote saved successfully!');
-                } else {
-                    alert('Error: ' + (response.message || 'Unknown error'));
+                    window.itemsItems = response.items;
+                    window.quotesCostingItems = response.items;
+                    console.log('Loaded costing items:', response.items.length);
                 }
-            },
-            error: function(xhr, status, error) {
-                alert('Failed to save quote: ' + error);
             }
+        }).always(function() {
+            // Then load quotes
+            $.ajax({
+                url: '/core/get_project_quotes/' + pk + '/',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        console.log('Loaded quotes:', response.quotes.length);
+                        AllocationsManager.populateMainTable('quote', response.quotes);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load quotes:', error);
+                }
+            });
         });
     }
     
-    function deleteQuote(quotePk, quoteNumber) {
-        if (!confirm('Are you sure you want to delete quote "' + quoteNumber + '"?')) return;
-        
-        $.ajax({
-            url: '/delete_quote/',
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            data: JSON.stringify({ supplier_quote_number: quoteNumber }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    var projectPk = window.projectPk || getProjectPkFromUrl();
-                    if (projectPk) AllocationsManager.loadData('quote', { projectPk: projectPk });
-                } else {
-                    alert('Error: ' + (response.message || 'Failed to delete quote'));
-                }
-            },
-            error: function(xhr, status, error) {
-                alert('Failed to delete quote: ' + error);
-            }
-        });
+    
+    // Make functions globally available
+    window.loadQuotesData = loadQuotesData;
+    window.openQuoteForEditing = openQuoteForEditing;
+    
+    // Auto-load data
+    if (projectPk) {
+        loadQuotesData();
     }
-});
+    
+})();
 </script>

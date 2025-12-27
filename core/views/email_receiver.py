@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
-from core.models import ReceivedEmail, EmailAttachment, Invoices
+from core.models import ReceivedEmail, EmailAttachment, Bills
 from datetime import datetime
 import json
 import logging
@@ -133,21 +133,21 @@ def receive_email(request):
             
             if attachment:
                 # Check if invoice already exists for this attachment (prevent duplicates)
-                existing_invoice = Invoices.objects.filter(
+                existing_invoice = Bills.objects.filter(
                     email_attachment=attachment
                 ).first()
                 
                 if not existing_invoice:
                     # Create new invoice entry
-                    invoice = Invoices.objects.create(
+                    invoice = Bills.objects.create(
                         received_email=email,
                         email_attachment=attachment,
                         auto_created=True,
-                        invoice_status=-2,  # -2 = unprocessed email bill (shows in Bills modal)
-                        invoice_type=0,     # Default type
+                        bill_status=-2,  # -2 = unprocessed email bill (shows in Bills modal)
+                        bill_type=0,     # Default type
                     )
-                    invoices_created.append(invoice.invoice_pk)
-                    logger.info(f"Auto-created Invoice #{invoice.invoice_pk} for attachment {attachment.filename}")
+                    invoices_created.append(invoice.bill_pk)
+                    logger.info(f"Auto-created Invoice #{invoice.bill_pk} for attachment {attachment.filename}")
                 else:
                     logger.info(f"Invoice already exists for attachment {attachment.filename}, skipping")
         

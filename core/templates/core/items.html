@@ -1,0 +1,1070 @@
+<!-- Items Management for Project Tender View - HTML Only -->
+<style>
+    .items-container {
+        display: flex;
+        height: 100%;
+        gap: 15px;
+    }
+    
+    .items-left-panel {
+        width: 55%;
+        overflow-y: auto;
+    }
+    
+    .items-right-panel {
+        width: 45%;
+        overflow-y: auto;
+    }
+    
+    .items-section {
+        margin-bottom: 30px;
+    }
+    
+    .items-section h5 {
+        margin-bottom: 15px;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    /* Compact form inputs for items tables */
+    .items-left-panel .reusable-table input[type="text"],
+    .items-left-panel .reusable-table select {
+        width: 100%;
+        padding: 3px 5px;
+        font-size: 11px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+    }
+    
+    .items-add-btn {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    
+    .items-add-btn.disabled {
+        background-color: #6c757d;
+        color: white;
+        cursor: not-allowed;
+    }
+    
+    .items-add-btn.enabled {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .items-add-btn.enabled:hover {
+        background-color: #218838;
+    }
+    
+    
+    /* Category row styling (match Contract Budget) */
+    .items-right-panel .reusable-table tr.category-row {
+        background-color: #f9f9f9;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .items-right-panel .reusable-table tr.category-row:hover {
+        background-color: #ececec;
+    }
+    
+    /* Item row indent (match Contract Budget) */
+    .items-right-panel .reusable-table td.indent {
+        padding-left: 30px;
+    }
+    
+    /* Drag-and-drop styles */
+    .drag-over {
+        border-top: 3px solid #007bff !important;
+        background-color: #e3f2fd !important;
+    }
+    
+    .items-right-panel .reusable-table tr.item-row:hover {
+        background-color: #f5f5f5;
+    }
+    
+    /* Internal category styling - purple (match Contract Budget) */
+    .items-right-panel .reusable-table tr.category-row.internal-category {
+        background-color: #e6d5f5;
+        color: #6f2da8;
+        cursor: default;
+    }
+    
+    .items-right-panel .reusable-table tr.category-row.internal-category:hover {
+        background-color: #d9c5ed;
+    }
+    
+    .items-right-panel .reusable-table tr.item-row.internal-item {
+        color: #6f2da8;
+    }
+    
+    .items-right-panel .reusable-table tr.item-row.internal-item td {
+        color: #6f2da8;
+    }
+    
+    /* Delete button styling */
+    .delete-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 5px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .delete-btn:hover {
+        opacity: 1;
+    }
+    
+    .delete-btn:disabled {
+        color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.3;
+    }
+</style>
+
+<div class="items-container">
+    <!-- Left Panel: Add Category and Add Item Forms -->
+    <div class="items-left-panel">
+        <!-- Add Category Section -->
+        <div class="items-section">
+            <h5>Add Category</h5>
+            <table class="reusable-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="categoryNameInput" maxlength="20" placeholder="Enter category name">
+                        </td>
+                        <td>
+                            <select id="categoryOrderSelect"></select>
+                        </td>
+                        <td>
+                            <button id="addCategoryBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Add Item Section -->
+        <div class="items-section">
+            <h5>Add Item</h5>
+            <table class="reusable-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Unit</th>
+                        <th>Category</th>
+                        <th>Order in List</th>
+                        <th>Add</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <input type="text" id="itemNameInput" maxlength="20" placeholder="Enter item name">
+                        </td>
+                        <td>
+                            <select id="itemUnitSelect">
+                                <option value="">Select unit...</option>
+                                <!-- Units will be loaded dynamically from database -->
+                            </select>
+                        </td>
+                        <td>
+                            <select id="itemCategorySelect"></select>
+                        </td>
+                        <td>
+                            <select id="itemOrderSelect" disabled></select>
+                        </td>
+                        <td>
+                            <button id="addItemBtn" class="items-add-btn disabled" disabled>Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Bulk Upload via CSV Section -->
+        <div class="items-section">
+            <h5>Bulk Upload via CSV</h5>
+            <div style="padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                <p style="margin-bottom: 10px; font-size: 12px; color: #6c757d;">
+                    Upload categories and items in bulk using a CSV file. Download the example template below to see the required format.
+                </p>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button id="downloadExampleCsvBtn" class="btn btn-sm btn-info">
+                        <i class="fas fa-download"></i> Download Example CSV
+                    </button>
+                    
+                    <button id="uploadCsvBtn" class="btn btn-sm btn-success">
+                        <i class="fas fa-upload"></i> Upload CSV
+                    </button>
+                </div>
+                
+                <!-- Hidden file input -->
+                <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                
+                <p style="margin-top: 10px; margin-bottom: 0; font-size: 11px; color: #dc3545;">
+                    <strong>Note:</strong> Upload will add to existing categories/items, not replace them.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Category / Item Display Table -->
+    <div class="items-right-panel">
+        <table class="reusable-table">
+            <thead>
+                <tr>
+                    <th style="width: 70%;">Category / Item</th>
+                    <th style="width: 15%;">Unit</th>
+                    <th style="width: 15%; text-align: center;">Delete</th>
+                </tr>
+            </thead>
+            <tbody id="itemsDisplayTableBody">
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">
+                        No items yet. Add a category and items to get started.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Self-contained Items Section JS -->
+<script>
+$(document).ready(function() {
+    // Auto-initialize if the items section is loaded
+    if ($('#itemsDisplayTableBody').length > 0) {
+        initializeItemsSection();
+    }
+    
+    // Initialize Items Section Function
+    function initializeItemsSection() {
+            // Clear global variables for items management
+            window.itemsCategories = [];
+            window.itemsItems = [];
+            
+            // Clear the table immediately to prevent showing stale data
+            var tbody = $('#tenderContentArea #itemsDisplayTableBody');
+            if (tbody.length > 0) {
+                tbody.html('<tr><td style="text-align: center; color: #6c757d; padding: 20px;">Loading...</td></tr>');
+            }
+            
+            // Dropdown update functions
+            // Update category order dropdown
+            function updateCategoryOrderDropdown() {
+                var select = document.querySelector('#tenderContentArea #categoryOrderSelect');
+                if (!select) return;
+                
+                // Add 1 to number of categories: if 0 categories, show option 1; if 3 categories, show 1,2,3,4
+                var maxOrder = window.itemsCategories.length + 1;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select order...</option>';
+                for (var i = 1; i <= maxOrder; i++) {
+                    optionsHTML += '<option value="' + i + '">' + i + '</option>';
+                }
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+            }
+            
+            // Update item category dropdown
+            function updateItemCategoryDropdown() {
+                var select = document.querySelector('#tenderContentArea #itemCategorySelect');
+                if (!select) return;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select category...</option>';
+                window.itemsCategories.forEach(function(category) {
+                    optionsHTML += '<option value="' + category.categories_pk + '">' + category.category + '</option>';
+                });
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+            }
+            
+            // Load and populate unit dropdown
+            function loadAndPopulateUnits() {
+                $.ajax({
+                    url: '/core/get_units/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            var select = document.querySelector('#tenderContentArea #itemUnitSelect');
+                            if (!select) return;
+                            
+                            // Build options HTML string
+                            var optionsHTML = '<option value="">Select unit...</option>';
+                            response.units.forEach(function(unit) {
+                                optionsHTML += '<option value="' + unit.unit_pk + '">' + unit.unit_name + '</option>';
+                            });
+                            
+                            // Replace select's innerHTML
+                            select.innerHTML = optionsHTML;
+                        } else {
+                            console.error('Error loading units:', response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading units:', error);
+                    }
+                });
+            }
+            
+            // Update item order dropdown based on selected category
+            function updateItemOrderDropdown(categoryPk) {
+                var select = document.querySelector('#tenderContentArea #itemOrderSelect');
+                if (!select) return;
+                
+                if (!categoryPk) {
+                    select.innerHTML = '<option value="">Select category first...</option>';
+                    select.disabled = true;
+                    return;
+                }
+                
+                // Count items in this category
+                var itemsInCategory = window.itemsItems.filter(function(item) {
+                    return item.category__category === getCategoryName(categoryPk);
+                });
+                
+                // Add 1 to number of items: if 0 items, show option 1; if 3 items, show 1,2,3,4
+                var maxOrder = itemsInCategory.length + 1;
+                
+                // Build options HTML string
+                var optionsHTML = '<option value="">Select order...</option>';
+                for (var i = 1; i <= maxOrder; i++) {
+                    optionsHTML += '<option value="' + i + '">' + i + '</option>';
+                }
+                
+                // Replace select's innerHTML
+                select.innerHTML = optionsHTML;
+                select.disabled = false;
+            }
+            
+            // Get category name by PK
+            function getCategoryName(categoryPk) {
+                var category = window.itemsCategories.find(function(cat) {
+                    return cat.categories_pk == categoryPk;
+                });
+                return category ? category.category : '';
+            }
+            
+            // Load units for the unit dropdown
+            loadAndPopulateUnits();
+            
+            // Load categories and items for current project
+            if (window.currentTenderProject && window.currentTenderProject.pk) {
+                loadProjectItems(window.currentTenderProject.pk);
+            }
+            
+            // Load categories and items for a project
+            function loadProjectItems(projectPk) {
+                console.log('Loading items for project:', projectPk);
+                
+                // Load categories
+                $.ajax({
+                    url: '/core/get_project_categories/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.itemsCategories = response.categories;
+                            console.log('Loaded categories:', window.itemsCategories);
+                            updateCategoryOrderDropdown();
+                            updateItemCategoryDropdown();
+                            loadItems(projectPk);
+                        } else {
+                            console.error('Error loading categories:', response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load categories:', error);
+                    }
+                });
+            }
+            
+            // Load items
+            function loadItems(projectPk) {
+                $.ajax({
+                    url: '/core/get_project_items/' + projectPk + '/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            window.itemsItems = response.items;
+                            console.log('Loaded items:', window.itemsItems);
+                            renderItemsTable();
+                        } else {
+                            console.error('Error loading items:', response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load items:', error);
+                    }
+                });
+            }
+            
+            // Render items display table with drag-and-drop
+            function renderItemsTable() {
+                // Use scoped selector to ensure we target the correct table in tenderContentArea
+                var tbody = $('#tenderContentArea #itemsDisplayTableBody');
+                if (tbody.length === 0) {
+                    console.error('Table body not found in DOM');
+                    return;
+                }
+                
+                tbody.empty();
+                
+                if (window.itemsItems.length === 0) {
+                    tbody.append('<tr><td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">No items yet. Add a category and items to get started.</td></tr>');
+                    return;
+                }
+                
+                // Group items by category
+                var groupedItems = {};
+                window.itemsItems.forEach(function(item) {
+                    var categoryName = item.category__category;
+                    if (!groupedItems[categoryName]) {
+                        groupedItems[categoryName] = [];
+                    }
+                    groupedItems[categoryName].push(item);
+                });
+                
+                // Sort categories by order_in_list
+                window.itemsCategories.sort(function(a, b) {
+                    return a.order_in_list - b.order_in_list;
+                });
+                
+                // Render each category and its items
+                window.itemsCategories.forEach(function(category, catIndex) {
+                    var items = groupedItems[category.category] || [];
+                    
+                    // Sort items by order_in_list
+                    items.sort(function(a, b) {
+                        return (a.order_in_list || 0) - (b.order_in_list || 0);
+                    });
+                    
+                    // Render category header row (draggable unless Internal)
+                    var isInternal = category.category === 'Internal';
+                    var categoryRow = $('<tr></tr>')
+                        .addClass('category-row')
+                        .attr('data-category-pk', category.categories_pk)
+                        .attr('data-category-order', category.order_in_list);
+                    
+                    if (isInternal) {
+                        // Internal category: purple, not draggable, can't be deleted
+                        categoryRow.addClass('internal-category');
+                    } else {
+                        // Regular category: draggable, can be deleted
+                        categoryRow.attr('draggable', 'true')
+                            .css({
+                                'background-color': '#f0f0f0',
+                                'font-weight': 'bold',
+                                'cursor': 'move'
+                            });
+                    }
+                    
+                    // Add category name cell (no emoji, clean like Contract Budget)
+                    categoryRow.append('<td>' + category.category + '</td>');
+                    
+                    // Add empty unit cell for category rows
+                    categoryRow.append('<td></td>');
+                    
+                    // Add delete button cell
+                    var deleteCell = $('<td style="text-align: center;"></td>');
+                    if (isInternal) {
+                        // Internal category cannot be deleted
+                        deleteCell.append('<button class="delete-btn" disabled title="Internal category cannot be deleted">✕</button>');
+                    } else {
+                        // Regular category can be deleted
+                        var deleteBtn = $('<button class="delete-btn delete-category-btn" title="Delete category and all items"></button>')
+                            .attr('data-category-pk', category.categories_pk)
+                            .attr('data-category-name', category.category)
+                            .text('✕');
+                        deleteCell.append(deleteBtn);
+                    }
+                    categoryRow.append(deleteCell);
+                    
+                    tbody.append(categoryRow);
+                    
+                    // Render items under this category (draggable within category)
+                    items.forEach(function(item, itemIndex) {
+                        var itemRow = $('<tr></tr>')
+                            .addClass('item-row')
+                            .attr('draggable', 'true')
+                            .attr('data-item-pk', item.costing_pk)
+                            .attr('data-category-pk', category.categories_pk)
+                            .attr('data-item-order', item.order_in_list || (itemIndex + 1))
+                            .css('cursor', 'move');
+                        
+                        // Apply purple styling if item is in Internal category
+                        if (isInternal) {
+                            itemRow.addClass('internal-item');
+                        }
+                        
+                        // Add item name cell with indent class (no tree characters, clean like Contract Budget)
+                        itemRow.append('<td class="indent">' + item.item + '</td>');
+                        
+                        // Add unit cell
+                        var unitDisplay = item.unit || '-';
+                        itemRow.append('<td>' + unitDisplay + '</td>');
+                        
+                        // Add delete button cell for items
+                        var itemDeleteCell = $('<td style="text-align: center;"></td>');
+                        var itemDeleteBtn = $('<button class="delete-btn delete-item-btn" title="Delete item"></button>')
+                            .attr('data-item-pk', item.costing_pk)
+                            .attr('data-item-name', item.item)
+                            .text('✕');
+                        itemDeleteCell.append(itemDeleteBtn);
+                        itemRow.append(itemDeleteCell);
+                        
+                        tbody.append(itemRow);
+                    });
+                });
+                
+                // Attach drag-and-drop event handlers
+                attachDragHandlers();
+            }
+            
+            // Drag-and-drop event handlers
+            var draggedElement = null;
+            var draggedType = null; // 'category' or 'item'
+            
+            function attachDragHandlers() {
+                // Category rows - can drag anywhere (except Internal)
+                $('.category-row:not(.internal-category)').on('dragstart', function(e) {
+                    draggedElement = this;
+                    draggedType = 'category';
+                    $(this).css('opacity', '0.4');
+                    e.originalEvent.dataTransfer.effectAllowed = 'move';
+                });
+                
+                $('.category-row').on('dragend', function(e) {
+                    $(this).css('opacity', '1');
+                    $('.drag-over').removeClass('drag-over');
+                });
+                
+                $('.category-row').on('dragover', function(e) {
+                    if (e.preventDefault) {
+                        e.preventDefault();
+                    }
+                    e.originalEvent.dataTransfer.dropEffect = 'move';
+                    
+                    if ($(this)[0] !== draggedElement) {
+                        $(this).addClass('drag-over');
+                    }
+                    return false;
+                });
+                
+                $('.category-row').on('dragleave', function(e) {
+                    $(this).removeClass('drag-over');
+                });
+                
+                $('.category-row').on('drop', function(e) {
+                    if (e.stopPropagation) {
+                        e.stopPropagation();
+                    }
+                    
+                    $(this).removeClass('drag-over');
+                    
+                    if (draggedElement !== this) {
+                        if (draggedType === 'category') {
+                            // Moving a category
+                            var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                            var targetCategoryOrder = parseInt($(this).attr('data-category-order'));
+                            
+                            reorderCategory(draggedCategoryPk, targetCategoryOrder);
+                        }
+                    }
+                    
+                    return false;
+                });
+                
+                // Item rows - can only drag within category
+                $('.item-row').on('dragstart', function(e) {
+                    draggedElement = this;
+                    draggedType = 'item';
+                    $(this).css('opacity', '0.4');
+                    e.originalEvent.dataTransfer.effectAllowed = 'move';
+                });
+                
+                $('.item-row').on('dragend', function(e) {
+                    $(this).css('opacity', '1');
+                    $('.drag-over').removeClass('drag-over');
+                });
+                
+                $('.item-row').on('dragover', function(e) {
+                    if (e.preventDefault) {
+                        e.preventDefault();
+                    }
+                    
+                    // Only allow drop if same category
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryPk = $(this).attr('data-category-pk');
+                    
+                    if (draggedType === 'item' && draggedCategoryPk === targetCategoryPk) {
+                        e.originalEvent.dataTransfer.dropEffect = 'move';
+                        if ($(this)[0] !== draggedElement) {
+                            $(this).addClass('drag-over');
+                        }
+                    } else {
+                        e.originalEvent.dataTransfer.dropEffect = 'none';
+                    }
+                    
+                    return false;
+                });
+                
+                $('.item-row').on('dragleave', function(e) {
+                    $(this).removeClass('drag-over');
+                });
+                
+                $('.item-row').on('drop', function(e) {
+                    if (e.stopPropagation) {
+                        e.stopPropagation();
+                    }
+                    
+                    $(this).removeClass('drag-over');
+                    
+                    // Only allow drop if same category
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryPk = $(this).attr('data-category-pk');
+                    
+                    if (draggedElement !== this && draggedType === 'item' && draggedCategoryPk === targetCategoryPk) {
+                        var draggedItemPk = $(draggedElement).attr('data-item-pk');
+                        var targetItemOrder = parseInt($(this).attr('data-item-order'));
+                        
+                        reorderItem(draggedItemPk, targetItemOrder);
+                    }
+                    
+                    return false;
+                });
+            }
+            
+            // Reorder category via AJAX
+            function reorderCategory(categoryPk, newOrder) {
+                $.ajax({
+                    url: '/core/reorder_category/' + window.currentTenderProject.pk + '/' + categoryPk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        new_order: newOrder
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Reload all data to reflect new order
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var errorMessage = 'Failed to reorder category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+            
+            // Reorder item via AJAX
+            function reorderItem(itemPk, newOrder) {
+                $.ajax({
+                    url: '/core/reorder_item/' + window.currentTenderProject.pk + '/' + itemPk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        new_order: newOrder
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Reload all data to reflect new order
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var errorMessage = 'Failed to reorder item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+            
+            // Validation for Add Category button
+            function validateCategoryForm() {
+                // Use scoped selectors to only target elements within tenderContentArea
+                var categoryName = $('#tenderContentArea #categoryNameInput').val();
+                if (categoryName) categoryName = categoryName.trim();
+                var orderInList = $('#tenderContentArea #categoryOrderSelect').val();
+                
+                var isValid = categoryName && categoryName.length > 0 && orderInList !== '';
+                
+                var btn = $('#tenderContentArea #addCategoryBtn');
+                
+                if (isValid) {
+                    btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+                } else {
+                    btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+                }
+            }
+            
+            // Validation for Add Item button
+            function validateItemForm() {
+                // Use scoped selectors to only target elements within tenderContentArea
+                var itemName = $('#tenderContentArea #itemNameInput').val();
+                if (itemName) itemName = itemName.trim();
+                var itemUnit = $('#tenderContentArea #itemUnitSelect').val();
+                var categoryPk = $('#tenderContentArea #itemCategorySelect').val();
+                var orderInList = $('#tenderContentArea #itemOrderSelect').val();
+                
+                var isValid = itemName && itemName.length > 0 && itemUnit && itemUnit.length > 0 && categoryPk !== '' && orderInList !== '';
+                
+                var btn = $('#tenderContentArea #addItemBtn');
+                if (isValid) {
+                    btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+                } else {
+                    btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+                }
+            }
+            
+            // Event listeners for validation (scoped to tenderContentArea)
+            // Remove old handlers first to prevent duplicates
+            $('#tenderContentArea').off('input change', '#categoryNameInput, #categoryOrderSelect').on('input change', '#categoryNameInput, #categoryOrderSelect', function(e) {
+                validateCategoryForm();
+            });
+            $('#tenderContentArea').off('input change', '#itemNameInput, #itemUnitSelect, #itemCategorySelect, #itemOrderSelect').on('input change', '#itemNameInput, #itemUnitSelect, #itemCategorySelect, #itemOrderSelect', function(e) {
+                validateItemForm();
+            });
+            
+            // Event listener for item category selection
+            // Remove old handler first to prevent duplicates
+            $('#tenderContentArea').off('change', '#itemCategorySelect').on('change', '#itemCategorySelect', function() {
+                var categoryPk = $(this).val();
+                updateItemOrderDropdown(categoryPk);
+                validateItemForm();
+            });
+            
+            // Trigger validation on page load to set initial button states
+            setTimeout(function() {
+                validateCategoryForm();
+                validateItemForm();
+            }, 100);
+            
+            // Add Category button click (scoped to tenderContentArea)
+            // Remove old handler first to prevent duplicate submissions
+            $('#tenderContentArea').off('click', '#addCategoryBtn').on('click', '#addCategoryBtn', function() {
+                if ($(this).hasClass('disabled')) return;
+                
+                var categoryName = $('#tenderContentArea #categoryNameInput').val().trim();
+                var orderInList = $('#tenderContentArea #categoryOrderSelect').val();
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/core/dashboard_create_category/' + window.currentTenderProject.pk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        category: categoryName,
+                        order_in_list: parseInt(orderInList)
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            console.log('Category created:', response.category);
+                            
+                            // Reload all categories since order may have changed
+                            loadProjectItems(window.currentTenderProject.pk);
+                            
+                            // Clear form
+                            $('#tenderContentArea #categoryNameInput').val('');
+                            $('#tenderContentArea #categoryOrderSelect').val('');
+                            validateCategoryForm();
+                            
+                            alert('Category added successfully!');
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to create category:', error);
+                        var errorMessage = 'Failed to create category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage = 'Failed to create category: ' + error;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+            
+            // Add Item button click (scoped to tenderContentArea)
+            // Remove old handler first to prevent duplicate submissions
+            $('#tenderContentArea').off('click', '#addItemBtn').on('click', '#addItemBtn', function() {
+                if ($(this).hasClass('disabled')) return;
+                
+                var itemName = $('#tenderContentArea #itemNameInput').val().trim();
+                var itemUnit = $('#tenderContentArea #itemUnitSelect').val();
+                var categoryPk = $('#tenderContentArea #itemCategorySelect').val();
+                var orderInList = $('#tenderContentArea #itemOrderSelect').val();
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/core/dashboard_create_item/' + window.currentTenderProject.pk + '/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        item: itemName,
+                        unit: itemUnit,
+                        category_pk: parseInt(categoryPk),
+                        order_in_list: parseInt(orderInList)
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            console.log('Item created:', response.item);
+                            
+                            // Reload all items since order may have changed
+                            loadProjectItems(window.currentTenderProject.pk);
+                            
+                            // Clear form
+                            $('#tenderContentArea #itemNameInput').val('');
+                            $('#tenderContentArea #itemUnitSelect').val('');
+                            $('#tenderContentArea #itemOrderSelect').val('');
+                            
+                            // Keep category selected for convenience
+                            // (user might want to add more items to same category)
+                            updateItemOrderDropdown(categoryPk);
+                            validateItemForm();
+                            
+                            alert('Item added successfully!');
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to create item:', error);
+                        var errorMessage = 'Failed to create item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage = 'Failed to create item: ' + error;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+            
+            // Download Example CSV button
+            $('#tenderContentArea').off('click', '#downloadExampleCsvBtn').on('click', '#downloadExampleCsvBtn', function() {
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Trigger download of example CSV
+                window.location.href = '/core/download_items_csv_template/';
+            });
+            
+            // Upload CSV button - triggers file picker
+            $('#tenderContentArea').off('click', '#uploadCsvBtn').on('click', '#uploadCsvBtn', function() {
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Trigger the hidden file input
+                $('#tenderContentArea #csvFileInput').click();
+            });
+            
+            // CSV File input change handler - immediately upload when file selected
+            $('#tenderContentArea').off('change', '#csvFileInput').on('change', '#csvFileInput', function() {
+                const fileInput = this;
+                
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    return;
+                }
+                
+                const file = fileInput.files[0];
+                
+                // Validate file type
+                if (!file.name.endsWith('.csv')) {
+                    alert('Please select a valid CSV file');
+                    fileInput.value = '';
+                    return;
+                }
+                
+                // Create FormData and upload
+                const formData = new FormData();
+                formData.append('csv_file', file);
+                formData.append('project_pk', window.currentTenderProject.pk);
+                
+                // Show uploading state on upload button
+                const uploadBtn = $('#uploadCsvBtn');
+                const originalText = uploadBtn.html();
+                uploadBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Uploading...');
+                
+                $.ajax({
+                    url: '/core/upload_items_csv/' + window.currentTenderProject.pk + '/',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            let message = `Success! Created ${response.categories_created} categories and ${response.items_created} items.`;
+                            
+                            // Add warnings if any
+                            if (response.warnings && response.warnings.length > 0) {
+                                message += '\n\nWarnings:\n' + response.warnings.slice(0, 5).join('\n');
+                                if (response.warnings.length > 5) {
+                                    message += `\n... and ${response.warnings.length - 5} more warnings`;
+                                }
+                            }
+                            
+                            alert(message);
+                            
+                            // Reload items to show new data
+                            loadProjectItems(window.currentTenderProject.pk);
+                            
+                            // Clear file input
+                            fileInput.value = '';
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                        
+                        uploadBtn.prop('disabled', false).html(originalText);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to upload CSV:', error);
+                        let errorMessage = 'Failed to upload CSV';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage = 'Failed to upload CSV: ' + error;
+                        }
+                        alert(errorMessage);
+                        uploadBtn.prop('disabled', false).html(originalText);
+                        fileInput.value = '';
+                    }
+                });
+            });
+            
+            // Delete Category button handler
+            $('#tenderContentArea').off('click', '.delete-category-btn').on('click', '.delete-category-btn', function(e) {
+                e.stopPropagation(); // Prevent drag events
+                
+                var categoryPk = $(this).attr('data-category-pk');
+                var categoryName = $(this).attr('data-category-name');
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Confirmation dialog
+                var itemCount = window.itemsItems.filter(function(item) {
+                    return item.category__category === categoryName;
+                }).length;
+                
+                var message = `Are you sure you want to delete the category "${categoryName}"?`;
+                if (itemCount > 0) {
+                    message += `\n\nThis will also delete ${itemCount} item(s) in this category.`;
+                }
+                
+                if (!confirm(message)) {
+                    return;
+                }
+                
+                // Make AJAX call to delete category
+                $.ajax({
+                    url: `/core/delete_category/${window.currentTenderProject.pk}/${categoryPk}/`,
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            // Reload items to reflect deletion
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to delete category:', error);
+                        var errorMessage = 'Failed to delete category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+            
+            // Delete Item button handler
+            $('#tenderContentArea').off('click', '.delete-item-btn').on('click', '.delete-item-btn', function(e) {
+                e.stopPropagation(); // Prevent drag events
+                
+                var itemPk = $(this).attr('data-item-pk');
+                var itemName = $(this).attr('data-item-name');
+                
+                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
+                    alert('No project selected');
+                    return;
+                }
+                
+                // Confirmation dialog
+                if (!confirm(`Are you sure you want to delete the item "${itemName}"?`)) {
+                    return;
+                }
+                
+                // Make AJAX call to delete item
+                $.ajax({
+                    url: `/core/delete_item/${window.currentTenderProject.pk}/${itemPk}/`,
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            // Reload items to reflect deletion
+                            loadProjectItems(window.currentTenderProject.pk);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to delete item:', error);
+                        var errorMessage = 'Failed to delete item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            });
+        }
+    });
+</script>

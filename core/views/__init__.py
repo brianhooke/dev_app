@@ -8,21 +8,25 @@ All views are re-exported here for backward compatibility.
 # Quote views
 from .quotes import (
     commit_data, update_quote, delete_quote, get_quote_allocations,
-    update_uncommitted, get_quotes_by_supplier, get_quote_allocations_by_quotes,
+    get_quote_allocations_by_quotes,
     get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation
 )
 
+# Contract Budget views
+from .contract_budget import update_uncommitted, get_project_committed_amounts
+
 # Bill/Invoice views
 from .bills import (
-    delete_invoice, upload_invoice, upload_invoice_allocations,
-    post_invoice, test_xero_invoice, get_invoices_by_supplier,
-    get_invoice_allocations
+    delete_bill, upload_bill, upload_bill_allocations,
+    post_bill, test_xero_bill, get_bills_by_supplier,
+    get_bill_allocations
 )
 
 # PO views
 from .pos import (
-    create_po_order, generate_po_pdf, view_po_pdf, wrap_text,
-    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_invoice_pdf, get_po_table_data_for_invoice
+    create_po_order, generate_po_pdf, wrap_text,
+    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_bill_pdf, get_po_table_data_for_invoice,
+    get_quotes_by_supplier
 )
 
 # Claims views - now imported from construction app for backward compatibility
@@ -50,14 +54,32 @@ from .project_type import (
 from .main import (
     create_contacts, send_test_email, send_test_email_view,
     upload_categories, upload_costings, update_contract_budget_amounts,
-    upload_letterhead, update_contacts, upload_margin_category_and_lines,
-    invoices_view, get_project_invoices, update_allocated_invoice,
-    get_unallocated_invoice_allocations, create_unallocated_invoice_allocation,
+    upload_letterhead, update_contacts, upload_margin_category_and_lines
+)
+
+# Bill views (consolidated from main.py into bills.py)
+from .bills import (
+    bills_view, get_project_bills, update_allocated_bill,
+    get_unallocated_bill_allocations, create_unallocated_invoice_allocation,
     update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation,
-    allocate_invoice, unallocate_invoice, approve_invoice
+    allocate_bill, unallocate_bill, approve_bill, get_allocated_bills
 )
 
 # Database management views
 from .database_wipe import wipe_database
+
+# Dashboard views (moved from dashboard app)
+from .dashboard import (
+    error_response, success_response, dashboard_view,
+    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
+    create_contact, update_contact_details, update_contact_status,
+    send_bill, get_project_categories, get_project_items,
+    create_category, create_item, reorder_category, reorder_item,
+    download_items_csv_template, upload_items_csv,
+    generate_po_html, get_po_status, preview_po,
+    send_po_email as dashboard_send_po_email, download_po_pdf,
+    get_units, add_unit, reorder_unit, delete_unit,
+    get_recent_activities, get_action_items
+)
 
 # DEPRECATED: get_xero_token, get_xero_contacts - use OAuth2 in xero_oauth.py instead

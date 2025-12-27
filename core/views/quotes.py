@@ -1,68 +1,106 @@
 """
 Quotes-related views.
+
+Template Rendering:
+1. quotes_view - Render quotes section template (supports project_pk query param)
+
+Quote CRUD:
+2. commit_data - Commit quote data (create new quote with allocations)
+3. update_quote - Update existing quote with new data
+4. delete_quote - Delete quote and its allocations
+5. save_project_quote - Save or update a project quote (with PDF upload)
+
+Quote Retrieval:
+6. get_project_quotes - Get all quotes for a project with allocations
+7. get_project_contacts - Get contacts for project's Xero instance
+
+Allocation Management:
+8. get_quote_allocations - Get allocations by supplier
+9. get_quote_allocations_for_quote - Get allocations for specific quote
+10. get_quote_allocations_by_quotes - Get allocations for given quote IDs
+11. create_quote_allocation - Create new quote allocation
+12. update_quote_allocation - Update existing quote allocation
+13. delete_quote_allocation - Delete quote allocation
 """
 
-import csv
-from decimal import Decimal, InvalidOperation
-from django.template import loader
-from ..forms import CSVUploadForm
-from django.http import HttpResponse, JsonResponse
-from ..models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
+import base64
 import json
-from django.shortcuts import render
+import logging
+import ssl
+import uuid
+from collections import defaultdict
+from decimal import Decimal
+
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.db.models import Prefetch
 from django.forms.models import model_to_dict
-from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
-from ..services import quotes as quote_service
-from ..services import pos as pos_service
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.shortcuts import get_object_or_404
-import uuid
-from django.core.files.base import ContentFile
-import base64
-from django.conf import settings
-from PyPDF2 import PdfReader, PdfWriter
-import os
-import logging
-from io import BytesIO
-from django.core.files.storage import default_storage
-from datetime import datetime, date, timedelta
-import re
-from django.core.mail import send_mail
-from django.db import connection
-from collections import defaultdict
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from io import BytesIO
-from django.core.mail import EmailMessage
-from urllib.parse import urljoin
-import textwrap
-from django.core import serializers
-from reportlab.lib import colors
-import requests
-from decimal import Decimal
-from ratelimit import limits, sleep_and_retry
-from urllib.request import urlretrieve
-from django.shortcuts import render
-from django.http import JsonResponse, HttpResponseBadRequest
-from django.forms.models import model_to_dict
-from django.db.models import Sum
-from ..models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
-import json
-from django.db.models import Q, Sum
-import ssl
-import urllib.request
-from django.core.exceptions import ValidationError
-from ..formulas import Committed
-from django.core.serializers.json import DjangoJSONEncoder
-from django.db import transaction
+
+from ..models import Contacts, Costing, Projects, Quote_allocations, Quotes
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  
+logger = logging.getLogger(__name__)  
+
+
+def quotes_view(request):
+    """Render the quotes section template.
+    
+    Accepts project_pk as query parameter to enable self-contained operation.
+    Example: /core/quotes/?project_pk=123
+    
+    Returns construction-specific columns when project_type == 'construction'.
+    """
+    project_pk = request.GET.get('project_pk')
+    is_construction = False
+    
+    if project_pk:
+        try:
+            project = Projects.objects.get(pk=project_pk)
+            is_construction = (project.project_type == 'construction')
+        except Projects.DoesNotExist:
+            pass
+    
+    # Main table columns (same for both project types)
+    main_table_columns = [
+        {'header': 'Supplier', 'width': '50%'},
+        {'header': '$ Net', 'width': '15%'},
+        {'header': 'Quote #', 'width': '15%'},
+        {'header': 'Update', 'width': '12%'},
+        {'header': 'Delete', 'width': '8%'},
+    ]
+    
+    # Allocations columns differ by project type
+    if is_construction:
+        allocations_columns = [
+            {'header': 'Item', 'width': '22%'},
+            {'header': 'Unit', 'width': '8%'},
+            {'header': 'Qty', 'width': '10%'},
+            {'header': 'Rate', 'width': '10%'},
+            {'header': '$ Amount', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Notes', 'width': '30%'},
+            {'header': '', 'width': '5%', 'align': 'center'},
+        ]
+    else:
+        allocations_columns = [
+            {'header': 'Item', 'width': '40%'},
+            {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Notes', 'width': '35%'},
+            {'header': '', 'width': '5%', 'align': 'center'},
+        ]
+    
+    context = {
+        'project_pk': project_pk,
+        'is_construction': is_construction,
+        'main_table_columns': main_table_columns,
+        'allocations_columns': allocations_columns,
+    }
+    return render(request, 'core/quotes.html', context)
+
 
 @csrf_exempt
 def commit_data(request):
@@ -394,61 +432,6 @@ def delete_quote_allocation(request, allocation_pk):
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
-
-@csrf_exempt
-def update_uncommitted(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        costing_pk = data.get('costing_pk')
-        uncommitted = data.get('uncommitted')
-        notes = data.get('notes')
-        uncommitted_qty = data.get('uncommitted_qty')
-        uncommitted_rate = data.get('uncommitted_rate')
-        
-        try:
-            costing = Costing.objects.get(costing_pk=costing_pk)
-            costing.uncommitted_amount = uncommitted
-            costing.uncommitted_notes = notes
-            
-            # Update qty and rate if provided (for construction projects)
-            if uncommitted_qty is not None:
-                costing.uncommitted_qty = uncommitted_qty
-            if uncommitted_rate is not None:
-                costing.uncommitted_rate = uncommitted_rate
-            
-            costing.save()
-            return JsonResponse({'status': 'success'})
-        except Costing.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
-logger = logging.getLogger(__name__)
-
-def get_quotes_by_supplier(request):
-    supplier_name = request.GET.get('supplier', '')
-    contact = Contacts.objects.filter(contact_name=supplier_name).first()
-    if not contact:
-        return JsonResponse({"error": "Supplier not found"}, status=404)
-    quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
-        Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  
-    )
-    quotes_data = []
-    for quote in quotes:
-        quote_info = {
-            "quotes_pk": quote.quotes_pk,
-            "supplier_quote_number": quote.supplier_quote_number,
-            "total_cost": str(quote.total_cost),  
-            "quote_allocations": [
-                {
-                    "quote_allocations_pk": allocation.quote_allocations_pk,
-                    "item": allocation.item.item,  
-                    "amount": str(allocation.amount),
-                    "notes": allocation.notes or ""
-                } for allocation in quote.fetched_allocations  
-            ]
-        }
-        quotes_data.append(quote_info)
-    return JsonResponse(quotes_data, safe=False)
 
 @require_http_methods(["GET"])
 def get_project_contacts(request, project_pk):
@@ -855,53 +838,4 @@ def get_quote_allocations_by_quotes(request):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting allocations: {str(e)}'
-        }, status=500)
-
-
-@require_http_methods(["GET"])
-def get_project_committed_amounts(request, project_pk):
-    """
-    Get committed amounts (sum of quote allocations) per item for a project.
-    For Internal category items, use contract_budget as committed amount.
-    Returns a dictionary of {costing_pk: total_committed_amount}
-    """
-    try:
-        project = get_object_or_404(Projects, pk=project_pk)
-        
-        # Get all quotes for this project
-        project_quotes = Quotes.objects.filter(project=project)
-        
-        # Get all quote allocations for these quotes and aggregate by item
-        committed_amounts = Quote_allocations.objects.filter(
-            quotes_pk__in=project_quotes
-        ).values('item__costing_pk').annotate(
-            total_committed=Sum('amount')
-        )
-        
-        # Convert to dictionary {costing_pk: amount}
-        committed_dict = {
-            item['item__costing_pk']: float(item['total_committed'])
-            for item in committed_amounts
-        }
-        
-        # For Internal category items, use contract_budget as committed amount
-        # (since they don't use uncommitted or quote allocations)
-        internal_items = Costing.objects.filter(
-            project=project,
-            category__category='Internal'
-        )
-        
-        for item in internal_items:
-            committed_dict[item.costing_pk] = float(item.contract_budget or 0)
-        
-        return JsonResponse({
-            'status': 'success',
-            'committed_amounts': committed_dict
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting committed amounts: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Error getting committed amounts: {str(e)}'
         }, status=500)

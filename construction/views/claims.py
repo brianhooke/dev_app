@@ -14,7 +14,7 @@ from core.models import (
     Categories, Contacts, Quotes, Costing, Quote_allocations,
     DesignCategories, PlanPdfs, ReportPdfs, ReportCategories,
     Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead,
-    Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
+    Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Projects, Hc_variation, Hc_variation_allocations
 )
 import json
@@ -87,7 +87,7 @@ def associate_sc_claims_with_hc_claim(request):
                 }, status=400)
         new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
         logger.info(f'Created new HC claim with pk: {new_hc_claim.hc_claim_pk}')
-        update_result = Invoices.objects.filter(invoice_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
+        update_result = Bills.objects.filter(bill_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
         logger.info(f'Updated {update_result} invoices with new HC claim')
         return JsonResponse({
             'latest_hc_claim_pk': new_hc_claim.hc_claim_pk,
@@ -357,13 +357,13 @@ def post_progress_claim_data(request):
             return JsonResponse({"error": "No allocations provided"}, status=400)
         new_allocations = []
         with transaction.atomic():
-            invoice = Invoices.objects.get(pk=invoice_id)
-            invoice.invoice_status = 1
-            invoice.invoice_type = 2
+            invoice = Bills.objects.get(pk=invoice_id)
+            invoice.bill_status = 1
+            invoice.bill_type = 2
             invoice.save()
             if updating:
-                existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
-                Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
+                existing_count = Bill_allocations.objects.filter(bill_pk=invoice).count()
+                Bill_allocations.objects.filter(bill_pk=invoice).delete()
                 print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
             for alloc in allocations:
                 item_pk = alloc.get("item_pk")
@@ -377,26 +377,26 @@ def post_progress_claim_data(request):
                     costing_obj = Costing.objects.get(pk=item_pk)
                 except Costing.DoesNotExist:
                     raise ValueError(f"Costing object not found for pk: {item_pk}")
-                new_alloc = Invoice_allocations.objects.create(
-                    invoice_pk=invoice,
+                new_alloc = Bill_allocations.objects.create(
+                    bill_pk=invoice,
                     item=costing_obj,
                     amount=net,
                     gst_amount=gst,
                     notes=notes,
                     allocation_type=allocation_type
                 )
-                new_allocations.append(new_alloc.invoice_allocations_pk)
+                new_allocations.append(new_alloc.bill_allocations_pk)
         message = "Progress claim allocations updated successfully" if updating else "Progress claim data posted successfully"
         return JsonResponse({
             "success": True,
             "message": message,
-            "updated_invoice": invoice.invoice_pk,
+            "updated_invoice": invoice.bill_pk,
             "created_allocations": new_allocations,
             "was_update": updating
         }, status=200)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-    except Invoices.DoesNotExist:
+    except Bills.DoesNotExist:
         return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
@@ -416,13 +416,13 @@ def post_direct_cost_data(request):
         updating = data.get("updating", False)
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
-        invoice = Invoices.objects.get(pk=invoice_id)
-        invoice.invoice_status = 1
-        invoice.invoice_type = 1
+        invoice = Bills.objects.get(pk=invoice_id)
+        invoice.bill_status = 1
+        invoice.bill_type = 1
         invoice.save()
         if updating:
-            existing_count = Invoice_allocations.objects.filter(invoice_pk=invoice).count()
-            Invoice_allocations.objects.filter(invoice_pk=invoice).delete()
+            existing_count = Bill_allocations.objects.filter(bill_pk=invoice).count()
+            Bill_allocations.objects.filter(bill_pk=invoice).delete()
             print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
         new_allocations = []
         for alloc in allocations:
@@ -437,25 +437,25 @@ def post_direct_cost_data(request):
             if uncommitted_new is not None:
                 costing_obj.uncommitted_amount = uncommitted_new
                 costing_obj.save()
-            new_alloc = Invoice_allocations.objects.create(
-                invoice_pk=invoice,
+            new_alloc = Bill_allocations.objects.create(
+                bill_pk=invoice,
                 item=costing_obj,
                 amount=net,
                 gst_amount=gst,
                 notes=notes,
                 allocation_type=0
             )
-            new_allocations.append(new_alloc.invoice_allocations_pk)
+            new_allocations.append(new_alloc.bill_allocations_pk)
         message = "Direct cost allocations updated successfully" if updating else "Direct cost data posted successfully"
         return JsonResponse({
             "message": message,
-            "updated_invoice": invoice.invoice_pk,
+            "updated_invoice": invoice.bill_pk,
             "created_allocations": new_allocations,
             "was_update": updating
         }, status=200)
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-    except Invoices.DoesNotExist:
+    except Bills.DoesNotExist:
         return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
     except Costing.DoesNotExist as e:
         return JsonResponse({"error": f"Costing object not found: {str(e)}"}, status=400)

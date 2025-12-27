@@ -1,23 +1,17 @@
 <!-- Purchase Orders Template -->
 <!-- Uses reusable allocations section with hide_allocations=True -->
-<!-- Table headers/columns are populated dynamically by JavaScript -->
+<!-- Self-contained: all logic in this file (Gold Standard pattern) -->
 {% load static %}
 
-{% include "core/components/reusable_allocations_section.html" with section_id="po" main_table_title="Purchase Orders" hide_allocations=True viewer_placeholder_text="Click on a supplier to view purchase order" viewer_placeholder_icon="fa fa-file-invoice" %}
+{% include "core/components/allocations_layout.html" with section_id="po" main_table_columns=main_table_columns hide_allocations=True viewer_placeholder_text="Click on a supplier to view purchase order" viewer_placeholder_icon="fa fa-file-bill" %}
 
 <style>
     /* PO-specific row selection styling */
     #poMainTableBody tr {
         cursor: pointer;
-        transition: opacity 0.3s ease, background-color 0.2s ease;
-    }
-    
-    #poMainTableBody.has-selection tr:not(.selected-row) {
-        opacity: 0.4;
     }
     
     #poMainTableBody tr.selected-row {
-        opacity: 1 !important;
         background-color: var(--color-selected) !important;
     }
     
@@ -44,4 +38,380 @@
     </div>
 </div>
 
-<!-- No inline script needed - all logic handled in projects_scripts.html -->
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
+
+<!-- Pass project PK and Xero instance PK to JavaScript -->
+<script>
+    window.poProjectPk = '{{ project_pk }}' !== 'None' ? '{{ project_pk }}' : null;
+    window.poXeroInstancePk = '{{ xero_instance_pk }}' !== 'None' ? '{{ xero_instance_pk }}' : null;
+</script>
+
+<!-- Self-contained PO Section JS -->
+<script>
+$(document).ready(function() {
+    if ($('#poMainTableBody').length === 0) return;
+    
+    var projectPk = window.poProjectPk;
+    if (!projectPk) {
+        console.error('PO section: No project_pk provided');
+        return;
+    }
+    
+    console.log('Initializing PO section for project:', projectPk);
+    
+    // Store for callbacks
+    var poStatus = {};
+    
+    
+    // Initialize AllocationsManager for PO
+    AllocationsManager.init({
+        sectionId: 'po',
+        features: {
+            saveRowBtn: false,
+            deleteRowBtn: false,
+            constructionMode: false,
+            gstField: false,
+            confirmDelete: false,
+            reloadAfterDelete: false
+        },
+        data: {
+            pkField: 'contact_pk'
+        },
+        mainTable: {
+            emptyMessage: 'No suppliers found in quotes',
+            showFooter: true,
+            footerTotals: [{ colIndex: 5, valueKey: 'supplier_total' }],
+            renderRow: function(supplier, index, cfg) {
+                var supplierStatus = poStatus[supplier.contact_pk] || {};
+                var isSent = supplierStatus.sent || false;
+                var pdfUrl = supplierStatus.pdf_url || null;
+                
+                var supplierTotal = (supplier.quotes || []).reduce(function(sum, quote) {
+                    return sum + parseFloat(quote.total_cost || 0);
+                }, 0);
+                supplier.supplier_total = supplierTotal;
+                
+                var row = $('<tr>')
+                    .attr('data-pk', supplier.contact_pk)
+                    .attr('data-supplier-pk', supplier.contact_pk)
+                    .attr('data-supplier-name', supplier.name)
+                    .attr('data-supplier-email', supplier.email || '')
+                    .attr('data-po-sent', isSent ? 'true' : 'false')
+                    .attr('data-pdf-url', pdfUrl || '');
+                
+                row.append($('<td>').addClass('po-supplier-name').text(supplier.name).attr('title', supplier.name));
+                
+                var firstNameDisplay = supplier.first_name || '<span style="color: #999; font-style: italic;">-</span>';
+                row.append($('<td>').addClass('po-first-name').html(firstNameDisplay));
+                
+                var lastNameDisplay = supplier.last_name || '<span style="color: #999; font-style: italic;">-</span>';
+                row.append($('<td>').addClass('po-last-name').html(lastNameDisplay));
+                
+                var emailDisplay = supplier.email || '<span style="color: #999; font-style: italic;">No email</span>';
+                row.append($('<td>').addClass('po-email').html(emailDisplay));
+                
+                var formattedAmount = '$' + Utils.formatMoney(supplierTotal);
+                row.append($('<td>').addClass('po-amount').css('text-align', 'right').text(formattedAmount));
+                
+                var sentDisplay = isSent ? '<i class="fa fa-check" style="color: #28a745;"></i>' : '<span style="color: #999;">-</span>';
+                row.append($('<td>').css('text-align', 'center').html(sentDisplay));
+                
+                row.append($('<td>').append($('<button>').addClass('btn btn-sm btn-warning po-update-btn').text('Update')));
+                row.append($('<td>').append($('<button>').addClass('btn btn-sm btn-primary po-email-btn').attr('title', 'Send PO email').html('<i class="fa fa-envelope"></i>')));
+                
+                return row;
+            },
+            onRowSelect: function(row, pk, cfg) {
+                var supplierPk = row.attr('data-supplier-pk');
+                var supplierName = row.attr('data-supplier-name');
+                generatePODocument(supplierPk, supplierName);
+            }
+        },
+        allocations: {
+            emptyMessage: '',
+            editable: false
+        },
+        api: {}
+    });
+    
+    // Append download button footer to viewer section
+    var footerHtml = $('#poViewerFooterTemplate').html();
+    $('#poViewerSection').append(footerHtml);
+    
+    // Load suppliers data
+    loadPOSuppliers();
+    
+    function loadPOSuppliers() {
+        $.ajax({
+            url: '/core/get_project_quotes/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    var quotes = response.quotes || [];
+                    console.log('Loaded', quotes.length, 'quotes for PO suppliers');
+                    
+                    var supplierMap = {};
+                    quotes.forEach(function(quote) {
+                        var contactPk = quote.supplier_pk || quote.contact_pk;
+                        if (contactPk && !supplierMap[contactPk]) {
+                            supplierMap[contactPk] = {
+                                contact_pk: contactPk,
+                                name: quote.supplier_name,
+                                first_name: quote.supplier_first_name || '',
+                                last_name: quote.supplier_last_name || '',
+                                email: quote.supplier_email || '',
+                                quotes: []
+                            };
+                        }
+                        if (supplierMap[contactPk]) {
+                            supplierMap[contactPk].quotes.push(quote);
+                        }
+                    });
+                    
+                    var suppliers = Object.values(supplierMap);
+                    suppliers.sort(function(a, b) { return a.name.localeCompare(b.name); });
+                    console.log('Found', suppliers.length, 'unique suppliers');
+                    
+                    $.ajax({
+                        url: '/core/get_po_status/' + projectPk + '/',
+                        type: 'GET',
+                        success: function(statusResponse) {
+                            poStatus = statusResponse.po_status || {};
+                            AllocationsManager.populateMainTable('po', suppliers);
+                        },
+                        error: function() {
+                            poStatus = {};
+                            AllocationsManager.populateMainTable('po', suppliers);
+                        }
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading quotes for PO suppliers:', error);
+            }
+        });
+    }
+    
+    function generatePODocument(supplierPk, supplierName) {
+        var previewUrl = '/core/preview_po/' + projectPk + '/' + supplierPk + '/';
+        $('#poViewerPlaceholder').hide();
+        $('#poPdfViewer').attr('src', previewUrl).show();
+        $('#poViewerFooter').addClass('visible');
+        $('#downloadPOBtn').data('supplierPk', supplierPk).data('supplierName', supplierName);
+    }
+    
+    // Track currently editing row
+    var editingRow = null;
+    
+    // Update button handler - convert row to editable inputs
+    $(document).on('click', '.po-update-btn', function(e) {
+        e.stopPropagation();
+        var button = $(this);
+        var row = button.closest('tr');
+        
+        // Cancel any other row being edited
+        if (editingRow && editingRow[0] !== row[0]) {
+            loadPOSuppliers();
+            return;
+        }
+        
+        editingRow = row;
+        row.addClass('po-editing');
+        
+        var supplierCell = row.find('.po-supplier-name');
+        var firstNameCell = row.find('.po-first-name');
+        var lastNameCell = row.find('.po-last-name');
+        var emailCell = row.find('.po-email');
+        
+        var supplier = supplierCell.text().trim();
+        var firstName = firstNameCell.text().trim().replace(/-/g, '');
+        var lastName = lastNameCell.text().trim().replace(/-/g, '');
+        var email = emailCell.text().trim().replace('No email', '');
+        
+        supplierCell.html('<input type="text" class="form-control form-control-sm po-supplier-input" value="' + Utils.escapeHtml(supplier) + '" style="width: 100%;">');
+        firstNameCell.html('<input type="text" class="form-control form-control-sm po-first-name-input" value="' + Utils.escapeHtml(firstName) + '" style="width: 100%;">');
+        lastNameCell.html('<input type="text" class="form-control form-control-sm po-last-name-input" value="' + Utils.escapeHtml(lastName) + '" style="width: 100%;">');
+        emailCell.html('<input type="text" class="form-control form-control-sm po-email-input" value="' + Utils.escapeHtml(email) + '" style="width: 100%;">');
+        
+        button.replaceWith('<button class="btn btn-sm btn-success po-save-btn">Save</button> <button class="btn btn-sm btn-secondary po-cancel-btn">Cancel</button>');
+    });
+    
+    // Click away from editing row - cancel edit
+    $(document).on('click', function(e) {
+        if (!editingRow) return;
+        
+        var target = $(e.target);
+        // If clicking inside the editing row or on save/cancel buttons, don't cancel
+        if (target.closest('.po-editing').length > 0 || 
+            target.hasClass('po-save-btn') || 
+            target.hasClass('po-cancel-btn')) {
+            return;
+        }
+        
+        // Cancel the edit
+        editingRow = null;
+        loadPOSuppliers();
+    });
+    
+    // Cancel button handler
+    $(document).on('click', '.po-cancel-btn', function(e) {
+        e.stopPropagation();
+        editingRow = null;
+        loadPOSuppliers();
+    });
+    
+    // Save button handler
+    $(document).on('click', '.po-save-btn', function(e) {
+        e.stopPropagation();
+        var button = $(this);
+        var row = button.closest('tr');
+        var contactPk = row.attr('data-supplier-pk');
+        
+        var supplierName = row.find('.po-supplier-input').val().trim();
+        var firstName = row.find('.po-first-name-input').val().trim();
+        var lastName = row.find('.po-last-name-input').val().trim();
+        var email = row.find('.po-email-input').val().trim();
+        
+        if (!supplierName && !firstName && !lastName) {
+            alert('Please provide at least a supplier name or contact name');
+            return;
+        }
+        
+        var inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        row.find('.po-cancel-btn').prop('disabled', true);
+        
+        // Get xero_instance_pk from view context
+        var xeroInstancePk = window.poXeroInstancePk;
+        
+        if (!xeroInstancePk) {
+            alert('No Xero instance available for this project');
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Update');
+            row.find('.po-cancel-btn').prop('disabled', false);
+            return;
+        }
+        
+        fetch('/core/update_contact_details/' + xeroInstancePk + '/' + contactPk + '/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify({
+                name: supplierName,
+                first_name: firstName,
+                last_name: lastName,
+                email: email
+            })
+        })
+        .then(function(response) { return response.json().then(function(data) { return {status: response.status, body: data}; }); })
+        .then(function(result) {
+            if (result.status === 401 && result.body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Update');
+                row.find('.po-cancel-btn').prop('disabled', false);
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = '/core/xero_oauth_authorize/' + xeroInstancePk + '/';
+                }
+                return;
+            }
+            
+            if (result.body.status === 'success') {
+                alert('Contact updated successfully!');
+                editingRow = null;
+                loadPOSuppliers();
+            } else {
+                alert('Error: ' + result.body.message);
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Update');
+                row.find('.po-cancel-btn').prop('disabled', false);
+            }
+        })
+        .catch(function(error) {
+            console.error('Error updating contact:', error);
+            alert('Failed to update contact. Please try again.');
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Update');
+            row.find('.po-cancel-btn').prop('disabled', false);
+        });
+    });
+    
+    // Email button handler
+    $(document).on('click', '.po-email-btn', function(e) {
+        e.stopPropagation();
+        var emailBtn = $(this);
+        var row = emailBtn.closest('tr');
+        var supplierEmail = row.attr('data-supplier-email');
+        var supplierPk = row.attr('data-supplier-pk');
+        
+        if (!supplierEmail) {
+            alert('No email address available for this supplier');
+            return;
+        }
+        
+        if (!confirm('Send purchase order to ' + supplierEmail + '?')) {
+            return;
+        }
+        
+        emailBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch('/core/send_po_email/' + projectPk + '/' + supplierPk + '/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            }
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
+            if (data.status === 'success') {
+                alert(data.message);
+                row.attr('data-po-sent', 'true');
+                row.attr('data-pdf-url', data.pdf_url || '');
+                row.find('td:eq(5)').html('<i class="fa fa-check" style="color: #28a745;"></i>');
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(function(error) {
+            emailBtn.prop('disabled', false).html('<i class="fa fa-envelope"></i>');
+            console.error('Error sending PO email:', error);
+            alert('Failed to send email. Please try again.');
+        });
+    });
+    
+    // Download button handler
+    $(document).on('click', '#downloadPOBtn', function() {
+        var button = $(this);
+        var supplierPk = button.data('supplierPk');
+        
+        if (!supplierPk || !projectPk) {
+            alert('Please select a supplier first');
+            return;
+        }
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Generating...');
+        
+        var form = $('<form>', {
+            method: 'POST',
+            action: '/core/download_po_pdf/' + projectPk + '/' + supplierPk + '/',
+            target: '_blank'
+        });
+        form.append($('<input>', {
+            type: 'hidden',
+            name: 'csrfmiddlewaretoken',
+            value: $('[name=csrfmiddlewaretoken]').val()
+        }));
+        form.appendTo('body').submit().remove();
+        
+        setTimeout(function() {
+            button.prop('disabled', false).html('<i class="fa fa-download"></i> Download PDF');
+        }, 2000);
+    });
+});
+</script>

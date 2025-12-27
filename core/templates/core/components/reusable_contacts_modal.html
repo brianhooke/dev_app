@@ -12,7 +12,7 @@
             </div>
             <div class="modal-body" style="max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; position: relative;">
                 {% block contacts_modal_body %}
-                {% include 'core/components/reusable_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
+                {% include 'core/components/data_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
                 {% endblock %}
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
@@ -142,7 +142,7 @@ $(document).ready(function() {
             return;
         }
         
-        fetch(`/get_contacts_by_instance/${instancePk}/`)
+        fetch(`/core/get_contacts_by_instance/${instancePk}/`)
             .then(response => response.json())
             .then(contacts => {
                 // Target either workspace contacts table or modal contacts table
@@ -378,7 +378,7 @@ $(document).ready(function() {
         row.find('.cancel-contact-btn').prop('disabled', true);
         
         // Make AJAX call to update contact
-        fetch(`/update_contact_details/${instancePk}/${contactPk}/`, {
+        fetch(`/core/update_contact_details/${instancePk}/${contactPk}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -461,9 +461,9 @@ $(document).ready(function() {
         const button = $(this);
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
         
-        console.log('[Contacts] Sending request to /pull_xero_contacts/' + xeroInstancePk + '/');
+        console.log('[Contacts] Sending request to /core/pull_xero_contacts/' + xeroInstancePk + '/');
         
-        fetch(`/pull_xero_contacts/${xeroInstancePk}/`, {
+        fetch(`/core/pull_xero_contacts/${xeroInstancePk}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -578,7 +578,7 @@ $(document).ready(function() {
         row.find('.cancel-add-contact-btn').prop('disabled', true);
         
         // Make AJAX call to create contact
-        fetch(`/create_contact/${instancePk}/`, {
+        fetch(`/core/create_contact/${instancePk}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -798,7 +798,7 @@ $(document).ready(function() {
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Adding...');
         
         // Make AJAX call to create contact
-        fetch(`/create_contact/${addSupplierXeroInstanceId}/`, {
+        fetch(`/core/create_contact/${addSupplierXeroInstanceId}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

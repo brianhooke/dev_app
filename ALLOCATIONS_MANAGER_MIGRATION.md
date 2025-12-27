@@ -25,8 +25,8 @@ After deep analysis, I found **two completely separate systems** for allocations
 
 ### System 2: Standalone Pages - PARTIALLY IMPLEMENTED
 - **Location:** Standalone pages accessed via `/quotes/`, `/invoices/`
-- **Templates:** `quotes.html`, `invoices.html` using `reusable_allocations_section.html`
-- **JS Files:** `allocations_manager.js` (EXISTS BUT UNUSED!)
+- **Templates:** `quotes.html`, `invoices.html` using `allocations_layout.html`
+- **JS Files:** `allocations_layout.js` (EXISTS BUT UNUSED!)
 - **Pattern:** Embedded sections with AllocationsManager API
 - **Status:** Templates exist but JS integration incomplete
 
@@ -45,7 +45,7 @@ The `AllocationsManager` class was designed for System 2 (standalone pages), but
 ## Current Architecture
 
 ### Template Layer (Working Well ✅)
-- `reusable_allocations_section.html` - Generic template with `section_id` parameter
+- `allocations_layout.html` - Generic template with `section_id` parameter
 - Used by: quotes.html, invoices.html, invoices_allocated.html, invoices_approvals.html
 
 ### View Layer (Working Well ✅)
@@ -64,7 +64,7 @@ The `AllocationsManager` class was designed for System 2 (standalone pages), but
 | `invoices_4.js` | 976 | Invoices - Progress Claims | Legacy |
 | `invoices_5.js` | 454 | Invoices - Direct Costs | Legacy |
 | `invoices_6.js` | 379 | Invoices - Allocated | Legacy |
-| `allocations_manager.js` | 579 | Reusable Manager | **UNUSED** |
+| `allocations_layout.js` | 579 | Reusable Manager | **UNUSED** |
 
 **Total duplicated code:** ~2,667 lines across quote/invoice files
 

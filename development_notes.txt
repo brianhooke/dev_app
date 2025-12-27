@@ -57,7 +57,7 @@ window.hideAllSections();
 
 FILES MODIFIED:
 - /dashboard/templates/dashboard/dashboard.html (hideAllSections function + Dashboard, Contacts handlers)
-- /dashboard/templates/dashboard/bills.html (Bills Inbox, Bills Direct handlers)
+- /dashboard/templates/dashboard/bills_global.html (Bills Inbox, Bills Direct handlers)
 - /dashboard/templates/dashboard/projects.html (Projects handler)
 - /core/static/core/js/xero.js (Xero handler)
 

@@ -12,7 +12,7 @@ django.setup()
 
 from django.utils import timezone
 from django.conf import settings
-from core.models import ReceivedEmail, EmailAttachment, Invoices
+from core.models import ReceivedEmail, EmailAttachment, Bills
 from datetime import timedelta
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -202,23 +202,23 @@ for i, email_data in enumerate(emails_data, 1):
         print(f"    ✓ Attachment created: {attachment.filename} ({attachment.size_bytes} bytes)")
         
         # Create invoice for each PDF attachment
-        invoice = Invoices.objects.create(
-            invoice_status=-2,  # Inbox status
+        invoice = Bills.objects.create(
+            bill_status=-2,  # Inbox status
             received_email=received_email,
             email_attachment=attachment,
             xero_instance=None,
             contact_pk=None,
             project=None,
-            supplier_invoice_number='',
+            supplier_bill_number='',
             total_net=None,
             total_gst=None
         )
-        print(f"    ✓ Invoice created: ID {invoice.invoice_pk} (status: Inbox)")
+        print(f"    ✓ Invoice created: ID {invoice.bill_pk} (status: Inbox)")
         created_count += 1
 
 print(f"\n✅ Successfully created {len(emails_data)} emails with {created_count} invoices!")
 print(f"\n📊 Summary:")
 print(f"   - Emails: {ReceivedEmail.objects.count()}")
 print(f"   - Attachments: {EmailAttachment.objects.count()}")
-print(f"   - Invoices in Inbox: {Invoices.objects.filter(invoice_status=-2).count()}")
+print(f"   - Invoices in Inbox: {Bills.objects.filter(bill_status=-2).count()}")
 print(f"\n🎯 Ready to test Bills - Inbox workflow!")

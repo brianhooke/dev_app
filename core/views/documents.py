@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.template import loader
 from ..forms import CSVUploadForm
 from django.http import HttpResponse, JsonResponse
-from ..models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
+from ..models import Categories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories, PlanPdfs, ReportPdfs, ReportCategories, Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations, Projects, Hc_variation, Hc_variation_allocations
 import json
 from django.shortcuts import render
 from django.forms.models import model_to_dict
@@ -48,7 +48,7 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.forms.models import model_to_dict
 from django.db.models import Sum
-from ..models import Invoices, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
+from ..models import Bills, Contacts, Costing, Categories, Quote_allocations, Quotes, Po_globals, Po_orders, SPVData
 import json
 from django.db.models import Q, Sum
 import ssl

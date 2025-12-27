@@ -348,47 +348,48 @@ class Document_files(models.Model):
         return f"{self.file_name} in {self.folder.folder_name}"
 
 # SERVICE: bills
-class Invoices(models.Model):
-    invoice_pk = models.AutoField(primary_key=True)
+class Bills(models.Model):
+    bill_pk = models.AutoField(primary_key=True)
     # Replaced invoice_division with FK to Projects
-    project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    invoice_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when invoice created, 1 when allocated, 2 when approved, 3 when sent to Xero, 4 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved in PO URL but no invoice uploaded, 102 is approved in PO URL and invoice uploaded, 103 is PO approved, invoice uploaded & approved for payment, 104 if sent to xero
-    invoice_xero_id = models.CharField(max_length=255, null=True, blank=True)
-    supplier_invoice_number = models.CharField(max_length=255, null=True, blank=True)
-    invoice_date = models.DateField(null=True, blank=True)
-    invoice_due_date = models.DateField(null=True, blank=True)
+    project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    bill_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when bill created, 1 when allocated, 2 when approved, 3 when sent to Xero, 4 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved in PO URL but no bill uploaded, 102 is approved in PO URL and bill uploaded, 103 is PO approved, bill uploaded & approved for payment, 104 if sent to xero
+    bill_xero_id = models.CharField(max_length=255, null=True, blank=True)
+    supplier_bill_number = models.CharField(max_length=255, null=True, blank=True)
+    bill_date = models.DateField(null=True, blank=True)
+    bill_due_date = models.DateField(null=True, blank=True)
     total_net = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     total_gst = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    pdf = models.FileField(upload_to='invoices/', null=True, blank=True)
+    pdf = models.FileField(upload_to='bills/', null=True, blank=True)
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True, blank=True)
     associated_hc_claim = models.ForeignKey('HC_claims', on_delete=models.CASCADE, null=True, blank=True)
-    invoice_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
-    received_email = models.ForeignKey('ReceivedEmail', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    email_attachment = models.ForeignKey('EmailAttachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    bill_type = models.IntegerField(default=0, choices=[(2, 'Progress Claim'), (1, 'Direct Cost')])
+    received_email = models.ForeignKey('ReceivedEmail', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    email_attachment = models.ForeignKey('EmailAttachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
     auto_created = models.BooleanField(default=False)  # Track if created automatically from email
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
+        db_table = 'core_invoices'  # Keep old table name to avoid migration
         indexes = [
-            models.Index(fields=['invoice_status']),
+            models.Index(fields=['bill_status']),
             models.Index(fields=['contact_pk']),
             models.Index(fields=['project']),
-            models.Index(fields=['invoice_type']),
+            models.Index(fields=['bill_type']),
             models.Index(fields=['-created_at']),
         ]
         ordering = ['-created_at']
     
     def __str__(self):
         if self.total_net:
-            return f"Invoices #{self.invoice_pk} - Cost: {self.total_net}"
-        return f"Invoices #{self.invoice_pk} - Email: {self.received_email_id if self.received_email else 'N/A'}"
+            return f"Bill #{self.bill_pk} - Cost: {self.total_net}"
+        return f"Bill #{self.bill_pk} - Email: {self.received_email_id if self.received_email else 'N/A'}"
 
 # SERVICE: bills
-class Invoice_allocations(models.Model):
-    invoice_allocations_pk = models.AutoField(primary_key=True)
-    invoice_pk = models.ForeignKey(Invoices, on_delete=models.CASCADE, related_name='invoice_allocations')
+class Bill_allocations(models.Model):
+    bill_allocation_pk = models.AutoField(primary_key=True)
+    bill = models.ForeignKey(Bills, on_delete=models.CASCADE, related_name='bill_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE, null=True, blank=True)  # Make nullable since we're using Xero accounts now
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -397,21 +398,22 @@ class Invoice_allocations(models.Model):
     gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.CharField(max_length=1000, null=True, blank=True)
     allocation_type = models.IntegerField(default=0, choices=[
-        (0, "as per invoice_type"),
+        (0, "as per bill_type"),
         (1, "direct cost in progress claim")
     ])
-    xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice_allocations')
+    xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_allocations')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
+        db_table = 'core_invoice_allocations'  # Keep old table name to avoid migration
         indexes = [
-            models.Index(fields=['invoice_pk']),
+            models.Index(fields=['bill']),
             models.Index(fields=['item']),
         ]
     
     def __str__(self):
-        return f"Invoice Allocation - PK: {self.invoice_allocations_pk}, Invoice PK: {self.invoice_pk.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
+        return f"Bill Allocation - PK: {self.bill_allocation_pk}, Bill PK: {self.bill.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
 
 # SERVICE: invoices (claims)
 class HC_claims(models.Model):

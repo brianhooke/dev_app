@@ -1,0 +1,720 @@
+<!-- Hidden template storage for items template -->
+<div id="itemsTemplateStorage" style="display: none;">
+    {% include 'core/items.html' %}
+</div>
+
+<!-- Hidden template storage for documents template -->
+<div id="documentsTemplateStorage" style="display: none;">
+    {% include 'core/documents.html' %}
+</div>
+
+<!-- Hidden template storage for contract budget template -->
+<div id="contractBudgetTemplateStorage" style="display: none;">
+    {% include 'core/contract_budget.html' %}
+</div>
+
+
+<style>
+    /* Global: Ensure all tables have white backgrounds (prevents background image bleed-through) */
+    .table,
+    table {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody,
+    table tbody {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody tr,
+    table tbody tr {
+        background-color: #ffffff !important;
+    }
+    
+    .table tbody tr td,
+    table tbody tr td {
+        background-color: #ffffff !important;
+    }
+    
+    /* Override for special rows that need different backgrounds */
+    .table tbody tr.selected-row,
+    .table tbody tr.selected-row td,
+    table tbody tr.selected-row,
+    table tbody tr.selected-row td {
+        background-color: #e3f2fd !important;
+    }
+    
+    .table tbody tr.category-row,
+    .table tbody tr.category-row td,
+    table tbody tr.category-row,
+    table tbody tr.category-row td {
+        background-color: #f9f9f9 !important;
+    }
+    
+    .table tbody tr:hover,
+    .table tbody tr:hover td,
+    table tbody tr:hover,
+    table tbody tr:hover td {
+        background-color: #f5f5f5 !important;
+    }
+    
+    /* Reusable table white backgrounds */
+    .reusable-table,
+    .reusable-table tbody,
+    .reusable-table tbody tr,
+    .reusable-table tbody tr td {
+        background-color: #ffffff !important;
+    }
+    
+    /* Compact Projects Table Styling */
+    #projectsTable .form-control-sm {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+        height: 26px !important;
+        min-height: 26px !important;
+    }
+    
+    #projectsTable select.form-control-sm {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+    }
+    
+    #projectsTable input[type="text"],
+    #projectsTable input[type="file"] {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+        height: 26px !important;
+    }
+    
+    #projectsTable .btn-sm {
+        padding: 3px 8px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        min-height: 26px !important;
+        height: 26px !important;
+    }
+    
+    #projectsTable .btn-sm i {
+        font-size: 12px !important;
+    }
+    
+    #projectsTable .btn {
+        padding: 3px 8px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        min-height: 26px !important;
+        height: 26px !important;
+    }
+    
+    /* Keep update button at normal height for better UX */
+    #projectsTable .update-project-btn,
+    #projectsTable .save-new-project-btn,
+    #projectsTable .cancel-add-project-btn {
+        height: auto !important;
+        min-height: 28px !important;
+        padding: 4px 10px !important;
+    }
+    
+    /* Compact background images */
+    #projectsTable img {
+        max-width: 50px !important;
+        max-height: 28px !important;
+    }
+    
+    /* Override Bootstrap table cell padding */
+    #projectsTable td {
+        padding: 5px 6px !important;
+        vertical-align: middle !important;
+    }
+    
+    #projectsTable th {
+        padding: 6px 6px !important;
+    }
+    
+    /* Sticky header for Tender Quotes table */
+    #tenderCommittedQuotesTable thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 10;
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Quotes/POs table row selection styling */
+    .quotes-table tbody tr,
+    .pos-table tbody tr {
+        transition: opacity 0.3s ease, box-shadow 0.3s ease;
+        cursor: pointer;
+        background-color: #ffffff;
+    }
+    
+    /* When there's a selected row, dim all non-selected rows */
+    .quotes-table tbody.has-selection tr:not(.selected-row),
+    .pos-table tbody.has-selection tr:not(.selected-row) {
+        opacity: 0.4;
+    }
+    
+    /* Highlight the selected row */
+    .quotes-table tbody tr.selected-row,
+    .pos-table tbody tr.selected-row {
+        opacity: 1 !important;
+        background-color: #e3f2fd !important;
+        box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+        position: relative;
+    }
+    
+    /* Keep hover effect visible on all rows */
+    .quotes-table tbody tr:hover,
+    .pos-table tbody tr:hover {
+        opacity: 0.8 !important;
+    }
+    
+    /* Construction Navigation Buttons - Compact styling */
+    .construction-nav-btn {
+        padding: 4px 12px !important;
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+    }
+    
+    /* Unified action button styling (+ New Quote, + Add Row) */
+    .quote-action-btn {
+        background-color: #22c55e;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .quote-action-btn:hover {
+        background-color: #16a34a;
+    }
+    
+    .quote-action-btn i {
+        font-size: 11px;
+    }
+    
+    /* Tender Navigation Buttons */
+    .tender-nav-btn {
+        padding: 4px 12px !important;
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+    }
+    
+    /* Bills Button Group Styling */
+    .bills-btn-group {
+        display: inline-flex;
+        align-items: center;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        padding: 3px;
+        gap: 3px;
+        transition: all 0.2s ease;
+    }
+    
+    .bills-btn-group.active {
+        background: linear-gradient(white, white) padding-box,
+                    linear-gradient(45deg, var(--gradient-start, #cf66ff) 0%, var(--gradient-end, #0a88ef) 100%) border-box;
+        box-shadow: 0 2px 8px rgba(207, 102, 255, 0.3);
+    }
+    
+    .bills-btn-group .bills-main-btn {
+        border-radius: 0.375rem;
+    }
+    
+    .bills-btn-group .bills-sub-btn {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 0.375rem;
+        background-color: #e9ecef;
+        border: none;
+        color: #495057;
+        transition: all 0.2s ease;
+        display: none;
+    }
+    
+    .bills-btn-group.active .bills-sub-btn {
+        display: inline-block;
+    }
+    
+    .bills-btn-group .bills-sub-btn:hover {
+        background-color: #dee2e6;
+    }
+    
+    .bills-btn-group .bills-sub-btn.active {
+        background: linear-gradient(45deg, var(--gradient-start, #cf66ff) 0%, var(--gradient-end, #0a88ef) 100%);
+        color: white;
+    }
+    
+    /* Keep Bills button blue when group is active */
+    .bills-btn-group.active .bills-main-btn {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    /* Projects Card Grid Styles */
+    .projects-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 10px 0;
+    }
+    
+    .projects-empty {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        color: #6c757d;
+    }
+    
+    .projects-empty i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    
+    .project-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+    
+    .project-card:hover {
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
+    }
+    
+    .project-card .card-header {
+        height: 80px;
+        background: var(--gradient-primary);
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        padding: 12px 15px;
+    }
+    
+    .project-card .card-title {
+        position: relative;
+        z-index: 1;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .project-card .card-body {
+        padding: 15px;
+        flex: 1;
+    }
+    
+    .project-card .card-info {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .project-card .card-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .project-card .card-icon {
+        width: 20px;
+        color: #6c757d;
+        font-size: 12px;
+        text-align: center;
+    }
+    
+    .project-card .card-label {
+        font-size: 12px;
+        color: #6c757d;
+        min-width: 60px;
+    }
+    
+    .project-card .card-value {
+        font-size: 13px;
+        color: #212529;
+        flex: 1;
+    }
+    
+    .project-card .type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .project-card .type-badge.construction { background: #e3f2fd; color: #1565c0; }
+    .project-card .type-badge.manufacturing { background: #fff3e0; color: #ef6c00; }
+    .project-card .type-badge.general { background: #f3e5f5; color: #7b1fa2; }
+    .project-card .type-badge.development { background: #e8f5e9; color: #2e7d32; }
+    .project-card .type-badge.precast { background: #fce4ec; color: #c2185b; }
+    .project-card .type-badge.pods { background: #e0f7fa; color: #00838f; }
+    
+    .project-card .card-footer {
+        padding: 12px 15px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f8f9fa;
+    }
+    
+    .project-card .card-status a {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        text-decoration: none;
+        margin-right: 8px;
+    }
+    
+    .project-card .card-status a.project-status-link { background: #e3f2fd; color: #1565c0; }
+    .project-card .card-status a.project-status-link:hover { background: #1565c0; color: white; }
+    .project-card .card-status a.construction-link { background: #e8f5e9; color: #2e7d32; }
+    .project-card .card-status a.construction-link:hover { background: #2e7d32; color: white; }
+    
+    .project-card .card-actions button {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    
+    /* Project Modal Styles */
+    .project-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .project-modal.show {
+        display: flex;
+    }
+    
+    .project-modal-content {
+        background: white;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .project-modal-header {
+        padding: 20px;
+        background: var(--gradient-primary);
+        color: white;
+        border-radius: 12px 12px 0 0;
+        position: relative;
+        min-height: 80px;
+        display: flex;
+        align-items: flex-end;
+    }
+    
+    .project-modal-header h4 {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        font-weight: 600;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .project-modal-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        z-index: 2;
+    }
+    
+    .project-modal-close:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    
+    .project-modal-body {
+        padding: 25px;
+    }
+    
+    .project-modal-body .form-group {
+        margin-bottom: 18px;
+    }
+    
+    .project-modal-body label {
+        font-weight: 600;
+        font-size: 12px;
+        color: #495057;
+        margin-bottom: 5px;
+        display: block;
+        text-transform: uppercase;
+    }
+    
+    .project-modal-body label.required::after {
+        content: ' *';
+        color: #dc3545;
+    }
+    
+    .project-modal-body .form-control {
+        border-radius: 6px;
+    }
+    
+    .project-modal-body .form-control:disabled {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    .project-modal-body .validation-error {
+        color: #dc3545;
+        font-size: 11px;
+        margin-top: 4px;
+        display: none;
+    }
+    
+    .project-modal-body .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+    
+    .project-modal-body .form-control.is-invalid + .validation-error {
+        display: block;
+    }
+    
+    .project-modal-footer {
+        padding: 15px 25px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .project-modal-footer .nav-buttons {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .project-modal-footer .action-buttons {
+        display: flex;
+        gap: 8px;
+    }
+</style>
+
+<!-- Projects Section (hidden initially, shown when Projects clicked) -->
+<div id="projectsSection" style="display: none; height: 100%; flex-direction: column;">
+    
+    <!-- Projects Card Grid (scrollable) -->
+    <div id="projectsGridContainer" style="flex: 1; overflow-y: auto;">
+        <div id="projectsGrid" class="projects-grid">
+            <div class="projects-empty">
+                <i class="fas fa-folder-open"></i>
+                <p>Loading projects...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Projects Footer with buttons -->
+    <div id="projectsHeader" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-shrink: 0; padding-top: 15px; border-top: 1px solid #e9ecef;">
+        <button id="toggleArchiveBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
+            <i class="fas fa-archive"></i> Show Archived
+        </button>
+        <button id="addProjectBtn" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Add Project
+        </button>
+    </div>
+    
+    <!-- Project Modal -->
+    <div id="projectModal" class="project-modal">
+        <div class="project-modal-content">
+            <div class="project-modal-header" id="projectModalHeader">
+                <button class="project-modal-close" id="projectModalClose">&times;</button>
+                <h4 id="projectModalTitle">Project Details</h4>
+            </div>
+            <div class="project-modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label class="required">Project Name</label>
+                            <input type="text" class="form-control" id="modalProjectName" disabled>
+                            <div class="validation-error">Project name is required</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select class="form-control" id="modalProjectType" disabled>
+                                <option value="general">General</option>
+                                <option value="development">Development</option>
+                                <option value="construction">Construction</option>
+                                <option value="precast">Precast</option>
+                                <option value="pods">Pods</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Manager</label>
+                            <input type="text" class="form-control" id="modalManager" disabled>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Manager Email</label>
+                            <input type="email" class="form-control" id="modalManagerEmail" disabled>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contracts Admin Emails</label>
+                    <input type="text" class="form-control" id="modalContractsAdminEmails" placeholder="Semicolon separated" disabled>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="required">Xero Instance</label>
+                            <select class="form-control" id="modalXeroInstance" disabled>
+                                <option value="">Select Xero Instance...</option>
+                            </select>
+                            <div class="validation-error">Xero Instance is required</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="required">Sales Account</label>
+                            <select class="form-control" id="modalSalesAccount" disabled>
+                                <option value="">Select Sales Account...</option>
+                            </select>
+                            <div class="validation-error">Sales Account is required</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="project-modal-footer">
+                <div class="nav-buttons">
+                    <a href="#" class="btn btn-outline-primary btn-sm" id="modalTenderBtn">
+                        <i class="fas fa-file-alt"></i> Open Tender
+                    </a>
+                    <a href="#" class="btn btn-outline-success btn-sm" id="modalExecutionBtn">
+                        <i class="fas fa-hard-hat"></i> Open Execution
+                    </a>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary btn-sm" id="modalCancelBtn">Cancel</button>
+                    <button class="btn btn-warning btn-sm" id="modalUpdateBtn">Update</button>
+                    <button class="btn btn-success btn-sm" id="modalSaveBtn" style="display: none;">Save Changes</button>
+                    <button class="btn btn-success btn-sm" id="modalCreateBtn" style="display: none;">Create Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Construction View (hidden initially, shown when Construction link clicked) -->
+    <div id="constructionView" style="display: none; height: 100%; flex-direction: column;">
+        <!-- Back button and Project heading -->
+        <div style="margin-bottom: 8px; display: flex; align-items: center; position: relative;">
+            <button id="backToProjectsFromConstructionBtn" class="btn btn-secondary btn-sm" style="position: absolute; left: 0; padding: 4px 10px; font-size: 14px;">
+                <i class="fas fa-arrow-left"></i> Back to Projects
+            </button>
+            <h3 id="constructionProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
+        </div>
+        
+        <!-- Construction navigation buttons -->
+        <div style="margin-bottom: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary construction-nav-btn" data-section="quotes">Quotes</button>
+            <button class="btn btn-primary construction-nav-btn" data-section="pos">POs</button>
+            
+            <!-- Bills button group with sub-menu -->
+            <div id="billsButtonGroup" class="bills-btn-group">
+                <button class="btn btn-primary construction-nav-btn bills-main-btn" data-section="bills">Bills</button>
+                <button class="btn bills-sub-btn active" data-subsection="unallocated">Unallocated</button>
+                <button class="btn bills-sub-btn" data-subsection="allocated">Allocated</button>
+            </div>
+            
+            <button class="btn btn-primary construction-nav-btn" data-section="contract-budget">Contract Budget</button>
+            <button class="btn btn-primary construction-nav-btn" data-section="hc-variations">HC Variations</button>
+            <button class="btn btn-primary construction-nav-btn" data-section="hc-claims">HC Claims</button>
+            <button class="btn btn-primary construction-nav-btn" data-section="documents">Documents</button>
+            
+            <!-- Dynamic action buttons (shown based on selected section) -->
+            <button id="constructionNewQuoteBtn" class="quote-action-btn" style="display: none; margin-left: 10px;">
+                <i class="fas fa-plus"></i> New Quote
+            </button>
+        </div>
+        
+        <!-- Horizontal divider line below buttons -->
+        <div style="border-bottom: 1px solid #e2e8f0;"></div>
+        
+        <!-- Hidden file input for quote PDF upload -->
+        <input type="file" id="constructionQuotePdfInput" accept="application/pdf" style="display: none;">
+        
+        <!-- Construction content area -->
+        <div id="constructionContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
+            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+        </div>
+    </div>
+    
+    <!-- Tender View (hidden initially, shown when Tender link clicked) -->
+    <div id="tenderView" style="display: none; height: 100%; flex-direction: column;">
+        <!-- Back button and Project heading -->
+        <div style="margin-bottom: 20px; display: flex; align-items: center; position: relative;">
+            <button id="backToProjectsBtn" class="btn btn-secondary" style="position: absolute; left: 0; font-size: 14px;">
+                <i class="fas fa-arrow-left"></i> Back to Projects
+            </button>
+            <h3 id="tenderProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
+        </div>
+        
+        <!-- Tender navigation buttons -->
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-primary tender-nav-btn" data-section="items">Items</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
+            <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
+            
+            <!-- Dynamic action buttons (shown based on selected section) -->
+            <button id="newQuoteBtn" class="btn btn-success" style="display: none; margin-left: 10px;">
+                <i class="fas fa-plus"></i> New Quote
+            </button>
+        </div>
+        
+        <!-- Hidden file input for quote PDF upload -->
+        <input type="file" id="tenderQuotePdfInput" accept="application/pdf" style="display: none;">
+        
+        <!-- Tender content area -->
+        <div id="tenderContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
+            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+        </div>
+    </div>
+</div>
+
+
+{% include "core/includes/projects_scripts.html" %}

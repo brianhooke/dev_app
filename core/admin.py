@@ -3,7 +3,7 @@ from django import forms
 from .models import (
     Categories, Projects, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
-    SPVData, Letterhead, Invoices, Invoice_allocations, HC_claims, HC_claim_allocations,
+    SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units
 )
 
@@ -54,17 +54,17 @@ class PoOrderDetailForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         set_nullable_fields_not_required(self, ['quote', 'variation_note'])
 
-class InvoicesForm(forms.ModelForm):
+class BillsForm(forms.ModelForm):
     class Meta:
-        model = Invoices
+        model = Bills
         fields = '__all__'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        set_nullable_fields_not_required(self, ['invoice_xero_id', 'associated_hc_claim', 'xero_instance', 'project'])
+        set_nullable_fields_not_required(self, ['bill_xero_id', 'associated_hc_claim', 'xero_instance', 'project'])
 
-class InvoiceAllocationsForm(forms.ModelForm):
+class BillAllocationsForm(forms.ModelForm):
     class Meta:
-        model = Invoice_allocations
+        model = Bill_allocations
         fields = '__all__'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -160,18 +160,18 @@ class SPVDataAdmin(admin.ModelAdmin):
 class LetterheadAdmin(admin.ModelAdmin):
     list_display = ("letterhead_path",)
 
-class InvoicesAdmin(admin.ModelAdmin):
-    form = InvoicesForm
+class BillsAdmin(admin.ModelAdmin):
+    form = BillsForm
     list_display = (
-        "invoice_pk", "contact_pk", "project", "invoice_status", "invoice_xero_id", "supplier_invoice_number", 
-        "invoice_date", "invoice_due_date", "total_net", "total_gst", "pdf", "associated_hc_claim", 
-        "invoice_type", "auto_created", "received_email", "email_attachment"
+        "bill_pk", "contact_pk", "project", "bill_status", "bill_xero_id", "supplier_bill_number", 
+        "bill_date", "bill_due_date", "total_net", "total_gst", "pdf", "associated_hc_claim", 
+        "bill_type", "auto_created", "received_email", "email_attachment"
     )
-    list_filter = ('invoice_status', 'auto_created', 'invoice_type', 'project')
-    search_fields = ('supplier_invoice_number', 'contact_pk__contact_name', 'invoice_xero_id')
-class InvoiceAllocationsAdmin(admin.ModelAdmin):
-    form = InvoiceAllocationsForm
-    list_display = ("invoice_allocations_pk", "invoice_pk", "item", "amount", "gst_amount", "notes", "allocation_type")
+    list_filter = ('bill_status', 'auto_created', 'bill_type', 'project')
+    search_fields = ('supplier_bill_number', 'contact_pk__contact_name', 'bill_xero_id')
+class BillAllocationsAdmin(admin.ModelAdmin):
+    form = BillAllocationsForm
+    list_display = ("bill_allocation_pk", "bill", "item", "amount", "gst_amount", "notes", "allocation_type")
 
 class HC_claimsAdmin(admin.ModelAdmin):
     list_display = ("hc_claim_pk", "date", "status", "display_id")
@@ -207,8 +207,8 @@ admin.site.register(Po_orders, Po_ordersAdmin)
 admin.site.register(Po_order_detail, PoOrderDetailAdmin)
 admin.site.register(SPVData, SPVDataAdmin)
 admin.site.register(Letterhead, LetterheadAdmin)
-admin.site.register(Invoices, InvoicesAdmin)
-admin.site.register(Invoice_allocations, InvoiceAllocationsAdmin)
+admin.site.register(Bills, BillsAdmin)
+admin.site.register(Bill_allocations, BillAllocationsAdmin)
 admin.site.register(HC_claims, HC_claimsAdmin)
 admin.site.register(HC_claim_allocations, HC_claim_allocationsAdmin)
 admin.site.register(Hc_variation, HcVariationAdmin)

@@ -1,6 +1,6 @@
 <!-- Working Budget Template -->
 <!-- Inherit base table styles -->
-{% include "core/components/reusable_table_styles.html" %}
+{% include "core/components/data_table_styles.html" %}
 
 <style>
     /* Contract Budget specific styles - extends reusable_table_styles */
@@ -109,17 +109,8 @@
         }
     }, 100);
     
-    // Column width definitions
-    var columnWidths = {
-        // Execution + Construction (11 cols): Category/Item | Unit | Contract Budget | Working Budget | Qty | Rate | Amount | Committed | Cost to Complete | Invoiced | Fixed on Site
-        executionConstruction: ['20%', '6%', '9%', '9%', '7%', '7%', '9%', '9%', '8%', '8%', '8%'],
-        // Execution + Non-construction (9 cols): Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
-        executionNonConstruction: ['24%', '8%', '10%', '10%', '10%', '10%', '10%', '9%', '9%'],
-        // Tender + Construction (7 cols): Category/Item | Unit | Working Budget | Qty | Rate | Amount | Committed
-        tenderConstruction: ['28%', '8%', '12%', '10%', '10%', '12%', '12%'],
-        // Tender + Non-construction (5 cols): Category/Item | Unit | Working Budget | Uncommitted | Committed
-        tenderNonConstruction: ['32%', '10%', '18%', '20%', '20%']
-    };
+    // Column width definitions - now use ProjectTypeConfig.contractBudget.columnWidths
+    var columnWidths = ProjectTypeConfig.contractBudget.columnWidths;
     
     function renderTableHeaders(isTender, isConstructionType) {
         // isTender: controls column visibility (true = reduced columns, false = full columns)
@@ -171,7 +162,7 @@
                 headerRow1.append('<th colspan="3" style="text-align: center; width: ' + (parseInt(widths[4]) + parseInt(widths[5]) + parseInt(widths[6])) + '%;">Uncommitted</th>');
                 headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[7] + ';">Committed</th>');
                 headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[8] + ';">Cost to Complete</th>');
-                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[9] + ';">Invoiced</th>');
+                headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[9] + ';">Billd</th>');
                 headerRow1.append('<th rowspan="2" style="vertical-align: middle; width: ' + widths[10] + ';">Fixed on Site</th>');
                 thead.append(headerRow1);
                 
@@ -191,7 +182,7 @@
                 headerRow.append('<th style="width: ' + widths[4] + ';">Uncommitted</th>');
                 headerRow.append('<th style="width: ' + widths[5] + ';">Committed</th>');
                 headerRow.append('<th style="width: ' + widths[6] + ';">Cost to Complete</th>');
-                headerRow.append('<th style="width: ' + widths[7] + ';">Invoiced</th>');
+                headerRow.append('<th style="width: ' + widths[7] + ';">Billd</th>');
                 headerRow.append('<th style="width: ' + widths[8] + ';">Fixed on Site</th>');
                 thead.append(headerRow);
             }
@@ -231,7 +222,7 @@
             // EXECUTION MODE: Full columns
             if (isConstructionType) {
                 // Construction project_type: 11 columns with Qty|Rate|Amount
-                // Category/Item | Unit | Contract Budget | Working Budget | Qty | Rate | Amount | Committed | Cost to Complete | Invoiced | Fixed on Site
+                // Category/Item | Unit | Contract Budget | Working Budget | Qty | Rate | Amount | Committed | Cost to Complete | Billd | Fixed on Site
                 row.append('<td><strong>TOTALS</strong></td>');
                 row.append('<td></td>'); // Unit
                 row.append('<td id="totalContractBudget">$0.00</td>');
@@ -241,11 +232,11 @@
                 row.append('<td id="totalUncommittedAmount">$0.00</td>');
                 row.append('<td id="totalCommitted">$0.00</td>');
                 row.append('<td id="totalCostToComplete">$0.00</td>');
-                row.append('<td id="totalInvoiced">$0.00</td>');
+                row.append('<td id="totalBilld">$0.00</td>');
                 row.append('<td id="totalFixedOnSite">$0.00</td>');
             } else {
                 // Non-construction project_type: 9 columns with single Uncommitted
-                // Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                // Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Billd | Fixed on Site
                 row.append('<td><strong>TOTALS</strong></td>');
                 row.append('<td></td>'); // Unit
                 row.append('<td id="totalContractBudget">$0.00</td>');
@@ -253,7 +244,7 @@
                 row.append('<td id="totalUncommitted">$0.00</td>');
                 row.append('<td id="totalCommitted">$0.00</td>');
                 row.append('<td id="totalCostToComplete">$0.00</td>');
-                row.append('<td id="totalInvoiced">$0.00</td>');
+                row.append('<td id="totalBilld">$0.00</td>');
                 row.append('<td id="totalFixedOnSite">$0.00</td>');
             }
         }
@@ -268,7 +259,8 @@
         // isTender: controls column visibility (true = reduced columns, false = full columns)
         // isConstructionType: controls Uncommitted format (true = Qty|Rate|Amount, false = single Amount)
         var isTender = window.currentContractBudgetProject && window.currentContractBudgetProject.isTender === true;
-        var isConstructionType = window.currentContractBudgetProject && window.currentContractBudgetProject.project_type === 'construction';
+        var isConstructionType = window.currentContractBudgetProject && 
+            ProjectTypeConfig.isConstruction(window.currentContractBudgetProject.project_type);
         
         console.log('isTender (column visibility):', isTender);
         console.log('isConstructionType (Uncommitted format):', isConstructionType);
@@ -283,14 +275,14 @@
         
         // Load categories, items, and committed amounts
         $.ajax({
-            url: '/get_project_categories/' + projectPk + '/',
+            url: '/core/get_project_categories/' + projectPk + '/',
             type: 'GET',
             success: function(categoriesResponse) {
                 console.log('Categories loaded:', categoriesResponse);
                 
                 // Load items
                 $.ajax({
-                    url: '/get_project_items/' + projectPk + '/',
+                    url: '/core/get_project_items/' + projectPk + '/',
                     type: 'GET',
                     success: function(itemsResponse) {
                         console.log('Items loaded:', itemsResponse);
@@ -394,7 +386,7 @@
             if (isInternal) {
                 categoryRow.addClass('internal-category');
             }
-            categoryRow.append('<td><strong>' + escapeHtml(category.category) + '</strong></td>');
+            categoryRow.append('<td><strong>' + Utils.escapeHtml(category.category) + '</strong></td>');
             
             // Add category row cells based on mode
             categoryRow.append('<td>-</td>'); // Unit (always present)
@@ -431,7 +423,7 @@
                 
                 categoryRow.append('<td class="committed-amount">-</td>'); // Committed
                 categoryRow.append('<td>-</td>'); // Cost to Complete
-                categoryRow.append('<td>-</td>'); // Invoiced
+                categoryRow.append('<td>-</td>'); // Billd
                 categoryRow.append('<td>-</td>'); // Fixed on Site
             }
             
@@ -461,7 +453,7 @@
                 itemRow.attr('data-item-pk', item.costing_pk);
                 
                 // Category / Item column with indent
-                itemRow.append('<td class="indent">' + escapeHtml(item.item) + '</td>');
+                itemRow.append('<td class="indent">' + Utils.escapeHtml(item.item) + '</td>');
                 
                 // Unit column (always present)
                 var unitCell = $('<td></td>');
@@ -470,7 +462,7 @@
                 
                 // Get amounts from backend data
                 var committedAmount = committedAmounts[item.costing_pk] || 0;
-                var invoicedAmount = item.invoiced_amount || 0;
+                var billdAmount = item.billd_amount || 0;
                 var fixedOnSiteAmount = item.fixed_on_site_amount || 0;
                 
                 if (isTender) {
@@ -591,7 +583,7 @@
                     
                 } else {
                     // ===== EXECUTION MODE =====
-                    // Full columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Invoiced | Fixed on Site
+                    // Full columns: Category/Item | Unit | Contract Budget | Working Budget | Uncommitted | Committed | Cost to Complete | Billd | Fixed on Site
                     
                     // Contract Budget column (read-only, from backend)
                     var contractBudgetCell = $('<td class="contract-budget-amount"></td>');
@@ -719,12 +711,12 @@
                     costToCompleteCell.text('$0.00');
                     itemRow.append(costToCompleteCell);
                     
-                    // Invoiced column (read-only, from backend)
-                    var invoicedCell = $('<td class="invoiced-amount"></td>');
-                    invoicedCell.attr('data-item-pk', item.costing_pk);
-                    invoicedCell.attr('data-amount', invoicedAmount);
-                    invoicedCell.text('$' + invoicedAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
-                    itemRow.append(invoicedCell);
+                    // Billd column (read-only, from backend)
+                    var billdCell = $('<td class="billd-amount"></td>');
+                    billdCell.attr('data-item-pk', item.costing_pk);
+                    billdCell.attr('data-amount', billdAmount);
+                    billdCell.text('$' + billdAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+                    itemRow.append(billdCell);
                     
                     // Fixed on Site column (read-only, from backend)
                     var fixedOnSiteCell = $('<td class="fixed-on-site-amount"></td>');
@@ -822,7 +814,7 @@
         var totalUncommitted = 0;
         var totalCommitted = 0;
         var totalCostToComplete = 0;
-        var totalInvoiced = 0;
+        var totalBilld = 0;
         var totalFixedOnSite = 0;
         
         // Use global flags set during loadContractBudget
@@ -869,9 +861,9 @@
                 var costToCompleteAmount = parseFloat($(this).find('.cost-to-complete-amount').attr('data-amount')) || 0;
                 totalCostToComplete += costToCompleteAmount;
                 
-                // Invoiced
-                var invoicedAmount = parseFloat($(this).find('.invoiced-amount').attr('data-amount')) || 0;
-                totalInvoiced += invoicedAmount;
+                // Billd
+                var billdAmount = parseFloat($(this).find('.billd-amount').attr('data-amount')) || 0;
+                totalBilld += billdAmount;
                 
                 // Fixed on Site
                 var fixedOnSiteAmount = parseFloat($(this).find('.fixed-on-site-amount').attr('data-amount')) || 0;
@@ -898,7 +890,7 @@
             // Execution mode: full totals
             $(window.currentContractBudgetContainer + ' #totalContractBudget').text('$' + totalContractBudget.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
             $(window.currentContractBudgetContainer + ' #totalCostToComplete').text('$' + totalCostToComplete.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
-            $(window.currentContractBudgetContainer + ' #totalInvoiced').text('$' + totalInvoiced.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+            $(window.currentContractBudgetContainer + ' #totalBilld').text('$' + totalBilld.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
             $(window.currentContractBudgetContainer + ' #totalFixedOnSite').text('$' + totalFixedOnSite.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
             
             if (isConstructionType) {
@@ -1029,15 +1021,5 @@
         });
     }
     
-    function escapeHtml(text) {
-        var map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-    }
 })();
 </script>

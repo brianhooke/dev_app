@@ -39,10 +39,10 @@ class URLNamespaceTestCase(TestCase):
         url = reverse('core:create_po_order')
         self.assertEqual(url, '/create_po_order/')
     
-    def test_core_upload_invoice_url(self):
-        """Should resolve core:upload_invoice URL."""
-        url = reverse('core:upload_invoice')
-        self.assertEqual(url, '/upload_invoice/')
+    def test_core_upload_bill_url(self):
+        """Should resolve core:upload_bill URL."""
+        url = reverse('core:upload_bill')
+        self.assertEqual(url, '/upload_bill/')
     
     def test_development_namespace_exists(self):
         """Development namespace should be configured."""
