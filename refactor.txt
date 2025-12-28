@@ -206,6 +206,51 @@ A step-by-step guide for maintaining code quality.
 - MODEL_SERVICE_MAPPING.md
 
 ================================================================================
+8. RELATED FILE CONSISTENCY
+================================================================================
+
+**Goal:** Ensure related files behave consistently and use shared patterns.
+
+**Related File Groups:**
+
+8.1. **Allocations Layout Files** (use allocations_layout.js)
+     - quotes.html
+     - bills_project.html  
+     - po.html
+     
+     These files share common patterns via AllocationsManager:
+     - Column widths: Use allocations.columnWidths config
+     - Editable rows: Use AllocationsManager.createEditableAllocationRow()
+     - Table population: Use AllocationsManager.populateMainTable()
+     - Data loading: Use AllocationsManager.loadData() where possible
+     
+     Section-specific logic (e.g., PO's supplier grouping) stays in section files.
+
+**Steps:**
+8.1. **Compare Function Signatures**
+     - List functions in each related file
+     - Check for similar functions with different implementations
+     - Flag inconsistencies for review
+
+8.2. **Check Config Patterns**
+     - AllocationsManager.init() configs should follow same structure
+     - Feature flags should be used consistently
+
+8.3. **Verify Shared Functions**
+     - Editable allocation rows → createEditableAllocationRow()
+     - Column widths → allocations.columnWidths config
+     - Footer totals → footerTotals config
+
+8.4. **Report Inconsistencies**
+     - When refactoring, generate comparison table of functions
+     - Flag any section doing custom what another uses shared
+
+**Verification:**
+- Compare AllocationsManager.init() configs across files
+- Ensure same callbacks/features are used consistently
+- Test all three sections after changes
+
+================================================================================
 QUICK REFERENCE
 ================================================================================
 

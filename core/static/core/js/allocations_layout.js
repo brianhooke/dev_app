@@ -176,7 +176,8 @@ var AllocationsManager = (function() {
             allocations: {
                 emptyMessage: 'No allocations.',
                 editable: false,
-                showStillToAllocate: true
+                showStillToAllocate: true,
+                columnWidths: null  // Array of width strings to apply via Utils.applyColumnStyles
             },
             api: {
                 save: null,     // URL for save/update endpoint
@@ -220,7 +221,7 @@ var AllocationsManager = (function() {
      * Sizes table to content up to a maximum number of rows
      */
     function setupAllocationsHeightAdjustment(sectionId) {
-        var rowHeight = 28; // Matches --rt-row-height CSS variable
+        var fallbackRowHeight = 28; // Fallback if no rows to measure
         var maxRows = 6;    // Maximum rows before scrolling kicks in
         
         // Create the height adjustment function for this section
@@ -229,13 +230,22 @@ var AllocationsManager = (function() {
             var tbody = document.getElementById(sectionId + 'AllocationsTableBody');
             if (!tbody) return;
             
-            var rowCount = tbody.querySelectorAll('tr').length;
+            var rows = tbody.querySelectorAll('tr');
+            var rowCount = rows.length;
+            
+            // Measure actual row height from first row, or use fallback
+            var actualRowHeight = fallbackRowHeight;
+            if (rows.length > 0) {
+                actualRowHeight = rows[0].offsetHeight || fallbackRowHeight;
+            }
+            
             // Size to actual content, but cap at maxRows
             var displayRows = Math.min(Math.max(rowCount, 1), maxRows);
-            var newHeight = displayRows * rowHeight;
+            var newHeight = displayRows * actualRowHeight;
+            var maxHeight = maxRows * actualRowHeight;
             
             // Set the tbody height to fit content up to max
-            tbody.style.maxHeight = (maxRows * rowHeight) + 'px';
+            tbody.style.maxHeight = maxHeight + 'px';
             tbody.style.height = newHeight + 'px';
         };
         
@@ -641,6 +651,11 @@ var AllocationsManager = (function() {
                 saveItem(sectionId, itemPkToSave);
             }, 100);
         }
+        
+        // Apply column widths if configured
+        if (cfg.allocations.columnWidths) {
+            Utils.applyColumnStyles(sectionId, cfg.allocations.columnWidths, { addEditableClass: showEditable });
+        }
     }
     
     /**
@@ -739,7 +754,7 @@ var AllocationsManager = (function() {
                     window.adjustAllocationsHeight[sectionId]();
                 }
             });
-        row.append($('<td>').css('text-align', 'center').append(deleteBtn));
+        row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').append(deleteBtn));
         
         return row;
     }
@@ -891,6 +906,9 @@ var AllocationsManager = (function() {
             $('#' + sectionId + 'SaveAllocationsBtn').show();
             $('#' + sectionId + 'AllocationFooterLabel').text('Still to Allocate:');
         }
+        
+        // Show/hide edit-only columns (e.g., Delete column)
+        toggleEditOnlyColumns(sectionId, isNew);
     }
     
     /**
@@ -902,6 +920,21 @@ var AllocationsManager = (function() {
         st.editMode = isEdit;
         st.isNewMode = false;
         console.log('State after setEditMode:', 'editMode:', st.editMode, 'isNewMode:', st.isNewMode);
+        
+        // Show/hide edit-only columns (e.g., Delete column)
+        toggleEditOnlyColumns(sectionId, isEdit);
+    }
+    
+    /**
+     * Toggle visibility of edit-only columns (th and td with data-edit-only)
+     */
+    function toggleEditOnlyColumns(sectionId, show) {
+        var table = $('#' + sectionId + 'AllocationsTable');
+        if (show) {
+            table.find('th[data-edit-only], td[data-edit-only]').show();
+        } else {
+            table.find('th[data-edit-only], td[data-edit-only]').hide();
+        }
     }
     
     /**
@@ -1448,7 +1481,7 @@ var AllocationsManager = (function() {
                     onUpdate();
                 }
             });
-        row.append($('<td>').append(deleteBtn));
+        row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').append(deleteBtn));
         
         return row;
     }

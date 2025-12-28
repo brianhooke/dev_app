@@ -135,7 +135,6 @@ For a complete table with HTML structure, use data_table.html instead.
 
   /* Table container wrapper */
   .reusable-table-container {
-    margin-bottom: 15px;
     border: 1px solid black;
     border-radius: 6px;
     overflow: hidden;
@@ -219,6 +218,7 @@ For a complete table with HTML structure, use data_table.html instead.
     color: var(--color-text);
     height: var(--rt-row-height);
     font-size: var(--rt-font-size);
+    text-align: left;
     /* Single-line constraint with ellipsis for overflow */
     max-width: 0;
     overflow: hidden;
@@ -281,6 +281,31 @@ For a complete table with HTML structure, use data_table.html instead.
   
   .reusable-table .btn-sm i {
     font-size: var(--rt-icon-size);
+  }
+  
+  /* ========================================
+     COLUMN TYPE CLASSES
+     Data columns (left-aligned) vs Action columns (center-aligned)
+     with vertical divider between the two sections
+     ======================================== */
+  
+  /* Data columns - left-aligned (default, explicit class for clarity) */
+  .reusable-table th.col-data,
+  .reusable-table td.col-data {
+    text-align: left;
+  }
+  
+  /* Action columns - center-aligned */
+  .reusable-table th.col-action,
+  .reusable-table td.col-action {
+    text-align: center;
+  }
+  
+  /* First action column gets left border as vertical divider */
+  .reusable-table th.col-action-first,
+  .reusable-table td.col-action-first {
+    text-align: center;
+    border-left: 1px solid #dee2e6;
   }
   
   .reusable-table .dropdown-arrow {

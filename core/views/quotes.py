@@ -70,8 +70,8 @@ def quotes_view(request):
         {'header': 'Supplier', 'width': '50%'},
         {'header': '$ Net', 'width': '15%'},
         {'header': 'Quote #', 'width': '15%'},
-        {'header': 'Update', 'width': '12%'},
-        {'header': 'Delete', 'width': '8%'},
+        {'header': 'Update', 'width': '12%', 'class': 'col-action-first'},
+        {'header': 'Delete', 'width': '8%', 'class': 'col-action'},
     ]
     
     # Allocations columns differ by project type
@@ -83,14 +83,14 @@ def quotes_view(request):
             {'header': 'Rate', 'width': '10%'},
             {'header': '$ Amount', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
             {'header': 'Notes', 'width': '30%'},
-            {'header': '', 'width': '5%', 'align': 'center'},
+            {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
         ]
     else:
         allocations_columns = [
             {'header': 'Item', 'width': '40%'},
             {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
             {'header': 'Notes', 'width': '35%'},
-            {'header': '', 'width': '5%', 'align': 'center'},
+            {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
         ]
     
     context = {

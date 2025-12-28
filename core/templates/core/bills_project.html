@@ -50,12 +50,9 @@ $(document).ready(function() {
     var billSectionSuppliers = [];
     
     
-    // Update bill allocations table styling (uses shared utility for column widths)
+    // Update bill allocations footer label based on mode
+    // NOTE: Column widths now handled by AllocationsManager via allocations.columnWidths config
     function updateBillAllocationsTableStyle() {
-        var widths = window.billAllocationWidths || [];
-        Utils.applyColumnStyles('bill', widths, { addEditableClass: true });
-        
-        // Update footer label based on mode
         var isAllocated = templateType === 'allocated';
         var footerLabel = isAllocated ? 'Total Allocated:' : 'Still to Allocate:';
         $('#billAllocationFooterLabel').text(footerLabel);
@@ -158,14 +155,14 @@ $(document).ready(function() {
                     .attr('data-bill-pk', bill.bill_pk)
                     .prop('disabled', true)
                     .attr('title', 'Allocate bill (enabled when fully allocated)');
-                row.append($('<td>').css('text-align', 'center').append(allocateBtn));
+                row.append($('<td>').addClass('col-action-first').append(allocateBtn));
                 
                 // 6. Delete button
                 var deleteBtn = $('<button>')
                     .addClass('btn btn-sm btn-danger delete-bill-btn')
                     .html('<i class="fas fa-trash"></i>')
                     .attr('data-bill-pk', bill.bill_pk);
-                row.append($('<td>').append(deleteBtn));
+                row.append($('<td>').addClass('col-action').append(deleteBtn));
                 
                 return row;
             },
@@ -195,6 +192,7 @@ $(document).ready(function() {
         allocations: {
             emptyMessage: 'No allocations for this bill',
             editable: true,
+            columnWidths: window.billAllocationWidths || [],
             renderEditableRow: function(allocation, cfg, onChange) {
                 return AllocationsManager.createEditableAllocationRow({
                     sectionId: 'bill',
@@ -476,7 +474,7 @@ $(document).ready(function() {
             row.append(gstCell);
             
             // 5. Progress Claim column
-            var poCell = $('<td>').css('text-align', 'center');
+            var poCell = $('<td>').addClass('col-action-first');
             if (isPOClaim) {
                 poCell.append($('<i>').addClass('fas fa-check').css({'color': '#28a745', 'margin-right': '4px'}));
                 var viewLink = $('<a>').attr('href', '#').addClass('po-view-link').css({'color': '#007bff', 'cursor': 'pointer', 'text-decoration': 'underline'})
@@ -493,7 +491,7 @@ $(document).ready(function() {
             } else {
                 unallocateBtn.addClass('btn-warning').on('click', function(e) { e.stopPropagation(); unallocateBill($(this)); });
             }
-            row.append($('<td>').css('text-align', 'center').append(unallocateBtn));
+            row.append($('<td>').addClass('col-action').append(unallocateBtn));
             
             // 7. Approve button
             var approveBtn = $('<button>').addClass('btn btn-sm allocated-action-btn allocated-approve-btn').text('Approve').attr('data-bill-pk', bill.bill_pk)
@@ -508,7 +506,7 @@ $(document).ready(function() {
             } else {
                 approveBtn.addClass('btn-success').prop('disabled', false);
             }
-            row.append($('<td>').css('text-align', 'center').append(approveBtn));
+            row.append($('<td>').addClass('col-action').append(approveBtn));
             
             // 8. Save/Edit button - only for PO claims
             if (isPOClaim) {
@@ -519,10 +517,10 @@ $(document).ready(function() {
                 } else {
                     saveEditBtn.addClass('btn-secondary').text('Save').prop('disabled', true).on('click', function(e) { e.stopPropagation(); saveAllocatedBill($(this)); });
                 }
-                row.append($('<td>').css('text-align', 'center').append(saveEditBtn));
+                row.append($('<td>').addClass('col-action').append(saveEditBtn));
                 if (!hasBillNumber) updateAllocatedSaveButtonState(row);
             } else {
-                row.append($('<td>').css('text-align', 'center').text('-'));
+                row.append($('<td>').addClass('col-action').text('-'));
             }
             
             // Row click handler
@@ -688,8 +686,8 @@ $(document).ready(function() {
                             totalNet += amount;
                         } else {
                             row.append($('<td>').text(alloc.item_name || '-'));
-                            row.append($('<td>').text('$' + (alloc.amount || 0).toFixed(2)));
-                            row.append($('<td>').text('$' + (alloc.gst_amount || 0).toFixed(2)));
+                            row.append($('<td>').text('$' + Utils.formatMoney(alloc.amount || 0)));
+                            row.append($('<td>').text('$' + Utils.formatMoney(alloc.gst_amount || 0)));
                             row.append($('<td>').text(alloc.notes || '-'));
                             totalNet += alloc.amount || 0;
                             totalGst += alloc.gst_amount || 0;
@@ -697,8 +695,8 @@ $(document).ready(function() {
                         tbody.append(row);
                     });
                     
-                    $('#billTotalNet').text('$' + totalNet.toFixed(2));
-                    if (!isConstruction) $('#billTotalGst').text('$' + totalGst.toFixed(2));
+                    $('#billTotalNet').text('$' + Utils.formatMoney(totalNet));
+                    if (!isConstruction) $('#billTotalGst').text('$' + Utils.formatMoney(totalGst));
                 }
             },
             error: function(xhr, status, error) { console.error('Failed to load allocations:', error); }

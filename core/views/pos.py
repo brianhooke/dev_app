@@ -82,9 +82,9 @@ def po_view(request):
             {'header': 'Last Name', 'width': '10%'},
             {'header': 'Email', 'width': '20%'},
             {'header': 'Amount', 'width': '12%'},
-            {'header': 'Sent', 'width': '4%'},
-            {'header': 'Update', 'width': '12%'},
-            {'header': 'Email', 'width': '7%'},
+            {'header': 'Sent', 'width': '4%', 'class': 'col-action-first'},
+            {'header': 'Update', 'width': '12%', 'class': 'col-action'},
+            {'header': 'Email', 'width': '7%', 'class': 'col-action'},
         ],
     }
     return render(request, 'core/po.html', context)

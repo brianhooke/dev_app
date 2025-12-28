@@ -1333,10 +1333,10 @@ def bills_view(request):
                 {'header': 'Bill #', 'width': '12%'},
                 {'header': '$ Net', 'width': '10%'},
                 {'header': '$ GST', 'width': '10%'},
-                {'header': 'Progress Claim', 'width': '10%'},
-                {'header': 'Unallocate', 'width': '13%'},
-                {'header': 'Approve', 'width': '13%'},
-                {'header': 'Save', 'width': '10%'},
+                {'header': 'Progress Claim', 'width': '10%', 'class': 'col-action-first'},
+                {'header': 'Unallocate', 'width': '13%', 'class': 'col-action'},
+                {'header': 'Approve', 'width': '13%', 'class': 'col-action'},
+                {'header': 'Save', 'width': '10%', 'class': 'col-action'},
             ]
         else:
             main_table_columns = [
@@ -1344,8 +1344,8 @@ def bills_view(request):
                 {'header': 'Bill #', 'width': '20%'},
                 {'header': '$ Net', 'width': '17%'},
                 {'header': '$ GST', 'width': '17%'},
-                {'header': 'Allocate', 'width': '13%'},
-                {'header': 'Del', 'width': '8%'},
+                {'header': 'Allocate', 'width': '13%', 'class': 'col-action-first'},
+                {'header': 'Del', 'width': '8%', 'class': 'col-action'},
             ]
         
         # Allocations columns differ by project type AND allocated status
@@ -1369,7 +1369,7 @@ def bills_view(request):
                     {'header': 'Rate', 'width': '10%'},
                     {'header': '$ Amount', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
                     {'header': 'Notes', 'width': '30%'},
-                    {'header': '', 'width': '5%', 'align': 'center'},
+                    {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
                 ]
         else:
             if is_allocated:
@@ -1387,7 +1387,7 @@ def bills_view(request):
                     {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
                     {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
                     {'header': 'Notes', 'width': '30%'},
-                    {'header': '', 'width': '5%', 'align': 'center'},
+                    {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
                 ]
         
         context = {

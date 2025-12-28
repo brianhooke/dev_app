@@ -113,13 +113,13 @@ $(document).ready(function() {
                 row.append($('<td>').addClass('po-email').html(emailDisplay));
                 
                 var formattedAmount = '$' + Utils.formatMoney(supplierTotal);
-                row.append($('<td>').addClass('po-amount').css('text-align', 'right').text(formattedAmount));
+                row.append($('<td>').addClass('po-amount').text(formattedAmount));
                 
                 var sentDisplay = isSent ? '<i class="fa fa-check" style="color: #28a745;"></i>' : '<span style="color: #999;">-</span>';
-                row.append($('<td>').css('text-align', 'center').html(sentDisplay));
+                row.append($('<td>').addClass('col-action-first').html(sentDisplay));
                 
-                row.append($('<td>').append($('<button>').addClass('btn btn-sm btn-warning po-update-btn').text('Update')));
-                row.append($('<td>').append($('<button>').addClass('btn btn-sm btn-primary po-email-btn').attr('title', 'Send PO email').html('<i class="fa fa-envelope"></i>')));
+                row.append($('<td>').addClass('col-action').append($('<button>').addClass('btn btn-sm btn-warning po-update-btn').text('Update')));
+                row.append($('<td>').addClass('col-action').append($('<button>').addClass('btn btn-sm btn-primary po-email-btn').attr('title', 'Send PO email').html('<i class="fa fa-envelope"></i>')));
                 
                 return row;
             },
@@ -299,7 +299,7 @@ $(document).ready(function() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                'X-CSRFToken': Utils.getCSRFToken()
             },
             body: JSON.stringify({
                 name: supplierName,
@@ -363,7 +363,7 @@ $(document).ready(function() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                'X-CSRFToken': Utils.getCSRFToken()
             }
         })
         .then(function(response) { return response.json(); })

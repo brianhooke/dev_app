@@ -154,6 +154,12 @@ Optional context variables:
         border: none;
     }
     
+    /* Allow col-action-first left border to show on allocations table */
+    #{{ section_id }}AllocationsTable thead th.col-action-first,
+    #{{ section_id }}AllocationsTable tbody td.col-action-first {
+        border-left: 1px solid #dee2e6;
+    }
+    
     #{{ section_id }}AllocationsTable tbody {
         display: block;
         width: 100%;
@@ -270,7 +276,7 @@ Optional context variables:
                         <thead>
                             <tr>
                                 {% for col in main_table_columns %}
-                                <th style="width: {{ col.width }};">{{ col.header }}</th>
+                                <th style="width: {{ col.width }};"{% if col.class %} class="{{ col.class }}"{% endif %}>{{ col.header }}</th>
                                 {% endfor %}
                             </tr>
                         </thead>
@@ -285,7 +291,7 @@ Optional context variables:
                         <tfoot id="{{ section_id }}MainTableFooter" style="display: none;">
                             <tr style="background: var(--color-bg-muted); font-weight: 600;">
                                 {% for col in main_table_columns %}
-                                <td id="{{ section_id }}FooterCol{{ forloop.counter }}" style="border-top: 2px solid var(--color-border); padding: 4px 8px;">{% if forloop.first %}<span id="{{ section_id }}TitleActions" style="margin-left: -8px; display: inline-block;"></span>{% endif %}</td>
+                                <td id="{{ section_id }}FooterCol{{ forloop.counter }}" style="border-top: 2px solid var(--color-border); padding: 4px 8px;"{% if col.class %} class="{{ col.class }}"{% endif %}>{% if forloop.first %}<span id="{{ section_id }}TitleActions" style="margin-left: -8px; display: inline-block;"></span>{% endif %}</td>
                                 {% endfor %}
                             </tr>
                         </tfoot>
@@ -305,7 +311,7 @@ Optional context variables:
                             <thead>
                                 <tr>
                                     {% for col in allocations_columns %}
-                                    <th style="width: {{ col.width }};">{{ col.header }}</th>
+                                    <th style="width: {{ col.width }};{% if col.edit_only %} display: none;{% endif %}"{% if col.class %} class="{{ col.class }}"{% endif %}{% if col.edit_only %} data-edit-only="true"{% endif %}>{{ col.header }}</th>
                                     {% endfor %}
                                 </tr>
                             </thead>
@@ -319,13 +325,13 @@ Optional context variables:
                     <!-- DEBUG: allocations_columns count = {{ allocations_columns|length }} -->
                     <div id="{{ section_id }}AllocationsFooter" class="{{ section_id }}-allocations-footer" style="display: flex; align-items: center;">
                         {% for col in allocations_columns %}
-                        <div style="width: {{ col.width }}; padding: 4px 8px;">
+                        <div style="width: {{ col.width }}; padding: 4px 8px;{% if forloop.first %} display: flex; flex-wrap: nowrap; align-items: center; overflow: visible;{% endif %}">
                             {% if forloop.first %}
-                            <button type="button" class="{{ section_id }}-action-btn" id="{{ section_id }}AddAllocationBtn" style="margin-left: -4px; display: none;">
+                            <button type="button" class="{{ section_id }}-action-btn" id="{{ section_id }}AddAllocationBtn" style="margin-left: -4px; display: none; flex-shrink: 0;">
                                 <i class="fas fa-plus"></i> Add Row
                             </button>
+                            <span id="{{ section_id }}AllocationFooterLabel" style="white-space: nowrap; margin-left: 8px; flex-shrink: 0;">Still to Allocate:</span>
                             {% elif forloop.counter == 2 %}
-                            <span id="{{ section_id }}AllocationFooterLabel" style="white-space: nowrap;">Still to Allocate:</span>
                             {% if col.still_to_allocate_id %}<span id="{{ section_id }}{{ col.still_to_allocate_id }}" class="footer-value remaining">$0.00</span>{% endif %}
                             {% elif col.still_to_allocate_id %}
                             <span id="{{ section_id }}{{ col.still_to_allocate_id }}" class="footer-value remaining">$0.00</span>
