@@ -28,7 +28,7 @@ import json
 import logging
 import requests
 
-from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances
+from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts
 from .xero import get_xero_auth, parse_xero_validation_errors, handle_xero_request_errors
 
 logger = logging.getLogger(__name__)
@@ -42,14 +42,14 @@ def bills_global_inbox_view(request):
     """
     # Main table columns for Inbox view
     main_table_columns = [
-        {'header': 'Xero / Project', 'width': '10%'},
-        {'header': 'Supplier', 'width': '23%'},
-        {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Net', 'width': '11%'},
-        {'header': '$ GST', 'width': '11%'},
-        {'header': 'Email', 'width': '8%', 'class': 'col-action-first'},
-        {'header': 'Send', 'width': '12%', 'class': 'col-action'},
-        {'header': 'Archive', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Xero / Project', 'width': '15%'},
+        {'header': 'Supplier', 'width': '20%'},
+        {'header': 'Bill #', 'width': '12%'},
+        {'header': '$ Net', 'width': '13%'},
+        {'header': '$ GST', 'width': '13%'},
+        {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
+        {'header': 'Send', 'width': '7%', 'class': 'col-action'},
+        {'header': 'Archive', 'width': '7%', 'class': 'col-action'},
     ]
     
     context = {
@@ -67,14 +67,14 @@ def bills_global_direct_view(request):
     """
     # Main table columns for Direct view
     main_table_columns = [
-        {'header': 'Xero / Project', 'width': '10%'},
+        {'header': 'Xero / Project', 'width': '14%'},
         {'header': 'Supplier', 'width': '23%'},
         {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Net', 'width': '11%'},
-        {'header': '$ GST', 'width': '11%'},
+        {'header': '$ Net', 'width': '10%'},
+        {'header': '$ GST', 'width': '10%'},
         {'header': 'Email', 'width': '8%', 'class': 'col-action-first'},
         {'header': 'Send to Xero', 'width': '12%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '8%', 'class': 'col-action'},
     ]
     
     # Allocations columns for Direct view
@@ -351,4 +351,635 @@ def return_bill_to_project(request, invoice_id):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f"Error returning invoice to project: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+# =============================================================================
+# Bills Global API Endpoints
+# Moved from bills.py - used by bills_global_inbox/direct/approvals templates
+# =============================================================================
+
+@csrf_exempt
+def archive_bill(request):
+    """
+    Archive a bill by setting bill_status to -1
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            bill_pk = data.get('bill_pk')
+            
+            if not bill_pk:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice PK is required'
+                }, status=400)
+            
+            # Get the invoice
+            try:
+                invoice = Bills.objects.get(bill_pk=bill_pk)
+            except Bills.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice not found'
+                }, status=404)
+            
+            # Update status to -1 (archived)
+            invoice.bill_status = -1
+            invoice.save()
+            
+            logger.info(f"Archived invoice #{bill_pk}")
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Bill archived successfully',
+                'bill_pk': bill_pk
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON data'
+            }, status=400)
+        except Exception as e:
+            logger.error(f"Error archiving bill: {str(e)}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Server error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
+def return_to_inbox(request):
+    """
+    Return a bill to inbox by clearing fields and setting status to -2
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            bill_pk = data.get('bill_pk')
+            
+            if not bill_pk:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice PK is required'
+                }, status=400)
+            
+            # Get the invoice
+            try:
+                invoice = Bills.objects.get(bill_pk=bill_pk)
+            except Bills.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Invoice not found'
+                }, status=404)
+            
+            # Delete all associated allocations
+            deleted_count = Bill_allocations.objects.filter(bill_pk=invoice).delete()[0]
+            logger.info(f"Deleted {deleted_count} allocations for invoice {bill_pk}")
+            
+            # Clear fields and set status to -2
+            invoice.xero_instance = None
+            invoice.project = None
+            invoice.total_net = None
+            invoice.total_gst = None
+            invoice.supplier_bill_number = None
+            invoice.contact_pk = None
+            invoice.bill_status = -2
+            
+            invoice.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Bill returned to inbox successfully',
+                'bill_pk': invoice.bill_pk
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Server error: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+def get_bills_list(request):
+    """
+    Get list of all invoices for Bills modals (Inbox and Direct)
+    Frontend will filter by bill_status as needed
+    Also provides dropdown data for Xero instances, suppliers, and projects
+    """
+    # Get all invoices (frontend will filter by status)
+    invoices = Bills.objects.select_related(
+        'contact_pk', 'project', 'xero_instance', 'received_email', 'email_attachment'
+    ).prefetch_related('bill_allocations').order_by('-created_at')
+    
+    # Get dropdown options
+    xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name')
+    suppliers = Contacts.objects.filter(status='ACTIVE').order_by('name').values('contact_pk', 'name', 'xero_instance_id')
+    projects = Projects.objects.filter(archived=False).order_by('project').values('projects_pk', 'project', 'xero_instance_id')
+    
+    # Prepare bills data
+    bills_data = []
+    for invoice in invoices:
+        try:
+            # Get presigned S3 URL for attachment if it exists
+            attachment_url = ''
+            if invoice.email_attachment:
+                try:
+                    # Generate presigned URL (valid for 1 hour)
+                    attachment_url = invoice.email_attachment.get_download_url()
+                except Exception as e:
+                    # If S3 URL generation fails, use empty string
+                    logger.warning(f"Error getting download URL for attachment {invoice.email_attachment.id}: {str(e)}")
+                    attachment_url = ''
+            
+            # Get email URL (link to received email in admin)
+            email_url = ''
+            if invoice.received_email:
+                email_url = f"/admin/core/receivedemail/{invoice.received_email.id}/change/"
+            
+            # Determine xero_instance_id from either direct xero_instance or project
+            xero_instance_id = None
+            if invoice.xero_instance_id:
+                xero_instance_id = invoice.xero_instance_id
+            elif invoice.project and invoice.project.xero_instance_id:
+                xero_instance_id = invoice.project.xero_instance_id
+            
+            # Get existing allocations for this invoice
+            allocations = []
+            for allocation in invoice.bill_allocations.all():
+                allocations.append({
+                    'allocation_pk': allocation.bill_allocation_pk,
+                    'amount': float(allocation.amount) if allocation.amount is not None else None,
+                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount is not None else None,
+                    'notes': allocation.notes or '',
+                    'xero_account_pk': allocation.xero_account_id if allocation.xero_account else None,
+                })
+            
+            # Get PDF URL (local file or S3)
+            pdf_url = invoice.pdf.url if invoice.pdf else ''
+            
+            bill = {
+                'bill_pk': invoice.bill_pk,
+                'bill_status': invoice.bill_status,
+                'xero_instance_id': xero_instance_id,
+                'xero_instance_pk': xero_instance_id,  # Add this for frontend compatibility
+                'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'supplier_bill_number': invoice.supplier_bill_number or '',
+                'total_net': float(invoice.total_net) if invoice.total_net is not None else None,
+                'total_gst': float(invoice.total_gst) if invoice.total_gst is not None else None,
+                'pdf_url': pdf_url,
+                'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
+                'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',
+                'email_body_html': invoice.received_email.body_html if invoice.received_email else '',
+                'email_body_text': invoice.received_email.body_text if invoice.received_email else '',
+                'attachment_filename': invoice.email_attachment.filename if invoice.email_attachment else 'N/A',
+                'attachment_url': attachment_url,
+                'email_url': email_url,
+                'allocations': allocations,
+            }
+            bills_data.append(bill)
+        except Exception as e:
+            # Log error but continue processing other invoices
+            logger.error(f"Error processing invoice {invoice.bill_pk}: {str(e)}")
+            continue
+    
+    return JsonResponse({
+        'bills': bills_data,
+        'xero_instances': list(xero_instances),
+        'suppliers': list(suppliers),
+        'projects': list(projects),
+        'count': len(bills_data)
+    })
+
+
+def _pull_xero_accounts_for_instance(instance_pk):
+    """
+    Helper function to pull accounts and tracking categories for a single Xero instance.
+    Returns a dict with results for this instance.
+    Note: Does not use @handle_xero_request_errors decorator since it returns a dict, not a JsonResponse.
+    """
+    xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
+    logger.info(f"Processing Xero instance: {xero_instance.xero_name} (PK: {instance_pk})")
+    
+    # Get Xero authentication
+    xero_inst, access_token, tenant_id = get_xero_auth(instance_pk)
+    if not xero_inst:
+        # access_token is actually a JsonResponse error when auth fails
+        logger.error(f"Authentication failed for {xero_instance.xero_name}")
+        return {
+            'instance_name': xero_instance.xero_name,
+            'status': 'error',
+            'message': 'Authentication failed - please re-authorize this Xero instance',
+            'accounts_added': 0,
+            'accounts_updated': 0,
+            'accounts_unchanged': 0,
+            'divisions_added': 0,
+            'divisions_updated': 0,
+            'divisions_unchanged': 0
+        }
+    
+    logger.info(f"Successfully authenticated for {xero_instance.xero_name}, tenant_id: {tenant_id}")
+    
+    accounts_added = 0
+    accounts_updated = 0
+    accounts_unchanged = 0
+    
+    # Fetch Chart of Accounts from Xero
+    accounts_response = requests.get(
+        'https://api.xero.com/api.xro/2.0/Accounts',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json',
+            'Xero-tenant-id': tenant_id
+        },
+        timeout=30
+    )
+    
+    if accounts_response.status_code != 200:
+        error_msg = f'Failed to fetch accounts: {accounts_response.status_code}'
+        logger.error(f"{xero_instance.xero_name}: {error_msg}")
+        logger.error(f"Response body: {accounts_response.text[:500]}")
+        return {
+            'instance_name': xero_instance.xero_name,
+            'status': 'error',
+            'message': error_msg,
+            'accounts_added': 0,
+            'accounts_updated': 0,
+            'accounts_unchanged': 0
+        }
+    
+    accounts_data = accounts_response.json()
+    xero_accounts = accounts_data.get('Accounts', [])
+    
+    logger.info(f"Fetched {len(xero_accounts)} accounts from Xero for {xero_instance.xero_name} (PK: {xero_instance.xero_instance_pk})")
+    
+    # Get all existing account IDs for this instance (to detect deleted accounts)
+    existing_account_ids = set(
+        XeroAccounts.objects.filter(xero_instance=xero_instance)
+        .exclude(account_status='DELETED_IN_XERO')
+        .values_list('account_id', flat=True)
+    )
+    seen_account_ids = set()
+    
+    # Process each account
+    for xero_account in xero_accounts:
+        account_id = xero_account.get('AccountID')
+        account_code = xero_account.get('Code', '')
+        account_name = xero_account.get('Name', '')
+        account_status = xero_account.get('Status', '')
+        account_type = xero_account.get('Type', '')
+        
+        # Track this account as seen in Xero
+        seen_account_ids.add(account_id)
+        
+        # Check if account already exists (using xero_instance + account_id as unique identifier)
+        try:
+            account, created = XeroAccounts.objects.update_or_create(
+                xero_instance=xero_instance,
+                account_id=account_id,
+                defaults={
+                    'account_name': account_name,
+                    'account_code': account_code,
+                    'account_status': account_status,
+                    'account_type': account_type
+                }
+            )
+            
+            # Debug log for first few accounts
+            if xero_accounts.index(xero_account) < 3:
+                logger.info(f"  Account {account_code} ({account_name}) -> Instance PK: {account.xero_instance_id}, Created: {created}")
+            
+            if created:
+                accounts_added += 1
+            else:
+                # Check if anything actually changed
+                if (account.account_name == account_name and 
+                    account.account_code == account_code and 
+                    account.account_status == account_status and 
+                    account.account_type == account_type):
+                    accounts_unchanged += 1
+                else:
+                    accounts_updated += 1
+        except Exception as e:
+            # Handle duplicate account_code within same instance
+            logger.warning(f"Skipping duplicate account {account_code} ({account_name}) for {xero_instance.xero_name}: {str(e)}")
+            continue
+    
+    logger.info(f"Processed {len(xero_accounts)} accounts for {xero_instance.xero_name}")
+    
+    # Mark accounts that exist locally but not in Xero as DELETED_IN_XERO
+    deleted_account_ids = existing_account_ids - seen_account_ids
+    accounts_deleted = 0
+    if deleted_account_ids:
+        accounts_deleted = XeroAccounts.objects.filter(
+            xero_instance=xero_instance,
+            account_id__in=deleted_account_ids
+        ).update(account_status='DELETED_IN_XERO')
+        logger.info(f"Marked {accounts_deleted} accounts as DELETED_IN_XERO for {xero_instance.xero_name}")
+    
+    # Fetch Tracking Categories (Divisions) from Xero
+    tracking_response = requests.get(
+        'https://api.xero.com/api.xro/2.0/TrackingCategories',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json',
+            'Xero-tenant-id': tenant_id
+        },
+        timeout=30
+    )
+    
+    if tracking_response.status_code != 200:
+        logger.warning(f"Failed to fetch tracking categories for {xero_instance.xero_name}: {tracking_response.status_code}")
+        return {
+            'instance_name': xero_instance.xero_name,
+            'status': 'partial',
+            'message': f'Accounts synced but tracking categories failed: {tracking_response.status_code}',
+            'accounts_added': accounts_added,
+            'accounts_updated': accounts_updated,
+            'tracking_categories_found': 0
+        }
+    
+    return {
+        'instance_name': xero_instance.xero_name,
+        'status': 'success',
+        'accounts_added': accounts_added,
+        'accounts_updated': accounts_updated,
+        'accounts_unchanged': accounts_unchanged,
+        'accounts_deleted': accounts_deleted
+    }
+
+
+@csrf_exempt
+def pull_xero_accounts_and_divisions(request):
+    """
+    Pull accounts from Xero API for all instances.
+    Inserts new records and updates existing ones.
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        # Get all Xero instances
+        xero_instances = XeroInstances.objects.all()
+        
+        if not xero_instances.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No Xero instances found'
+            }, status=404)
+        
+        total_accounts_added = 0
+        total_accounts_updated = 0
+        total_accounts_unchanged = 0
+        instance_results = []
+        
+        # Process each Xero instance using the helper function
+        for xero_instance in xero_instances:
+            instance_pk = xero_instance.xero_instance_pk
+            
+            try:
+                # Call helper function
+                result = _pull_xero_accounts_for_instance(instance_pk)
+                instance_results.append(result)
+                
+                # Aggregate totals
+                total_accounts_added += result.get('accounts_added', 0)
+                total_accounts_updated += result.get('accounts_updated', 0)
+                total_accounts_unchanged += result.get('accounts_unchanged', 0)
+                
+            except Exception as e:
+                logger.error(f"Error processing instance {xero_instance.xero_name}: {str(e)}", exc_info=True)
+                instance_results.append({
+                    'instance_name': xero_instance.xero_name,
+                    'status': 'error',
+                    'message': f'Error: {str(e)}',
+                    'accounts_added': 0,
+                    'accounts_updated': 0,
+                    'accounts_unchanged': 0
+                })
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Processed {len(xero_instances)} Xero instance(s)',
+            'summary': {
+                'total_accounts_added': total_accounts_added,
+                'total_accounts_updated': total_accounts_updated,
+                'total_accounts_unchanged': total_accounts_unchanged
+            },
+            'instances': instance_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in pull_xero_accounts_and_divisions: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def pull_xero_accounts(request, instance_pk):
+    """
+    Pull accounts from Xero API for a single instance.
+    Inserts new records and updates existing ones.
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        # Call the helper function
+        result = _pull_xero_accounts_for_instance(instance_pk)
+        
+        if result.get('status') == 'error':
+            # Check if it's an auth error
+            if 'authorization' in result.get('message', '').lower() or 'auth' in result.get('message', '').lower():
+                return JsonResponse({
+                    'status': 'error',
+                    'message': result.get('message'),
+                    'needs_auth': True
+                }, status=401)
+            return JsonResponse({
+                'status': 'error',
+                'message': result.get('message')
+            }, status=400)
+        
+        return JsonResponse({
+            'status': 'success',
+            'instance_name': result.get('instance_name'),
+            'accounts_added': result.get('accounts_added', 0),
+            'accounts_updated': result.get('accounts_updated', 0),
+            'accounts_unchanged': result.get('accounts_unchanged', 0),
+            'accounts_deleted': result.get('accounts_deleted', 0)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in pull_xero_accounts: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def get_xero_accounts_by_instance(request, instance_pk):
+    """
+    Get all Xero accounts for a specific Xero instance.
+    Used to populate the Xero Account dropdown in bill allocations.
+    """
+    try:
+        accounts = XeroAccounts.objects.filter(
+            xero_instance_id=instance_pk,
+            account_status='ACTIVE'
+        ).order_by('account_code').values(
+            'xero_account_pk',
+            'account_code',
+            'account_name',
+            'account_type'
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'accounts': list(accounts)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching Xero accounts for instance {instance_pk}: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+def create_bill_allocation(request):
+    """
+    Create a new invoice allocation entry.
+    Called when a bill row is clicked or when user adds a new allocation row.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        bill_pk = data.get('bill_pk')
+        amount = data.get('amount')
+        gst_amount = data.get('gst_amount')
+        xero_account_pk = data.get('xero_account_pk')
+        
+        if not bill_pk:
+            return JsonResponse({'status': 'error', 'message': 'bill_pk is required'}, status=400)
+        
+        # Create allocation
+        allocation = Bill_allocations.objects.create(
+            bill_id=bill_pk,
+            amount=amount or 0,
+            gst_amount=gst_amount or 0,
+            allocation_type=0,
+            xero_account_id=xero_account_pk if xero_account_pk else None
+        )
+        
+        logger.info(f"Created invoice allocation {allocation.bill_allocation_pk} for invoice {bill_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocation_pk': allocation.bill_allocation_pk
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating invoice allocation: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def update_bill_allocation(request):
+    """
+    Update an existing invoice allocation entry.
+    Called when user changes Xero Account, Division, amounts, or description.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        allocation_pk = data.get('allocation_pk')
+        
+        if not allocation_pk:
+            return JsonResponse({'status': 'error', 'message': 'allocation_pk is required'}, status=400)
+        
+        try:
+            allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
+        except Bill_allocations.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+        
+        # Update fields if provided
+        if 'amount' in data:
+            allocation.amount = data['amount']
+        if 'gst_amount' in data:
+            allocation.gst_amount = data['gst_amount']
+        if 'notes' in data:
+            allocation.notes = data['notes']
+        if 'xero_account_pk' in data:
+            allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
+        
+        allocation.save()
+        
+        logger.info(f"Updated invoice allocation {allocation_pk}")
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Exception as e:
+        logger.error(f"Error updating invoice allocation: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_bill_allocation(request):
+    """
+    Delete an invoice allocation entry.
+    Called when user clicks the X button on an allocation row.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        allocation_pk = data.get('allocation_pk')
+        
+        if not allocation_pk:
+            return JsonResponse({'status': 'error', 'message': 'allocation_pk is required'}, status=400)
+        
+        try:
+            allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
+            allocation.delete()
+            
+            logger.info(f"Deleted invoice allocation {allocation_pk}")
+            return JsonResponse({'status': 'success'})
+        except Bill_allocations.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
+        
+    except Exception as e:
+        logger.error(f"Error deleting invoice allocation: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

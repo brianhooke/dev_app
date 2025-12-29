@@ -130,7 +130,8 @@
             editable: true,
             showStillToAllocate: true,
             renderEditableRow: function(alloc, cfg) {
-                var row = $('<tr>').attr('data-allocation-pk', alloc.allocation_pk);
+                alloc = alloc || {};  // Handle undefined allocation for new rows
+                var row = $('<tr>').attr('data-allocation-pk', alloc.allocation_pk || '');
                 
                 // 1. Xero Account dropdown
                 var accountSelect = $('<select>')
@@ -503,61 +504,18 @@
             }
         });
         
-        // Add allocation button
-        $(document).on('click' + ns, '#billsDirectAddAllocationBtn', function(e) {
-            e.preventDefault();
-            
-            if (!window.currentBillData) {
-                alert('Please select a bill first');
-                return;
-            }
-            
-            // Create allocation in database first
-            $.ajax({
-                url: '/core/create_bill_allocation/',
-                type: 'POST',
-                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    bill_pk: window.currentBillData.bill_pk,
-                    amount: 0,
-                    gst_amount: 0
-                }),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        var cfg = AllocationsManager.getConfig('billsDirect');
-                        var row = cfg.allocations.renderEditableRow({
-                            allocation_pk: response.allocation_pk,
-                            amount: 0,
-                            gst_amount: 0,
-                            notes: ''
-                        }, cfg);
-                        
-                        $('#billsDirectAllocationsTableBody').append(row);
-                        
-                        // Populate Xero Account dropdown
-                        var instancePk = window.currentBillData.xero_instance_pk || window.currentBillData.xero_instance_id;
-                        if (instancePk) {
-                            $.ajax({
-                                url: '/core/get_xero_accounts/' + instancePk + '/',
-                                type: 'GET',
-                                success: function(resp) {
-                                    if (resp.status === 'success' && resp.accounts) {
-                                        var select = row.find('.xero-account-select');
-                                        resp.accounts.forEach(function(acc) {
-                                            select.append($('<option>')
-                                                .val(acc.xero_account_pk)
-                                                .text(acc.account_code + ' - ' + acc.account_name));
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                        
-                        updateRemainingAllocations();
-                    }
+        // Add allocation button - use AllocationsManager's handler, just populate dropdown after
+        $(document).on('click' + ns, '#billsDirectAddAllocationBtn', function() {
+            // AllocationsManager's handler runs first and adds the row
+            // We just need to populate the Xero dropdown for the new row
+            setTimeout(function() {
+                var instancePk = window.currentBillData ? 
+                    (window.currentBillData.xero_instance_pk || window.currentBillData.xero_instance_id) : null;
+                if (instancePk) {
+                    populateAllXeroAccountDropdowns(instancePk);
                 }
-            });
+                updateRemainingAllocations();
+            }, 50);
         });
         
         // Return to Inbox button

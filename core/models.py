@@ -12,9 +12,19 @@ import base64
 
 # SERVICE: projects
 class XeroInstances(models.Model):
+    """
+    Xero instance configuration.
+    
+    Credentials are stored in AWS SSM Parameter Store when available (production).
+    Falls back to encrypted DB fields for local development without AWS.
+    
+    SSM Parameters (stored at /dev-app/xero/{instance_pk}/):
+    - client_id, client_secret, access_token, refresh_token, tenant_id, token_expires_at
+    """
     xero_instance_pk = models.AutoField(primary_key=True)
     xero_name = models.CharField(max_length=255)
     xero_client_id = models.CharField(max_length=255)
+    # DB fields kept for backwards compatibility (local dev without AWS)
     xero_client_secret_encrypted = models.BinaryField(null=True, blank=True)
     oauth_access_token_encrypted = models.BinaryField(null=True, blank=True)
     oauth_refresh_token_encrypted = models.BinaryField(null=True, blank=True)
@@ -24,24 +34,44 @@ class XeroInstances(models.Model):
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def _get_cipher(self):
-        """Get Fernet cipher using encryption key from settings."""
+        """Get Fernet cipher using encryption key from settings (DB fallback only)."""
         key = getattr(settings, 'XERO_ENCRYPTION_KEY', None)
         if not key:
-            # Generate a key if not set (for development)
             key = Fernet.generate_key()
         if isinstance(key, str):
             key = key.encode()
         return Fernet(key)
     
+    def _use_ssm(self):
+        """Check if SSM should be used for credential storage."""
+        from .utils.ssm import is_ssm_available
+        return is_ssm_available()
+    
     def set_client_secret(self, secret):
-        """Encrypt and store the client secret."""
-        if secret:
+        """Store client secret in SSM (preferred) or encrypted DB field."""
+        if not secret:
+            return
+        
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import set_xero_param
+            set_xero_param(self.xero_instance_pk, 'client_secret', secret)
+            # Also store client_id in SSM for completeness
+            set_xero_param(self.xero_instance_pk, 'client_id', self.xero_client_id)
+        else:
+            # DB fallback
             cipher = self._get_cipher()
             encrypted = cipher.encrypt(secret.encode())
             self.xero_client_secret_encrypted = encrypted
     
     def get_client_secret(self):
-        """Decrypt and return the client secret."""
+        """Get client secret from SSM (preferred) or encrypted DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import get_xero_param
+            secret = get_xero_param(self.xero_instance_pk, 'client_secret')
+            if secret:
+                return secret
+        
+        # DB fallback
         if self.xero_client_secret_encrypted:
             cipher = self._get_cipher()
             decrypted = cipher.decrypt(bytes(self.xero_client_secret_encrypted))
@@ -49,14 +79,28 @@ class XeroInstances(models.Model):
         return None
     
     def set_oauth_access_token(self, token):
-        """Encrypt and store OAuth access token."""
-        if token:
+        """Store OAuth access token in SSM (preferred) or encrypted DB field."""
+        if not token:
+            return
+            
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import set_xero_param
+            set_xero_param(self.xero_instance_pk, 'access_token', token)
+        else:
+            # DB fallback
             cipher = self._get_cipher()
             encrypted = cipher.encrypt(token.encode())
             self.oauth_access_token_encrypted = encrypted
     
     def get_oauth_access_token(self):
-        """Decrypt and return OAuth access token."""
+        """Get OAuth access token from SSM (preferred) or encrypted DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import get_xero_param
+            token = get_xero_param(self.xero_instance_pk, 'access_token')
+            if token:
+                return token
+        
+        # DB fallback
         if self.oauth_access_token_encrypted:
             cipher = self._get_cipher()
             decrypted = cipher.decrypt(bytes(self.oauth_access_token_encrypted))
@@ -64,19 +108,95 @@ class XeroInstances(models.Model):
         return None
     
     def set_oauth_refresh_token(self, token):
-        """Encrypt and store OAuth refresh token."""
-        if token:
+        """Store OAuth refresh token in SSM (preferred) or encrypted DB field."""
+        if not token:
+            return
+            
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import set_xero_param
+            set_xero_param(self.xero_instance_pk, 'refresh_token', token)
+        else:
+            # DB fallback
             cipher = self._get_cipher()
             encrypted = cipher.encrypt(token.encode())
             self.oauth_refresh_token_encrypted = encrypted
     
     def get_oauth_refresh_token(self):
-        """Decrypt and return OAuth refresh token."""
+        """Get OAuth refresh token from SSM (preferred) or encrypted DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import get_xero_param
+            token = get_xero_param(self.xero_instance_pk, 'refresh_token')
+            if token:
+                return token
+        
+        # DB fallback
         if self.oauth_refresh_token_encrypted:
             cipher = self._get_cipher()
             decrypted = cipher.decrypt(bytes(self.oauth_refresh_token_encrypted))
             return decrypted.decode()
         return None
+    
+    def set_oauth_tenant_id(self, tenant_id):
+        """Store tenant ID in SSM (preferred) or DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import set_xero_param
+            set_xero_param(self.xero_instance_pk, 'tenant_id', tenant_id)
+        
+        # Always store in DB too for quick access
+        self.oauth_tenant_id = tenant_id
+    
+    def get_oauth_tenant_id(self):
+        """Get tenant ID from SSM (preferred) or DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import get_xero_param
+            tenant_id = get_xero_param(self.xero_instance_pk, 'tenant_id')
+            if tenant_id:
+                return tenant_id
+        
+        return self.oauth_tenant_id
+    
+    def set_oauth_token_expires_at(self, expires_at):
+        """Store token expiry in SSM (preferred) or DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import set_xero_param
+            # Store as ISO string
+            expires_str = expires_at.isoformat() if expires_at else None
+            set_xero_param(self.xero_instance_pk, 'token_expires_at', expires_str)
+        
+        # Always store in DB too for quick access
+        self.oauth_token_expires_at = expires_at
+    
+    def get_oauth_token_expires_at(self):
+        """Get token expiry from SSM (preferred) or DB field."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import get_xero_param
+            expires_str = get_xero_param(self.xero_instance_pk, 'token_expires_at')
+            if expires_str:
+                from datetime import datetime
+                try:
+                    return datetime.fromisoformat(expires_str)
+                except ValueError:
+                    pass
+        
+        return self.oauth_token_expires_at
+    
+    def clear_oauth_tokens(self):
+        """Clear all OAuth tokens (e.g., when credentials change)."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import clear_xero_oauth_tokens
+            clear_xero_oauth_tokens(self.xero_instance_pk)
+        
+        # Clear DB fields too
+        self.oauth_access_token_encrypted = None
+        self.oauth_refresh_token_encrypted = None
+        self.oauth_token_expires_at = None
+        self.oauth_tenant_id = None
+    
+    def delete_ssm_params(self):
+        """Delete all SSM parameters for this instance. Call before deleting instance."""
+        if self._use_ssm() and self.xero_instance_pk:
+            from .utils.ssm import delete_all_xero_params
+            delete_all_xero_params(self.xero_instance_pk)
     
     def __str__(self):
         return self.xero_name
@@ -92,7 +212,7 @@ class XeroAccounts(models.Model):
     account_name = models.CharField(max_length=255)
     account_code = models.CharField(max_length=50)
     account_id = models.CharField(max_length=255)  # Xero's AccountID (unique per instance)
-    account_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, etc.
+    account_status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED, DELETED_IN_XERO
     account_type = models.CharField(max_length=100, null=True, blank=True)  # EXPENSE, REVENUE, etc.
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)

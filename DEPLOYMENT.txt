@@ -105,7 +105,9 @@ Required variables:
 Optional variables:
 - EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_CC, DEFAULT_FROM_EMAIL
 - LETTERHEAD_PATH, BACKGROUND_IMAGE_PATH
-- XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_ENCRYPTION_KEY
+- AWS_REGION (defaults to us-east-1)
+
+Note: Xero credentials are now stored in AWS SSM Parameter Store, not environment variables.
 
 KEY FILES FOR DEPLOYMENT
 ------------------------
@@ -229,28 +231,34 @@ Alternative: Use AWS Systems Manager Session Manager (no SSH key needed)
 Note: Xero credentials are encrypted using XERO_ENCRYPTION_KEY from settings.
 Ensure the same encryption key is set on both local and AWS environments.
 
-XERO DATA PERSISTENCE
----------------------
-The Xero credentials are stored in SQLite which can be reset on deployment.
-To persist Xero data across deployments:
+XERO DATA PERSISTENCE (AWS SSM PARAMETER STORE)
+------------------------------------------------
+Xero credentials are now stored in AWS SSM Parameter Store instead of the database.
+This ensures credentials persist across database wipes and deployments automatically.
 
-1. BACKUP (from AWS - do this BEFORE deploying if Xero is working):
-   - SSH/SSM into the EC2 instance
-   - Run: docker exec $(docker ps -q) python manage.py export_xero_b64
-   - Copy the base64 output
+HOW IT WORKS:
+- When you set up a Xero connection via xero.html, credentials are stored in SSM
+- Parameters are stored at: /dev-app/xero/{instance_pk}/{param_name}
+- Parameters stored: client_id, client_secret, access_token, refresh_token, tenant_id, token_expires_at
+- All parameters are stored as SecureString (encrypted at rest)
+- Falls back to encrypted DB fields for local development without AWS credentials
 
-2. SET ENVIRONMENT VARIABLE:
-   aws elasticbeanstalk update-environment \
-       --environment-name dev-app-prod \
-       --option-settings Namespace=aws:elasticbeanstalk:application:environment,OptionName=XERO_DATA,Value='<base64_string>'
+REQUIRED IAM PERMISSIONS:
+The EC2 instance role needs these SSM permissions:
+- ssm:GetParameter
+- ssm:PutParameter
+- ssm:DeleteParameter
+- ssm:DescribeParameters
 
-3. AUTOMATIC RESTORE:
-   - On startup, start.sh runs: python manage.py import_xero_from_env
-   - This imports Xero data from XERO_DATA environment variable
-   - Data is automatically restored on every deployment
+Resource ARN: arn:aws:ssm:us-east-1:*:parameter/dev-app/xero/*
 
-IMPORTANT: The XERO_DATA env var contains encrypted credentials.
-The XERO_ENCRYPTION_KEY must be the same on AWS as when the data was exported.
+NO MANUAL STEPS REQUIRED:
+- Credentials are automatically saved to SSM when you authorize Xero
+- Credentials persist across deployments and DB wipes
+- No need to export/import or set environment variables
+
+VIEWING SSM PARAMETERS (optional):
+aws ssm get-parameters-by-path --path "/dev-app/xero" --recursive --with-decryption
 
 DEPLOYMENT HISTORY
 ------------------

@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v89 (displayed in navbar bottom-left)
+Version: v106 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -109,6 +109,11 @@ Version: v89 (displayed in navbar bottom-left)
 <!-- Database Wipe Button -->
 <button id="wipeDbBtn" title="Wipe All Database Data" aria-label="Wipe Database">
     <i class="fas fa-trash-alt"></i>
+</button>
+
+<!-- Xero Migration Button (SHIFT+XERO) -->
+<button id="migrateXeroBtn" title="Migrate Xero Credentials to SSM" aria-label="Migrate Xero to SSM">
+    <i class="fas fa-cloud-upload-alt"></i>
 </button>
 
 <head>
@@ -158,6 +163,40 @@ Version: v89 (displayed in navbar bottom-left)
             transform: scale(0.95);
         }
         
+        /* Xero Migration Button - Next to DB Wipe Button */
+        #migrateXeroBtn {
+            position: fixed;
+            top: 20px;
+            left: 150px;
+            z-index: 9999;
+            background-color: #17a2b8;
+            color: white;
+            border: 2px solid #138496;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            display: none; /* Hidden by default - show with SHIFT+XERO */
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #migrateXeroBtn.visible {
+            display: flex;
+        }
+        
+        #migrateXeroBtn:hover {
+            background-color: #138496;
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(23, 162, 184, 0.5);
+        }
+        
+        #migrateXeroBtn:active {
+            transform: scale(0.95);
+        }
         
         /* Bills table row selection styling - applies to BOTH Inbox and Direct modals */
         #billsTableBody tr {
@@ -975,40 +1014,57 @@ Version: v89 (displayed in navbar bottom-left)
         });
         
         // Toggle Database Wipe Button visibility with SHIFT+BIN sequence
+        // Toggle Xero Migration Button visibility with SHIFT+XERO sequence
         let binSequence = [];
+        let xeroSequence = [];
         const BIN_SEQUENCE = ['b', 'i', 'n'];
+        const XERO_SEQUENCE = ['x', 'e', 'r', 'o'];
         let shiftHeld = false;
         
         $(document).on('keydown', function(e) {
             // Track shift key
             if (e.key === 'Shift') {
                 shiftHeld = true;
-                binSequence = []; // Reset sequence when shift is pressed
+                binSequence = [];
+                xeroSequence = [];
                 return;
             }
             
             // Only track keys while shift is held
             if (!shiftHeld) {
                 binSequence = [];
+                xeroSequence = [];
                 return;
             }
             
             const key = e.key.toLowerCase();
-            binSequence.push(key);
             
-            // Check if sequence matches so far
+            // Track BIN sequence
+            binSequence.push(key);
             for (let i = 0; i < binSequence.length; i++) {
                 if (binSequence[i] !== BIN_SEQUENCE[i]) {
                     binSequence = [];
-                    return;
+                    break;
                 }
             }
-            
-            // Check if full sequence is complete (SHIFT+B+I+N)
             if (binSequence.length === BIN_SEQUENCE.length) {
                 e.preventDefault();
                 $('#wipeDbBtn').toggleClass('visible');
                 binSequence = [];
+            }
+            
+            // Track XERO sequence
+            xeroSequence.push(key);
+            for (let i = 0; i < xeroSequence.length; i++) {
+                if (xeroSequence[i] !== XERO_SEQUENCE[i]) {
+                    xeroSequence = [];
+                    break;
+                }
+            }
+            if (xeroSequence.length === XERO_SEQUENCE.length) {
+                e.preventDefault();
+                $('#migrateXeroBtn').toggleClass('visible');
+                xeroSequence = [];
             }
         });
         
@@ -1016,6 +1072,7 @@ Version: v89 (displayed in navbar bottom-left)
             if (e.key === 'Shift') {
                 shiftHeld = false;
                 binSequence = [];
+                xeroSequence = [];
             }
         });
         
@@ -1062,6 +1119,43 @@ Version: v89 (displayed in navbar bottom-left)
                 console.error('Error wiping database:', error);
                 alert('✗ Error wiping database:\n\n' + error);
                 $('#wipeDbBtn').prop('disabled', false).html('<i class="fas fa-trash-alt"></i>');
+            });
+        });
+        
+        // Xero Migration Button Handler
+        $('#migrateXeroBtn').click(function() {
+            if (!confirm('This will copy all XeroInstances credentials from the database to AWS SSM Parameter Store.\n\nThis is useful before wiping the database to preserve Xero connections.\n\nContinue?')) {
+                return;
+            }
+            
+            // Show loading state
+            $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Get CSRF token
+            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Send request to migrate Xero credentials
+            fetch('/core/migrate_xero_to_ssm/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('✓ Xero credentials migrated to SSM!\n\n' + data.message);
+                    $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
+                } else {
+                    alert('✗ Error migrating Xero credentials:\n\n' + data.message);
+                    $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
+                }
+            })
+            .catch(error => {
+                console.error('Error migrating Xero credentials:', error);
+                alert('✗ Error migrating Xero credentials:\n\n' + error);
+                $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
             });
         });
     });

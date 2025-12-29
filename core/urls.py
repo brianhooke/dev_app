@@ -2,9 +2,16 @@ from django.urls import path
 from django.views.generic import RedirectView
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, send_po_email_view, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
-from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance, create_bill_allocation, update_bill_allocation, delete_bill_allocation, update_bill, null_allocation_xero_fields, get_approved_bills
+from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
-from .views.bills_global import bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, send_bill_direct, return_bill_to_project
+from .views.bills_global import (
+    bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
+    send_bill_direct, return_bill_to_project,
+    # Moved from bills.py:
+    get_bills_list, archive_bill, return_to_inbox, 
+    pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
+    create_bill_allocation, update_bill_allocation, delete_bill_allocation
+)
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
@@ -16,7 +23,7 @@ from .views.hc_variations import (
 )
 from .views.pos import get_quotes_by_supplier, po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file
-from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection
+from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection, migrate_xero_to_ssm
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
 from .views.contacts import (
@@ -112,6 +119,7 @@ urlpatterns = [
     path('update_xero_instance/<int:instance_pk>/', update_xero_instance, name='update_xero_instance'),
     path('delete_xero_instance/<int:instance_pk>/', delete_xero_instance, name='delete_xero_instance'),
     path('test_xero_connection/<int:instance_pk>/', test_xero_connection, name='test_xero_connection'),
+    path('migrate_xero_to_ssm/', migrate_xero_to_ssm, name='migrate_xero_to_ssm'),
     
     # Xero OAuth2 endpoints
     path('xero_oauth_authorize/<int:instance_pk>/', xero_oauth_authorize, name='xero_oauth_authorize'),

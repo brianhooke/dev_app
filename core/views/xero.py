@@ -90,7 +90,7 @@ def get_xero_auth(instance_pk):
         }, status=401), None
     
     access_token = token_or_error
-    tenant_id = xero_instance.oauth_tenant_id
+    tenant_id = xero_instance.get_oauth_tenant_id()
     
     if not tenant_id:
         return None, JsonResponse({
@@ -273,11 +273,8 @@ def update_xero_instance(request, instance_pk):
             # Only update secret if provided
             if xero_client_secret:
                 xero_instance.set_client_secret(xero_client_secret)
-                # Clear OAuth tokens since credentials changed
-                xero_instance.oauth_access_token_encrypted = None
-                xero_instance.oauth_refresh_token_encrypted = None
-                xero_instance.oauth_token_expires_at = None
-                xero_instance.oauth_tenant_id = None
+                # Clear OAuth tokens since credentials changed (clears both SSM and DB)
+                xero_instance.clear_oauth_tokens()
                 logger.info(f"Credentials updated for instance {instance_pk}. OAuth tokens cleared.")
             
             xero_instance.save()
@@ -315,6 +312,8 @@ def delete_xero_instance(request, instance_pk):
         try:
             xero_instance = XeroInstances.objects.get(xero_instance_pk=instance_pk)
             xero_name = xero_instance.xero_name
+            # Delete SSM parameters before deleting instance
+            xero_instance.delete_ssm_params()
             xero_instance.delete()
             
             return JsonResponse({
@@ -451,3 +450,110 @@ def test_xero_connection(request, instance_pk):
         'status': 'error',
         'message': 'Only GET method is allowed'
     }, status=405)
+
+
+@csrf_exempt
+def migrate_xero_to_ssm(request):
+    """
+    Migrate all XeroInstances credentials from database to AWS SSM Parameter Store.
+    This is a one-time migration tool to preserve credentials before a database wipe.
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Only POST method is allowed'
+        }, status=405)
+    
+    try:
+        from ..utils.ssm import is_ssm_available, set_xero_param
+        
+        if not is_ssm_available():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'AWS SSM Parameter Store is not available. Check AWS credentials.'
+            }, status=500)
+        
+        instances = XeroInstances.objects.all()
+        
+        if not instances.exists():
+            return JsonResponse({
+                'status': 'success',
+                'message': 'No XeroInstances found to migrate.'
+            })
+        
+        migrated = 0
+        errors = []
+        
+        for instance in instances:
+            try:
+                instance_pk = instance.xero_instance_pk
+                
+                # Get values from DB (using the encrypted fields directly)
+                client_id = instance.xero_client_id
+                
+                # Get decrypted values from DB
+                client_secret = None
+                if instance.xero_client_secret_encrypted:
+                    try:
+                        cipher = instance._get_cipher()
+                        client_secret = cipher.decrypt(bytes(instance.xero_client_secret_encrypted)).decode()
+                    except Exception:
+                        pass
+                
+                access_token = None
+                if instance.oauth_access_token_encrypted:
+                    try:
+                        cipher = instance._get_cipher()
+                        access_token = cipher.decrypt(bytes(instance.oauth_access_token_encrypted)).decode()
+                    except Exception:
+                        pass
+                
+                refresh_token = None
+                if instance.oauth_refresh_token_encrypted:
+                    try:
+                        cipher = instance._get_cipher()
+                        refresh_token = cipher.decrypt(bytes(instance.oauth_refresh_token_encrypted)).decode()
+                    except Exception:
+                        pass
+                
+                tenant_id = instance.oauth_tenant_id
+                token_expires_at = instance.oauth_token_expires_at.isoformat() if instance.oauth_token_expires_at else None
+                
+                # Store in SSM
+                if client_id:
+                    set_xero_param(instance_pk, 'client_id', client_id)
+                if client_secret:
+                    set_xero_param(instance_pk, 'client_secret', client_secret)
+                if access_token:
+                    set_xero_param(instance_pk, 'access_token', access_token)
+                if refresh_token:
+                    set_xero_param(instance_pk, 'refresh_token', refresh_token)
+                if tenant_id:
+                    set_xero_param(instance_pk, 'tenant_id', tenant_id)
+                if token_expires_at:
+                    set_xero_param(instance_pk, 'token_expires_at', token_expires_at)
+                
+                migrated += 1
+                logger.info(f"Migrated XeroInstance {instance_pk} ({instance.xero_name}) to SSM")
+                
+            except Exception as e:
+                errors.append(f"{instance.xero_name}: {str(e)}")
+                logger.error(f"Error migrating instance {instance.xero_name}: {str(e)}")
+        
+        if errors:
+            return JsonResponse({
+                'status': 'partial',
+                'message': f'Migrated {migrated} instance(s) with {len(errors)} error(s):\n' + '\n'.join(errors)
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Successfully migrated {migrated} XeroInstance(s) to SSM Parameter Store.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in migrate_xero_to_ssm: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)

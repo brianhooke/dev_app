@@ -156,15 +156,16 @@ def xero_oauth_callback(request):
                 logger.info(f"Storing tenant_id: {tenant_id} ({tenant_name}) for instance {instance_pk}")
                 logger.info(f"All connections: {[(c.get('tenantName'), c.get('tenantId')) for c in connections]}")
                 
-                xero_instance.oauth_tenant_id = tenant_id
+                xero_instance.set_oauth_tenant_id(tenant_id)
         
-        # Store tokens
+        # Store tokens (uses SSM when available, DB fallback otherwise)
         xero_instance.set_oauth_access_token(token_response['access_token'])
         xero_instance.set_oauth_refresh_token(token_response['refresh_token'])
         
-        # Calculate expiry time
+        # Calculate and store expiry time
         expires_in = token_response.get('expires_in', 1800)  # Default 30 minutes
-        xero_instance.oauth_token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+        expires_at = timezone.now() + timedelta(seconds=expires_in)
+        xero_instance.set_oauth_token_expires_at(expires_at)
         
         xero_instance.save()
         
@@ -199,8 +200,9 @@ def get_oauth_token(xero_instance):
         if not access_token or not refresh_token:
             return False, "No OAuth tokens found. Please authorize the app first."
         
-        # Check if token is expired
-        if xero_instance.oauth_token_expires_at and timezone.now() >= xero_instance.oauth_token_expires_at:
+        # Check if token is expired (use getter for SSM support)
+        token_expires_at = xero_instance.get_oauth_token_expires_at()
+        if token_expires_at and timezone.now() >= token_expires_at:
             # Refresh the token
             logger.info(f"Refreshing OAuth token for instance {xero_instance.xero_instance_pk}")
             
@@ -231,12 +233,13 @@ def get_oauth_token(xero_instance):
             
             token_response = response.json()
             
-            # Update tokens
+            # Update tokens (uses SSM when available)
             xero_instance.set_oauth_access_token(token_response['access_token'])
             xero_instance.set_oauth_refresh_token(token_response['refresh_token'])
             
             expires_in = token_response.get('expires_in', 1800)
-            xero_instance.oauth_token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+            expires_at = timezone.now() + timedelta(seconds=expires_in)
+            xero_instance.set_oauth_token_expires_at(expires_at)
             
             xero_instance.save()
             

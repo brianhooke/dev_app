@@ -299,7 +299,7 @@ $(document).ready(function() {
             if (body.status === 'success') {
                 button.removeClass('btn-secondary').addClass('btn-success');
                 button.prop('disabled', false).html('<i class="fas fa-check"></i>');
-                alert(`✓ Accounts synced for "${instanceName}"\n\nNew: ${body.accounts_added}\nUpdated: ${body.accounts_updated}\nUnchanged: ${body.accounts_unchanged}`);
+                alert(`✓ Accounts synced for "${instanceName}"\n\nNew: ${body.accounts_added}\nUpdated: ${body.accounts_updated}\nUnchanged: ${body.accounts_unchanged}\nDeleted in Xero: ${body.accounts_deleted || 0}`);
                 setTimeout(() => {
                     button.removeClass('btn-success').addClass('btn-secondary').html('Pull');
                 }, 3000);
