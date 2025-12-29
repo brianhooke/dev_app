@@ -594,12 +594,9 @@ $(document).ready(function() {
     // QUOTE PDF FILE INPUT HANDLERS
     // ==========================================
     
-    // Handle Construction Quote PDF selection
-    $('#constructionQuotePdfInput').on('change', function(e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        
-        console.log('Construction quote PDF selected:', file.name);
+    // Shared function to handle quote PDF selection
+    function handleQuotePdfSelection(file) {
+        console.log('Quote PDF selected:', file.name);
         
         // Create blob URL for the PDF viewer
         var pdfUrl = URL.createObjectURL(file);
@@ -614,12 +611,287 @@ $(document).ready(function() {
         $('#quotePdfViewer').attr('src', pdfUrl).show();
         $('#quoteViewerPlaceholder').hide();
         
-        // Enable edit mode for allocations
+        // Enable new mode for allocations
         if (typeof AllocationsManager !== 'undefined') {
             AllocationsManager.setNewMode('quote', true);
         }
         
-        // Clear selection to allow re-selecting the same file
+        // Create editable row in main table
+        var isConstruction = window.quoteIsConstruction || 
+                            (window.currentConstructionProject && window.currentConstructionProject.project_type === 'construction') ||
+                            (window.currentTenderProject && window.currentTenderProject.project_type === 'construction');
+        
+        var mainTbody = $('#quoteMainTableBody');
+        mainTbody.empty();
+        
+        // Create new quote row with editable inputs
+        var newRow = $('<tr class="new-quote-row selected-row">');
+        
+        // Supplier dropdown (will be populated from contacts)
+        var supplierCell = $('<td>');
+        var supplierSelect = $('<select id="newQuoteSupplier" class="form-control form-control-sm" style="width: 100%;">')
+            .append('<option value="">Select Supplier...</option>')
+            .on('change', function() {
+                window.validateNewQuote();
+            });
+        
+        // Try to populate suppliers from contacts
+        var projectPk = window.projectPk || 
+                        (window.currentConstructionProject && window.currentConstructionProject.pk) ||
+                        (window.currentTenderProject && window.currentTenderProject.pk);
+        if (projectPk) {
+            $.ajax({
+                url: '/core/get_project_contacts/' + projectPk + '/',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success' && response.contacts) {
+                        response.contacts.forEach(function(contact) {
+                            supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
+                        });
+                    }
+                }
+            });
+        }
+        supplierCell.append(supplierSelect);
+        newRow.append(supplierCell);
+        
+        // $ Net input - must have class 'new-quote-net' for updateStillToAllocate
+        var netCell = $('<td>');
+        var netInput = $('<input type="number" id="newQuoteNet" class="form-control form-control-sm new-quote-net" placeholder="0.00" step="0.01" style="width: 100px;">')
+            .on('input change', function() {
+                // Recalculate still to allocate when net changes
+                if (typeof AllocationsManager !== 'undefined') {
+                    AllocationsManager.updateStillToAllocate('quote');
+                }
+                window.validateNewQuote();
+            });
+        netCell.append(netInput);
+        newRow.append(netCell);
+        
+        // Quote # input
+        var quoteNumCell = $('<td>');
+        var quoteNumInput = $('<input type="text" id="newQuoteNumber" class="form-control form-control-sm" placeholder="Quote #" style="width: 100px;">');
+        quoteNumCell.append(quoteNumInput);
+        newRow.append(quoteNumCell);
+        
+        // Save button (in Update column)
+        var saveCell = $('<td class="col-action-first">');
+        var saveBtn = $('<button type="button" class="btn btn-success btn-sm" id="saveNewQuoteBtn" title="Save Quote">')
+            .html('<i class="fas fa-save"></i>')
+            .on('click', function() {
+                saveNewQuote();
+            });
+        saveCell.append(saveBtn);
+        newRow.append(saveCell);
+        
+        // Cancel button (in Delete column)
+        var cancelCell = $('<td class="col-action">');
+        var cancelBtn = $('<button type="button" class="btn btn-secondary btn-sm" title="Cancel">')
+            .html('<i class="fas fa-times"></i>')
+            .on('click', function() {
+                cancelNewQuote();
+            });
+        cancelCell.append(cancelBtn);
+        newRow.append(cancelCell);
+        
+        mainTbody.append(newRow);
+        
+        // Clear allocations table and add initial empty row
+        var allocTbody = $('#quoteAllocationsTableBody');
+        allocTbody.empty();
+        
+        // Show the Add Allocation button
+        $('#quoteAddAllocationBtn').show();
+        $('#quoteSaveAllocationsBtn').hide(); // Hide save btn until quote is saved
+        
+        // Add initial allocation row
+        if (typeof AllocationsManager !== 'undefined') {
+            AllocationsManager.addAllocationRow('quote');
+        }
+        
+        // Update still to allocate
+        if (typeof AllocationsManager !== 'undefined') {
+            AllocationsManager.updateStillToAllocate('quote');
+        }
+        
+        // Focus on supplier dropdown
+        supplierSelect.focus();
+        
+        // Initial validation (will disable save button)
+        window.validateNewQuote();
+    }
+    
+    // Validate new quote and enable/disable save button (global for access from quotes.html)
+    window.validateNewQuote = function() {
+        var saveBtn = $('#saveNewQuoteBtn');
+        if (!saveBtn.length) return;
+        
+        var isValid = true;
+        var errors = [];
+        
+        // 1. Supplier must be selected
+        var supplierPk = $('#newQuoteSupplier').val();
+        if (!supplierPk) {
+            isValid = false;
+            errors.push('Select supplier');
+        }
+        
+        // 2. Net amount must be > 0
+        var netAmount = parseFloat($('#newQuoteNet').val()) || 0;
+        if (netAmount <= 0) {
+            isValid = false;
+            errors.push('Enter net amount');
+        }
+        
+        // 3. Still to allocate must be ~0 (using same threshold as quotes.html)
+        var stillToAllocate = parseFloat($('#quoteRemainingNet').text().replace(/[$,]/g, '')) || 0;
+        if (Math.abs(stillToAllocate) >= 0.01) {
+            isValid = false;
+            errors.push('Fully allocate amount');
+        }
+        
+        // 4. No allocation rows with amounts but no item selected
+        var hasInvalidAllocations = false;
+        $('#quoteAllocationsTableBody tr').each(function() {
+            var itemSelect = $(this).find('select');
+            var amountInput = $(this).find('.quote-allocation-net-input, .quote-allocation-amount-input');
+            var amount = parseFloat(amountInput.val()) || 0;
+            var itemSelected = itemSelect.val();
+            
+            if (amount > 0 && !itemSelected) {
+                hasInvalidAllocations = true;
+            }
+        });
+        if (hasInvalidAllocations) {
+            isValid = false;
+            errors.push('Select items for allocations');
+        }
+        
+        // Update button state
+        if (isValid) {
+            saveBtn.removeClass('btn-secondary').addClass('btn-success');
+            saveBtn.prop('disabled', false);
+            saveBtn.css('opacity', '1');
+        } else {
+            saveBtn.removeClass('btn-success').addClass('btn-secondary');
+            saveBtn.prop('disabled', true);
+            saveBtn.css('opacity', '0.5');
+        }
+    }
+    
+    // Save new quote function
+    function saveNewQuote() {
+        var supplierPk = $('#newQuoteSupplier').val();
+        var netAmount = parseFloat($('#newQuoteNet').val()) || 0;
+        var quoteNumber = $('#newQuoteNumber').val();
+        
+        if (!supplierPk) {
+            alert('Please select a supplier.');
+            return;
+        }
+        if (netAmount <= 0) {
+            alert('Please enter a valid net amount.');
+            return;
+        }
+        
+        var projectPk = window.projectPk || 
+                        (window.currentConstructionProject && window.currentConstructionProject.pk) ||
+                        (window.currentTenderProject && window.currentTenderProject.pk);
+        
+        if (!projectPk) {
+            alert('No project selected.');
+            return;
+        }
+        
+        // Get allocations from table and convert to line_items format
+        var allocations = [];
+        if (typeof AllocationsManager !== 'undefined') {
+            allocations = AllocationsManager.getAllocations('quote');
+        }
+        
+        // Convert to backend expected format
+        var lineItems = allocations.map(function(alloc) {
+            return {
+                item: alloc.item_pk || alloc.costing_pk,
+                amount: parseFloat(alloc.amount || alloc.net || 0),
+                notes: alloc.notes || ''
+            };
+        });
+        
+        // Convert PDF file to base64 data URL
+        if (!window.newQuotePdfData) {
+            alert('No PDF file selected.');
+            return;
+        }
+        
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var pdfDataUrl = e.target.result;
+            
+            // Prepare JSON data matching backend expectations
+            var requestData = {
+                project_pk: projectPk,
+                supplier: parseInt(supplierPk),
+                total_cost: netAmount,
+                quote_number: quoteNumber || 'Q-' + Date.now(),
+                line_items: lineItems,
+                pdf_data_url: pdfDataUrl
+            };
+            
+            // Send to server as JSON
+            $.ajax({
+                url: '/core/save_project_quote/',
+                type: 'POST',
+                data: JSON.stringify(requestData),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': Utils.getCSRFToken()
+                },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Quote saved successfully!');
+                        window.newQuoteMode = false;
+                        window.newQuotePdfData = null;
+                        window.newQuotePdfUrl = null;
+                        // Reload quotes
+                        if (typeof loadQuotesData === 'function') {
+                            loadQuotesData();
+                        }
+                    } else {
+                        alert('Error saving quote: ' + (response.message || 'Unknown error'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Failed to save quote: ' + error);
+                }
+            });
+        };
+        
+        // Read PDF file as base64 data URL
+        reader.readAsDataURL(window.newQuotePdfData);
+    }
+    
+    // Cancel new quote function
+    function cancelNewQuote() {
+        window.newQuoteMode = false;
+        window.newQuotePdfData = null;
+        window.newQuotePdfUrl = null;
+        
+        // Clear viewer
+        $('#quotePdfViewer').attr('src', '').hide();
+        $('#quoteViewerPlaceholder').show();
+        
+        // Reload quotes to restore table
+        if (typeof loadQuotesData === 'function') {
+            loadQuotesData();
+        }
+    }
+    
+    // Handle Construction Quote PDF selection
+    $('#constructionQuotePdfInput').on('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        handleQuotePdfSelection(file);
         $(this).val('');
     });
     
@@ -627,28 +899,7 @@ $(document).ready(function() {
     $('#tenderQuotePdfInput').on('change', function(e) {
         var file = e.target.files[0];
         if (!file) return;
-        
-        console.log('Tender quote PDF selected:', file.name);
-        
-        // Create blob URL for the PDF viewer
-        var pdfUrl = URL.createObjectURL(file);
-        
-        // Set new quote mode
-        window.newQuoteMode = true;
-        window.newQuotePdfData = file;
-        window.newQuotePdfUrl = pdfUrl;
-        window.newQuoteAllocations = [];
-        
-        // Show PDF in viewer
-        $('#quotePdfViewer').attr('src', pdfUrl).show();
-        $('#quoteViewerPlaceholder').hide();
-        
-        // Enable edit mode for allocations
-        if (typeof AllocationsManager !== 'undefined') {
-            AllocationsManager.setNewMode('quote', true);
-        }
-        
-        // Clear selection to allow re-selecting the same file
+        handleQuotePdfSelection(file);
         $(this).val('');
     });
 });

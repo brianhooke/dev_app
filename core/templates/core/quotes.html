@@ -152,6 +152,10 @@
                     saveBtn.prop('disabled', !isValid);
                     saveBtn.css('opacity', isValid ? '1' : '0.5');
                 }
+                // Also validate new quote if in new mode
+                if (window.newQuoteMode && typeof window.validateNewQuote === 'function') {
+                    window.validateNewQuote();
+                }
             }
         },
         api: {
