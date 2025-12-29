@@ -73,6 +73,7 @@
         mainTable: {
             emptyMessage: 'No quotes found. Click "+ New Quote" to create one.',
             showFooter: true,
+            alwaysShowFooter: true,
             footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
             renderRow: function(quote, index, cfg) {
                 var pdfUrl = quote.pdf_url || '';

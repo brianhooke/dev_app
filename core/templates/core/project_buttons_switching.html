@@ -471,7 +471,7 @@ $(document).ready(function() {
                 $('#tenderContentArea').html(response);
                 // Add New Quote button using shared AllocationsManager function
                 AllocationsManager.addNewItemButton('quote', 'New Quote', function() {
-                    $('#quotePdfInput').click();
+                    $('#tenderQuotePdfInput').click();
                 });
             },
             error: function(xhr, status, error) {
@@ -589,5 +589,67 @@ $(document).ready(function() {
             }
         });
     };
+    
+    // ==========================================
+    // QUOTE PDF FILE INPUT HANDLERS
+    // ==========================================
+    
+    // Handle Construction Quote PDF selection
+    $('#constructionQuotePdfInput').on('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('Construction quote PDF selected:', file.name);
+        
+        // Create blob URL for the PDF viewer
+        var pdfUrl = URL.createObjectURL(file);
+        
+        // Set new quote mode
+        window.newQuoteMode = true;
+        window.newQuotePdfData = file;
+        window.newQuotePdfUrl = pdfUrl;
+        window.newQuoteAllocations = [];
+        
+        // Show PDF in viewer
+        $('#quotePdfViewer').attr('src', pdfUrl).show();
+        $('#quoteViewerPlaceholder').hide();
+        
+        // Enable edit mode for allocations
+        if (typeof AllocationsManager !== 'undefined') {
+            AllocationsManager.setNewMode('quote', true);
+        }
+        
+        // Clear selection to allow re-selecting the same file
+        $(this).val('');
+    });
+    
+    // Handle Tender Quote PDF selection
+    $('#tenderQuotePdfInput').on('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('Tender quote PDF selected:', file.name);
+        
+        // Create blob URL for the PDF viewer
+        var pdfUrl = URL.createObjectURL(file);
+        
+        // Set new quote mode
+        window.newQuoteMode = true;
+        window.newQuotePdfData = file;
+        window.newQuotePdfUrl = pdfUrl;
+        window.newQuoteAllocations = [];
+        
+        // Show PDF in viewer
+        $('#quotePdfViewer').attr('src', pdfUrl).show();
+        $('#quoteViewerPlaceholder').hide();
+        
+        // Enable edit mode for allocations
+        if (typeof AllocationsManager !== 'undefined') {
+            AllocationsManager.setNewMode('quote', true);
+        }
+        
+        // Clear selection to allow re-selecting the same file
+        $(this).val('');
+    });
 });
 </script>

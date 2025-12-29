@@ -196,41 +196,6 @@ local.py               - Settings file used in production (SQLite)
 base.py                - Base Django settings
 production_aws.py      - AWS-specific settings (RDS PostgreSQL - not currently used)
 
-TRANSFERRING DATA TO AWS
-------------------------
-Since AWS uses SQLite (local to container), you can transfer data using management commands:
-
-Export data locally:
-   python manage.py export_xero_instances --output xero_instances_export.json
-
-Deploy to AWS (includes the export file):
-   [Use the standard deployment command above]
-
-Import data on AWS (via SSH or AWS Systems Manager):
-   # SSH into EC2 instance
-   ssh -i your-key.pem ec2-user@[instance-ip]
-   
-   # Navigate to app directory
-   cd /var/app/current
-   
-   # Activate virtual environment
-   source /var/app/venv/*/bin/activate
-   
-   # Run import command
-   python manage.py import_xero_instances --input xero_instances_export.json
-   
-   # Or use --update flag to overwrite existing records
-   python manage.py import_xero_instances --input xero_instances_export.json --update
-
-Alternative: Use AWS Systems Manager Session Manager (no SSH key needed)
-   1. Go to AWS Systems Manager Console
-   2. Click "Session Manager" → "Start session"
-   3. Select your EC2 instance
-   4. Run the same commands as above
-
-Note: Xero credentials are encrypted using XERO_ENCRYPTION_KEY from settings.
-Ensure the same encryption key is set on both local and AWS environments.
-
 XERO DATA PERSISTENCE (AWS SSM PARAMETER STORE)
 ------------------------------------------------
 Xero credentials are now stored in AWS SSM Parameter Store instead of the database.

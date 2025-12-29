@@ -553,6 +553,39 @@ var AllocationsManager = (function() {
     }
     
     /**
+     * Recalculate footer totals based on current table rows
+     * Called after a row is removed to update the totals
+     */
+    function recalculateFooterTotals(sectionId) {
+        var cfg = configs[sectionId];
+        if (!cfg || !cfg.mainTable.showFooter || !cfg.mainTable.footerTotals) {
+            return;
+        }
+        
+        var totals = {};
+        var tbody = $('#' + sectionId + 'MainTableBody');
+        
+        // Sum values from remaining rows
+        tbody.find('tr[data-pk]').each(function() {
+            var row = $(this);
+            cfg.mainTable.footerTotals.forEach(function(ft) {
+                // Get the cell at the specified column index (1-indexed for display)
+                var cell = row.find('td').eq(ft.colIndex - 1);
+                var text = cell.text().replace(/[$,]/g, '');
+                var value = parseFloat(text) || 0;
+                totals[ft.colIndex] = (totals[ft.colIndex] || 0) + value;
+            });
+        });
+        
+        // Update footer cells
+        cfg.mainTable.footerTotals.forEach(function(ft) {
+            var value = totals[ft.colIndex] || 0;
+            var formatted = '$' + Utils.formatMoney(value);
+            $('#' + sectionId + 'FooterCol' + ft.colIndex).text(formatted);
+        });
+    }
+    
+    /**
      * Default row renderer (override with config.mainTable.renderRow)
      */
     function renderDefaultMainRow(item, sectionId) {
@@ -1335,8 +1368,9 @@ var AllocationsManager = (function() {
                     if (cfg.features.reloadAfterDelete && window.projectPk) {
                         loadData(sectionId, { queryParams: { project_pk: window.projectPk } });
                     } else if (row) {
-                        // Just remove the row
+                        // Just remove the row and recalculate footer totals
                         row.remove();
+                        recalculateFooterTotals(sectionId);
                     }
                 } else {
                     alert('Error: ' + (response.message || 'Failed to delete'));
