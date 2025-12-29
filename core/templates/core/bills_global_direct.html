@@ -1,0 +1,760 @@
+<!-- Bills Global Direct Section -->
+<!-- Uses allocations_layout.html with all 3 sections (main table, allocations, PDF viewer) -->
+{% load static %}
+
+{% include "core/components/allocations_layout.html" with section_id="billsDirect" main_table_columns=main_table_columns allocations_columns=allocations_columns hide_allocations=False viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
+
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
+
+<!-- Bills Direct Section JS -->
+<script>
+(function() {
+    'use strict';
+    
+    // Wait for DOM and ensure we have the table
+    if ($('#billsDirectMainTableBody').length === 0) {
+        console.log('Bills Direct section: Table not found, skipping init');
+        return;
+    }
+    
+    console.log('Bills Direct section: Self-initializing...');
+    
+    // Initialize AllocationsManager for Bills Direct
+    AllocationsManager.init({
+        sectionId: 'billsDirect',
+        features: {
+            saveRowBtn: false,
+            deleteRowBtn: true,
+            constructionMode: false,
+            gstField: true,
+            confirmDelete: true,
+            reloadAfterDelete: false,
+            showSaveButton: false,
+            alwaysShowAddButton: true,
+            emailViewer: true
+        },
+        data: {
+            pkField: 'bill_pk'
+        },
+        mainTable: {
+            emptyMessage: 'No bills in Direct mode.',
+            showFooter: false,
+            renderRow: function(bill, index, cfg) {
+                var pdfUrl = bill.pdf_url || bill.attachment_url || '';
+                var row = $('<tr>')
+                    .attr('data-pk', bill.bill_pk)
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .attr('data-pdf-url', pdfUrl)
+                    .attr('data-xero-instance-id', bill.xero_instance_pk || bill.xero_instance_id || '')
+                    .attr('data-supplier-pk', bill.contact_pk || '')
+                    .attr('data-bill-number', bill.supplier_bill_number || '')
+                    .attr('data-total-net', bill.total_net || 0)
+                    .attr('data-total-gst', bill.total_gst || 0);
+                
+                // 1. Xero Instance / Project (display only - already set)
+                var xeroProjectName = '';
+                if (bill.xero_instance_id && window.billsDirectData) {
+                    var instance = window.billsDirectData.xero_instances.find(function(x) {
+                        return x.xero_instance_pk === bill.xero_instance_id;
+                    });
+                    if (instance) xeroProjectName = instance.xero_name;
+                }
+                row.append($('<td>').text(xeroProjectName));
+                
+                // 2. Supplier (display only)
+                var supplierName = '';
+                if (bill.contact_pk && window.billsDirectData) {
+                    var supplier = window.billsDirectData.suppliers.find(function(s) {
+                        return s.contact_pk === bill.contact_pk;
+                    });
+                    if (supplier) supplierName = supplier.name;
+                }
+                row.append($('<td>').text(supplierName));
+                
+                // 3. Bill # (display only)
+                row.append($('<td>').text(bill.supplier_bill_number || ''));
+                
+                // 4. $ Net (display only)
+                row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
+                
+                // 5. $ GST (display only)
+                row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
+                
+                // 6. Email link
+                var emailLink = $('<a>')
+                    .attr('href', '#')
+                    .text('email')
+                    .addClass('email-link')
+                    .attr('data-email-html', bill.email_body_html || '')
+                    .attr('data-email-text', bill.email_body_text || '')
+                    .attr('data-email-subject', bill.email_subject || '')
+                    .attr('data-email-from', bill.email_from || '')
+                    .attr('title', bill.email_subject + ' from ' + bill.email_from);
+                row.append($('<td>').addClass('col-action-first').append(emailLink));
+                
+                // 7. Send to Xero button
+                var sendBtn = $('<button>')
+                    .addClass('btn btn-sm btn-secondary send-to-xero-btn')
+                    .text('Send to Xero')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .prop('disabled', true);
+                row.append($('<td>').addClass('col-action').append(sendBtn));
+                
+                // 8. Return to Inbox button
+                var returnBtn = $('<button>')
+                    .addClass('btn btn-sm btn-warning return-to-inbox-btn')
+                    .html('<i class="fas fa-undo"></i>')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .attr('title', 'Return to Inbox');
+                row.append($('<td>').addClass('col-action').append(returnBtn));
+                
+                return row;
+            },
+            onRowSelect: function(row, pk, cfg) {
+                console.log('Direct bill row selected:', pk);
+                window.currentSelectedBillPk = pk;
+                
+                // Find full bill data
+                var bill = window.billsDirectData.bills.find(function(b) {
+                    return b.bill_pk === parseInt(pk);
+                });
+                window.currentBillData = bill;
+                
+                // Load allocations for this bill
+                loadBillAllocations(pk, bill);
+            }
+        },
+        allocations: {
+            editable: true,
+            showStillToAllocate: true,
+            renderEditableRow: function(alloc, cfg) {
+                var row = $('<tr>').attr('data-allocation-pk', alloc.allocation_pk);
+                
+                // 1. Xero Account dropdown
+                var accountSelect = $('<select>')
+                    .addClass('form-control form-control-sm xero-account-select');
+                accountSelect.append($('<option>').val('').text('Select Account...'));
+                row.append($('<td>').append(accountSelect));
+                
+                // Store xero_account_pk for later selection
+                if (alloc.xero_account_pk) {
+                    row.attr('data-xero-account-pk', alloc.xero_account_pk);
+                }
+                
+                // 2. $ Net input
+                var netInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm allocation-net-input')
+                    .val(alloc.amount || '');
+                row.append($('<td>').append(netInput));
+                
+                // 3. $ GST input
+                var gstInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm allocation-gst-input')
+                    .val(alloc.gst_amount || '');
+                row.append($('<td>').append(gstInput));
+                
+                // 4. Notes input
+                var notesInput = $('<input>')
+                    .attr('type', 'text')
+                    .addClass('form-control form-control-sm allocation-notes-input')
+                    .attr('placeholder', 'Description...')
+                    .val(alloc.notes || '');
+                row.append($('<td>').append(notesInput));
+                
+                // 5. Delete button
+                var deleteBtn = $('<button>')
+                    .addClass('btn btn-sm btn-danger delete-allocation-btn')
+                    .html('<i class="fas fa-times"></i>')
+                    .attr('data-allocation-pk', alloc.allocation_pk)
+                    .attr('title', 'Delete allocation');
+                row.append($('<td>').addClass('col-action-first').append(deleteBtn));
+                
+                return row;
+            }
+        },
+        api: {
+            // Allocations loaded manually in onRowSelect
+        },
+        callbacks: {}
+    });
+    
+    // Load bill allocations
+    function loadBillAllocations(billPk, bill) {
+        var allocationsTableBody = $('#billsDirectAllocationsTableBody');
+        allocationsTableBody.empty();
+        
+        var cfg = AllocationsManager.getConfig('billsDirect');
+        var instancePk = bill ? (bill.xero_instance_pk || bill.xero_instance_id) : null;
+        
+        if (bill && bill.allocations && bill.allocations.length > 0) {
+            // Render existing allocations
+            bill.allocations.forEach(function(alloc) {
+                var row = cfg.allocations.renderEditableRow(alloc, cfg);
+                allocationsTableBody.append(row);
+            });
+        } else {
+            // No allocations - add a blank editable row
+            var blankAlloc = { allocation_pk: '', amount: '', gst_amount: '', notes: '' };
+            var row = cfg.allocations.renderEditableRow(blankAlloc, cfg);
+            allocationsTableBody.append(row);
+        }
+        
+        // Populate Xero Account dropdowns for all rows
+        if (instancePk) {
+            populateAllXeroAccountDropdowns(instancePk);
+        }
+        
+        // Update remaining allocations display
+        updateRemainingAllocations();
+        
+        // Apply column widths for proper alignment (tbody uses display:block for scrolling)
+        Utils.applyColumnStyles('billsDirect', ['30%', '15%', '15%', '35%', '5%'], { addEditableClass: true });
+        
+        // Show Add Row button (since we're always in edit mode)
+        $('#billsDirectAddAllocationBtn').show();
+        
+        // Validate send button
+        validateDirectSendButton(billPk);
+    }
+    
+    // Populate Xero Account dropdowns for all allocation rows
+    function populateAllXeroAccountDropdowns(instancePk) {
+        if (!instancePk) return;
+        
+        $.ajax({
+            url: '/core/get_xero_accounts/' + instancePk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' && response.accounts) {
+                    $('#billsDirectAllocationsTableBody tr').each(function() {
+                        var row = $(this);
+                        var accountSelect = row.find('.xero-account-select');
+                        var storedAccountPk = row.attr('data-xero-account-pk');
+                        
+                        // Clear existing options except first
+                        accountSelect.find('option:not(:first)').remove();
+                        
+                        response.accounts.forEach(function(account) {
+                            accountSelect.append($('<option>')
+                                .val(account.xero_account_pk)
+                                .text(account.account_code + ' - ' + account.account_name));
+                        });
+                        
+                        // Set stored value if exists
+                        if (storedAccountPk) {
+                            accountSelect.val(storedAccountPk);
+                        }
+                    });
+                }
+            }
+        });
+    }
+    
+    // Update remaining allocations display
+    function updateRemainingAllocations() {
+        if (!window.currentBillData) {
+            $('#billsDirectRemainingNet').text('$0.00').css('color', 'green');
+            $('#billsDirectRemainingGst').text('$0.00').css('color', 'green');
+            return;
+        }
+        
+        var billNet = parseFloat(window.currentBillData.total_net) || 0;
+        var billGst = parseFloat(window.currentBillData.total_gst) || 0;
+        
+        var allocatedNet = 0;
+        var allocatedGst = 0;
+        
+        $('#billsDirectAllocationsTableBody tr').each(function() {
+            allocatedNet += parseFloat($(this).find('.allocation-net-input').val()) || 0;
+            allocatedGst += parseFloat($(this).find('.allocation-gst-input').val()) || 0;
+        });
+        
+        var remainingNet = billNet - allocatedNet;
+        var remainingGst = billGst - allocatedGst;
+        
+        $('#billsDirectRemainingNet').text('$' + Utils.formatMoney(remainingNet));
+        $('#billsDirectRemainingGst').text('$' + Utils.formatMoney(remainingGst));
+        
+        // Color coding
+        $('#billsDirectRemainingNet').css('color', Math.abs(remainingNet) < 0.01 ? 'green' : (remainingNet > 0 ? 'blue' : 'red'));
+        $('#billsDirectRemainingGst').css('color', Math.abs(remainingGst) < 0.01 ? 'green' : (remainingGst > 0 ? 'blue' : 'red'));
+        
+        // Validate send button
+        if (window.currentSelectedBillPk) {
+            validateDirectSendButton(window.currentSelectedBillPk);
+        }
+    }
+    
+    // Validate bill on page load (checks bill data directly, not allocations table)
+    function validateBillOnLoad(bill) {
+        var button = $('button[data-bill-pk="' + bill.bill_pk + '"].send-to-xero-btn');
+        if (button.length === 0) {
+            console.log('validateBillOnLoad: button not found for bill', bill.bill_pk);
+            return;
+        }
+        
+        var isValid = true;
+        var reason = '';
+        
+        // Must have at least one allocation with a Xero account
+        if (!bill.allocations || bill.allocations.length === 0) {
+            isValid = false;
+            reason = 'no allocations';
+        } else {
+            // All allocations must have Xero Account selected
+            var hasAllAccounts = true;
+            bill.allocations.forEach(function(alloc) {
+                if (!alloc.xero_account_pk) {
+                    hasAllAccounts = false;
+                }
+            });
+            if (!hasAllAccounts) {
+                isValid = false;
+                reason = 'missing xero account';
+            }
+            
+            // Calculate remaining amounts
+            var totalNet = parseFloat(bill.total_net) || 0;
+            var totalGst = parseFloat(bill.total_gst) || 0;
+            var allocatedNet = 0;
+            var allocatedGst = 0;
+            
+            bill.allocations.forEach(function(alloc) {
+                allocatedNet += parseFloat(alloc.amount) || 0;
+                allocatedGst += parseFloat(alloc.gst_amount) || 0;
+            });
+            
+            var remainingNet = totalNet - allocatedNet;
+            var remainingGst = totalGst - allocatedGst;
+            
+            if (Math.abs(remainingNet) > 0.01 || Math.abs(remainingGst) > 0.01) {
+                isValid = false;
+                reason = 'remaining not zero: net=' + remainingNet + ', gst=' + remainingGst;
+            }
+        }
+        
+        console.log('validateBillOnLoad:', bill.bill_pk, 'isValid:', isValid, reason);
+        
+        if (isValid) {
+            button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+        } else {
+            button.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+        }
+    }
+    
+    // Validate Send to Xero button (checks allocations table - used after row selection)
+    function validateDirectSendButton(billPk) {
+        var button = $('button[data-bill-pk="' + billPk + '"].send-to-xero-btn');
+        if (button.length === 0) return;
+        
+        var isValid = true;
+        
+        // Must have at least one allocation
+        var allocRows = $('#billsDirectAllocationsTableBody tr');
+        if (allocRows.length === 0) {
+            isValid = false;
+        }
+        
+        // All allocations must have Xero Account selected
+        allocRows.each(function() {
+            if (!$(this).find('.xero-account-select').val()) {
+                isValid = false;
+            }
+        });
+        
+        // Remaining must be zero
+        var remainingNet = parseFloat($('#billsDirectRemainingNet').text().replace('$', '').replace(',', '')) || 0;
+        var remainingGst = parseFloat($('#billsDirectRemainingGst').text().replace('$', '').replace(',', '')) || 0;
+        
+        if (Math.abs(remainingNet) > 0.01 || Math.abs(remainingGst) > 0.01) {
+            isValid = false;
+        }
+        
+        if (isValid) {
+            button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+        } else {
+            button.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+        }
+    }
+    
+    // Load Bills Direct data
+    window.loadBillsDirect = function() {
+        console.log('Loading Bills Direct...');
+        
+        $.ajax({
+            url: '{% url "core:get_bills_list" %}',
+            type: 'GET',
+            success: function(response) {
+                console.log('Bills loaded:', response);
+                
+                // Store data globally
+                window.billsDirectData = response;
+                
+                // Filter for Direct bills (status = 0, xero_instance set, no project)
+                var directBills = response.bills.filter(function(bill) {
+                    return bill.bill_status === 0 && 
+                           bill.xero_instance_id !== null && 
+                           bill.project_pk === null;
+                });
+                
+                // Populate table
+                AllocationsManager.populateMainTable('billsDirect', directBills);
+                
+                // Add truncation tooltips
+                Utils.addTruncationTooltips('billsDirectMainTable');
+                
+                // Bind event handlers
+                bindDirectEventHandlers();
+                
+                // Validate Send buttons on load (check bill data directly)
+                // Small delay to ensure DOM is fully rendered
+                setTimeout(function() {
+                    directBills.forEach(function(bill) {
+                        validateBillOnLoad(bill);
+                    });
+                }, 100);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load bills:', error);
+            }
+        });
+    };
+    
+    // Bind event handlers for Direct mode
+    function bindDirectEventHandlers() {
+        var ns = '.billsDirect';
+        
+        // Unbind previous handlers
+        $(document).off(ns);
+        
+        // Allocation field changes - update database and recalculate
+        $(document).on('change' + ns, '#billsDirectAllocationsTableBody .xero-account-select', function() {
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            var value = $(this).val();
+            
+            updateAllocationField(allocationPk, 'xero_account_pk', value, row);
+            validateDirectSendButton(window.currentSelectedBillPk);
+        });
+        
+        $(document).on('change' + ns, '#billsDirectAllocationsTableBody .allocation-net-input', function() {
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            var value = $(this).val();
+            
+            // Auto-calculate GST
+            var gstValue = (parseFloat(value) * 0.1).toFixed(2);
+            row.find('.allocation-gst-input').val(gstValue);
+            
+            updateAllocationField(allocationPk, 'amount', value, row);
+            updateAllocationField(allocationPk, 'gst_amount', gstValue, row);
+            updateRemainingAllocations();
+        });
+        
+        $(document).on('change' + ns, '#billsDirectAllocationsTableBody .allocation-gst-input', function() {
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            var value = $(this).val();
+            
+            updateAllocationField(allocationPk, 'gst_amount', value, row);
+            updateRemainingAllocations();
+        });
+        
+        $(document).on('input' + ns, '#billsDirectAllocationsTableBody .allocation-net-input, #billsDirectAllocationsTableBody .allocation-gst-input', function() {
+            updateRemainingAllocations();
+        });
+        
+        $(document).on('change' + ns, '#billsDirectAllocationsTableBody .allocation-notes-input', function() {
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            updateAllocationField(allocationPk, 'notes', $(this).val(), row);
+        });
+        
+        // Delete allocation button
+        $(document).on('click' + ns, '#billsDirectAllocationsTableBody .delete-allocation-btn', function(e) {
+            e.preventDefault();
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            
+            if (confirm('Delete this allocation?')) {
+                $.ajax({
+                    url: '/core/delete_bill_allocation/',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ allocation_pk: allocationPk }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            row.fadeOut(300, function() {
+                                $(this).remove();
+                                updateRemainingAllocations();
+                            });
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Add allocation button
+        $(document).on('click' + ns, '#billsDirectAddAllocationBtn', function(e) {
+            e.preventDefault();
+            
+            if (!window.currentBillData) {
+                alert('Please select a bill first');
+                return;
+            }
+            
+            // Create allocation in database first
+            $.ajax({
+                url: '/core/create_bill_allocation/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    bill_pk: window.currentBillData.bill_pk,
+                    amount: 0,
+                    gst_amount: 0
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        var cfg = AllocationsManager.getConfig('billsDirect');
+                        var row = cfg.allocations.renderEditableRow({
+                            allocation_pk: response.allocation_pk,
+                            amount: 0,
+                            gst_amount: 0,
+                            notes: ''
+                        }, cfg);
+                        
+                        $('#billsDirectAllocationsTableBody').append(row);
+                        
+                        // Populate Xero Account dropdown
+                        var instancePk = window.currentBillData.xero_instance_pk || window.currentBillData.xero_instance_id;
+                        if (instancePk) {
+                            $.ajax({
+                                url: '/core/get_xero_accounts/' + instancePk + '/',
+                                type: 'GET',
+                                success: function(resp) {
+                                    if (resp.status === 'success' && resp.accounts) {
+                                        var select = row.find('.xero-account-select');
+                                        resp.accounts.forEach(function(acc) {
+                                            select.append($('<option>')
+                                                .val(acc.xero_account_pk)
+                                                .text(acc.account_code + ' - ' + acc.account_name));
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                        
+                        updateRemainingAllocations();
+                    }
+                }
+            });
+        });
+        
+        // Return to Inbox button
+        $(document).on('click' + ns, '.return-to-inbox-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var billPk = $(this).attr('data-bill-pk');
+            var row = $(this).closest('tr');
+            
+            if (confirm('Return this bill to Inbox?')) {
+                $.ajax({
+                    url: '{% url "core:return_to_inbox" %}',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ bill_pk: billPk }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            row.fadeOut(400, function() { $(this).remove(); });
+                            
+                            if (window.currentSelectedBillPk == billPk) {
+                                $('#billsDirectAllocationsTableBody').empty();
+                                $('#billsDirectRemainingNet').text('$0.00').css('color', 'green');
+                                $('#billsDirectRemainingGst').text('$0.00').css('color', 'green');
+                                $('#billsDirectPdfViewer').hide();
+                                $('#billsDirectViewerPlaceholder').show();
+                                window.currentSelectedBillPk = null;
+                                window.currentBillData = null;
+                            }
+                        } else {
+                            alert('Failed: ' + response.message);
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Send to Xero button
+        $(document).on('click' + ns, '.send-to-xero-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var button = $(this);
+            var billPk = button.attr('data-bill-pk');
+            var row = button.closest('tr');
+            
+            // Get bill data from row attributes
+            var xeroInstanceId = row.attr('data-xero-instance-id');
+            var supplierPk = row.attr('data-supplier-pk');
+            var billNumber = row.attr('data-bill-number') || '';
+            var totalNet = parseFloat(row.attr('data-total-net')) || 0;
+            var totalGst = parseFloat(row.attr('data-total-gst')) || 0;
+            
+            if (!xeroInstanceId || !supplierPk) {
+                alert('Missing required data (Xero Instance or Supplier)');
+                return;
+            }
+            
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // Collect allocations data
+            var allocations = [];
+            $('#billsDirectAllocationsTableBody tr').each(function() {
+                allocations.push({
+                    allocation_pk: $(this).attr('data-allocation-pk'),
+                    xero_account_pk: $(this).find('.xero-account-select').val(),
+                    amount: parseFloat($(this).find('.allocation-net-input').val()) || 0,
+                    gst_amount: parseFloat($(this).find('.allocation-gst-input').val()) || 0,
+                    notes: $(this).find('.allocation-notes-input').val()
+                });
+            });
+            
+            // Send to Xero API endpoint
+            $.ajax({
+                url: '{% url "core:send_bill_direct" %}',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    bill_pk: billPk,
+                    xero_instance_or_project: 'xero_' + xeroInstanceId,
+                    supplier_pk: supplierPk,
+                    bill_number: billNumber,
+                    total_net: totalNet,
+                    total_gst: totalGst,
+                    allocations: allocations
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                            if (window.currentSelectedBillPk == billPk) {
+                                $('#billsDirectAllocationsTableBody').empty();
+                                $('#billsDirectPdfViewer').hide();
+                                $('#billsDirectViewerPlaceholder').show();
+                                window.currentSelectedBillPk = null;
+                                window.currentBillData = null;
+                            }
+                        });
+                    } else {
+                        alert('Error: ' + response.message);
+                        button.prop('disabled', false).text('Send to Xero');
+                    }
+                },
+                error: function(xhr) {
+                    var errorMsg = 'Failed to send to Xero. Please try again.';
+                    try {
+                        var resp = JSON.parse(xhr.responseText);
+                        if (resp.message) errorMsg = resp.message;
+                    } catch(e) {}
+                    alert(errorMsg);
+                    button.prop('disabled', false).text('Send to Xero');
+                }
+            });
+        });
+        
+        // Pull Xero Accounts button
+        $(document).on('click' + ns, '#billsDirectPullAccountsBtn', function(e) {
+            e.preventDefault();
+            
+            var button = $(this);
+            var originalHtml = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: '{% url "core:pull_xero_accounts_and_divisions" %}',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('Xero accounts pulled successfully');
+                        // Refresh dropdowns
+                        if (window.currentBillData) {
+                            populateAllXeroAccountDropdowns(window.currentBillData.xero_instance_pk || window.currentBillData.xero_instance_id);
+                        }
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                    button.prop('disabled', false).html(originalHtml);
+                },
+                error: function() {
+                    alert('Failed to pull Xero accounts');
+                    button.prop('disabled', false).html(originalHtml);
+                }
+            });
+        });
+        
+        // Prevent scroll changing number inputs
+        $(document).on('wheel' + ns + ' mousewheel' + ns, '#billsDirectAllocationsTableBody input[type="number"]', function() {
+            $(this).blur();
+        });
+    }
+    
+    // Update allocation field in database
+    // If allocationPk is empty, creates the allocation first
+    function updateAllocationField(allocationPk, field, value, row) {
+        if (!allocationPk) {
+            // No allocation yet - create one first
+            if (!window.currentBillData) return;
+            
+            var createData = {
+                bill_pk: window.currentBillData.bill_pk,
+                amount: 0,
+                gst_amount: 0
+            };
+            createData[field] = value;
+            
+            $.ajax({
+                url: '/core/create_bill_allocation/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify(createData),
+                success: function(response) {
+                    if (response.status === 'success' && response.allocation_pk) {
+                        // Update the row with the new allocation_pk
+                        if (row) {
+                            row.attr('data-allocation-pk', response.allocation_pk);
+                        }
+                        console.log('Created allocation:', response.allocation_pk);
+                    }
+                }
+            });
+            return;
+        }
+        
+        var data = { allocation_pk: allocationPk };
+        data[field] = value;
+        
+        $.ajax({
+            url: '/core/update_bill_allocation/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify(data)
+        });
+    }
+    
+})();
+</script>

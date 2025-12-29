@@ -2,6 +2,11 @@
 <!-- SELF-CONTAINED: All quote logic is in this file - does not depend on projects_scripts.html -->
 {% load static %}
 
+<style>
+    /* Constrain quotes main table height */
+    .quote-table-container { max-height: 300px; }
+</style>
+
 {% include "core/components/allocations_layout.html" with section_id="quote" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Quote Allocations" viewer_placeholder_text="Click on a quote to view the PDF" viewer_placeholder_icon="fas fa-file-alt" %}
 
 <!-- Load shared utilities and AllocationsManager -->
@@ -58,7 +63,7 @@
             constructionMode: isConstruction,
             gstField: false,
             confirmDelete: true,
-            reloadAfterDelete: true,
+            reloadAfterDelete: false,  // Use onDeleteSuccess callback instead
             showSaveButton: true,
             alwaysShowAddButton: false
         },
@@ -190,6 +195,16 @@
                 window.editingQuotePk = null;
                 // Reload allocations to show saved state
                 AllocationsManager.loadAllocations('quote', itemPk);
+            },
+            onDeleteSuccess: function(response, itemPk, cfg) {
+                // Clear allocations table and reload quotes list
+                $('#quoteAllocationsTableBody').empty();
+                $('#quoteAddAllocationBtn').hide();
+                $('#quoteSaveAllocationsBtn').hide();
+                window.currentSelectedQuote = null;
+                
+                // Reload the quotes list using custom function
+                loadQuotesData();
             }
         }
     });
@@ -216,13 +231,13 @@
             var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
             row.append($('<td>').text('$' + Utils.formatMoney(amount)));
             row.append($('<td>').text(allocation.notes || '-'));
-            row.append($('<td>')); // Empty for delete column
+            row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').hide()); // Hidden delete column
         } else {
             row.append($('<td>').text(allocation.item_name || '-'));
             var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
             row.append($('<td>').text('$' + Utils.formatMoney(amount)));
             row.append($('<td>').text(allocation.notes || '-'));
-            row.append($('<td>')); // Empty for delete column
+            row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').hide()); // Hidden delete column
         }
         
         return row;
@@ -283,6 +298,8 @@
                     if (response.status === 'success') {
                         console.log('Loaded quotes:', response.quotes.length);
                         AllocationsManager.populateMainTable('quote', response.quotes);
+                        // Initialize sortable table after data loads
+                        Utils.initSortableTable('quoteMainTable', { tbodyId: 'quoteMainTableBody' });
                     }
                 },
                 error: function(xhr, status, error) {

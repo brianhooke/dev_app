@@ -8,11 +8,7 @@
     {% include 'core/documents.html' %}
 </div>
 
-<!-- Hidden template storage for contract budget template -->
-<div id="contractBudgetTemplateStorage" style="display: none;">
-    {% include 'core/contract_budget.html' %}
-</div>
-
+<!-- Contract Budget is now loaded via AJAX from /core/contract_budget/ -->
 
 <style>
     /* Global: Ensure all tables have white backgrounds (prevents background image bleed-through) */
@@ -285,8 +281,8 @@
     .project-card {
         background: white;
         border-radius: 12px;
+        border: 1px solid #000;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border: 1px solid #e9ecef;
         overflow: hidden;
         transition: all 0.3s ease;
         display: flex;
@@ -300,22 +296,16 @@
     }
     
     .project-card .card-header {
-        height: 80px;
-        background: var(--gradient-primary);
-        position: relative;
-        display: flex;
-        align-items: flex-end;
-        padding: 12px 15px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        padding: 10px 15px;
     }
     
     .project-card .card-title {
-        position: relative;
-        z-index: 1;
-        color: white;
-        font-size: 16px;
+        color: #212529;
+        font-size: 15px;
         font-weight: 600;
         margin: 0;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     
     .project-card .card-body {
@@ -638,83 +628,546 @@
         </div>
     </div>
     
-    <!-- Construction View (hidden initially, shown when Construction link clicked) -->
-    <div id="constructionView" style="display: none; height: 100%; flex-direction: column;">
-        <!-- Back button and Project heading -->
-        <div style="margin-bottom: 8px; display: flex; align-items: center; position: relative;">
-            <button id="backToProjectsFromConstructionBtn" class="btn btn-secondary btn-sm" style="position: absolute; left: 0; padding: 4px 10px; font-size: 14px;">
-                <i class="fas fa-arrow-left"></i> Back to Projects
-            </button>
-            <h3 id="constructionProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
-        </div>
-        
-        <!-- Construction navigation buttons -->
-        <div style="margin-bottom: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-primary construction-nav-btn" data-section="quotes">Quotes</button>
-            <button class="btn btn-primary construction-nav-btn" data-section="pos">POs</button>
-            
-            <!-- Bills button group with sub-menu -->
-            <div id="billsButtonGroup" class="bills-btn-group">
-                <button class="btn btn-primary construction-nav-btn bills-main-btn" data-section="bills">Bills</button>
-                <button class="btn bills-sub-btn active" data-subsection="unallocated">Unallocated</button>
-                <button class="btn bills-sub-btn" data-subsection="allocated">Allocated</button>
-            </div>
-            
-            <button class="btn btn-primary construction-nav-btn" data-section="contract-budget">Contract Budget</button>
-            <button class="btn btn-primary construction-nav-btn" data-section="hc-variations">HC Variations</button>
-            <button class="btn btn-primary construction-nav-btn" data-section="hc-claims">HC Claims</button>
-            <button class="btn btn-primary construction-nav-btn" data-section="documents">Documents</button>
-            
-            <!-- Dynamic action buttons (shown based on selected section) -->
-            <button id="constructionNewQuoteBtn" class="quote-action-btn" style="display: none; margin-left: 10px;">
-                <i class="fas fa-plus"></i> New Quote
-            </button>
-        </div>
-        
-        <!-- Horizontal divider line below buttons -->
-        <div style="border-bottom: 1px solid #e2e8f0;"></div>
-        
-        <!-- Hidden file input for quote PDF upload -->
-        <input type="file" id="constructionQuotePdfInput" accept="application/pdf" style="display: none;">
-        
-        <!-- Construction content area -->
-        <div id="constructionContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
-            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
-        </div>
-    </div>
-    
-    <!-- Tender View (hidden initially, shown when Tender link clicked) -->
-    <div id="tenderView" style="display: none; height: 100%; flex-direction: column;">
-        <!-- Back button and Project heading -->
-        <div style="margin-bottom: 20px; display: flex; align-items: center; position: relative;">
-            <button id="backToProjectsBtn" class="btn btn-secondary" style="position: absolute; left: 0; font-size: 14px;">
-                <i class="fas fa-arrow-left"></i> Back to Projects
-            </button>
-            <h3 id="tenderProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
-        </div>
-        
-        <!-- Tender navigation buttons -->
-        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
-            <button class="btn btn-primary tender-nav-btn" data-section="items">Items</button>
-            <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
-            <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
-            <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
-            
-            <!-- Dynamic action buttons (shown based on selected section) -->
-            <button id="newQuoteBtn" class="btn btn-success" style="display: none; margin-left: 10px;">
-                <i class="fas fa-plus"></i> New Quote
-            </button>
-        </div>
-        
-        <!-- Hidden file input for quote PDF upload -->
-        <input type="file" id="tenderQuotePdfInput" accept="application/pdf" style="display: none;">
-        
-        <!-- Tender content area -->
-        <div id="tenderContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
-            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
-        </div>
-    </div>
+    {% include "core/project_buttons_switching.html" %}
 </div>
 
+<!-- Project Cards JavaScript (cards grid, modal, archive toggle) -->
+<script>
+$(document).ready(function() {
+    // Projects controller - shows inline in workspace
+    $('#projectsLink').click(function(e) {
+        e.preventDefault();
+        
+        // Remove active class from all nav items and set this one
+        $('.reusable-navbar a').removeClass('active');
+        $(this).addClass('active');
+        
+        // Hide all sections using universal function
+        if (typeof window.hideAllSections === 'function') {
+            window.hideAllSections();
+        }
+        
+        // Reset tender view state when returning to projects
+        if (typeof window.resetTenderViewState === 'function') {
+            window.resetTenderViewState();
+        }
+        
+        // Reset construction view state when returning to projects
+        if (typeof window.resetConstructionViewState === 'function') {
+            window.resetConstructionViewState();
+        }
+        
+        // Hide tender and construction views if showing
+        $('#tenderView').hide();
+        $('#constructionView').hide();
+        
+        // Show projects section and add has-content class to hide background
+        $('#projectsSection').css('display', 'flex').show();
+        $('#dynamicContentArea').addClass('has-content');
+        
+        // Show projects header and grid
+        $('#projectsHeader').show();
+        $('#projectsGridContainer').show();
+        
+        // Load projects data
+        loadProjects();
+        
+        // Scroll to top
+        $('html, body').animate({ scrollTop: 0 }, 300);
+    });
+    
+    // Function to load and display projects
+    function loadProjects(showArchived) {
+        const archived = showArchived ? '1' : '0';
+        
+        $.ajax({
+            url: '{% url "core:get_projects" %}',
+            type: 'GET',
+            data: { archived: archived },
+            success: function(response) {
+                if (response.status === 'success') {
+                    populateProjectsTable(response.projects, showArchived);
+                } else {
+                    alert('Error loading projects: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading projects:', error);
+                alert('Failed to load projects. Please try again.');
+            }
+        });
+    }
+    
+    // Function to populate projects table with data
+    function populateProjectsTable(projects, showingArchived) {
+        const grid = $('#projectsGrid');
+        
+        console.log('📊 Populating projects grid with', projects.length, 'projects');
+        
+        // Clear existing cards
+        grid.empty();
+        
+        if (projects.length === 0) {
+            const message = showingArchived ? 'No archived projects found.' : 'No projects found. Click "Add Project" to create one.';
+            grid.html(`<div class="projects-empty"><i class="fas fa-folder-open"></i><p>${message}</p></div>`);
+            return;
+        }
+        
+        // Determine archive button appearance based on view
+        const archiveBtnClass = showingArchived ? 'btn-outline-success' : 'btn-outline-danger';
+        const archiveBtnIcon = showingArchived ? 'fa-box-open' : 'fa-archive';
+        const archiveBtnTitle = showingArchived ? 'Restore' : 'Archive';
+        
+        // Add project cards
+        projects.forEach(project => {
+            console.log(`📁 Project: ${project.project}`);
+            
+            const typeClass = project.project_type || 'general';
+            
+            const card = $(`
+                <div class="project-card" data-project-pk="${project.projects_pk}">
+                    <div class="card-header">
+                        <h5 class="card-title">${project.project}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-info">
+                            <div class="card-row">
+                                <span class="card-icon"><i class="fas fa-tag"></i></span>
+                                <span class="type-badge ${typeClass}">${project.project_type_display || 'General'}</span>
+                            </div>
+                            <div class="card-row">
+                                <span class="card-icon"><i class="fas fa-user"></i></span>
+                                <span class="card-label">Manager:</span>
+                                <span class="card-value">${project.manager || '-'}</span>
+                            </div>
+                            <div class="card-row">
+                                <span class="card-icon"><i class="fas fa-building"></i></span>
+                                <span class="card-label">Xero:</span>
+                                <span class="card-value">${project.xero_instance_name || '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="card-status">
+                            <a href="#" class="project-status-link" data-status="${project.project_status}">Tender</a>
+                            <a href="#" class="construction-link">Execution</a>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn ${archiveBtnClass} btn-sm archive-project-btn" title="${archiveBtnTitle}">
+                                <i class="fas ${archiveBtnIcon}"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `);
+            
+            // Store project data on the card for click handlers
+            card.data('project-pk', project.projects_pk);
+            card.data('original-project', project.project);
+            card.data('original-sales-account', project.xero_sales_account || '');
+            card.data('original-manager', project.manager || '');
+            card.data('original-manager-email', project.manager_email || '');
+            card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
+            card.data('xero-instance-pk', project.xero_instance_pk);
+            card.data('project-type', project.project_type);
+            
+            grid.append(card);
+        });
+    }
+    
+    // Toggle Archive button handler
+    $('#toggleArchiveBtn').click(function() {
+        const currentlyShowingArchived = $(this).data('showing-archived') === 1;
+        const newShowingArchived = !currentlyShowingArchived;
+        
+        // Update button state
+        $(this).data('showing-archived', newShowingArchived ? 1 : 0);
+        
+        if (newShowingArchived) {
+            $(this).html('<i class="fas fa-list"></i> Show Active');
+        } else {
+            $(this).html('<i class="fas fa-archive"></i> Show Archived');
+        }
+        
+        // Load projects with new filter
+        loadProjects(newShowingArchived);
+    });
+    
+    // ========== PROJECT MODAL FUNCTIONALITY ==========
+    var currentModalProject = null;
+    var isEditMode = false;
+    var isCreateMode = false;
+    var xeroInstancesCache = null;
+    var xeroAccountsCache = {};
+    
+    // Add Project button - open modal in create mode
+    $(document).on('click', '#addProjectBtn', function() {
+        openProjectModal(null, true);
+    });
+    
+    // Click on project card to open modal
+    $(document).on('click', '.project-card', function(e) {
+        // Don't open modal if clicking on a button or link
+        if ($(e.target).closest('a, button').length) return;
+        
+        const card = $(this);
+        const project = {
+            projects_pk: card.data('project-pk'),
+            project: card.find('.card-title').text(),
+            project_type: card.data('project-type'),
+            manager: card.data('original-manager'),
+            manager_email: card.data('original-manager-email'),
+            contracts_admin_emails: card.data('original-contracts-admin-emails'),
+            xero_instance_pk: card.data('xero-instance-pk'),
+            xero_sales_account: card.data('original-sales-account')
+        };
+        openProjectModal(project, false);
+    });
+    
+    // Open project modal
+    function openProjectModal(project, createMode) {
+        currentModalProject = project;
+        isCreateMode = createMode;
+        isEditMode = false;
+        
+        // Reset modal state
+        clearValidationErrors();
+        
+        // Load Xero instances for dropdown
+        loadXeroInstances().then(function() {
+            if (createMode) {
+                // Create mode
+                $('#projectModalTitle').text('New Project');
+                
+                // Clear all fields
+                $('#modalProjectName').val('');
+                $('#modalProjectType').val('general');
+                $('#modalManager').val('');
+                $('#modalManagerEmail').val('');
+                $('#modalContractsAdminEmails').val('');
+                $('#modalXeroInstance').val('');
+                $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+                
+                // Enable all inputs for create mode
+                enableFormInputs(true);
+                
+                // Show create button, hide others
+                $('#modalUpdateBtn').hide();
+                $('#modalSaveBtn').hide();
+                $('#modalCreateBtn').show();
+                $('.nav-buttons').hide();
+            } else {
+                // View mode
+                $('#projectModalTitle').text(project.project);
+                
+                // Populate fields
+                $('#modalProjectName').val(project.project);
+                $('#modalProjectType').val(project.project_type);
+                $('#modalManager').val(project.manager || '');
+                $('#modalManagerEmail').val(project.manager_email || '');
+                $('#modalContractsAdminEmails').val(project.contracts_admin_emails || '');
+                $('#modalXeroInstance').val(project.xero_instance_pk || '');
+                
+                // Load sales accounts for the selected Xero instance
+                if (project.xero_instance_pk) {
+                    loadXeroAccounts(project.xero_instance_pk).then(function() {
+                        $('#modalSalesAccount').val(project.xero_sales_account || '');
+                    });
+                }
+                
+                // Disable all inputs (view mode)
+                enableFormInputs(false);
+                
+                // Show update button, hide save/create
+                $('#modalUpdateBtn').show();
+                $('#modalSaveBtn').hide();
+                $('#modalCreateBtn').hide();
+                $('.nav-buttons').show();
+            }
+            
+            $('#projectModal').addClass('show');
+        });
+    }
+    
+    // Load Xero instances for Project modal dropdown
+    function loadXeroInstances() {
+        if (xeroInstancesCache) {
+            populateXeroInstances(xeroInstancesCache);
+            return Promise.resolve();
+        }
+        
+        return $.ajax({
+            url: '/core/get_xero_instances/',
+            type: 'GET'
+        }).then(function(response) {
+            // API returns array directly
+            xeroInstancesCache = Array.isArray(response) ? response : [];
+            populateXeroInstances(xeroInstancesCache);
+        });
+    }
 
-{% include "core/projects_scripts.html" %}
+    // Populate Xero instances dropdown for Project modal
+    function populateXeroInstances(instances) {
+        const select = $('#modalXeroInstance');
+        select.html('<option value="">Select Xero Instance...</option>');
+        instances.forEach(function(inst) {
+            select.append(`<option value="${inst.xero_instance_pk}">${inst.xero_name}</option>`);
+        });
+    }
+    
+    // Load Xero accounts for an instance (with optional target select)
+    function loadXeroAccounts(instancePk, targetSelect) {
+        const select = targetSelect || $('#modalSalesAccount');
+        
+        if (xeroAccountsCache[instancePk]) {
+            populateXeroAccounts(xeroAccountsCache[instancePk], select);
+            return Promise.resolve();
+        }
+        
+        return $.ajax({
+            url: `/core/get_xero_accounts/${instancePk}/`,
+            type: 'GET'
+        }).then(function(response) {
+            const accounts = response.accounts || [];
+            // Filter for revenue/sales accounts
+            const filtered = accounts.filter(acc => 
+                acc.account_type === 'REVENUE' || 
+                acc.account_type === 'SALES' || 
+                acc.account_type === 'OTHERINCOME'
+            );
+            xeroAccountsCache[instancePk] = filtered;
+            populateXeroAccounts(filtered, select);
+        }).catch(function() {
+            select.prop('disabled', true).html('<option value="">Error loading accounts</option>');
+        });
+    }
+    
+    function populateXeroAccounts(accounts, targetSelect) {
+        const select = targetSelect || $('#modalSalesAccount');
+        select.prop('disabled', false);
+        select.html('<option value="">Select Sales Account...</option>');
+        accounts.forEach(function(acc) {
+            select.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
+        });
+    }
+    
+    // Xero instance change handler
+    $('#modalXeroInstance').on('change', function() {
+        const instancePk = $(this).val();
+        if (instancePk) {
+            loadXeroAccounts(instancePk);
+        } else {
+            $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+        }
+    });
+    
+    // Enable/disable form inputs
+    function enableFormInputs(enable) {
+        $('#modalProjectName').prop('disabled', !enable);
+        $('#modalProjectType').prop('disabled', !enable);
+        $('#modalManager').prop('disabled', !enable);
+        $('#modalManagerEmail').prop('disabled', !enable);
+        $('#modalContractsAdminEmails').prop('disabled', !enable);
+        $('#modalXeroInstance').prop('disabled', !enable);
+        $('#modalSalesAccount').prop('disabled', !enable);
+    }
+    
+    // Form Validation
+    function validateForm() {
+        let isValid = true;
+        clearValidationErrors();
+        
+        // Project name required
+        if (!$('#modalProjectName').val().trim()) {
+            $('#modalProjectName').addClass('is-invalid');
+            isValid = false;
+        }
+        
+        // Xero instance required
+        if (!$('#modalXeroInstance').val()) {
+            $('#modalXeroInstance').addClass('is-invalid');
+            isValid = false;
+        }
+        
+        // Sales account required
+        if (!$('#modalSalesAccount').val()) {
+            $('#modalSalesAccount').addClass('is-invalid');
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+    
+    function clearValidationErrors() {
+        $('.form-control').removeClass('is-invalid');
+    }
+    
+    // Update button - switch to edit mode
+    $('#modalUpdateBtn').on('click', function() {
+        isEditMode = true;
+        enableFormInputs(true);
+        $(this).hide();
+        $('#modalSaveBtn').show();
+    });
+    
+    // Save button - save changes
+    $('#modalSaveBtn').on('click', function() {
+        if (!validateForm()) return;
+        
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+        
+        const formData = new FormData();
+        formData.append('project_pk', currentModalProject.projects_pk);
+        formData.append('project_name', $('#modalProjectName').val().trim());
+        formData.append('project_type', $('#modalProjectType').val());
+        formData.append('manager', $('#modalManager').val().trim());
+        formData.append('manager_email', $('#modalManagerEmail').val().trim());
+        formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
+        formData.append('xero_instance_pk', $('#modalXeroInstance').val());
+        formData.append('xero_sales_account', $('#modalSalesAccount').val());
+        
+        $.ajax({
+            url: '/core/update_project/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#projectModal').removeClass('show');
+                    loadProjects($('#toggleArchiveBtn').data('showing-archived') === 1);
+                } else {
+                    alert(response.message || 'Error updating project');
+                }
+                btn.prop('disabled', false).html('Save Changes');
+            },
+            error: function() {
+                alert('Error updating project');
+                btn.prop('disabled', false).html('Save Changes');
+            }
+        });
+    });
+    
+    // Create button - create new project
+    $('#modalCreateBtn').on('click', function() {
+        if (!validateForm()) return;
+        
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Creating...');
+        
+        const formData = new FormData();
+        formData.append('project_name', $('#modalProjectName').val().trim());
+        formData.append('project_type', $('#modalProjectType').val());
+        formData.append('manager', $('#modalManager').val().trim());
+        formData.append('manager_email', $('#modalManagerEmail').val().trim());
+        formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
+        formData.append('xero_instance_pk', $('#modalXeroInstance').val());
+        formData.append('xero_sales_account', $('#modalSalesAccount').val());
+        
+        $.ajax({
+            url: '/core/create_project/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#projectModal').removeClass('show');
+                    loadProjects(false);
+                } else {
+                    alert(response.message || 'Error creating project');
+                }
+                btn.prop('disabled', false).html('Create Project');
+            },
+            error: function() {
+                alert('Error creating project');
+                btn.prop('disabled', false).html('Create Project');
+            }
+        });
+    });
+    
+    // Modal Tender button clicked --> trigger tender view
+    $('#modalTenderBtn').on('click', function(e) {
+        e.preventDefault();
+        if (!currentModalProject) return;
+        
+        // Close modal and trigger tender view
+        $('#projectModal').removeClass('show');
+        
+        // Find the card and trigger tender link click
+        const card = $(`.project-card[data-project-pk="${currentModalProject.projects_pk}"]`);
+        card.find('.project-status-link').click();
+    });
+    
+    // Modal Execution button
+    $('#modalExecutionBtn').on('click', function(e) {
+        e.preventDefault();
+        if (!currentModalProject) return;
+        
+        // Close modal and trigger execution view
+        $('#projectModal').removeClass('show');
+        
+        // Find the card and trigger construction link click
+        const card = $(`.project-card[data-project-pk="${currentModalProject.projects_pk}"]`);
+        card.find('.construction-link').click();
+    });
+    
+    // Close modal handlers
+    $('#projectModalClose, #modalCancelBtn').on('click', function() {
+        $('#projectModal').removeClass('show');
+        currentModalProject = null;
+        isEditMode = false;
+        isCreateMode = false;
+    });
+    
+    // Click outside modal to close
+    $('#projectModal').on('click', function(e) {
+        if ($(e.target).hasClass('project-modal')) {
+            $(this).removeClass('show');
+            currentModalProject = null;
+            isEditMode = false;
+            isCreateMode = false;
+        }
+    });
+    // ========== END PROJECT MODAL FUNCTIONALITY ==========
+    
+    // Archive project button handler
+    $(document).on('click', '.archive-project-btn', function(e) {
+        e.stopPropagation();
+        
+        const card = $(this).closest('.project-card');
+        const projectPk = card.data('project-pk');
+        const projectName = card.find('.card-title').text();
+        const isCurrentlyArchived = $('#toggleArchiveBtn').data('showing-archived') === 1;
+        const action = isCurrentlyArchived ? 'restore' : 'archive';
+        
+        if (!confirm(`Are you sure you want to ${action} "${projectName}"?`)) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/toggle_project_archive/' + projectPk + '/',
+            type: 'POST',
+            data: {
+                archive: !isCurrentlyArchived
+            },
+            headers: {
+                'X-CSRFToken': Utils.getCSRFToken()
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadProjects(isCurrentlyArchived);
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Failed to ' + action + ' project');
+            }
+        });
+    });
+});
+</script>

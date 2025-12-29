@@ -1,50 +1,47 @@
 {% load static %}
 
+<style>
+    /* Contacts table should expand to fill available height and be scrollable */
+    .contacts-table-container {
+        flex: 1 1 auto !important;
+        min-height: 0;
+    }
+</style>
+
 <!--
-Template: Contacts Modal (Dashboard Extended Version)
+Template: Contacts Management (contacts.html)
 
 Purpose:
-Extended contacts management modal that adds Xero instance selection, contact verification,
-and additional functionality to the base reusable_contacts_modal.html component.
+Provides contacts management functionality for the dashboard workspace.
+Contacts are displayed inline in #contactsSection (not in a modal).
 
 Components:
-1. Base Modal Extension
-   - Includes core/components/reusable_contacts_modal.html
-   - Dynamically adds Xero Instance dropdown to modal body
-   - Adds Delete button to modal footer
-
-2. Verify Details Modal (#verifyContactModal)
+1. Verify Details Modal (#verifyContactModal)
    - Side-by-side comparison of Xero data vs Verified data
    - Highlights mismatches in yellow (Xero) and red (Verified)
    - Fields: Name, Email, BSB, Account Number, ABN
    - Notes section with previous/new notes comparison
-   - Verify button to save verified details via /verify_contact_details/
+
+2. Add Supplier Modal (#addSupplierModal)
+   - Quick add supplier form
+   - Used by Bills section to add new suppliers on the fly
 
 JavaScript Features:
-- Utility functions: formatBSB() and formatABN() for consistent formatting
-- MutationObserver to add "Verify" buttons to contact rows
-- Click handler for Verify buttons - opens verification modal
-- Format BSB as XXX-XXX and ABN as XX XXX XXX XXX using utility functions
-- Mismatch detection and highlighting
-- AJAX submission to verify_contact_details endpoint
-- Updates contact row with verified badge after successful verification
+- validateContactFields() - Common validation for contact fields
+- loadContacts() - Fetch and display contacts for a Xero instance
+- formatBSB() / formatABN() - Format display values
+- Update/Save/Cancel handlers for inline editing
+- Pull Xero Contacts handler
+- Add Contact handler
+- Verify contact handler
 
 Backend Endpoints Used:
-- POST /verify_contact_details/{contact_pk}/ - Save verified contact details
+- GET  /core/get_contacts_by_instance/{pk}/ - Get contacts for instance
+- POST /core/pull_xero_contacts/{pk}/ - Sync contacts from Xero
+- POST /core/create_contact/{pk}/ - Create contact in Xero + DB
+- POST /core/update_contact_details/{pk}/{contact_pk}/ - Update contact
+- POST /core/verify_contact_details/{contact_pk}/ - Save verified details
 -->
-
-<!-- Extended Contacts Modal with XeroInstances dropdown, Pull Xero Contacts, and Delete button -->
-
-<!-- Wrapper to override blocks in base modal -->
-<div style="display: none;">
-    {% block contacts_modal_body %}
-    {% endblock %}
-    {% block contacts_modal_footer %}
-    {% endblock %}
-</div>
-
-<!-- Include base modal -->
-{% include 'core/components/reusable_contacts_modal.html' %}
 
 <!-- Verify Details Modal -->
 <div class="modal fade" id="verifyContactModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
@@ -114,226 +111,801 @@ Backend Endpoints Used:
     </div>
 </div>
 
-<!-- Override modal body and footer with JavaScript -->
-<script>
-    $(document).ready(function() {
-        // Utility functions for formatting
-        function formatBSB(bsb) {
-            /**
-             * Format BSB as XXX-XXX
-             * @param {string} bsb - BSB number (6 digits)
-             * @returns {string} Formatted BSB or original value
-             */
-            if (bsb && bsb.length === 6) {
-                return bsb.substring(0, 3) + '-' + bsb.substring(3);
-            }
-            return bsb || '';
-        }
-        
-        function formatABN(abn) {
-            /**
-             * Format ABN as XX XXX XXX XXX
-             * @param {string} abn - ABN number (11 digits)
-             * @returns {string} Formatted ABN or original value
-             */
-            if (!abn) return '';
-            const cleaned = abn.replace(/\s/g, '');
-            if (cleaned.length === 11) {
-                return cleaned.substring(0, 2) + ' ' + cleaned.substring(2, 5) + ' ' + 
-                       cleaned.substring(5, 8) + ' ' + cleaned.substring(8);
-            }
-            return abn;
-        }
-        
-        // Add XeroInstances dropdown to modal body
-        const xeroDropdown = `
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label for="xeroInstanceSelect">Xero Instance:</label>
-                <select class="form-control" id="xeroInstanceSelect">
-                    {% for instance in xero_instances %}
-                        <option value="{{ instance.xero_instance_pk }}" {% if forloop.first %}selected{% endif %}>
-                            {{ instance.xero_name }}
-                        </option>
-                    {% endfor %}
-                </select>
+<style>
+/* Ensure Add Supplier modal appears above other modals */
+#addSupplierModal {
+    z-index: 1060 !important;
+}
+#addSupplierModal ~ .modal-backdrop {
+    z-index: 1055 !important;
+}
+</style>
+
+<!-- Add Supplier Modal (Quick add from Bills section) -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 700px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Add Supplier</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
-        `;
-        
-        // Insert dropdown before the table when modal is shown
-        $('#contactsModal').on('show.bs.modal', function() {
-            const modalBody = $(this).find('.modal-body');
-            if (!$(this).find('#xeroInstanceSelect').length) {
-                modalBody.prepend(xeroDropdown);
-            }
-            
-            // Add Delete button after Archive button if not already present
-            const archiveBtn = $(this).find('#archiveContactBtn');
-            if (archiveBtn.length && !$(this).find('#deleteContactBtn').length) {
-                archiveBtn.after('<button type="button" class="btn btn-danger" id="deleteContactBtn" style="margin-left: 10px;">Delete</button>');
-            }
-        });
-        
-        function updateVerifiedRow(contactPk, updatedData) {
-            const rows = $(`#contactsSection tbody tr[data-contact-pk="${contactPk}"], #contactsModal tbody tr[data-contact-pk="${contactPk}"]`);
-            if (!rows.length) {
-                return;
-            }
+            <div class="modal-body">
+                <div style="overflow-x: auto;">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 100px;">Name</th>
+                                <th style="min-width: 130px;">Email Address</th>
+                                <th style="min-width: 70px;">BSB</th>
+                                <th style="min-width: 90px;">Account Number</th>
+                                <th style="min-width: 110px;">ABN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="addSupplierRow">
+                                <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 100%;"></td>
+                                <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 100%;"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="addSupplierBtn">Add</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-            rows.each(function() {
-                const row = $(this);
-                const nameCell = row.find('.contact-name');
-                nameCell.find('.verified-badge').remove();
-                nameCell.append(' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>');
-
-                const contactData = row.data('contact') || {};
-                row.data('contact', {
-                    ...contactData,
-                    ...updatedData,
-                    verified: 1
-                });
-            });
+<script>
+// ============================================
+// VALIDATION FUNCTION (Global scope for reuse)
+// ============================================
+function validateContactFields(row, options = {}) {
+    const requireName = options.requireName || false;
+    const requireEmail = options.requireEmail || false;
+    
+    // Get input values
+    const nameInput = row.find('.name-input');
+    const emailInput = row.find('.email-input');
+    const bsbInput = row.find('.bsb-input');
+    const accountInput = row.find('.account-input');
+    const abnInput = row.find('.abn-input');
+    
+    const name = nameInput.val() ? nameInput.val().trim() : '';
+    const email = emailInput.val() ? emailInput.val().trim() : '';
+    const bsb = bsbInput.val() || '';
+    const account = accountInput.val() || '';
+    const abn = abnInput.val() || '';
+    
+    // Extract digits only
+    const bsbDigits = bsb.replace(/[^0-9]/g, '');
+    const accountDigits = account.replace(/[^0-9]/g, '');
+    const abnDigits = abn.replace(/[^0-9]/g, '');
+    
+    // Name validation (for add only)
+    if (requireName && !name) {
+        return {
+            valid: false,
+            message: 'Name is required',
+            focusElement: nameInput
+        };
+    }
+    
+    // Email required validation (for add only)
+    if (requireEmail && !email) {
+        return {
+            valid: false,
+            message: 'Email is required',
+            focusElement: emailInput
+        };
+    }
+    
+    // Email format validation (if email is provided)
+    if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return {
+                valid: false,
+                message: 'Please enter a valid email address',
+                focusElement: emailInput
+            };
         }
+    }
+    
+    // BSB and Account validation - both must be filled together
+    if ((bsbDigits || accountDigits) && !(bsbDigits && accountDigits)) {
+        return {
+            valid: false,
+            message: 'Both BSB and Account Number must be filled in together',
+            focusElement: null
+        };
+    }
+    
+    // BSB length validation
+    if (bsbDigits && bsbDigits.length !== 6) {
+        return {
+            valid: false,
+            message: 'BSB must have exactly 6 digits',
+            focusElement: bsbInput
+        };
+    }
+    
+    // Account number length validation
+    if (accountDigits && accountDigits.length < 6) {
+        return {
+            valid: false,
+            message: 'Account number must have at least 6 digits',
+            focusElement: accountInput
+        };
+    }
+    
+    // ABN length validation
+    if (abnDigits && abnDigits.length !== 11) {
+        return {
+            valid: false,
+            message: 'ABN must have exactly 11 digits',
+            focusElement: abnInput
+        };
+    }
+    
+    // All validations passed
+    return {
+        valid: true,
+        values: {
+            name: name,
+            email: email,
+            bsbDigits: bsbDigits,
+            accountDigits: accountDigits,
+            abnDigits: abnDigits
+        }
+    };
+}
 
-        // Handle Verify button click
-        $(document).on('click', '.verify-contact-btn', function() {
-            const row = $(this).closest('tr');
-            const contact = row.data('contact');
-            
-            if (!contact) {
-                alert('Contact data not found');
-                return;
-            }
-            
-            // Format BSB and ABN using utility functions
-            const formattedBsb = formatBSB(contact.bank_bsb);
-            const formattedAbn = formatABN(contact.tax_number);
-            const formattedVerifiedBsb = formatBSB(contact.verified_bank_bsb);
-            const formattedVerifiedAbn = formatABN(contact.verified_tax_number);
-            
-            // Check for mismatches
-            const nameMatches = contact.verified_name === contact.name;
-            const emailMatches = contact.verified_email === contact.email;
-            const bsbMatches = contact.verified_bank_bsb === contact.bank_bsb;
-            const accountMatches = contact.verified_bank_account_number === contact.bank_account_number;
-            
-            // Populate verification modal - Xero Data column with mismatch highlighting
-            $('#verify-name').text(contact.name || '')
-                .css('background-color', contact.verified_name && !nameMatches ? '#fff3cd' : '');
-            $('#verify-email').text(contact.email || '')
-                .css('background-color', contact.verified_email && !emailMatches ? '#fff3cd' : '');
-            $('#verify-bsb').text(formattedBsb)
-                .css('background-color', contact.verified_bank_bsb && !bsbMatches ? '#fff3cd' : '');
-            $('#verify-account').text(contact.bank_account_number || '')
-                .css('background-color', contact.verified_bank_account_number && !accountMatches ? '#fff3cd' : '');
-            $('#verify-abn').text(formattedAbn);
-            
-            $('#verify-name-verified').text(contact.verified_name || '(not verified)')
-                .css('background-color', contact.verified_name && !nameMatches ? '#ffebee' : '');
-            $('#verify-email-verified').text(contact.verified_email || '(not verified)')
-                .css('background-color', contact.verified_email && !emailMatches ? '#ffebee' : '');
-            $('#verify-bsb-verified').text(formattedVerifiedBsb || '(not verified)')
-                .css('background-color', contact.verified_bank_bsb && !bsbMatches ? '#ffebee' : '');
-            $('#verify-account-verified').text(contact.verified_bank_account_number || '(not verified)')
-                .css('background-color', contact.verified_bank_account_number && !accountMatches ? '#ffebee' : '');
-            $('#verify-abn-verified').text(formattedVerifiedAbn || '(not verified)');
-            
-            // Populate notes sections
-            $('#verify-notes').val('');
-            $('#verify-notes-verified').text(contact.verified_notes || '(no previous notes)');
-            
-            // Store contact_pk for later use
-            $('#verifyContactModal').data('contact-pk', contact.contact_pk);
-            
-            // Show verification modal
-            $('#verifyContactModal').modal('show');
-        });
+$(document).ready(function() {
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    function formatBSB(bsb) {
+        if (bsb && bsb.length === 6) {
+            return bsb.substring(0, 3) + '-' + bsb.substring(3);
+        }
+        return bsb || '';
+    }
+    
+    function formatABN(abn) {
+        if (!abn) return '';
+        const cleaned = abn.replace(/\s/g, '');
+        if (cleaned.length === 11) {
+            return cleaned.substring(0, 2) + ' ' + cleaned.substring(2, 5) + ' ' + 
+                   cleaned.substring(5, 8) + ' ' + cleaned.substring(8);
+        }
+        return abn;
+    }
+    
+    // ============================================
+    // LOAD CONTACTS FUNCTION
+    // ============================================
+    window.loadContacts = function(instancePk) {
+        // Use allocations_layout table ID pattern
+        const tbody = $('#contactsMainTableBody');
         
-        // Verify button handler
-        $(document).on('click', '#verifyContactBtn', function() {
-            const button = $(this);
-            const contactPk = $('#verifyContactModal').data('contact-pk');
-            
-            // Get values from modal
-            const name = $('#verify-name').text().trim();
-            const email = $('#verify-email').text().trim();
-            const bsb = $('#verify-bsb').text().trim();
-            const accountNumber = $('#verify-account').text().trim();
-            const abn = $('#verify-abn').text().trim();
-            const notes = $('#verify-notes').val().trim();
-            
-            // Validation - all fields required except ABN
-            if (!name) {
-                alert('Name is required');
-                return;
-            }
-            
-            if (!email) {
-                alert('Email is required');
-                return;
-            }
-            
-            if (!bsb) {
-                alert('BSB is required');
-                return;
-            }
-            
-            if (!accountNumber) {
-                alert('Account Number is required');
-                return;
-            }
-            
-            if (!notes) {
-                alert('Notes are required');
-                return;
-            }
-            
-            // Show processing state
-            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Verifying...');
-            
-            // Make AJAX call to verify contact
-            fetch(`/core/verify_contact_details/${contactPk}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
-                },
-                body: JSON.stringify({
-                    name: name,
-                    email: email,
-                    bsb: bsb.replace('-', ''), // Remove dash for storage
-                    account_number: accountNumber,
-                    tax_number: abn.replace(/\s/g, ''), // Remove spaces for storage
-                    notes: notes
-                })
-            })
-            .then(response => response.json().then(data => ({status: response.status, body: data})))
-            .then(({status, body}) => {
-                if (body.status === 'success') {
-                    alert('Contact details verified successfully!');
-                    
-                    // Close the verification modal
-                    $('#verifyContactModal').modal('hide');
-                    
-                    // Update the main contacts table to show verified status
-                    updateVerifiedRow(contactPk, {
-                        verified_name: name,
-                        verified_email: email,
-                        verified_bank_bsb: bsb.replace('-', ''),
-                        verified_bank_account_number: accountNumber,
-                        verified_tax_number: abn.replace(/\s/g, ''),
-                        verified_notes: notes
-                    });
-                    
-                    button.prop('disabled', false).html('Verify');
+        if (!instancePk) {
+            tbody.html(`<tr><td colspan="9" style="text-align: center;">Please select a Xero instance</td></tr>`);
+            return;
+        }
+        
+        fetch(`/core/get_contacts_by_instance/${instancePk}/`)
+            .then(response => response.json())
+            .then(contacts => {
+                tbody.empty();
+                
+                if (contacts.length === 0) {
+                    tbody.html(`<tr><td colspan="9" style="text-align: center;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>`);
                 } else {
-                    throw new Error(body.message || 'Unknown error');
+                    contacts.forEach(contact => {
+                        let row = $(`<tr data-contact-pk="${contact.contact_pk}"></tr>`);
+                        row.data('contact', contact);
+                        
+                        // Format BSB as XXX-XXX
+                        let formattedBsb = formatBSB(contact.bank_bsb);
+                        
+                        // Format ABN as XX XXX XXX XXX
+                        let formattedAbn = formatABN(contact.tax_number);
+                        
+                        // Add verified badge based on status
+                        let verifiedBadge = '';
+                        if (contact.verified === 1) {
+                            verifiedBadge = ' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>';
+                        } else if (contact.verified === 2) {
+                            verifiedBadge = ' <span class="badge badge-danger verified-badge" style="font-size: 0.7em;">✗ Details Changed</span>';
+                        }
+                        
+                        row.append(`
+                            <td class="contact-name">${Utils.escapeHtml(contact.name || '')}${verifiedBadge}</td>
+                            <td class="contact-first-name">${Utils.escapeHtml(contact.first_name || '')}</td>
+                            <td class="contact-last-name">${Utils.escapeHtml(contact.last_name || '')}</td>
+                            <td class="contact-email">${Utils.escapeHtml(contact.email || '')}</td>
+                            <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${Utils.escapeHtml(contact.bank_bsb || '')}">${formattedBsb}</td>
+                            <td class="contact-account" data-account="${Utils.escapeHtml(contact.bank_account_number || '')}">${Utils.escapeHtml(contact.bank_account_number || '')}</td>
+                            <td class="contact-abn" style="white-space: nowrap;" data-abn="${Utils.escapeHtml(contact.tax_number || '')}">${formattedAbn}</td>
+                            <td class="col-action-first"><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>
+                            <td class="col-action"><button class="btn btn-sm btn-warning update-contact-btn">Update</button></td>
+                        `);
+                        
+                        tbody.append(row);
+                    });
                 }
+                
+                // Initialize sortable table after data is loaded
+                Utils.initSortableTable('contactsMainTable', {
+                    tbodyId: 'contactsMainTableBody'
+                });
             })
             .catch(error => {
-                console.error('Error verifying contact:', error);
-                button.prop('disabled', false).html('Verify');
-                alert(`Failed to verify contact: ${error.message}`);
+                console.error('Error loading contacts:', error);
+                tbody.html(`<tr><td colspan="9" style="text-align: center; color: red;">Error loading contacts</td></tr>`);
             });
+    };
+    
+    // ============================================
+    // UPDATE CONTACT HANDLERS
+    // ============================================
+    
+    // Update contact button - convert row to editable inputs
+    $(document).on('click', '.update-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        
+        // Get current values
+        const firstNameCell = row.find('.contact-first-name');
+        const lastNameCell = row.find('.contact-last-name');
+        const emailCell = row.find('.contact-email');
+        const bsbCell = row.find('.contact-bsb');
+        const accountCell = row.find('.contact-account');
+        const abnCell = row.find('.contact-abn');
+        
+        const firstName = firstNameCell.text().trim();
+        const lastName = lastNameCell.text().trim();
+        const email = emailCell.text().trim();
+        const bsb = String(bsbCell.data('bsb') || '');
+        const account = String(accountCell.data('account') || '');
+        const abn = String(abnCell.data('abn') || '');
+        
+        // Format BSB for input (XXX-XXX)
+        let bsbFormatted = formatBSB(bsb);
+        
+        // Format ABN for input (XX XXX XXX XXX)
+        let abnFormatted = formatABN(abn);
+        
+        // Replace cells with input fields
+        firstNameCell.html(`<input type="text" class="form-control form-control-sm first-name-input" value="${firstName}" style="width: 100px;">`);
+        lastNameCell.html(`<input type="text" class="form-control form-control-sm last-name-input" value="${lastName}" style="width: 100px;">`);
+        emailCell.html(`<input type="text" class="form-control form-control-sm email-input" value="${email}" style="width: 180px;">`);
+        bsbCell.html(`<input type="text" class="form-control form-control-sm bsb-input" value="${bsbFormatted}" maxlength="7" style="width: 80px;">`);
+        accountCell.html(`<input type="text" class="form-control form-control-sm account-input" value="${account}" style="width: 120px;">`);
+        abnCell.html(`<input type="text" class="form-control form-control-sm abn-input" value="${abnFormatted}" maxlength="14" style="width: 130px;">`);
+        
+        // Change button to Save/Cancel
+        button.replaceWith(`
+            <button class="btn btn-sm btn-warning save-contact-btn">Update</button>
+            <button class="btn btn-sm btn-secondary cancel-contact-btn">Cancel</button>
+        `);
+    });
+    
+    // BSB input handler - maintain fixed dash
+    $(document).on('input', '.bsb-input', function() {
+        let value = $(this).val().replace(/[^0-9]/g, '');
+        if (value.length > 6) value = value.substring(0, 6);
+        if (value.length > 3) {
+            $(this).val(value.substring(0, 3) + '-' + value.substring(3));
+        } else {
+            $(this).val(value);
+        }
+    });
+    
+    // Account number input handler - numbers only
+    $(document).on('input', '.account-input', function() {
+        $(this).val($(this).val().replace(/[^0-9]/g, ''));
+    });
+    
+    // ABN input handler - maintain fixed spaces
+    $(document).on('input', '.abn-input', function() {
+        let value = $(this).val().replace(/[^0-9]/g, '');
+        if (value.length > 11) value = value.substring(0, 11);
+        
+        let formatted = '';
+        if (value.length > 0) {
+            formatted = value.substring(0, 2);
+            if (value.length > 2) formatted += ' ' + value.substring(2, 5);
+            if (value.length > 5) formatted += ' ' + value.substring(5, 8);
+            if (value.length > 8) formatted += ' ' + value.substring(8);
+        }
+        $(this).val(formatted);
+    });
+    
+    // Save button handler - validate and update contact in Xero
+    $(document).on('click', '.save-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        const contactPk = row.data('contact-pk');
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        
+        const validation = validateContactFields(row, { requireName: false, requireEmail: false });
+        
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) validation.focusElement.focus();
+            return;
+        }
+        
+        const { email, bsbDigits, accountDigits, abnDigits } = validation.values;
+        const firstName = row.find('.first-name-input').val().trim();
+        const lastName = row.find('.last-name-input').val().trim();
+        
+        // Show processing state
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        row.find('.cancel-contact-btn').prop('disabled', true);
+        
+        fetch(`/core/update_contact_details/${instancePk}/${contactPk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify({
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Save');
+                row.find('.cancel-contact-btn').prop('disabled', false);
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                loadContacts(instancePk);
+                alert('Contact updated successfully!');
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating contact:', error);
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Save');
+            row.find('.cancel-contact-btn').prop('disabled', false);
+            alert(`Failed to update contact: ${error.message}`);
         });
     });
+    
+    // Cancel button handler
+    $(document).on('click', '.cancel-contact-btn', function() {
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        if (instancePk) loadContacts(instancePk);
+    });
+    
+    // ============================================
+    // PULL XERO CONTACTS
+    // ============================================
+    $(document).on('click', '#pullXeroContactsBtn', function() {
+        const xeroInstancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        
+        if (!xeroInstancePk) {
+            alert('Please select a Xero instance');
+            return;
+        }
+        
+        const button = $(this);
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Pulling Contacts...');
+        
+        fetch(`/core/pull_xero_contacts/${xeroInstancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders()
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${xeroInstancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                const contactPersonMsg = body.details.contact_person_updates !== undefined ? 
+                    `\n📧 ${body.details.contact_person_updates} contact person fields updated` : '';
+                alert(`Success! ${body.details.new_contacts_added} new contacts added, ${body.details.contacts_updated} contacts updated, ${body.details.contacts_unchanged} contacts unchanged.${contactPersonMsg}`);
+                loadContacts(xeroInstancePk);
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+            } else {
+                alert(`Error: ${body.message}`);
+                button.prop('disabled', false).html('Pull/Update Xero Contacts');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to pull contacts. Please try again.');
+            button.prop('disabled', false).html('Pull/Update Xero Contacts');
+        });
+    });
+    
+    // ============================================
+    // ADD CONTACT
+    // ============================================
+    $(document).on('click', '#addContactBtn', function() {
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        
+        if (!instancePk) {
+            alert('Please select a Xero instance');
+            return;
+        }
+        
+        const tbody = $('#contactsMainTableBody');
+        if (tbody.find('.add-contact-row').length > 0) {
+            alert('Please complete or cancel the current add operation');
+            return;
+        }
+        
+        const addRow = $(`<tr class="add-contact-row" style="background-color: #f8f9fa;"></tr>`);
+        addRow.append(`
+            <td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 150px;"></td>
+            <td><input type="text" class="form-control form-control-sm first-name-input" placeholder="First Name" style="width: 100px;"></td>
+            <td><input type="text" class="form-control form-control-sm last-name-input" placeholder="Last Name" style="width: 100px;"></td>
+            <td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 180px;"></td>
+            <td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 80px;"></td>
+            <td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 120px;"></td>
+            <td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 130px;"></td>
+            <td></td>
+            <td>
+                <button class="btn btn-sm btn-success add-new-contact-btn">Add</button>
+                <button class="btn btn-sm btn-secondary cancel-add-contact-btn">Cancel</button>
+            </td>
+        `);
+        
+        tbody.prepend(addRow);
+        addRow.find('.name-input').focus();
+    });
+    
+    // Add new contact save button
+    $(document).on('click', '.add-new-contact-btn', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        const instancePk = $('#contactsXeroInstanceSelect').val() || $('#xeroInstanceSelect').val();
+        
+        const validation = validateContactFields(row, { requireName: true, requireEmail: true });
+        
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) validation.focusElement.focus();
+            return;
+        }
+        
+        const { name, email, bsbDigits, accountDigits, abnDigits } = validation.values;
+        const firstName = row.find('.first-name-input').val().trim();
+        const lastName = row.find('.last-name-input').val().trim();
+        
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        row.find('.cancel-add-contact-btn').prop('disabled', true);
+        
+        fetch(`/core/create_contact/${instancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify({
+                name: name,
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Add');
+                row.find('.cancel-add-contact-btn').prop('disabled', false);
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                const contact = body.contact;
+                
+                let newRow = $(`<tr data-contact-pk="${contact.contact_pk}" style="background-color: #d4edda;"></tr>`);
+                newRow.data('contact', contact);
+                
+                newRow.append(`
+                    <td class="contact-name">${Utils.escapeHtml(contact.name || '')}</td>
+                    <td class="contact-first-name">${Utils.escapeHtml(contact.first_name || '')}</td>
+                    <td class="contact-last-name">${Utils.escapeHtml(contact.last_name || '')}</td>
+                    <td class="contact-email">${Utils.escapeHtml(contact.email || '')}</td>
+                    <td class="contact-bsb" style="white-space: nowrap;" data-bsb="${Utils.escapeHtml(contact.bank_bsb || '')}">${formatBSB(contact.bank_bsb)}</td>
+                    <td class="contact-account" data-account="${Utils.escapeHtml(contact.bank_account_number || '')}">${Utils.escapeHtml(contact.bank_account_number || '')}</td>
+                    <td class="contact-abn" style="white-space: nowrap;" data-abn="${Utils.escapeHtml(contact.tax_number || '')}">${formatABN(contact.tax_number)}</td>
+                    <td class="col-action-first"><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>
+                    <td class="col-action"><button class="btn btn-sm btn-warning update-contact-btn">Update</button></td>
+                `);
+                
+                row.replaceWith(newRow);
+                alert('Contact created successfully!');
+                
+                setTimeout(() => { newRow.css('background-color', ''); }, 3000);
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating contact:', error);
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Add');
+            row.find('.cancel-add-contact-btn').prop('disabled', false);
+            alert(`Failed to create contact: ${error.message}`);
+        });
+    });
+    
+    // Cancel add contact
+    $(document).on('click', '.cancel-add-contact-btn', function() {
+        $(this).closest('tr').remove();
+    });
+    
+    // ============================================
+    // VERIFY CONTACT HANDLERS
+    // ============================================
+    function updateVerifiedRow(contactPk, updatedData) {
+        const rows = $(`#contactsSection tbody tr[data-contact-pk="${contactPk}"]`);
+        if (!rows.length) return;
+
+        rows.each(function() {
+            const row = $(this);
+            const nameCell = row.find('.contact-name');
+            nameCell.find('.verified-badge').remove();
+            nameCell.append(' <span class="badge badge-success verified-badge" style="font-size: 0.7em;">✓ Verified</span>');
+
+            const contactData = row.data('contact') || {};
+            row.data('contact', { ...contactData, ...updatedData, verified: 1 });
+        });
+    }
+
+    // Verify button click - open modal
+    $(document).on('click', '.verify-contact-btn', function() {
+        const row = $(this).closest('tr');
+        const contact = row.data('contact');
+        
+        if (!contact) {
+            alert('Contact data not found');
+            return;
+        }
+        
+        const formattedBsb = formatBSB(contact.bank_bsb);
+        const formattedAbn = formatABN(contact.tax_number);
+        const formattedVerifiedBsb = formatBSB(contact.verified_bank_bsb);
+        const formattedVerifiedAbn = formatABN(contact.verified_tax_number);
+        
+        // Check for mismatches
+        const nameMatches = contact.verified_name === contact.name;
+        const emailMatches = contact.verified_email === contact.email;
+        const bsbMatches = contact.verified_bank_bsb === contact.bank_bsb;
+        const accountMatches = contact.verified_bank_account_number === contact.bank_account_number;
+        
+        // Populate modal
+        $('#verify-name').text(contact.name || '')
+            .css('background-color', contact.verified_name && !nameMatches ? '#fff3cd' : '');
+        $('#verify-email').text(contact.email || '')
+            .css('background-color', contact.verified_email && !emailMatches ? '#fff3cd' : '');
+        $('#verify-bsb').text(formattedBsb)
+            .css('background-color', contact.verified_bank_bsb && !bsbMatches ? '#fff3cd' : '');
+        $('#verify-account').text(contact.bank_account_number || '')
+            .css('background-color', contact.verified_bank_account_number && !accountMatches ? '#fff3cd' : '');
+        $('#verify-abn').text(formattedAbn);
+        
+        $('#verify-name-verified').text(contact.verified_name || '(not verified)')
+            .css('background-color', contact.verified_name && !nameMatches ? '#ffebee' : '');
+        $('#verify-email-verified').text(contact.verified_email || '(not verified)')
+            .css('background-color', contact.verified_email && !emailMatches ? '#ffebee' : '');
+        $('#verify-bsb-verified').text(formattedVerifiedBsb || '(not verified)')
+            .css('background-color', contact.verified_bank_bsb && !bsbMatches ? '#ffebee' : '');
+        $('#verify-account-verified').text(contact.verified_bank_account_number || '(not verified)')
+            .css('background-color', contact.verified_bank_account_number && !accountMatches ? '#ffebee' : '');
+        $('#verify-abn-verified').text(formattedVerifiedAbn || '(not verified)');
+        
+        $('#verify-notes').val('');
+        $('#verify-notes-verified').text(contact.verified_notes || '(no previous notes)');
+        
+        $('#verifyContactModal').data('contact-pk', contact.contact_pk);
+        $('#verifyContactModal').modal('show');
+    });
+    
+    // Verify submit button
+    $(document).on('click', '#verifyContactBtn', function() {
+        const button = $(this);
+        const contactPk = $('#verifyContactModal').data('contact-pk');
+        
+        const name = $('#verify-name').text().trim();
+        const email = $('#verify-email').text().trim();
+        const bsb = $('#verify-bsb').text().trim();
+        const accountNumber = $('#verify-account').text().trim();
+        const abn = $('#verify-abn').text().trim();
+        const notes = $('#verify-notes').val().trim();
+        
+        if (!name) { alert('Name is required'); return; }
+        if (!email) { alert('Email is required'); return; }
+        if (!bsb) { alert('BSB is required'); return; }
+        if (!accountNumber) { alert('Account Number is required'); return; }
+        if (!notes) { alert('Notes are required'); return; }
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Verifying...');
+        
+        fetch(`/core/verify_contact_details/${contactPk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify({
+                name: name,
+                email: email,
+                bsb: bsb.replace('-', ''),
+                account_number: accountNumber,
+                tax_number: abn.replace(/\s/g, ''),
+                notes: notes
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (body.status === 'success') {
+                alert('Contact details verified successfully!');
+                $('#verifyContactModal').modal('hide');
+                
+                updateVerifiedRow(contactPk, {
+                    verified_name: name,
+                    verified_email: email,
+                    verified_bank_bsb: bsb.replace('-', ''),
+                    verified_bank_account_number: accountNumber,
+                    verified_tax_number: abn.replace(/\s/g, ''),
+                    verified_notes: notes
+                });
+                
+                button.prop('disabled', false).html('Verify');
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error verifying contact:', error);
+            button.prop('disabled', false).html('Verify');
+            alert(`Failed to verify contact: ${error.message}`);
+        });
+    });
+    
+    // ============================================
+    // ADD SUPPLIER MODAL (Used by Bills section)
+    // ============================================
+    let addSupplierXeroInstanceId = null;
+    let addSupplierBillRow = null;
+    
+    window.openAddSupplierModal = function(xeroInstanceId, billRow) {
+        addSupplierXeroInstanceId = xeroInstanceId;
+        addSupplierBillRow = billRow;
+        
+        $('#addSupplierRow input').val('');
+        $('#addSupplierModal').modal('show');
+        
+        setTimeout(() => {
+            $('.modal-backdrop').last().css('z-index', 1055);
+            $('#addSupplierRow .name-input').focus();
+        }, 100);
+    };
+    
+    $('#addSupplierBtn').click(function() {
+        const button = $(this);
+        const row = $('#addSupplierRow');
+        
+        if (!addSupplierXeroInstanceId) {
+            alert('No Xero Instance selected');
+            return;
+        }
+        
+        const validation = validateContactFields(row, { requireName: true, requireEmail: true });
+        
+        if (!validation.valid) {
+            alert(validation.message);
+            if (validation.focusElement) validation.focusElement.focus();
+            return;
+        }
+        
+        const { name, email, bsbDigits, accountDigits, abnDigits } = validation.values;
+        
+        const inputs = row.find('input');
+        inputs.prop('disabled', true).css('background-color', '#e9ecef');
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Adding...');
+        
+        fetch(`/core/create_contact/${addSupplierXeroInstanceId}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify({
+                name: name,
+                email: email,
+                bsb: bsbDigits,
+                account_number: accountDigits,
+                tax_number: abnDigits
+            })
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                inputs.prop('disabled', false).css('background-color', '');
+                button.prop('disabled', false).html('Add');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${addSupplierXeroInstanceId}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                const contact = body.contact;
+                
+                // Add to global suppliers list
+                if (window.billsData && window.billsData.suppliers) {
+                    window.billsData.suppliers.unshift({
+                        contact_pk: contact.contact_pk,
+                        name: contact.name,
+                        xero_instance_id: addSupplierXeroInstanceId
+                    });
+                }
+                
+                // Update supplier dropdown if provided
+                if (addSupplierBillRow) {
+                    const supplierSelect = addSupplierBillRow.find('.supplier-select');
+                    const newOption = $('<option>')
+                        .val(contact.contact_pk)
+                        .text(contact.name)
+                        .attr('data-xero-instance', addSupplierXeroInstanceId);
+                    
+                    const separator2 = supplierSelect.find('option[disabled][value="separator2"]');
+                    if (separator2.length > 0) {
+                        separator2.after(newOption);
+                    } else {
+                        supplierSelect.append(newOption);
+                    }
+                    
+                    supplierSelect.val(contact.contact_pk);
+                }
+                
+                inputs.prop('disabled', false).css('background-color', '').val('');
+                button.prop('disabled', false).html('Add');
+                $('#addSupplierModal').modal('hide');
+                alert('Supplier added successfully!');
+            } else {
+                throw new Error(body.message || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating supplier:', error);
+            inputs.prop('disabled', false).css('background-color', '');
+            button.prop('disabled', false).html('Add');
+            alert(`Failed to create supplier: ${error.message}`);
+        });
+    });
+});
 </script>

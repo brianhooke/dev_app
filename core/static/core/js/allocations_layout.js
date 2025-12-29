@@ -166,7 +166,8 @@ var AllocationsManager = (function() {
                 reloadAfterSave: false,   // Reload data after successful save
                 reloadAfterDelete: true,  // Reload data after successful delete
                 showSaveButton: true,     // Show Save button in allocations footer
-                alwaysShowAddButton: false // Always show Add Row button (vs only in edit mode)
+                alwaysShowAddButton: false, // Always show Add Row button (vs only in edit mode)
+                emailViewer: false        // Enable email link click to show email in viewer
             },
             mainTable: {
                 emptyMessage: 'No items found.',
@@ -203,7 +204,8 @@ var AllocationsManager = (function() {
             selectedRowPk: null,
             isNewMode: false,
             editMode: false,
-            pendingSaveItemPk: null  // For Update button on non-selected rows
+            pendingSaveItemPk: null,  // For Update button on non-selected rows
+            showingEmail: false       // Track if viewer is showing email vs PDF
         };
         
         // Bind event handlers
@@ -323,7 +325,12 @@ var AllocationsManager = (function() {
         $(document).off('click', '#' + sectionId + 'SaveAllocationsBtn')
             .on('click', '#' + sectionId + 'SaveAllocationsBtn', function() {
                 var st = state[sectionId];
-                if (st.selectedRowPk) {
+                var cfg = configs[sectionId];
+                
+                // In new mode, call custom save handler if defined
+                if (st.isNewMode && cfg.callbacks && cfg.callbacks.onSaveNew) {
+                    cfg.callbacks.onSaveNew(sectionId, cfg);
+                } else if (st.selectedRowPk) {
                     saveItem(sectionId, st.selectedRowPk);
                 }
             });
@@ -331,10 +338,94 @@ var AllocationsManager = (function() {
         // Main table row click - use event delegation
         $(document).off('click', '#' + sectionId + 'MainTableBody tr')
             .on('click', '#' + sectionId + 'MainTableBody tr', function(e) {
-                // Don't trigger on buttons
-                if ($(e.target).closest('button, a').length) return;
+                // Don't trigger on buttons or email links
+                if ($(e.target).closest('button, .email-link').length) return;
+                
+                // Restore PDF if we were showing email
+                var st = state[sectionId];
+                if (cfg.features.emailViewer && st && st.showingEmail) {
+                    restorePdfViewer(sectionId, $(this));
+                }
+                
                 selectRow(sectionId, $(this));
             });
+        
+        // Email viewer feature - email link click handler
+        if (cfg.features.emailViewer) {
+            $(document).off('click', '#' + sectionId + 'MainTableBody .email-link')
+                .on('click', '#' + sectionId + 'MainTableBody .email-link', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showEmailInViewer(sectionId, $(this));
+                });
+            
+            // Focus handler for inputs/selects - restore PDF when focused
+            $(document).off('focus', '#' + sectionId + 'MainTableBody input, #' + sectionId + 'MainTableBody select')
+                .on('focus', '#' + sectionId + 'MainTableBody input, #' + sectionId + 'MainTableBody select', function() {
+                    var st = state[sectionId];
+                    if (st && st.showingEmail) {
+                        restorePdfViewer(sectionId, $(this).closest('tr'));
+                    }
+                });
+        }
+    }
+    
+    /**
+     * Show email content in the viewer (for emailViewer feature)
+     */
+    function showEmailInViewer(sectionId, emailLink) {
+        var st = state[sectionId];
+        
+        var emailHtml = emailLink.attr('data-email-html') || '';
+        var emailText = emailLink.attr('data-email-text') || '';
+        var emailSubject = emailLink.attr('data-email-subject') || '';
+        var emailFrom = emailLink.attr('data-email-from') || '';
+        
+        // Create HTML content with email header
+        var emailContent = '<div style="padding: 20px; font-family: Arial, sans-serif;">';
+        emailContent += '<div style="border-bottom: 2px solid #ddd; margin-bottom: 20px; padding-bottom: 10px;">';
+        emailContent += '<p style="margin: 5px 0;"><strong>From:</strong> ' + emailFrom + '</p>';
+        emailContent += '<p style="margin: 5px 0;"><strong>Subject:</strong> ' + emailSubject + '</p>';
+        emailContent += '</div>';
+        
+        // Add email body (HTML or text)
+        if (emailHtml) {
+            emailContent += emailHtml;
+        } else if (emailText) {
+            emailContent += '<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">' + emailText + '</pre>';
+        } else {
+            emailContent += '<p><em>No email content available</em></p>';
+        }
+        emailContent += '</div>';
+        
+        // Create a blob URL for the HTML content
+        var blob = new Blob([emailContent], { type: 'text/html' });
+        var blobUrl = URL.createObjectURL(blob);
+        
+        // Load HTML in iframe
+        $('#' + sectionId + 'PdfViewer').attr('src', blobUrl).show();
+        $('#' + sectionId + 'ViewerPlaceholder').hide();
+        
+        // Mark that we're showing email
+        st.showingEmail = true;
+    }
+    
+    /**
+     * Restore PDF in the viewer (for emailViewer feature)
+     */
+    function restorePdfViewer(sectionId, row) {
+        var st = state[sectionId];
+        if (!st.showingEmail) return;
+        
+        var pdfUrl = row.attr('data-pdf-url');
+        if (pdfUrl) {
+            $('#' + sectionId + 'PdfViewer').attr('src', pdfUrl).show();
+            $('#' + sectionId + 'ViewerPlaceholder').hide();
+        } else {
+            $('#' + sectionId + 'PdfViewer').hide();
+            $('#' + sectionId + 'ViewerPlaceholder').show();
+        }
+        st.showingEmail = false;
     }
     
     /**
@@ -362,9 +453,9 @@ var AllocationsManager = (function() {
             type: 'GET',
             data: params.queryParams || {},
             success: function(response) {
-                if (response.status === 'success' || response.items || response.quotes || response.invoices || response.bills) {
+                if (response.status === 'success' || response.items || response.quotes || response.invoices || response.bills || response.variations) {
                     // Normalize response data
-                    var items = response.items || response.quotes || response.invoices || response.bills || [];
+                    var items = response.items || response.quotes || response.invoices || response.bills || response.variations || [];
                     cfg.data.items = items;
                     cfg.data.suppliers = response.suppliers || response.contacts || [];
                     cfg.data.costingItems = response.costing_items || response.items || window.itemsItems || [];
@@ -412,7 +503,10 @@ var AllocationsManager = (function() {
             var colCount = $('#' + sectionId + 'MainTable thead th').length || 5;
             tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; padding: 40px; color: #6c757d;">' + 
                 cfg.mainTable.emptyMessage + '</td></tr>');
-            $('#' + sectionId + 'MainTableFooter').hide();
+            // Only hide footer if alwaysShowFooter is not set
+            if (!cfg.mainTable.alwaysShowFooter) {
+                $('#' + sectionId + 'MainTableFooter').hide();
+            }
             return;
         }
         
@@ -475,6 +569,12 @@ var AllocationsManager = (function() {
         var cfg = configs[sectionId];
         var st = state[sectionId];
         
+        // Skip if row has no pk (empty state row or new row)
+        var pk = row.attr('data-pk');
+        if (!pk || row.hasClass('new-variation-row') || row.hasClass('new-quote-row')) {
+            return;
+        }
+        
         // Skip if already selected
         if (row.hasClass('selected-row')) {
             return;
@@ -484,18 +584,17 @@ var AllocationsManager = (function() {
         tbody.addClass('has-selection');
         tbody.find('tr').removeClass('selected-row');
         row.addClass('selected-row');
-        
-        var pk = row.attr('data-pk');
         var pdfUrl = row.attr('data-pdf-url');
         st.selectedRowPk = pk;
         
         // Find and set currentItem from items array
         if (cfg.data.items && cfg.data.items.length) {
-            var pkField = cfg.mainTable.pkField || 'pk';
+            var pkField = cfg.data.pkField || cfg.mainTable.pkField || 'pk';
             cfg.data.currentItem = cfg.data.items.find(function(item) {
-                var itemPk = item[pkField] || item.pk || item.quotes_pk || item.invoice_pk;
+                var itemPk = item[pkField] || item.pk || item.quotes_pk || item.invoice_pk || item.hc_variation_pk;
                 return String(itemPk) === String(pk);
             }) || null;
+            console.log('selectRow currentItem:', cfg.data.currentItem);
         }
         
         // Update PDF viewer
@@ -780,7 +879,8 @@ var AllocationsManager = (function() {
                 totalGst = parseFloat(gstInput.val()) || 0;
             }
         } else if (cfg.data.currentItem) {
-            totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || 0);
+            totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
+            console.log('updateStillToAllocate totalNet from currentItem:', totalNet, 'currentItem:', cfg.data.currentItem);
             if (hasGst) {
                 totalGst = parseFloat(cfg.data.currentItem.total_gst || 0);
             }
@@ -788,9 +888,11 @@ var AllocationsManager = (function() {
         
         // Calculate allocated amounts
         var allocatedNet = 0, allocatedGst = 0;
-        $('#' + sectionId + 'AllocationsTableBody tr').each(function() {
+        console.log('updateStillToAllocate - sectionId:', sectionId, 'looking for class:', cls + '-net-input');
+        $('#' + sectionId + 'AllocationsTableBody tr').each(function(index) {
             // Net amount - use standardized class name
             var netInput = $(this).find('.' + cls + '-net-input');
+            console.log('  Row', index, '- netInput found:', netInput.length, 'value:', netInput.val());
             if (netInput.length) {
                 allocatedNet += parseFloat(netInput.val()) || 0;
             } else {
@@ -802,6 +904,7 @@ var AllocationsManager = (function() {
                     // Read-only row - parse from text (column index varies)
                     var amountCell = $(this).find('td:eq(1)');
                     var text = amountCell.text().replace(/[$,]/g, '');
+                    console.log('  Row', index, '- fallback text parse from td:eq(1):', text);
                     allocatedNet += parseFloat(text) || 0;
                 }
             }
@@ -817,6 +920,7 @@ var AllocationsManager = (function() {
         
         var remainingNet = totalNet - allocatedNet;
         var remainingGst = hasGst ? totalGst - allocatedGst : 0;
+        console.log('updateStillToAllocate RESULT - totalNet:', totalNet, 'allocatedNet:', allocatedNet, 'remainingNet:', remainingNet);
         
         // Update Net display
         var netDisplayEl = $('#' + sectionId + 'RemainingNet');
@@ -873,6 +977,7 @@ var AllocationsManager = (function() {
     function getAllocations(sectionId) {
         var cfg = configs[sectionId];
         var allocations = [];
+        var isConstruction = cfg.features && cfg.features.constructionMode;
         
         $('#' + sectionId + 'AllocationsTableBody tr').each(function() {
             var row = $(this);
@@ -881,16 +986,50 @@ var AllocationsManager = (function() {
             var notesInput = row.find('.' + sectionId + '-allocation-notes-input');
             
             if (itemSelect.length && itemSelect.val()) {
-                allocations.push({
+                var alloc = {
                     item_pk: itemSelect.val(),
                     amount: parseFloat(amountInput.val()) || 0,
                     notes: notesInput.val() || '',
                     allocation_pk: row.attr('data-allocation-pk') || null
-                });
+                };
+                
+                // Include qty and rate for construction mode
+                if (isConstruction) {
+                    var qtyInput = row.find('.' + sectionId + '-allocation-qty-input');
+                    var rateInput = row.find('.' + sectionId + '-allocation-rate-input');
+                    alloc.qty = parseFloat(qtyInput.val()) || null;
+                    alloc.rate = parseFloat(rateInput.val()) || null;
+                    
+                    // Get unit from selected item
+                    var selectedOption = itemSelect.find('option:selected');
+                    alloc.unit = selectedOption.attr('data-unit') || '';
+                }
+                
+                allocations.push(alloc);
             }
         });
         
         return allocations;
+    }
+    
+    /**
+     * Add "New Item" button to main table footer
+     * @param {string} sectionId - Section identifier
+     * @param {string} buttonText - Text for the button (e.g., "New Quote", "New Variation")
+     * @param {Function} onClick - Click handler function
+     */
+    function addNewItemButton(sectionId, buttonText, onClick) {
+        var newBtn = $('<button type="button" class="' + sectionId + '-action-btn" id="' + sectionId + 'NewBtn">')
+            .html('<i class="fas fa-plus"></i> ' + buttonText)
+            .on('click', onClick);
+        
+        // Add to the TitleActions span in the table footer (first column)
+        $('#' + sectionId + 'TitleActions').empty().append(newBtn);
+        
+        // Show the footer
+        $('#' + sectionId + 'MainTableFooter').show();
+        
+        console.log(buttonText + ' button added to table footer');
     }
     
     /**
@@ -1194,7 +1333,7 @@ var AllocationsManager = (function() {
                     
                     // Reload data if configured
                     if (cfg.features.reloadAfterDelete && window.projectPk) {
-                        loadData(sectionId, { projectPk: window.projectPk });
+                        loadData(sectionId, { queryParams: { project_pk: window.projectPk } });
                     } else if (row) {
                         // Just remove the row
                         row.remove();
@@ -1304,6 +1443,8 @@ var AllocationsManager = (function() {
             itemSelect.find('optgroup').last().append(option);
         });
         
+        console.log('createEditableAllocationRow - isConstruction:', isConstruction, 'sectionId:', sectionId);
+        
         if (isConstruction) {
             // Construction mode: Item | Unit | Qty | $ Rate | $ Amount | Notes | Del
             
@@ -1361,7 +1502,12 @@ var AllocationsManager = (function() {
             row.append($('<td>').append(rateInput));
             
             // 5. $ Amount (calculated, read-only display but hidden input for data)
+            // If amount not set but qty and rate are, calculate it
             var calcAmount = alloc.amount ? parseFloat(alloc.amount) : 0;
+            if (calcAmount === 0 && alloc.qty && alloc.rate) {
+                calcAmount = parseFloat(alloc.qty) * parseFloat(alloc.rate);
+            }
+            console.log('createEditableAllocationRow construction - alloc.amount:', alloc.amount, 'calcAmount:', calcAmount, 'qty:', alloc.qty, 'rate:', alloc.rate);
             var amountDisplay = $('<span>').addClass(cls + '-amount-display')
                 .text('$' + Utils.formatMoney(calcAmount));
             var amountHidden = $('<input>').attr('type', 'hidden')
@@ -1487,6 +1633,33 @@ var AllocationsManager = (function() {
     }
     
     
+    /**
+     * Show success tick on button, then fade out and remove the row.
+     * Used after successful send/submit actions.
+     * 
+     * @param {jQuery} button - The button element that was clicked
+     * @param {jQuery} row - The table row to fade out
+     * @param {Function} onComplete - Optional callback after row is removed
+     */
+    function showSuccessAndFadeRow(button, row, onComplete) {
+        // Show green tick success animation
+        button.removeClass('btn-success btn-secondary btn-primary')
+            .addClass('btn-success')
+            .html('<i class="fas fa-check"></i>')
+            .css('background-color', '#28a745')
+            .prop('disabled', true);
+        
+        // Fade out row after brief delay to show success
+        setTimeout(function() {
+            row.fadeOut(1000, function() {
+                $(this).remove();
+                if (typeof onComplete === 'function') {
+                    onComplete();
+                }
+            });
+        }, 800);
+    }
+    
     // Public API
     return {
         init: init,
@@ -1500,6 +1673,7 @@ var AllocationsManager = (function() {
         getAllocations: getAllocations,
         setNewMode: setNewMode,
         setEditMode: setEditMode,
+        addNewItemButton: addNewItemButton,
         getConfig: getConfig,
         getState: getState,
         // Button helpers - use these in custom renderRow functions
@@ -1512,6 +1686,8 @@ var AllocationsManager = (function() {
         deleteItem: deleteItem,
         // Reusable row builders
         createEditableAllocationRow: createEditableAllocationRow,
+        // Success animation
+        showSuccessAndFadeRow: showSuccessAndFadeRow,
         // Utility functions are now in utils.js (Utils.isConstructionProject, etc.)
         _initialized: true
     };

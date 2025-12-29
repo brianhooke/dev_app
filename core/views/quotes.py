@@ -67,9 +67,9 @@ def quotes_view(request):
     
     # Main table columns (same for both project types)
     main_table_columns = [
-        {'header': 'Supplier', 'width': '50%'},
-        {'header': '$ Net', 'width': '15%'},
-        {'header': 'Quote #', 'width': '15%'},
+        {'header': 'Supplier', 'width': '50%', 'sortable': True},
+        {'header': '$ Net', 'width': '15%', 'sortable': True},
+        {'header': 'Quote #', 'width': '15%', 'sortable': True},
         {'header': 'Update', 'width': '12%', 'class': 'col-action-first'},
         {'header': 'Delete', 'width': '8%', 'class': 'col-action'},
     ]
@@ -241,8 +241,8 @@ def delete_quote(request):
     if request.method in ['DELETE', 'POST']:
         data = json.loads(request.body)
         
-        # Support both quote_pk and supplier_quote_number for backwards compatibility
-        quote_pk = data.get('quote_pk')
+        # Support pk, quote_pk, and supplier_quote_number for backwards compatibility
+        quote_pk = data.get('pk') or data.get('quote_pk')
         supplier_quote_number = data.get('supplier_quote_number')
         
         if not quote_pk and not supplier_quote_number:
@@ -838,4 +838,98 @@ def get_quote_allocations_by_quotes(request):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting allocations: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def save_quote_allocations(request):
+    """
+    Save allocations for an existing quote (update mode).
+    
+    Expected POST data:
+    {
+        "pk": int (quote_pk),
+        "allocations": [
+            {"item_pk": int, "amount": decimal, "qty": decimal, "rate": decimal, "unit": str, "notes": str}
+        ]
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        quote_pk = data.get('pk')
+        allocations_data = data.get('allocations', [])
+        
+        if not quote_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Quote PK is required'
+            }, status=400)
+        
+        # Get the quote
+        try:
+            quote = Quotes.objects.get(quotes_pk=quote_pk)
+        except Quotes.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Quote not found'
+            }, status=404)
+        
+        # Check if construction project
+        is_construction = (quote.project and quote.project.project_type == 'construction')
+        
+        with transaction.atomic():
+            # Delete existing allocations and recreate
+            Quote_allocations.objects.filter(quotes_pk=quote).delete()
+            
+            # Create new allocations
+            for alloc_data in allocations_data:
+                item_pk = alloc_data.get('item_pk')
+                if not item_pk:
+                    continue
+                
+                try:
+                    costing = Costing.objects.get(costing_pk=item_pk)
+                    
+                    # Handle construction mode (qty/rate) vs simple mode (amount)
+                    qty = alloc_data.get('qty')
+                    rate = alloc_data.get('rate')
+                    if qty is not None and rate is not None:
+                        amount = Decimal(str(qty)) * Decimal(str(rate))
+                        qty_val = Decimal(str(qty))
+                        rate_val = Decimal(str(rate))
+                    else:
+                        amount = Decimal(str(alloc_data.get('amount', 0)))
+                        qty_val = None
+                        rate_val = None
+                    
+                    Quote_allocations.objects.create(
+                        quotes_pk=quote,
+                        item=costing,
+                        amount=amount,
+                        qty=qty_val,
+                        unit=alloc_data.get('unit', ''),
+                        rate=rate_val,
+                        notes=alloc_data.get('notes', '')
+                    )
+                except Costing.DoesNotExist:
+                    logger.warning(f"Costing {item_pk} not found for quote allocation")
+            
+            logger.info(f"Updated quote {quote_pk} with {len(allocations_data)} allocations")
+            return JsonResponse({
+                'status': 'success',
+                'quote_pk': quote_pk
+            })
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in save_quote_allocations: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error saving quote allocations: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error saving allocations: {str(e)}'
         }, status=500)

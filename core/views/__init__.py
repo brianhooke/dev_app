@@ -15,6 +15,13 @@ from .quotes import (
 # Contract Budget views
 from .contract_budget import update_uncommitted, get_project_committed_amounts
 
+# HC Variations views
+from .hc_variations import (
+    hc_variations_view, get_hc_variations, get_hc_variation_allocations,
+    save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
+    delete_hc_variation_allocation
+)
+
 # Bill/Invoice views
 from .bills import (
     delete_bill, upload_bill, upload_bill_allocations,
@@ -68,11 +75,15 @@ from .bills import (
 # Database management views
 from .database_wipe import wipe_database
 
+# Contact views
+from .contacts import (
+    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
+    create_contact, update_contact_details, update_contact_status
+)
+
 # Dashboard views (moved from dashboard app)
 from .dashboard import (
     error_response, success_response, dashboard_view,
-    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
-    create_contact, update_contact_details, update_contact_status,
     send_bill, get_project_categories, get_project_items,
     create_category, create_item, reorder_category, reorder_item,
     download_items_csv_template, upload_items_csv,

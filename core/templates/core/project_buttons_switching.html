@@ -1,0 +1,593 @@
+<!-- Construction View (hidden initially, shown when Construction link clicked) -->
+<div id="constructionView" style="display: none; height: 100%; flex-direction: column;">
+    <!-- Back button and Project heading -->
+    <div style="margin-bottom: 8px; display: flex; align-items: center; position: relative;">
+        <button id="backToProjectsFromConstructionBtn" class="btn btn-secondary btn-sm" style="position: absolute; left: 0; padding: 4px 10px; font-size: 14px;">
+            <i class="fas fa-arrow-left"></i> Back to Projects
+        </button>
+        <h3 id="constructionProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
+    </div>
+    
+    <!-- Construction navigation buttons -->
+    <div style="margin-bottom: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        <button class="btn btn-primary construction-nav-btn" data-section="quotes">Quotes</button>
+        <button class="btn btn-primary construction-nav-btn" data-section="pos">POs</button>
+        
+        <!-- Bills button group with sub-menu -->
+        <div id="billsButtonGroup" class="bills-btn-group">
+            <button class="btn btn-primary construction-nav-btn bills-main-btn" data-section="bills">Bills</button>
+            <button class="btn bills-sub-btn active" data-subsection="unallocated">Unallocated</button>
+            <button class="btn bills-sub-btn" data-subsection="allocated">Allocated</button>
+        </div>
+        
+        <button class="btn btn-primary construction-nav-btn" data-section="contract-budget">Contract Budget</button>
+        <button class="btn btn-primary construction-nav-btn" data-section="hc-variations">HC Variations</button>
+        <button class="btn btn-primary construction-nav-btn" data-section="hc-claims">HC Claims</button>
+        <button class="btn btn-primary construction-nav-btn" data-section="documents">Documents</button>
+        
+        <!-- Dynamic action buttons (shown based on selected section) -->
+        <button id="constructionNewQuoteBtn" class="quote-action-btn" style="display: none; margin-left: 10px;">
+            <i class="fas fa-plus"></i> New Quote
+        </button>
+    </div>
+    
+    <!-- Horizontal divider line below buttons -->
+    <div style="border-bottom: 1px solid #e2e8f0;"></div>
+    
+    <!-- Hidden file input for quote PDF upload -->
+    <input type="file" id="constructionQuotePdfInput" accept="application/pdf" style="display: none;">
+    
+    <!-- Construction content area -->
+    <div id="constructionContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
+        <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+    </div>
+</div>
+
+<!-- Tender View (hidden initially, shown when Tender link clicked) -->
+<div id="tenderView" style="display: none; height: 100%; flex-direction: column;">
+    <!-- Back button and Project heading -->
+    <div style="margin-bottom: 20px; display: flex; align-items: center; position: relative;">
+        <button id="backToProjectsBtn" class="btn btn-secondary" style="position: absolute; left: 0; font-size: 14px;">
+            <i class="fas fa-arrow-left"></i> Back to Projects
+        </button>
+        <h3 id="tenderProjectName" style="margin: 0; flex: 1; text-align: center;"></h3>
+    </div>
+    
+    <!-- Tender navigation buttons -->
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-primary tender-nav-btn" data-section="items">Items</button>
+        <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
+        <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
+        <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
+        
+        <!-- Dynamic action buttons (shown based on selected section) -->
+        <button id="newQuoteBtn" class="btn btn-success" style="display: none; margin-left: 10px;">
+            <i class="fas fa-plus"></i> New Quote
+        </button>
+    </div>
+    
+    <!-- Hidden file input for quote PDF upload -->
+    <input type="file" id="tenderQuotePdfInput" accept="application/pdf" style="display: none;">
+    
+    <!-- Tender content area -->
+    <div id="tenderContentArea" style="flex: 1; padding: 0; overflow-y: auto;">
+        <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+    </div>
+</div>
+
+<!-- Tender/Construction Navigation Scripts -->
+<script>
+$(document).ready(function() {
+    // Function to reset tender view state (make it global so other scripts can call it)
+    window.resetTenderViewState = function() {
+        // Reset all tender navigation buttons to default state
+        $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        
+        // Hide all dynamic action buttons
+        $('#newQuoteBtn').hide();
+        
+        // Clear tender content area
+        $('#tenderContentArea').html(`
+            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+        `);
+        
+        // Clear current tender project
+        window.currentTenderProject = null;
+    };
+    
+    // Function to reset construction view state
+    window.resetConstructionViewState = function() {
+        // Reset all construction navigation buttons to default state
+        $('.construction-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        $('#billsButtonGroup').removeClass('active');
+        
+        // Hide all dynamic action buttons
+        $('#constructionNewQuoteBtn').hide();
+        
+        // Clear construction content area
+        $('#constructionContentArea').html(`
+            <p style="text-align: center; color: #6c757d;">Select a section above to view content.</p>
+        `);
+        
+        // Clear current construction project
+        window.currentConstructionProject = null;
+    };
+    
+    // Handle Tender link click from project card - show tender view
+    $(document).on('click', '.project-status-link', function(e) {
+        e.preventDefault();
+        
+        const card = $(this).closest('.project-card');
+        const projectPk = card.data('project-pk');
+        const projectName = card.find('.card-title').text();
+        const xeroInstancePk = card.data('xero-instance-pk');
+        const projectType = card.data('project-type');
+        
+        console.log(`Opening tender view for project: ${projectName} (pk=${projectPk})`);
+        
+        // Store current project info globally
+        window.currentTenderProject = {
+            pk: projectPk,
+            name: projectName,
+            xero_instance_pk: xeroInstancePk,
+            project_type: projectType
+        };
+        
+        // Hide projects header and grid
+        $('#projectsHeader').hide();
+        $('#projectsGridContainer').hide();
+        
+        // Reset all tender nav buttons to outline state
+        $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        
+        // Show tender view
+        $('#tenderView').css('display', 'flex').show();
+        $('#tenderProjectName').text(projectName);
+    });
+    
+    // Handle Construction link click from project card - show construction view (Execution mode)
+    $(document).on('click', '.construction-link', function(e) {
+        e.preventDefault();
+        
+        const card = $(this).closest('.project-card');
+        const projectPk = card.data('project-pk');
+        const projectName = card.find('.card-title').text();
+        const xeroInstancePk = card.data('xero-instance-pk');
+        const projectType = card.data('project-type');
+        
+        console.log(`Opening construction view for project: ${projectName} (pk=${projectPk})`);
+        console.log(`Xero Instance PK: ${xeroInstancePk}`);
+        console.log(`Project Type: ${projectType}`);
+        
+        // Store current project info globally
+        window.currentConstructionProject = {
+            pk: projectPk,
+            name: projectName,
+            xero_instance_pk: xeroInstancePk,
+            project_type: projectType
+        };
+        
+        // Hide projects header and grid
+        $('#projectsHeader').hide();
+        $('#projectsGridContainer').hide();
+        
+        // Reset all construction nav buttons to outline state (none selected initially)
+        $('.construction-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        $('#billsButtonGroup').removeClass('active');
+        
+        // Clear content area with placeholder
+        $('#constructionContentArea').html('<p style="text-align: center; color: #6c757d; padding: 40px;">Select a section above to view content.</p>');
+        
+        // Show construction view
+        $('#constructionView').css('display', 'flex').show();
+        $('#constructionProjectName').text(projectName);
+    });
+    
+    // Back to Projects button (from Tender view)
+    $('#backToProjectsBtn').on('click', function() {
+        $('#tenderView').hide();
+        $('#projectsHeader').show();
+        $('#projectsGridContainer').show();
+        window.resetTenderViewState();
+    });
+    
+    // Back to Projects button (from Construction view)
+    $('#backToProjectsFromConstructionBtn').on('click', function() {
+        $('#constructionView').hide();
+        $('#projectsHeader').show();
+        $('#projectsGridContainer').show();
+        window.resetConstructionViewState();
+    });
+    
+    // Handle Construction navigation button clicks
+    $(document).on('click', '.construction-nav-btn', function() {
+        const section = $(this).data('section');
+        console.log(`Construction section clicked: ${section}`);
+        
+        // Remove active class from all buttons (except bills main btn which is handled separately)
+        $('.construction-nav-btn:not(.bills-main-btn)').removeClass('btn-primary').addClass('btn-outline-primary');
+        
+        // Deactivate bills button group if clicking another section
+        if (section !== 'bills') {
+            $('#billsButtonGroup').removeClass('active');
+            $('.bills-main-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        }
+        
+        // Add active class to clicked button
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        // Hide all dynamic action buttons first
+        $('#constructionNewQuoteBtn').hide();
+        
+        // Update content area based on section
+        if (section === 'quotes') {
+            loadConstructionQuotesSection();
+        } else if (section === 'pos') {
+            loadConstructionPOSection();
+        } else if (section === 'contract-budget') {
+            loadConstructionContractBudgetSection();
+        } else if (section === 'hc-variations') {
+            loadConstructionHCVariationsSection();
+        } else if (section === 'hc-claims') {
+            loadConstructionHCClaimsSection();
+        } else if (section === 'bills') {
+            // Activate the bills button group and show sub-buttons
+            $('#billsButtonGroup').addClass('active');
+            $('.bills-main-btn').removeClass('btn-outline-primary').addClass('btn-primary');
+            // Default to unallocated if no sub-button is active
+            const activeSubBtn = $('.bills-sub-btn.active');
+            const subsection = activeSubBtn.length ? activeSubBtn.data('subsection') : 'unallocated';
+            loadConstructionBillsSection(subsection);
+        } else if (section === 'documents') {
+            loadConstructionDocumentsSection();
+        }
+    });
+    
+    // Handle Bills sub-menu button clicks
+    $(document).on('click', '.bills-sub-btn', function() {
+        const subsection = $(this).data('subsection');
+        console.log(`Bills subsection clicked: ${subsection}`);
+        
+        // Update active state on sub-buttons
+        $('.bills-sub-btn').removeClass('active');
+        $(this).addClass('active');
+        
+        // Load the appropriate bills view
+        loadConstructionBillsSection(subsection);
+    });
+    
+    // Handle Tender navigation button clicks
+    $(document).on('click', '.tender-nav-btn', function() {
+        const section = $(this).data('section');
+        console.log(`Tender section clicked: ${section}`);
+        
+        // Remove active class from all buttons
+        $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        
+        // Add active class to clicked button
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        // Hide all dynamic action buttons first
+        $('#newQuoteBtn').hide();
+        
+        // Update content area based on section
+        if (section === 'quotes') {
+            loadQuotesSection();
+        } else if (section === 'items') {
+            // Load Items section from hidden storage - items.html self-initializes
+            var itemsContent = $('#itemsTemplateStorage').html();
+            $('#tenderContentArea').html(itemsContent);
+            console.log('Items section loaded - items.html handles initialization');
+        } else if (section === 'documents') {
+            loadDocumentsSection();
+        } else if (section === 'contract-budget') {
+            loadContractBudgetSection();
+        } else {
+            // Placeholder for other sections
+            $('#tenderContentArea').html(`
+                <h4>${section.charAt(0).toUpperCase() + section.slice(1).replace('-', ' ')}</h4>
+                <p style="color: #6c757d;">Content for ${section} will be implemented next.</p>
+            `);
+        }
+    });
+    
+    // ==========================================
+    // CONSTRUCTION SECTION LOADERS
+    // ==========================================
+    
+    // Load the quotes section view for CONSTRUCTION
+    function loadConstructionQuotesSection() {
+        console.log('Loading quotes section - quotes.html handles initialization');
+        
+        // Set shared project reference for quotes (quotes.html will use this)
+        window.currentQuotesProject = {
+            pk: window.currentConstructionProject.pk,
+            project_type: window.currentConstructionProject.project_type,
+            contacts: window.constructionProjectContacts || []
+        };
+        
+        // Load contacts for the project if not already loaded
+        if (!window.constructionProjectContacts || window.constructionProjectContacts.length === 0) {
+            const projectPk = window.currentConstructionProject.pk;
+            $.ajax({
+                url: '{% url "core:get_project_contacts" 0 %}'.replace('0', projectPk),
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        window.constructionProjectContacts = response.contacts;
+                        window.currentQuotesProject.contacts = response.contacts;
+                        console.log('Loaded', response.contacts.length, 'contacts for quotes');
+                    }
+                }
+            });
+        }
+        
+        var projectPk = window.currentConstructionProject ? window.currentConstructionProject.pk : null;
+        
+        $.ajax({
+            url: '{% url "core:quotes" %}?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                $('#constructionContentArea').html(response);
+                // Add New Quote button using shared AllocationsManager function
+                AllocationsManager.addNewItemButton('quote', 'New Quote', function() {
+                    $('#constructionQuotePdfInput').click();
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load quotes section:', error);
+                $('#constructionContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading Quotes</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function loadConstructionDocumentsSection() {
+        window.loadSharedDocumentsSection({
+            projectObj: window.currentConstructionProject,
+            contentAreaId: 'constructionContentArea'
+        });
+    }
+    
+    function loadConstructionContractBudgetSection() {
+        window.loadSharedContractBudgetSection({
+            projectObj: window.currentConstructionProject,
+            contentAreaId: 'constructionContentArea',
+            isTender: false  // Execution mode = full columns
+        });
+    }
+    
+    function loadConstructionPOSection() {
+        window.loadSharedPOSection({
+            projectObj: window.currentConstructionProject,
+            contentAreaId: 'constructionContentArea'
+        });
+    }
+    
+    function loadConstructionHCVariationsSection() {
+        var projectPk = window.currentConstructionProject ? window.currentConstructionProject.pk : null;
+        
+        if (!projectPk) {
+            console.error('No project selected for HC Variations');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "core:hc_variations" %}?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                $('#constructionContentArea').html(response);
+                console.log('HC Variations section loaded for project:', projectPk);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load HC Variations section:', error);
+                $('#constructionContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading HC Variations</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function loadConstructionHCClaimsSection() {
+        $('#constructionContentArea').html(`
+            <div style="text-align: center; padding: #6c757d;">
+                <i class="fas fa-file-invoice-dollar" style="font-size: 64px; margin-bottom: 20px;"></i>
+                <h4>HC Claims</h4>
+                <p>Coming soon...</p>
+            </div>
+        `);
+    }
+    
+    function loadConstructionBillsSection(subsection) {
+        console.log(`Loading bills section: ${subsection}`);
+        
+        var projectPk = window.currentConstructionProject ? window.currentConstructionProject.pk : null;
+        var templateType = subsection === 'allocated' ? 'allocated' : 'unallocated';
+        
+        $.ajax({
+            url: '{% url "core:bills" %}?project_pk=' + projectPk + '&template=' + templateType,
+            type: 'GET',
+            success: function(response) {
+                $('#constructionContentArea').html(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load bills section:', error);
+                $('#constructionContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading Bills</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    // ==========================================
+    // TENDER SECTION LOADERS
+    // ==========================================
+    
+    function loadQuotesSection() {
+        console.log('Loading quotes section for Tender - quotes.html handles initialization');
+        
+        // Set shared project reference for quotes (quotes.html will use this)
+        window.currentQuotesProject = {
+            pk: window.currentTenderProject.pk,
+            project_type: window.currentTenderProject.project_type,
+            contacts: window.projectContacts || []
+        };
+        
+        // Load contacts for the project if not already loaded
+        if (!window.projectContacts || window.projectContacts.length === 0) {
+            const projectPk = window.currentTenderProject.pk;
+            $.ajax({
+                url: '{% url "core:get_project_contacts" 0 %}'.replace('0', projectPk),
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        window.projectContacts = response.contacts;
+                        window.currentQuotesProject.contacts = response.contacts;
+                        console.log('Loaded', response.contacts.length, 'contacts for Tender quotes');
+                    }
+                }
+            });
+        }
+        
+        var projectPk = window.currentTenderProject ? window.currentTenderProject.pk : null;
+        
+        $.ajax({
+            url: '{% url "core:quotes" %}?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                $('#tenderContentArea').html(response);
+                // Add New Quote button using shared AllocationsManager function
+                AllocationsManager.addNewItemButton('quote', 'New Quote', function() {
+                    $('#quotePdfInput').click();
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load quotes section:', error);
+                $('#tenderContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading Quotes</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function loadDocumentsSection() {
+        window.loadSharedDocumentsSection({
+            projectObj: window.currentTenderProject,
+            contentAreaId: 'tenderContentArea'
+        });
+    }
+    
+    function loadContractBudgetSection() {
+        window.loadSharedContractBudgetSection({
+            projectObj: window.currentTenderProject,
+            contentAreaId: 'tenderContentArea',
+            isTender: true  // Tender mode = reduced columns
+        });
+    }
+    
+    // ==========================================
+    // SHARED SECTION LOADERS (used by both Tender and Construction)
+    // ==========================================
+    
+    window.loadSharedDocumentsSection = function(config) {
+        const { projectObj, contentAreaId } = config;
+        
+        if (!projectObj || !projectObj.pk) {
+            console.error('No project selected for documents');
+            return;
+        }
+        
+        // Load the documents template from hidden storage
+        var documentsHtml = $('#documentsTemplateStorage').html();
+        $(`#${contentAreaId}`).html(documentsHtml);
+        
+        // Initialize DocumentsManager module with container context
+        DocumentsManager.init({
+            projectPk: projectObj.pk,
+            containerSelector: `#${contentAreaId}`
+        });
+        
+        console.log('Documents section loaded for project:', projectObj.pk, 'in container:', contentAreaId);
+    };
+    
+    window.loadSharedContractBudgetSection = function(config) {
+        const { projectObj, contentAreaId, isTender } = config;
+        
+        if (!projectObj || !projectObj.pk) {
+            console.error('No project selected for contract budget');
+            return;
+        }
+        
+        // Set global context variables for legacy support
+        window.currentContractBudgetProject = projectObj;
+        window.currentContractBudgetContainer = `#${contentAreaId}`;
+        
+        // Build URL with query params
+        var isTenderParam = isTender ? '1' : '0';
+        var url = '{% url "core:contract_budget" %}?project_pk=' + projectObj.pk + '&is_tender=' + isTenderParam;
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(response) {
+                $(`#${contentAreaId}`).html(response);
+                console.log('Contract Budget section loaded for project:', projectObj.pk, 'in container:', contentAreaId);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load Contract Budget section:', error);
+                $(`#${contentAreaId}`).html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading Contract Budget</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    };
+    
+    window.loadSharedPOSection = function(config) {
+        const { projectObj, contentAreaId } = config;
+        
+        if (!projectObj || !projectObj.pk) {
+            console.error('No project selected for POs');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "core:po" %}?project_pk=' + projectObj.pk,
+            type: 'GET',
+            success: function(response) {
+                $(`#${contentAreaId}`).html(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load PO section:', error);
+                $(`#${contentAreaId}`).html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading POs</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
+    };
+});
+</script>

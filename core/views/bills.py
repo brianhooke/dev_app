@@ -261,7 +261,7 @@ def get_bills_list(request):
             allocations = []
             for allocation in invoice.bill_allocations.all():
                 allocations.append({
-                    'allocation_pk': allocation.bill_allocations_pk,
+                    'allocation_pk': allocation.bill_allocation_pk,
                     'amount': float(allocation.amount) if allocation.amount is not None else None,
                     'gst_amount': float(allocation.gst_amount) if allocation.gst_amount is not None else None,
                     'notes': allocation.notes or '',
@@ -960,29 +960,21 @@ def create_bill_allocation(request):
         
         # Create allocation
         allocation = Bill_allocations.objects.create(
-            bill_pk_id=bill_pk,
+            bill_id=bill_pk,
             amount=amount or 0,
             gst_amount=gst_amount or 0,
             allocation_type=0
         )
         
-        # Recalculate parent invoice totals after adding new allocation
-        from django.db.models import Sum
-        from decimal import Decimal
-        invoice = Bills.objects.get(bill_pk=bill_pk)
-        totals = Bill_allocations.objects.filter(bill_pk=invoice).aggregate(
-            total_net=Sum('amount'),
-            total_gst=Sum('gst_amount')
-        )
-        invoice.total_net = totals['total_net'] or Decimal('0')
-        invoice.total_gst = totals['total_gst'] or Decimal('0')
-        invoice.save()
+        # Note: We do NOT recalculate bill totals here - the bill's total_net/total_gst
+        # come from the email parsing and should not be overwritten by allocation sums.
+        # The "Still to Allocate" calculation is done in frontend.
         
-        logger.info(f"Created invoice allocation {allocation.bill_allocations_pk} for invoice {bill_pk}, updated totals")
+        logger.info(f"Created invoice allocation {allocation.bill_allocation_pk} for invoice {bill_pk}")
         
         return JsonResponse({
             'status': 'success',
-            'allocation_pk': allocation.bill_allocations_pk
+            'allocation_pk': allocation.bill_allocation_pk
         })
         
     except Exception as e:
@@ -1007,7 +999,7 @@ def update_bill_allocation(request):
             return JsonResponse({'status': 'error', 'message': 'allocation_pk is required'}, status=400)
         
         try:
-            allocation = Bill_allocations.objects.get(bill_allocations_pk=allocation_pk)
+            allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
         except Bill_allocations.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
         
@@ -1026,19 +1018,8 @@ def update_bill_allocation(request):
         
         allocation.save()
         
-        # If amount changed, recalculate parent invoice totals
-        if amount_changed:
-            invoice = allocation.bill_pk
-            from django.db.models import Sum
-            from decimal import Decimal
-            totals = Bill_allocations.objects.filter(bill_pk=invoice).aggregate(
-                total_net=Sum('amount'),
-                total_gst=Sum('gst_amount')
-            )
-            invoice.total_net = totals['total_net'] or Decimal('0')
-            invoice.total_gst = totals['total_gst'] or Decimal('0')
-            invoice.save()
-            logger.info(f"Updated invoice {invoice.bill_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
+        # Note: We do NOT recalculate bill totals here - the bill's total_net/total_gst
+        # come from the email parsing and should not be overwritten by allocation sums.
         
         logger.info(f"Updated invoice allocation {allocation_pk}")
         
@@ -1066,22 +1047,13 @@ def delete_bill_allocation(request):
             return JsonResponse({'status': 'error', 'message': 'allocation_pk is required'}, status=400)
         
         try:
-            allocation = Bill_allocations.objects.get(bill_allocations_pk=allocation_pk)
-            invoice = allocation.bill_pk  # Store reference before delete
+            allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
             allocation.delete()
             
-            # Recalculate parent invoice totals after deletion
-            from django.db.models import Sum
-            from decimal import Decimal
-            totals = Bill_allocations.objects.filter(bill_pk=invoice).aggregate(
-                total_net=Sum('amount'),
-                total_gst=Sum('gst_amount')
-            )
-            invoice.total_net = totals['total_net'] or Decimal('0')
-            invoice.total_gst = totals['total_gst'] or Decimal('0')
-            invoice.save()
+            # Note: We do NOT recalculate bill totals here - the bill's total_net/total_gst
+            # come from the email parsing and should not be overwritten by allocation sums.
             
-            logger.info(f"Deleted invoice allocation {allocation_pk}, updated invoice {invoice.bill_pk} totals")
+            logger.info(f"Deleted invoice allocation {allocation_pk}")
             return JsonResponse({'status': 'success'})
         except Bill_allocations.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
@@ -1225,7 +1197,7 @@ def get_approved_bills(request):
             allocations = []
             for allocation in invoice.bill_allocations.all():
                 allocations.append({
-                    'allocation_pk': allocation.bill_allocations_pk,
+                    'allocation_pk': allocation.bill_allocation_pk,
                     'costing_name': allocation.item.item if allocation.item else '-',
                     'amount': float(allocation.amount) if allocation.amount else 0,
                     'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
@@ -1257,42 +1229,6 @@ def get_approved_bills(request):
         'bills': invoices_data,
         'count': len(invoices_data)
     })
-
-
-def return_bill_to_project(request, invoice_id):
-    """
-    Return an approved invoice back to project (from Approvals).
-    Status 2 -> 1 (allocated)
-    Status 103 -> 102 (PO approved, invoice uploaded)
-    """
-    if request.method != 'POST':
-        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
-    
-    try:
-        invoice = Bills.objects.get(bill_pk=invoice_id)
-        
-        if invoice.bill_status == 2:
-            invoice.bill_status = 1
-        elif invoice.bill_status == 103:
-            invoice.bill_status = 102
-        else:
-            return JsonResponse({
-                'status': 'error', 
-                'message': f'Invoice status {invoice.bill_status} cannot be returned to project'
-            }, status=400)
-        
-        invoice.save()
-        
-        return JsonResponse({
-            'status': 'success',
-            'new_status': invoice.bill_status,
-            'message': 'Invoice returned to project'
-        })
-    except Bills.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
-    except Exception as e:
-        logger.error(f"Error returning invoice to project: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 # ============================================================================
@@ -1329,10 +1265,10 @@ def bills_view(request):
         # Main table columns (same for both project types)
         if is_allocated:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '15%'},
-                {'header': 'Bill #', 'width': '12%'},
-                {'header': '$ Net', 'width': '10%'},
-                {'header': '$ GST', 'width': '10%'},
+                {'header': 'Supplier', 'width': '15%', 'sortable': True},
+                {'header': 'Bill #', 'width': '12%', 'sortable': True},
+                {'header': '$ Net', 'width': '10%', 'sortable': True},
+                {'header': '$ GST', 'width': '10%', 'sortable': True},
                 {'header': 'Progress Claim', 'width': '10%', 'class': 'col-action-first'},
                 {'header': 'Unallocate', 'width': '13%', 'class': 'col-action'},
                 {'header': 'Approve', 'width': '13%', 'class': 'col-action'},
@@ -1340,10 +1276,10 @@ def bills_view(request):
             ]
         else:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '25%'},
-                {'header': 'Bill #', 'width': '20%'},
-                {'header': '$ Net', 'width': '17%'},
-                {'header': '$ GST', 'width': '17%'},
+                {'header': 'Supplier', 'width': '25%', 'sortable': True},
+                {'header': 'Bill #', 'width': '20%', 'sortable': True},
+                {'header': '$ Net', 'width': '17%', 'sortable': True},
+                {'header': '$ GST', 'width': '17%', 'sortable': True},
                 {'header': 'Allocate', 'width': '13%', 'class': 'col-action-first'},
                 {'header': 'Del', 'width': '8%', 'class': 'col-action'},
             ]
@@ -1403,31 +1339,11 @@ def bills_view(request):
     
     if template_type == 'approvals':
         # Approvals - invoices approved and ready to send to Xero (status 2 or 103)
-        context = {
-            'template_type': 'approvals',
-            'main_table_columns': [
-                {'header': 'Project', 'width': '15%'},
-                {'header': 'Xero Instance', 'width': '12%'},
-                {'header': 'Xero Account', 'width': '12%'},
-                {'header': 'Supplier', 'width': '13%'},
-                {'header': '$ Gross', 'width': '9%'},
-                {'header': '$ Net', 'width': '9%'},
-                {'header': '$ GST', 'width': '9%'},
-                {'header': 'Send to Xero', 'width': '12%'},
-                {'header': 'Return to Project', 'width': '12%'},
-            ],
-            'allocations_columns': [
-                {'header': 'Item', 'width': '25%'},
-                {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'TotalNet'},
-                {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'TotalGst'},
-                {'header': 'Notes', 'width': '45%'},
-            ],
-            'readonly': True,
-        }
-        return render(request, 'core/bills_global.html', context)
+        # Returns the approvals template which is loaded via AJAX into the approvals section
+        return render(request, 'core/bills_global_approvals.html')
     
-    # Fallback - should not reach here but return bills_global.html for standalone
-    return render(request, 'core/bills_global.html', {'template_type': template_type})
+    # Fallback - should not reach here
+    return render(request, 'core/bills_global_approvals.html')
 
 
 @csrf_exempt

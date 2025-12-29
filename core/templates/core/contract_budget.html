@@ -55,6 +55,36 @@ Column Behaviors:
         padding-left: 30px;
     }
     
+    /* Collapsible category rows */
+    .contractBudget-container .reusable-table tr.category-row {
+        cursor: pointer;
+    }
+    
+    .contractBudget-container .reusable-table tr.category-row .collapse-icon {
+        margin-right: 6px;
+        transition: transform 0.2s ease;
+        display: inline-block;
+        width: 12px;
+    }
+    
+    .contractBudget-container .reusable-table tr.category-row.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+    }
+    
+    .contractBudget-container .reusable-table tr.category-row .subtotal-cell {
+        font-weight: normal;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .contractBudget-container .reusable-table tr.category-row.collapsed .subtotal-cell {
+        opacity: 1;
+    }
+    
+    .contractBudget-container .reusable-table tr.item-row.hidden-by-collapse {
+        display: none;
+    }
+    
     /* Compact inputs for contract budget - right-align */
     .contractBudget-container .reusable-table input[type="number"] {
         width: 100%;
@@ -263,18 +293,50 @@ Column Behaviors:
         renderTotalsFooter(tfoot, totals);
     }
     
-    // Render a category row
+    // Render a category row with collapsible subtotals
     function renderCategoryRow(category, isInternal) {
         var row = $('<tr class="category-row"></tr>');
+        row.attr('data-category', category.category);
         if (isInternal) row.addClass('internal-category');
         
-        row.append('<td><strong>' + Utils.escapeHtml(category.category) + '</strong></td>');
+        // Category name with collapse icon
+        row.append('<td><i class="fas fa-chevron-down collapse-icon"></i><strong>' + Utils.escapeHtml(category.category) + '</strong></td>');
         
-        // Add empty cells based on mode (no dashes)
-        var emptyCells = getColCount() - 1;
-        for (var i = 0; i < emptyCells; i++) {
-            row.append('<td></td>');
+        // Unit column (empty)
+        row.append('<td class="subtotal-cell"></td>');
+        
+        if (!isTender) {
+            // Contract Budget subtotal
+            row.append('<td class="subtotal-cell" data-subtotal="contract_budget"></td>');
         }
+        
+        // Working Budget subtotal
+        row.append('<td class="subtotal-cell" data-subtotal="working_budget"></td>');
+        
+        if (isConstruction) {
+            row.append('<td class="subtotal-cell"></td>');  // Qty (empty)
+            row.append('<td class="subtotal-cell"></td>');  // Rate (empty)
+            row.append('<td class="subtotal-cell" data-subtotal="uncommitted"></td>');  // Uncommitted Amount
+            row.append('<td class="subtotal-cell"></td>');  // Notes (empty)
+        } else {
+            row.append('<td class="subtotal-cell" data-subtotal="uncommitted"></td>');  // Uncommitted
+        }
+        
+        // Committed subtotal
+        row.append('<td class="subtotal-cell" data-subtotal="committed"></td>');
+        
+        if (!isTender) {
+            row.append('<td class="subtotal-cell" data-subtotal="cost_to_complete"></td>');
+            row.append('<td class="subtotal-cell" data-subtotal="billed"></td>');
+            row.append('<td class="subtotal-cell" data-subtotal="fixed_on_site"></td>');
+        }
+        
+        // Add click handler for collapse/expand
+        row.on('click', function(e) {
+            // Don't toggle if clicking on notes icon
+            if ($(e.target).hasClass('notes-icon')) return;
+            toggleCategory(category.category);
+        });
         
         return row;
     }
@@ -316,9 +378,9 @@ Column Behaviors:
                 row.append('<td>-</td>');  // Notes
             } else {
                 // Qty - clickable text that becomes input
-                var qtyVal = parseFloat(item.uncommitted_qty || 0).toFixed(2);
+                var qtyVal = parseFloat(item.uncommitted_qty || 0);
                 var qtyTd = $('<td class="qty-cell" data-item-pk="' + item.costing_pk + '"></td>');
-                var qtyLink = $('<a href="#" class="click-to-edit qty-display" data-item-pk="' + item.costing_pk + '">' + qtyVal + '</a>');
+                var qtyLink = $('<a href="#" class="click-to-edit qty-display" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(qtyVal, 2) + '</a>');
                 qtyLink.on('click', function(e) {
                     e.preventDefault();
                     convertToInput(item.costing_pk, 'qty');
@@ -327,9 +389,9 @@ Column Behaviors:
                 row.append(qtyTd);
                 
                 // Rate - clickable text that becomes input
-                var rateVal = parseFloat(item.uncommitted_rate || 0).toFixed(2);
+                var rateVal = parseFloat(item.uncommitted_rate || 0);
                 var rateTd = $('<td class="rate-cell" data-item-pk="' + item.costing_pk + '"></td>');
-                var rateLink = $('<a href="#" class="click-to-edit rate-display" data-item-pk="' + item.costing_pk + '">' + rateVal + '</a>');
+                var rateLink = $('<a href="#" class="click-to-edit rate-display" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(rateVal, 2) + '</a>');
                 rateLink.on('click', function(e) {
                     e.preventDefault();
                     convertToInput(item.costing_pk, 'rate');
@@ -406,7 +468,7 @@ Column Behaviors:
         // Handle blur - convert back to link
         input.on('blur', function() {
             var newVal = parseFloat($(this).val()) || 0;
-            var newLink = $('<a href="#" class="click-to-edit ' + field + '-display" data-item-pk="' + itemPk + '">' + newVal.toFixed(2) + '</a>');
+            var newLink = $('<a href="#" class="click-to-edit ' + field + '-display" data-item-pk="' + itemPk + '">' + Utils.formatNumber(newVal, 2) + '</a>');
             newLink.on('click', function(e) {
                 e.preventDefault();
                 convertToInput(itemPk, field);
@@ -420,7 +482,7 @@ Column Behaviors:
         var input = $('.uncommitted-qty[data-item-pk="' + itemPk + '"]');
         if (input.length) return parseFloat(input.val()) || 0;
         var display = $('.qty-display[data-item-pk="' + itemPk + '"]');
-        if (display.length) return parseFloat(display.text()) || 0;
+        if (display.length) return parseFloat(display.text().replace(/,/g, '')) || 0;
         return 0;
     }
     
@@ -429,7 +491,7 @@ Column Behaviors:
         var input = $('.uncommitted-rate[data-item-pk="' + itemPk + '"]');
         if (input.length) return parseFloat(input.val()) || 0;
         var display = $('.rate-display[data-item-pk="' + itemPk + '"]');
-        if (display.length) return parseFloat(display.text()) || 0;
+        if (display.length) return parseFloat(display.text().replace(/,/g, '')) || 0;
         return 0;
     }
     
@@ -450,6 +512,103 @@ Column Behaviors:
             $('.notes-icon[data-item-pk="' + itemPk + '"]').removeClass('active');
             openRow.remove();
         }
+    }
+    
+    // Toggle category collapse/expand
+    function toggleCategory(categoryName) {
+        var categoryRow = $('tr.category-row[data-category="' + categoryName + '"]');
+        var isCollapsed = categoryRow.hasClass('collapsed');
+        
+        if (isCollapsed) {
+            // Expand: show item rows
+            categoryRow.removeClass('collapsed');
+            $('tr.item-row[data-category="' + categoryName + '"]').removeClass('hidden-by-collapse');
+            // Also show any notes rows for this category
+            $('tr.item-row[data-category="' + categoryName + '"]').each(function() {
+                var itemPk = $(this).attr('data-item-pk');
+                $('#notes-row-' + itemPk).removeClass('hidden-by-collapse');
+            });
+        } else {
+            // Collapse: hide item rows and calculate subtotals
+            categoryRow.addClass('collapsed');
+            $('tr.item-row[data-category="' + categoryName + '"]').addClass('hidden-by-collapse');
+            // Also hide any notes rows for this category
+            $('tr.item-row[data-category="' + categoryName + '"]').each(function() {
+                var itemPk = $(this).attr('data-item-pk');
+                $('#notes-row-' + itemPk).addClass('hidden-by-collapse');
+            });
+            
+            // Calculate and display subtotals
+            updateCategorySubtotals(categoryName);
+        }
+    }
+    
+    // Calculate and update subtotals for a collapsed category
+    function updateCategorySubtotals(categoryName) {
+        var categoryRow = $('tr.category-row[data-category="' + categoryName + '"]');
+        var subtotals = {
+            contract_budget: 0,
+            working_budget: 0,
+            uncommitted: 0,
+            committed: 0,
+            cost_to_complete: 0,
+            billed: 0,
+            fixed_on_site: 0
+        };
+        
+        // Sum up values from item rows in this category
+        $('tr.item-row[data-category="' + categoryName + '"]:not([data-is-internal="true"])').each(function() {
+            var itemPk = $(this).attr('data-item-pk');
+            
+            // Uncommitted
+            var uncommitted = 0;
+            if (isConstruction) {
+                uncommitted = getQtyValue(itemPk) * getRateValue(itemPk);
+            } else {
+                uncommitted = parseFloat($('.uncommitted-amount-input[data-item-pk="' + itemPk + '"]').val()) || 0;
+            }
+            
+            // Committed (from display cell)
+            var committedText = $('.committed-cell[data-item-pk="' + itemPk + '"]').text();
+            var committed = parseFloat(committedText.replace(/[^0-9.-]/g, '')) || 0;
+            
+            // Working budget
+            var workingBudgetText = $('.working-budget-cell[data-item-pk="' + itemPk + '"]').text();
+            var workingBudget = parseFloat(workingBudgetText.replace(/[^0-9.-]/g, '')) || 0;
+            
+            subtotals.uncommitted += uncommitted;
+            subtotals.committed += committed;
+            subtotals.working_budget += workingBudget;
+        });
+        
+        // For non-tender mode, also get contract_budget, cost_to_complete, billed, fixed_on_site from the row text
+        if (!isTender) {
+            $('tr.item-row[data-category="' + categoryName + '"]:not([data-is-internal="true"])').each(function() {
+                var cells = $(this).find('td');
+                // Contract budget is the 3rd cell (index 2) in execution mode
+                var contractBudgetText = cells.eq(2).text();
+                subtotals.contract_budget += parseFloat(contractBudgetText.replace(/[^0-9.-]/g, '')) || 0;
+                
+                // Cost to complete, billed, fixed on site are the last 3 cells
+                var cellCount = cells.length;
+                var costToCompleteText = cells.eq(cellCount - 3).text();
+                var billedText = cells.eq(cellCount - 2).text();
+                var fixedOnSiteText = cells.eq(cellCount - 1).text();
+                
+                subtotals.cost_to_complete += parseFloat(costToCompleteText.replace(/[^0-9.-]/g, '')) || 0;
+                subtotals.billed += parseFloat(billedText.replace(/[^0-9.-]/g, '')) || 0;
+                subtotals.fixed_on_site += parseFloat(fixedOnSiteText.replace(/[^0-9.-]/g, '')) || 0;
+            });
+        }
+        
+        // Update subtotal cells in the category row
+        categoryRow.find('[data-subtotal="contract_budget"]').text(Utils.formatCurrency(subtotals.contract_budget));
+        categoryRow.find('[data-subtotal="working_budget"]').text(Utils.formatCurrency(subtotals.working_budget));
+        categoryRow.find('[data-subtotal="uncommitted"]').text(Utils.formatCurrency(subtotals.uncommitted));
+        categoryRow.find('[data-subtotal="committed"]').text(Utils.formatCurrency(subtotals.committed));
+        categoryRow.find('[data-subtotal="cost_to_complete"]').text(Utils.formatCurrency(subtotals.cost_to_complete));
+        categoryRow.find('[data-subtotal="billed"]').text(Utils.formatCurrency(subtotals.billed));
+        categoryRow.find('[data-subtotal="fixed_on_site"]').text(Utils.formatCurrency(subtotals.fixed_on_site));
     }
     
     // Toggle notes row - inline expansion (only one at a time)

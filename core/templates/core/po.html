@@ -42,10 +42,11 @@
 <script src="{% static 'core/js/utils.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
 
-<!-- Pass project PK and Xero instance PK to JavaScript -->
+<!-- Pass project PK, Xero instance PK, and construction flag to JavaScript -->
 <script>
     window.poProjectPk = '{{ project_pk }}' !== 'None' ? '{{ project_pk }}' : null;
     window.poXeroInstancePk = '{{ xero_instance_pk }}' !== 'None' ? '{{ xero_instance_pk }}' : null;
+    window.poIsConstruction = {{ is_construction|yesno:"true,false" }};
 </script>
 
 <!-- Self-contained PO Section JS -->
@@ -65,13 +66,15 @@ $(document).ready(function() {
     var poStatus = {};
     
     
+    var isConstruction = window.poIsConstruction || false;
+    
     // Initialize AllocationsManager for PO
     AllocationsManager.init({
         sectionId: 'po',
         features: {
             saveRowBtn: false,
             deleteRowBtn: false,
-            constructionMode: false,
+            constructionMode: isConstruction,
             gstField: false,
             confirmDelete: false,
             reloadAfterDelete: false
@@ -180,10 +183,13 @@ $(document).ready(function() {
                         success: function(statusResponse) {
                             poStatus = statusResponse.po_status || {};
                             AllocationsManager.populateMainTable('po', suppliers);
+                            // Initialize sortable table after data loads
+                            Utils.initSortableTable('poMainTable', { tbodyId: 'poMainTableBody' });
                         },
                         error: function() {
                             poStatus = {};
                             AllocationsManager.populateMainTable('po', suppliers);
+                            Utils.initSortableTable('poMainTable', { tbodyId: 'poMainTableBody' });
                         }
                     });
                 }
@@ -220,17 +226,15 @@ $(document).ready(function() {
         editingRow = row;
         row.addClass('po-editing');
         
-        var supplierCell = row.find('.po-supplier-name');
+        // Supplier name is NOT editable - only First Name, Last Name, Email
         var firstNameCell = row.find('.po-first-name');
         var lastNameCell = row.find('.po-last-name');
         var emailCell = row.find('.po-email');
         
-        var supplier = supplierCell.text().trim();
         var firstName = firstNameCell.text().trim().replace(/-/g, '');
         var lastName = lastNameCell.text().trim().replace(/-/g, '');
         var email = emailCell.text().trim().replace('No email', '');
         
-        supplierCell.html('<input type="text" class="form-control form-control-sm po-supplier-input" value="' + Utils.escapeHtml(supplier) + '" style="width: 100%;">');
         firstNameCell.html('<input type="text" class="form-control form-control-sm po-first-name-input" value="' + Utils.escapeHtml(firstName) + '" style="width: 100%;">');
         lastNameCell.html('<input type="text" class="form-control form-control-sm po-last-name-input" value="' + Utils.escapeHtml(lastName) + '" style="width: 100%;">');
         emailCell.html('<input type="text" class="form-control form-control-sm po-email-input" value="' + Utils.escapeHtml(email) + '" style="width: 100%;">');
@@ -269,15 +273,11 @@ $(document).ready(function() {
         var row = button.closest('tr');
         var contactPk = row.attr('data-supplier-pk');
         
-        var supplierName = row.find('.po-supplier-input').val().trim();
+        // Supplier name is not editable, read from original cell text
+        var supplierName = row.find('.po-supplier-name').text().trim();
         var firstName = row.find('.po-first-name-input').val().trim();
         var lastName = row.find('.po-last-name-input').val().trim();
         var email = row.find('.po-email-input').val().trim();
-        
-        if (!supplierName && !firstName && !lastName) {
-            alert('Please provide at least a supplier name or contact name');
-            return;
-        }
         
         var inputs = row.find('input');
         inputs.prop('disabled', true).css('background-color', '#e9ecef');

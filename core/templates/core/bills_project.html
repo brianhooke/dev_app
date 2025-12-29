@@ -230,6 +230,8 @@ $(document).ready(function() {
             billSectionSuppliers = response.suppliers || [];
             console.log('Loaded bills:', (response.bills || []).length);
             console.log('Loaded costing items:', billCostingItems.length);
+            // Initialize sortable table after data loads
+            Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });
         });
     }
     
@@ -350,8 +352,7 @@ $(document).ready(function() {
                 type: 'POST',
                 success: function(response) {
                     if (response.status === 'success') {
-                        row.fadeOut(300, function() {
-                            $(this).remove();
+                        AllocationsManager.showSuccessAndFadeRow(btn, row, function() {
                             $('#billAllocationsTableBody').empty();
                             currentSelectedBill = null;
                             recalculateFooterTotals();
@@ -404,6 +405,8 @@ $(document).ready(function() {
                 if (response.status === 'success') {
                     console.log('Loaded allocated bills:', response.bills.length);
                     populateAllocatedBillsTable(response.bills, response.suppliers);
+                    // Initialize sortable table after data loads
+                    Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });
                 } else {
                     console.error('Error loading allocated bills:', response.message);
                 }
@@ -740,7 +743,9 @@ $(document).ready(function() {
             contentType: 'application/json',
             success: function(response) {
                 if (response.status === 'success') {
-                    removeAllocatedBillRow(row);
+                    AllocationsManager.showSuccessAndFadeRow(btn, row, function() {
+                        removeAllocatedBillRowCleanup();
+                    });
                 } else {
                     btn.prop('disabled', false).text(originalText);
                     alert('Failed to approve bill: ' + response.message);
@@ -750,35 +755,32 @@ $(document).ready(function() {
         });
     }
     
-    // Remove an allocated bill row
-    function removeAllocatedBillRow(row) {
-        row.fadeOut(300, function() {
-            $(this).remove();
-            $('#billAllocationsTableBody').empty();
-            $('#billTotalNet').text('$0.00');
-            $('#billTotalGst').text('$0.00');
-            
-            var totalNet = 0, totalGst = 0;
-            $('#billMainTableBody tr').each(function() {
-                var netText = $(this).find('td:eq(2)').text().replace('$', '').replace(/,/g, '');
-                var gstText = $(this).find('td:eq(3)').text().replace('$', '').replace(/,/g, '');
-                totalNet += parseFloat(netText) || 0;
-                totalGst += parseFloat(gstText) || 0;
-            });
-            $('#billFooterCol3').text('$' + Utils.formatMoney(totalNet));
-            $('#billFooterCol4').text('$' + Utils.formatMoney(totalGst));
-            
-            var firstRow = $('#billMainTableBody tr').first();
-            if (firstRow.length && firstRow.attr('data-bill-pk')) {
-                selectAllocatedBillRow(firstRow);
-            } else {
-                $('#billMainTableBody').html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
-                $('#billMainTableBody').removeClass('has-selection');
-                $('#billPdfViewer').hide();
-                $('#billViewerPlaceholder').show();
-                $('#billMainTableFooter').hide();
-            }
+    // Cleanup after allocated bill row is removed (called from showSuccessAndFadeRow callback)
+    function removeAllocatedBillRowCleanup() {
+        $('#billAllocationsTableBody').empty();
+        $('#billTotalNet').text('$0.00');
+        $('#billTotalGst').text('$0.00');
+        
+        var totalNet = 0, totalGst = 0;
+        $('#billMainTableBody tr').each(function() {
+            var netText = $(this).find('td:eq(2)').text().replace('$', '').replace(/,/g, '');
+            var gstText = $(this).find('td:eq(3)').text().replace('$', '').replace(/,/g, '');
+            totalNet += parseFloat(netText) || 0;
+            totalGst += parseFloat(gstText) || 0;
         });
+        $('#billFooterCol3').text('$' + Utils.formatMoney(totalNet));
+        $('#billFooterCol4').text('$' + Utils.formatMoney(totalGst));
+        
+        var firstRow = $('#billMainTableBody tr').first();
+        if (firstRow.length && firstRow.attr('data-bill-pk')) {
+            selectAllocatedBillRow(firstRow);
+        } else {
+            $('#billMainTableBody').html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
+            $('#billMainTableBody').removeClass('has-selection');
+            $('#billPdfViewer').hide();
+            $('#billViewerPlaceholder').show();
+            $('#billMainTableFooter').hide();
+        }
     }
     
     // Show PO table for bill

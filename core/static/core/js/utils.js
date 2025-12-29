@@ -238,6 +238,137 @@ function getJSONHeaders() {
     };
 }
 
+/**
+ * Initialize sortable table functionality.
+ * Adds click handlers to th.sortable headers to sort table rows.
+ * Safe to call multiple times - removes old handlers before adding new ones.
+ * 
+ * @param {string} tableId - ID of the table element (without #)
+ * @param {Object} options - Optional settings
+ * @param {string} options.tbodyId - ID of tbody if different from default (tableId + 'Body')
+ * @param {Function} options.onSort - Callback after sort completes (columnIndex, direction)
+ */
+function initSortableTable(tableId, options) {
+    var opts = options || {};
+    var table = document.getElementById(tableId);
+    if (!table) {
+        console.warn('initSortableTable: table not found:', tableId);
+        return;
+    }
+    
+    var headers = table.querySelectorAll('thead th.sortable');
+    if (headers.length === 0) {
+        return; // No sortable columns
+    }
+    
+    // Determine tbody - try options.tbodyId, then tableId + 'Body', then first tbody
+    var tbody = opts.tbodyId ? document.getElementById(opts.tbodyId) : 
+                document.getElementById(tableId + 'Body') ||
+                table.querySelector('tbody');
+    
+    if (!tbody) {
+        console.warn('initSortableTable: tbody not found for table:', tableId);
+        return;
+    }
+    
+    // Remove any existing sort handlers to prevent duplicates on re-init
+    headers.forEach(function(header) {
+        // Clone and replace to remove all event listeners
+        var newHeader = header.cloneNode(true);
+        header.parentNode.replaceChild(newHeader, header);
+    });
+    
+    // Re-query headers after replacement
+    headers = table.querySelectorAll('thead th.sortable');
+    
+    headers.forEach(function(header, index) {
+        header.addEventListener('click', function() {
+            var columnIndex = Array.from(header.parentNode.children).indexOf(header);
+            var currentDirection = header.classList.contains('sort-asc') ? 'asc' : 
+                                   header.classList.contains('sort-desc') ? 'desc' : null;
+            var newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+            
+            // Remove sort classes from all headers
+            headers.forEach(function(h) {
+                h.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Add sort class to clicked header
+            header.classList.add('sort-' + newDirection);
+            
+            // Get rows and sort
+            var rows = Array.from(tbody.querySelectorAll('tr:not(.add-contact-row)'));
+            
+            rows.sort(function(a, b) {
+                var cellA = a.children[columnIndex];
+                var cellB = b.children[columnIndex];
+                
+                if (!cellA || !cellB) return 0;
+                
+                var valueA = cellA.textContent.trim();
+                var valueB = cellB.textContent.trim();
+                
+                // Try to parse as number (remove $ and , for currency)
+                var numA = parseFloat(valueA.replace(/[$,]/g, ''));
+                var numB = parseFloat(valueB.replace(/[$,]/g, ''));
+                
+                var comparison;
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    // Numeric sort
+                    comparison = numA - numB;
+                } else {
+                    // String sort (case-insensitive)
+                    comparison = valueA.toLowerCase().localeCompare(valueB.toLowerCase());
+                }
+                
+                return newDirection === 'asc' ? comparison : -comparison;
+            });
+            
+            // Re-append sorted rows
+            rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+            
+            // Call onSort callback if provided
+            if (opts.onSort) {
+                opts.onSort(columnIndex, newDirection);
+            }
+        });
+    });
+    
+    // Automatically add truncation tooltips after sort initialization
+    addTruncationTooltips(tableId);
+}
+
+/**
+ * Add tooltips to table cells that have truncated text.
+ * Automatically detects cells where content overflows and adds title attribute.
+ * Safe to call multiple times - updates tooltips based on current state.
+ * 
+ * @param {string} tableId - ID of the table element (without #)
+ */
+function addTruncationTooltips(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    
+    // Process all td cells in the table
+    table.querySelectorAll('td').forEach(function(cell) {
+        // Skip cells with buttons/inputs (action columns)
+        if (cell.querySelector('button, input, select, a')) {
+            cell.removeAttribute('title');
+            return;
+        }
+        
+        // Check if content is truncated (scrollWidth > clientWidth)
+        if (cell.scrollWidth > cell.clientWidth) {
+            cell.setAttribute('title', cell.textContent.trim());
+        } else {
+            // Remove title if no longer truncated (e.g., after resize)
+            cell.removeAttribute('title');
+        }
+    });
+}
+
 // Expose as Utils namespace object
 window.Utils = {
     getCookie: getCookie,
@@ -252,5 +383,7 @@ window.Utils = {
     recalculateFooterTotals: recalculateFooterTotals,
     formatQty: formatQty,
     getCSRFToken: getCSRFToken,
-    getJSONHeaders: getJSONHeaders
+    getJSONHeaders: getJSONHeaders,
+    initSortableTable: initSortableTable,
+    addTruncationTooltips: addTruncationTooltips
 };

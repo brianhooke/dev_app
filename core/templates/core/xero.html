@@ -1,0 +1,460 @@
+{% load static %}
+
+<!--
+Template: Xero Instance Management (xero.html)
+
+Purpose:
+Provides Xero instance management functionality for the dashboard workspace.
+Xero instances are displayed inline in #xeroSection using allocations_layout.html.
+
+Components:
+1. Add New Xero Instance Modal (#addXeroInstanceModal)
+   - Form fields: Xero Name, Client ID, Client Secret
+   - Validation: All fields required
+
+2. Edit Xero Instance Modal (#editXeroInstanceModal)
+   - Pre-populated form for editing existing instances
+   - Client secret optional (leave blank to keep existing)
+
+JavaScript Features:
+- loadXeroInstances() - Fetch and display Xero instances
+- Test Connection, Authorize, Pull Contacts, Pull Accounts handlers
+- Add/Edit/Delete instance handlers
+
+Backend Endpoints Used:
+- GET  /core/get_xero_instances/ - Fetch all instances
+- POST /core/create_xero_instance/ - Create new instance
+- POST /core/update_xero_instance/{pk}/ - Update instance
+- DELETE /core/delete_xero_instance/{pk}/ - Delete instance
+- GET  /core/test_xero_connection/{pk}/ - Test API connection
+- POST /core/pull_xero_contacts/{pk}/ - Sync contacts from Xero
+- POST /core/pull_xero_accounts/{pk}/ - Sync accounts from Xero
+-->
+
+<style>
+/* Ensure Add/Edit modals appear above other modals */
+#addXeroInstanceModal {
+    z-index: 1060 !important;
+}
+#addXeroInstanceModal ~ .modal-backdrop {
+    z-index: 1055 !important;
+}
+#editXeroInstanceModal {
+    z-index: 1060 !important;
+}
+#editXeroInstanceModal ~ .modal-backdrop {
+    z-index: 1055 !important;
+}
+</style>
+
+<!-- Add New Xero Instance Modal -->
+<div class="modal fade" id="addXeroInstanceModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 500px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Add New Xero Instance</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addXeroInstanceForm">
+                    <div class="form-group">
+                        <label for="xeroNameInput">Xero Name</label>
+                        <input type="text" class="form-control" id="xeroNameInput" placeholder="e.g., Mason Build" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="xeroClientIdInput">Xero Client ID</label>
+                        <input type="text" class="form-control" id="xeroClientIdInput" placeholder="e.g., ABC123..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="xeroClientSecretInput">Xero Client Secret</label>
+                        <input type="password" class="form-control" id="xeroClientSecretInput" placeholder="Enter client secret" required>
+                        <small class="form-text text-muted">This will be encrypted and stored securely</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitXeroInstanceBtn">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Xero Instance Modal -->
+<div class="modal fade" id="editXeroInstanceModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document" style="max-width: 500px;">
+        <div class="modal-content" style="border: 3px solid black;">
+            <div class="modal-header" style="text-align: center; background: var(--gradient-primary-45deg);">
+                <h5 class="modal-title">Edit Xero Instance</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editXeroInstanceForm">
+                    <input type="hidden" id="editXeroInstancePk">
+                    <div class="form-group">
+                        <label for="editXeroNameInput">Xero Name</label>
+                        <input type="text" class="form-control" id="editXeroNameInput" placeholder="e.g., Mason Build" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editXeroClientIdInput">Xero Client ID</label>
+                        <input type="text" class="form-control" id="editXeroClientIdInput" placeholder="e.g., ABC123..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editXeroClientSecretInput">Xero Client Secret</label>
+                        <input type="password" class="form-control" id="editXeroClientSecretInput" placeholder="Leave blank to keep current secret">
+                        <small class="form-text text-muted">Leave blank to keep existing secret, or enter new secret to update</small>
+                    </div>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Note:</strong> If you update credentials, you'll need to click "Authorise" again to re-authenticate with Xero.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitEditXeroInstanceBtn">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // ============================================
+    // LOAD XERO INSTANCES FUNCTION
+    // ============================================
+    window.loadXeroInstances = function() {
+        const tbody = $('#xeroMainTableBody');
+        
+        fetch('/core/get_xero_instances/')
+            .then(response => response.json())
+            .then(instances => {
+                tbody.empty();
+                
+                if (instances.length === 0) {
+                    tbody.html(`<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>`);
+                } else {
+                    instances.forEach(instance => {
+                        const row = $(`<tr data-instance-pk="${instance.xero_instance_pk}"></tr>`);
+                        row.data('instance', instance);
+                        
+                        row.append(`
+                            <td>${Utils.escapeHtml(instance.xero_name)}</td>
+                            <td class="col-action-first">
+                                <button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Test</button>
+                            </td>
+                            <td class="col-action">
+                                <button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Authorise</button>
+                            </td>
+                            <td class="col-action">
+                                <button class="btn btn-sm btn-secondary pull-contacts-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Pull</button>
+                            </td>
+                            <td class="col-action">
+                                <button class="btn btn-sm btn-secondary pull-accounts-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Pull</button>
+                            </td>
+                            <td class="col-action">
+                                <button class="btn btn-sm btn-warning edit-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}" data-client-id="${Utils.escapeHtml(instance.xero_client_id)}">Edit</button>
+                            </td>
+                            <td class="col-action">
+                                <button class="btn btn-sm btn-danger delete-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}"><i class="fas fa-times"></i></button>
+                            </td>
+                        `);
+                        
+                        tbody.append(row);
+                    });
+                }
+                
+                // Initialize sortable table after data loads
+                Utils.initSortableTable('xeroMainTable', { tbodyId: 'xeroMainTableBody' });
+            })
+            .catch(error => {
+                console.error('Error loading Xero instances:', error);
+                tbody.html(`<tr><td colspan="7" style="text-align: center; color: red;">Error loading Xero instances</td></tr>`);
+            });
+    };
+    
+    // ============================================
+    // TEST XERO CONNECTION
+    // ============================================
+    $(document).on('click', '.test-xero-btn', function() {
+        const button = $(this);
+        const instancePk = button.data('instance-pk');
+        const instanceName = button.data('instance-name');
+        const row = button.closest('tr');
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/core/test_xero_connection/${instancePk}/`, { method: 'GET' })
+            .then(response => response.json().then(data => ({status: response.status, body: data})))
+            .then(({status, body}) => {
+                if (status === 401 && body.needs_auth) {
+                    button.prop('disabled', false).html('Test');
+                    if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                        window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                    }
+                    return;
+                }
+                
+                if (body.status === 'success') {
+                    button.removeClass('btn-primary').addClass('btn-success');
+                    button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                    if (body.details && body.details.xero_org_name) {
+                        row.find('td:first').text(body.details.xero_org_name);
+                    }
+                } else {
+                    button.prop('disabled', false).html('Test');
+                    alert(`✗ Test Failed\n\n${body.message}`);
+                }
+            })
+            .catch(error => {
+                button.prop('disabled', false).html('Test');
+                console.error('Error testing Xero connection:', error);
+                alert('✗ Test Failed\n\nFailed to connect to server');
+            });
+    });
+    
+    // ============================================
+    // AUTHORIZE XERO INSTANCE
+    // ============================================
+    $(document).on('click', '.authorize-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        
+        if (confirm(`Authorize "${instanceName}" with Xero?\n\nThis will redirect you to Xero to grant permissions.`)) {
+            window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+        }
+    });
+    
+    // ============================================
+    // PULL CONTACTS
+    // ============================================
+    $(document).on('click', '.pull-contacts-btn', function() {
+        const button = $(this);
+        const instancePk = button.data('instance-pk');
+        const instanceName = button.data('instance-name');
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/core/pull_xero_contacts/${instancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders()
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Pull');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                button.removeClass('btn-secondary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                const details = body.details;
+                alert(`✓ Contacts synced for "${instanceName}"\n\nNew: ${details.new_contacts_added}\nUpdated: ${details.contacts_updated}\nUnchanged: ${details.contacts_unchanged}`);
+                setTimeout(() => {
+                    button.removeClass('btn-success').addClass('btn-secondary').html('Pull');
+                }, 3000);
+            } else {
+                button.prop('disabled', false).html('Pull');
+                alert(`✗ Failed to pull contacts\n\n${body.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('Pull');
+            console.error('Error pulling contacts:', error);
+            alert('✗ Failed to pull contacts\n\nConnection error');
+        });
+    });
+    
+    // ============================================
+    // PULL ACCOUNTS
+    // ============================================
+    $(document).on('click', '.pull-accounts-btn', function() {
+        const button = $(this);
+        const instancePk = button.data('instance-pk');
+        const instanceName = button.data('instance-name');
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/core/pull_xero_accounts/${instancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders()
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Pull');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                button.removeClass('btn-secondary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                alert(`✓ Accounts synced for "${instanceName}"\n\nNew: ${body.accounts_added}\nUpdated: ${body.accounts_updated}\nUnchanged: ${body.accounts_unchanged}`);
+                setTimeout(() => {
+                    button.removeClass('btn-success').addClass('btn-secondary').html('Pull');
+                }, 3000);
+            } else {
+                button.prop('disabled', false).html('Pull');
+                alert(`✗ Failed to pull accounts\n\n${body.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('Pull');
+            console.error('Error pulling accounts:', error);
+            alert('✗ Failed to pull accounts\n\nConnection error');
+        });
+    });
+    
+    // ============================================
+    // DELETE XERO INSTANCE
+    // ============================================
+    $(document).on('click', '.delete-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        
+        if (!confirm(`Are you sure you want to delete "${instanceName}"?`)) {
+            return;
+        }
+        
+        fetch(`/core/delete_xero_instance/${instancePk}/`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message);
+                loadXeroInstances();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting Xero instance:', error);
+            alert('Failed to delete Xero instance');
+        });
+    });
+    
+    // ============================================
+    // ADD NEW XERO INSTANCE
+    // ============================================
+    $(document).on('click', '#addNewXeroBtn', function() {
+        $('#xeroNameInput').val('');
+        $('#xeroClientIdInput').val('');
+        $('#xeroClientSecretInput').val('');
+        $('#addXeroInstanceModal').modal('show');
+        setTimeout(() => {
+            $('.modal-backdrop').last().css('z-index', 1055);
+            $('#xeroNameInput').focus();
+        }, 100);
+    });
+    
+    $(document).on('click', '#submitXeroInstanceBtn', function() {
+        const xeroName = $('#xeroNameInput').val().trim();
+        const xeroClientId = $('#xeroClientIdInput').val().trim();
+        const xeroClientSecret = $('#xeroClientSecretInput').val().trim();
+        
+        if (!xeroName || !xeroClientId || !xeroClientSecret) {
+            alert('Please fill in all fields');
+            return;
+        }
+        
+        fetch('/core/create_xero_instance/', {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify({
+                xero_name: xeroName,
+                xero_client_id: xeroClientId,
+                xero_client_secret: xeroClientSecret
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Xero instance added successfully');
+                $('#addXeroInstanceModal').modal('hide');
+                loadXeroInstances();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error creating Xero instance:', error);
+            alert('Failed to create Xero instance');
+        });
+    });
+    
+    // ============================================
+    // EDIT XERO INSTANCE
+    // ============================================
+    $(document).on('click', '.edit-xero-btn', function() {
+        const instancePk = $(this).data('instance-pk');
+        const instanceName = $(this).data('instance-name');
+        const clientId = $(this).data('client-id');
+        
+        $('#editXeroInstancePk').val(instancePk);
+        $('#editXeroNameInput').val(instanceName);
+        $('#editXeroClientIdInput').val(clientId);
+        $('#editXeroClientSecretInput').val('');
+        
+        $('#editXeroInstanceModal').modal('show');
+        setTimeout(() => {
+            $('.modal-backdrop').last().css('z-index', 1055);
+        }, 100);
+    });
+    
+    $(document).on('click', '#submitEditXeroInstanceBtn', function() {
+        const instancePk = $('#editXeroInstancePk').val();
+        const xeroName = $('#editXeroNameInput').val().trim();
+        const xeroClientId = $('#editXeroClientIdInput').val().trim();
+        const xeroClientSecret = $('#editXeroClientSecretInput').val().trim();
+        
+        if (!xeroName || !xeroClientId) {
+            alert('Xero Name and Client ID are required');
+            return;
+        }
+        
+        const payload = {
+            xero_name: xeroName,
+            xero_client_id: xeroClientId
+        };
+        if (xeroClientSecret) {
+            payload.xero_client_secret = xeroClientSecret;
+        }
+        
+        fetch(`/core/update_xero_instance/${instancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders(),
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                let message = 'Xero instance updated successfully';
+                if (data.xero_instance && data.xero_instance.needs_reauth) {
+                    message += '\n\nCredentials were changed. Please click "Authorise" again to re-authenticate with Xero.';
+                }
+                alert(message);
+                $('#editXeroInstanceModal').modal('hide');
+                loadXeroInstances();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating Xero instance:', error);
+            alert('Failed to update Xero instance');
+        });
+    });
+});
+</script>

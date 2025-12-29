@@ -1,0 +1,265 @@
+<!-- Bills Global Approvals Section -->
+<!-- Uses allocations_layout.html with read-only allocations -->
+{% load static %}
+
+{% include "core/components/allocations_layout.html" with section_id="billsApprovals" main_table_columns=main_table_columns allocations_columns=allocations_columns hide_allocations=False viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
+
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
+
+<!-- Bills Approvals Section JS -->
+<script>
+(function() {
+    'use strict';
+    
+    // Wait for DOM and ensure we have the table
+    if ($('#billsApprovalsMainTableBody').length === 0) {
+        console.log('Bills Approvals section: Table not found, skipping init');
+        return;
+    }
+    
+    console.log('Bills Approvals section: Self-initializing...');
+    
+    // Initialize AllocationsManager for Bills Approvals
+    AllocationsManager.init({
+        sectionId: 'billsApprovals',
+        features: {
+            saveRowBtn: false,
+            deleteRowBtn: false,
+            constructionMode: false,
+            gstField: true,
+            confirmDelete: false,
+            reloadAfterDelete: false,
+            showSaveButton: false,
+            alwaysShowAddButton: false
+        },
+        data: {
+            pkField: 'bill_pk'
+        },
+        mainTable: {
+            emptyMessage: 'No approved bills waiting to be sent to Xero.',
+            showFooter: false,
+            renderRow: function(bill, index, cfg) {
+                var pdfUrl = bill.pdf_url || '';
+                var row = $('<tr>')
+                    .attr('data-pk', bill.bill_pk)
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .attr('data-pdf-url', pdfUrl);
+                
+                // 1. Project
+                var projectName = bill.project_name || '-';
+                row.append($('<td>').attr('title', projectName).text(projectName));
+                
+                // 2. Xero Instance
+                var xeroInstanceName = bill.xero_instance_name || '-';
+                row.append($('<td>').attr('title', xeroInstanceName).text(xeroInstanceName));
+                
+                // 3. Xero Account
+                row.append($('<td>').text(bill.xero_account_name || '-'));
+                
+                // 4. Supplier
+                var supplierName = bill.supplier_name || '-';
+                row.append($('<td>').attr('title', supplierName).text(supplierName));
+                
+                // 5. $ Gross
+                row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
+                
+                // 6. $ Net
+                row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
+                
+                // 7. $ GST
+                row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
+                
+                // 8. Send to Xero button
+                var sendBtn = $('<button>')
+                    .addClass('btn btn-sm btn-success approvals-send-btn')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .text('Send');
+                row.append($('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn));
+                
+                // 9. Return to Project button
+                var returnBtn = $('<button>')
+                    .addClass('btn btn-sm btn-warning approvals-return-btn')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .html('<i class="fas fa-undo"></i>')
+                    .attr('title', 'Return to Project');
+                row.append($('<td>').addClass('col-action').css('text-align', 'center').append(returnBtn));
+                
+                return row;
+            },
+            onRowSelect: function(row, pk, cfg) {
+                console.log('Approvals bill row selected:', pk);
+                window.currentSelectedBillPk = pk;
+                
+                // Find full bill data
+                var bill = window.billsApprovalsData.find(function(b) {
+                    return b.bill_pk === parseInt(pk);
+                });
+                window.currentBillData = bill;
+                
+                // Load allocations for this bill (read-only)
+                loadBillAllocations(bill);
+            }
+        },
+        allocations: {
+            editable: false,
+            showStillToAllocate: false,
+            columnWidths: ['30%', '20%', '20%', '30%']
+        },
+        api: {},
+        callbacks: {}
+    });
+    
+    // Load bill allocations (read-only display)
+    function loadBillAllocations(bill) {
+        var allocationsTableBody = $('#billsApprovalsAllocationsTableBody');
+        allocationsTableBody.empty();
+        
+        if (bill && bill.allocations && bill.allocations.length > 0) {
+            bill.allocations.forEach(function(alloc) {
+                var row = $('<tr>');
+                
+                // 1. Costing Item (30%)
+                row.append($('<td>').text(alloc.costing_name || '-'));
+                
+                // 2. $ Net (20%)
+                row.append($('<td>').text('$' + Utils.formatMoney(alloc.amount)));
+                
+                // 3. $ GST (20%)
+                row.append($('<td>').text('$' + Utils.formatMoney(alloc.gst_amount)));
+                
+                // 4. Notes (30%)
+                row.append($('<td>').text(alloc.notes || ''));
+                
+                allocationsTableBody.append(row);
+            });
+        }
+        
+        // Hide allocations footer (not needed for approvals)
+        $('#billsApprovalsAllocationsFooter').hide();
+        
+        // Apply column widths for proper alignment (tbody uses display:block for scrolling)
+        Utils.applyColumnStyles('billsApprovals', ['30%', '20%', '20%', '30%'], { addEditableClass: false });
+    }
+    
+    // Load Approved Bills data
+    window.loadApprovedBills = function() {
+        console.log('Loading Bills Approvals...');
+        
+        $.ajax({
+            url: '{% url "core:get_approved_bills" %}',
+            type: 'GET',
+            success: function(response) {
+                console.log('Approved bills loaded:', response);
+                
+                // Store data globally
+                window.billsApprovalsData = response.bills;
+                
+                // Populate table
+                AllocationsManager.populateMainTable('billsApprovals', response.bills);
+                
+                // Add truncation tooltips
+                Utils.addTruncationTooltips('billsApprovalsMainTable');
+                
+                // Bind event handlers
+                bindApprovalsEventHandlers();
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load approved bills:', error);
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-danger">Failed to load bills</td></tr>');
+            }
+        });
+    };
+    
+    // Bind event handlers for Approvals mode
+    function bindApprovalsEventHandlers() {
+        var ns = '.billsApprovals';
+        
+        // Unbind previous handlers
+        $(document).off(ns);
+        
+        // Send to Xero button
+        $(document).on('click' + ns, '.approvals-send-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var button = $(this);
+            var billPk = button.attr('data-bill-pk');
+            var row = button.closest('tr');
+            
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            // TODO: Implement actual Xero send logic
+            $.ajax({
+                url: '/core/send_bill_to_xero/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify({ bill_pk: billPk }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                            if (window.currentSelectedBillPk == billPk) {
+                                $('#billsApprovalsAllocationsTableBody').empty();
+                                $('#billsApprovalsPdfViewer').hide();
+                                $('#billsApprovalsViewerPlaceholder').show();
+                                window.currentSelectedBillPk = null;
+                                window.currentBillData = null;
+                            }
+                        });
+                    } else {
+                        alert('Error: ' + response.message);
+                        button.prop('disabled', false).text('Send');
+                    }
+                },
+                error: function() {
+                    alert('Failed to send to Xero. Please try again.');
+                    button.prop('disabled', false).text('Send');
+                }
+            });
+        });
+        
+        // Return to Project button
+        $(document).on('click' + ns, '.approvals-return-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var button = $(this);
+            var billPk = button.attr('data-bill-pk');
+            var row = button.closest('tr');
+            
+            if (confirm('Return this bill to the project?')) {
+                button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                
+                $.ajax({
+                    url: '{% url "core:return_bill_to_project" invoice_id=0 %}'.replace('0', billPk),
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    success: function(response) {
+                        AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                            if (window.currentSelectedBillPk == billPk) {
+                                $('#billsApprovalsAllocationsTableBody').empty();
+                                $('#billsApprovalsPdfViewer').hide();
+                                $('#billsApprovalsViewerPlaceholder').show();
+                                window.currentSelectedBillPk = null;
+                                window.currentBillData = null;
+                            }
+                            
+                            // Check if table is now empty
+                            if ($('#billsApprovalsMainTableBody tr').length === 0) {
+                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                            }
+                        });
+                    },
+                    error: function(xhr) {
+                        alert('Failed to return bill: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                        button.prop('disabled', false).html('<i class="fas fa-undo"></i>');
+                    }
+                });
+            }
+        });
+    }
+    
+})();
+</script>

@@ -1,0 +1,179 @@
+<!-- Bills Global Buttons and Layout -->
+<!-- Contains navigation buttons and content containers - uses allocations_layout for content -->
+
+<!-- Bills Section Container (hidden initially, shown when Bills clicked) -->
+<div id="billsGlobalSection" style="display: none; height: 100%; flex-direction: column;">
+    <!-- Bills navigation buttons -->
+    <div id="billsNavButtons" style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-primary bills-nav-btn" id="billsInboxBtn" data-mode="inbox">Inbox</button>
+        <button class="btn btn-outline-primary bills-nav-btn" id="billsDirectBtn" data-mode="direct">Direct</button>
+        <button class="btn btn-outline-primary bills-nav-btn" id="billsApprovalsBtn" data-mode="approvals">Approvals</button>
+    </div>
+    
+    <!-- Content area - loaded via AJAX -->
+    <div id="billsContentArea" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <!-- Content will be loaded via AJAX from bills_global_inbox/direct/approvals.html -->
+        <div class="text-center p-4">
+            <i class="fas fa-spinner fa-spin"></i> Loading...
+        </div>
+    </div>
+</div>
+
+<!-- Bills Global Button Switching Logic -->
+<script>
+$(document).ready(function() {
+    // Global variables for bills state
+    window.currentBillData = null;
+    window.currentSelectedBillPk = null;
+    window.currentBillsModalType = null;
+    window.billsContentLoaded = { inbox: false, direct: false, approvals: false };
+    
+    // Helper function to reset ALL bills navigation buttons
+    window.resetAllBillsNavButtons = function() {
+        $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+        $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+        $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+    };
+    
+    // Load bills content via AJAX
+    function loadBillsContent(mode) {
+        var url = '';
+        if (mode === 'inbox') {
+            url = '{% url "core:bills_global_inbox" %}';
+        } else if (mode === 'direct') {
+            url = '{% url "core:bills_global_direct" %}';
+        } else if (mode === 'approvals') {
+            url = '{% url "core:bills_global_approvals" %}';
+        }
+        
+        // Show loading indicator
+        $('#billsContentArea').html('<div class="text-center p-4"><i class="fas fa-spinner fa-spin"></i> Loading...</div>');
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(html) {
+                $('#billsContentArea').html(html);
+                window.billsContentLoaded[mode] = true;
+                window.currentBillsModalType = mode;
+                
+                // Trigger data load after template is inserted
+                setTimeout(function() {
+                    if (mode === 'inbox' && typeof window.loadBillsInbox === 'function') {
+                        window.loadBillsInbox();
+                    } else if (mode === 'direct' && typeof window.loadBillsDirect === 'function') {
+                        window.loadBillsDirect();
+                    } else if (mode === 'approvals' && typeof window.loadApprovedBills === 'function') {
+                        window.loadApprovedBills();
+                    }
+                }, 100);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load bills content:', error);
+                $('#billsContentArea').html('<p class="text-danger text-center p-4">Failed to load content</p>');
+            }
+        });
+    }
+    
+    // Handle main Bills navbar link click - shows Bills section with Inbox selected by default
+    $('#billsLink').click(function(e) {
+        e.preventDefault();
+        
+        // Remove active class from all nav items and set this one
+        $('.reusable-navbar a').removeClass('active');
+        $(this).addClass('active');
+        
+        // Reset tender view state
+        if (typeof window.resetTenderViewState === 'function') {
+            window.resetTenderViewState();
+        }
+        
+        // Hide all sections using universal function
+        if (typeof window.hideAllSections === 'function') {
+            window.hideAllSections();
+        }
+        
+        // Show Bills section and add has-content class to hide background
+        $('#billsGlobalSection').css('display', 'flex').show();
+        $('#dynamicContentArea').addClass('has-content');
+        
+        // Update button states - Inbox active
+        window.resetAllBillsNavButtons();
+        $('#billsInboxBtn').removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        // Load Inbox content
+        loadBillsContent('inbox');
+        
+        // Scroll to top
+        $('html, body').animate({ scrollTop: 0 }, 300);
+    });
+    
+    // Handle Inbox button click
+    $('#billsInboxBtn').click(function(e) {
+        e.preventDefault();
+        
+        window.resetAllBillsNavButtons();
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        loadBillsContent('inbox');
+    });
+    
+    // Handle Direct button click
+    $('#billsDirectBtn').click(function(e) {
+        e.preventDefault();
+        
+        window.resetAllBillsNavButtons();
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        loadBillsContent('direct');
+    });
+    
+    // Handle Approvals button click
+    $('#billsApprovalsBtn').click(function(e) {
+        e.preventDefault();
+        
+        window.resetAllBillsNavButtons();
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        
+        loadBillsContent('approvals');
+    });
+    
+    // Add click handler for email links (delegated for dynamic content)
+    $(document).on('click', '.email-link', function(e) {
+        e.preventDefault();
+        var emailHtml = $(this).attr('data-email-html');
+        var emailText = $(this).attr('data-email-text');
+        var emailSubject = $(this).attr('data-email-subject');
+        var emailFrom = $(this).attr('data-email-from');
+        
+        // Create HTML content with email header
+        var emailContent = '<div style="padding: 20px; font-family: Arial, sans-serif;">';
+        emailContent += '<div style="border-bottom: 2px solid #ddd; margin-bottom: 20px; padding-bottom: 10px;">';
+        emailContent += '<p style="margin: 5px 0;"><strong>From:</strong> ' + emailFrom + '</p>';
+        emailContent += '<p style="margin: 5px 0;"><strong>Subject:</strong> ' + emailSubject + '</p>';
+        emailContent += '</div>';
+        
+        if (emailHtml) {
+            emailContent += emailHtml;
+        } else if (emailText) {
+            emailContent += '<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">' + emailText + '</pre>';
+        } else {
+            emailContent += '<p><em>No email content available</em></p>';
+        }
+        emailContent += '</div>';
+        
+        // Create a blob URL for the HTML content
+        var blob = new Blob([emailContent], { type: 'text/html' });
+        var blobUrl = URL.createObjectURL(blob);
+        
+        // Find the PDF viewer in the current section (dynamic based on loaded content)
+        var pdfViewer = $('#billsContentArea').find('iframe[id$="PdfViewer"]');
+        var placeholder = $('#billsContentArea').find('[id$="ViewerPlaceholder"]');
+        
+        if (pdfViewer.length) {
+            pdfViewer.attr('src', blobUrl).show();
+            placeholder.hide();
+        }
+    });
+});
+</script>

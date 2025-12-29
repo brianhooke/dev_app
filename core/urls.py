@@ -2,24 +2,33 @@ from django.urls import path
 from django.views.generic import RedirectView
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, send_po_email_view, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
-from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance, create_bill_allocation, update_bill_allocation, delete_bill_allocation, update_bill, null_allocation_xero_fields, get_approved_bills, return_bill_to_project
+from .views.bills import get_bills_list, archive_bill, return_to_inbox, pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance, create_bill_allocation, update_bill_allocation, delete_bill_allocation, update_bill, null_allocation_xero_fields, get_approved_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
+from .views.bills_global import bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, send_bill_direct, return_bill_to_project
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
-from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation
-from .views.contract_budget import update_uncommitted, get_project_committed_amounts
+from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
+from .views.contract_budget import contract_budget_view, update_uncommitted, get_project_committed_amounts
+from .views.hc_variations import (
+    hc_variations_view, get_hc_variations, get_hc_variation_allocations,
+    save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
+    delete_hc_variation_allocation
+)
 from .views.pos import get_quotes_by_supplier, po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file
 from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
+from .views.contacts import (
+    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
+    create_contact, update_contact_details, update_contact_status
+)
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
-    dashboard_view, verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
-    create_contact, update_contact_details, update_contact_status, send_bill,
+    dashboard_view, send_bill,
     get_project_categories, get_project_items, create_category as dashboard_create_category,
     create_item as dashboard_create_item, reorder_category, reorder_item,
     download_items_csv_template, upload_items_csv, generate_po_html, get_po_status,
@@ -135,6 +144,9 @@ urlpatterns = [
     
     # Bills section
     path('bills/', bills_view, name='bills'),
+    path('bills/inbox/', bills_global_inbox_view, name='bills_global_inbox'),
+    path('bills/direct/', bills_global_direct_view, name='bills_global_direct'),
+    path('bills/approvals/', bills_global_approvals_view, name='bills_global_approvals'),
     path('get_project_bills/<int:project_pk>/', get_project_bills, name='get_project_bills'),
     path('get_allocated_bills/<int:project_pk>/', get_allocated_bills, name='get_allocated_bills'),
     path('get_unallocated_bill_allocations/<int:bill_pk>/', get_unallocated_bill_allocations, name='get_unallocated_bill_allocations'),
@@ -153,9 +165,22 @@ urlpatterns = [
     path('create_quote_allocation/', create_quote_allocation, name='create_quote_allocation'),
     path('update_quote_allocation/<int:allocation_pk>/', update_quote_allocation, name='update_quote_allocation'),
     path('delete_quote_allocation/<int:allocation_pk>/', delete_quote_allocation, name='delete_quote_allocation'),
+    path('save_quote_allocations/', save_quote_allocations, name='save_quote_allocations'),
     
     # PO section (reusable template)
     path('po/', po_view, name='po'),
+    
+    # Contract Budget section (reusable template)
+    path('contract_budget/', contract_budget_view, name='contract_budget'),
+    
+    # HC Variations section (reusable template)
+    path('hc_variations/', hc_variations_view, name='hc_variations'),
+    path('get_hc_variations/<int:project_pk>/', get_hc_variations, name='get_hc_variations'),
+    path('get_hc_variation_allocations/<int:variation_pk>/', get_hc_variation_allocations, name='get_hc_variation_allocations'),
+    path('save_hc_variation/', save_hc_variation, name='save_hc_variation'),
+    path('delete_hc_variation/', delete_hc_variation, name='delete_hc_variation'),
+    path('update_hc_variation_allocation/<int:allocation_pk>/', update_hc_variation_allocation, name='update_hc_variation_allocation'),
+    path('delete_hc_variation_allocation/<int:allocation_pk>/', delete_hc_variation_allocation, name='delete_hc_variation_allocation'),
     
     # Document management endpoints
     path('get_project_folders/<int:project_pk>/', get_project_folders, name='get_project_folders'),
@@ -179,6 +204,7 @@ urlpatterns = [
     path('update_contact_status/<int:instance_pk>/<int:contact_pk>/', update_contact_status, name='update_contact_status'),
     path('verify_contact_details/<int:contact_pk>/', verify_contact_details, name='verify_contact_details'),
     path('send_bill/', send_bill, name='send_bill'),
+    path('send_bill_direct/', send_bill_direct, name='send_bill_direct'),
     path('send_po_email/<int:project_pk>/<int:supplier_pk>/', dashboard_send_po_email, name='dashboard_send_po_email'),
     path('download_po_pdf/<int:project_pk>/<int:supplier_pk>/', download_po_pdf, name='download_po_pdf'),
     path('preview_po/<int:project_pk>/<int:supplier_pk>/', preview_po, name='preview_po'),

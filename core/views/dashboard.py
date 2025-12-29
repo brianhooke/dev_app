@@ -229,7 +229,7 @@ def send_bill(request):
             }, status=400)
         
         # Get allocations for this invoice
-        allocations = Bill_allocations.objects.filter(bill_pk=invoice).select_related('xero_account')
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account')
         
         # Check if allocations exist - this determines the workflow
         if allocations.exists():

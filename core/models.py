@@ -465,11 +465,12 @@ class HC_claim_allocations(models.Model):
 class Hc_variation(models.Model):
     hc_variation_pk = models.AutoField(primary_key=True)
     date = models.DateField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
     def __str__(self):
-        return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date}"
+        return f"HC Variation PK: {self.hc_variation_pk} - Date: {self.date} - Amount: {self.amount}"
 
 # SERVICE: invoices (variations)
 class Hc_variation_allocations(models.Model):

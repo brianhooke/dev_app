@@ -1,3 +1,4 @@
+{% load static %}
 {% comment %}
 Reusable Allocations Section Template
 =====================================
@@ -18,10 +19,11 @@ Optional context variables:
 - readonly: If True, hides Add Row button and shows "Total Allocated" instead of "Still to Allocate"
 - allocations_footer_label: Custom label for footer (default: "Still to Allocate:" or "Total Allocated:" if readonly)
 - hide_allocations: If True, hides the entire allocations section (for sections like POs that don't need allocations)
+- hide_viewer: If True, hides the right-side PDF viewer (for sections like Contacts that don't need a viewer)
 {% endcomment %}
 
-<!-- Include shared table styles (styles only, no HTML structure) -->
-{% include "core/components/data_table_styles.html" %}
+<!-- Include shared table styles -->
+<link rel="stylesheet" href="{% static 'core/css/data_table_styles.css' %}">
 
 <style>
     /* ========================================
@@ -63,6 +65,24 @@ Optional context variables:
     #{{ section_id }}TableContainer::-webkit-scrollbar-thumb:hover,
     #{{ section_id }}AllocationsTableBody::-webkit-scrollbar-thumb:hover {
         background: var(--color-text-muted);
+    }
+    
+    /* Main table - fixed layout to respect column widths */
+    #{{ section_id }}MainTable {
+        table-layout: fixed;
+        width: 100%;
+    }
+    
+    /* Main table sticky header */
+    #{{ section_id }}MainTable thead {
+        position: sticky;
+        top: 0;
+        z-index: 11;
+        background: var(--color-bg-default, #fff);
+    }
+    
+    #{{ section_id }}MainTable thead th {
+        background: var(--color-bg-default, #fff);
     }
     
     /* Main table sticky footer - inherits from data_table_styles.html */
@@ -136,6 +156,12 @@ Optional context variables:
 
     /* Allocations Table uses .reusable-table class for base styling */
     
+    /* Main table - ensure col-action-first border shows */
+    #{{ section_id }}MainTable thead th.col-action-first,
+    #{{ section_id }}MainTable tbody td.col-action-first {
+        border-left: 1px solid #dee2e6;
+    }
+    
     /* Allocations table - consistent layout for thead and tbody */
     #{{ section_id }}AllocationsTable {
         table-layout: fixed;
@@ -163,13 +189,13 @@ Optional context variables:
     #{{ section_id }}AllocationsTable tbody {
         display: block;
         width: 100%;
-        overflow-y: auto;
+        overflow-y: scroll;
         max-height: 168px;
     }
     
     #{{ section_id }}AllocationsTable tbody tr {
         display: table;
-        width: 100%;
+        width: calc(100% - 8px);
         table-layout: fixed;
     }
     
@@ -267,18 +293,41 @@ Optional context variables:
 
 <div class="{{ section_id }}-container" style="height: 100%; display: flex; flex-direction: column;">
     <div style="display: flex; flex: 1; overflow: hidden;">
-        <!-- Left side: Main Table (top 2/3) and Allocations (bottom 1/3) (60%) -->
-        <div class="{{ section_id }}-left-panel" style="width: 60%; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 12px 6px 0;">
+        <!-- Left side: Main Table (top 2/3) and Allocations (bottom 1/3) -->
+        <div class="{{ section_id }}-left-panel" style="width: {% if hide_viewer %}100%{% else %}60%{% endif %}; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px {% if hide_viewer %}0{% else %}12px{% endif %} 6px 0;">
             <!-- Main Table Container -->
-            <div class="{{ section_id }}-table-container reusable-table-container" style="flex: 0 1 auto; display: flex; flex-direction: column; overflow: hidden;">
-                <div id="{{ section_id }}TableContainer" style="flex: 1; overflow-y: auto;">
+            <div class="{{ section_id }}-table-container reusable-table-container" style="flex: 0 0 auto; display: flex; flex-direction: column; overflow: hidden;">
+                <div id="{{ section_id }}TableContainer" style="overflow-y: auto;">
                     <table id="{{ section_id }}MainTable" class="reusable-table">
                         <thead>
+                            {% if has_subheadings %}
+                            <!-- Two-row header for columns with parent groups (e.g., Uncommitted > Qty|Rate|Amount) -->
                             <tr>
                                 {% for col in main_table_columns %}
-                                <th style="width: {{ col.width }};"{% if col.class %} class="{{ col.class }}"{% endif %}>{{ col.header }}</th>
+                                {% if col.parent_header %}
+                                {% if col.is_first_child %}
+                                <th colspan="{{ col.parent_colspan }}" style="text-align: center; vertical-align: middle;">{{ col.parent_header }}</th>
+                                {% endif %}
+                                {% else %}
+                                <th rowspan="2" style="width: {{ col.width }}; vertical-align: middle;" class="{% if col.sortable %}sortable {% endif %}{{ col.class|default:'' }}">{{ col.header }}</th>
+                                {% endif %}
                                 {% endfor %}
                             </tr>
+                            <tr>
+                                {% for col in main_table_columns %}
+                                {% if col.parent_header %}
+                                <th style="width: {{ col.width }};" class="{{ col.class|default:'' }}">{{ col.header }}</th>
+                                {% endif %}
+                                {% endfor %}
+                            </tr>
+                            {% else %}
+                            <!-- Single-row header (standard) -->
+                            <tr>
+                                {% for col in main_table_columns %}
+                                <th style="width: {{ col.width }};" class="{% if col.sortable %}sortable {% endif %}{{ col.class|default:'' }}">{{ col.header }}</th>
+                                {% endfor %}
+                            </tr>
+                            {% endif %}
                         </thead>
                         <tbody id="{{ section_id }}MainTableBody">
                             <!-- Data will be populated here via JavaScript -->
@@ -291,7 +340,7 @@ Optional context variables:
                         <tfoot id="{{ section_id }}MainTableFooter" style="display: none;">
                             <tr style="background: var(--color-bg-muted); font-weight: 600;">
                                 {% for col in main_table_columns %}
-                                <td id="{{ section_id }}FooterCol{{ forloop.counter }}" style="border-top: 2px solid var(--color-border); padding: 4px 8px;"{% if col.class %} class="{{ col.class }}"{% endif %}>{% if forloop.first %}<span id="{{ section_id }}TitleActions" style="margin-left: -8px; display: inline-block;"></span>{% endif %}</td>
+                                <td id="{{ section_id }}FooterCol{{ forloop.counter }}" style="border-top: 2px solid var(--color-border); padding: 4px 8px;"{% if col.class %} class="{{ col.class }}"{% endif %}>{% if forloop.first %}<span id="{{ section_id }}TitleActions" style="display: inline-block;"></span>{% endif %}</td>
                                 {% endfor %}
                             </tr>
                         </tfoot>
@@ -325,7 +374,7 @@ Optional context variables:
                     <!-- DEBUG: allocations_columns count = {{ allocations_columns|length }} -->
                     <div id="{{ section_id }}AllocationsFooter" class="{{ section_id }}-allocations-footer" style="display: flex; align-items: center;">
                         {% for col in allocations_columns %}
-                        <div style="width: {{ col.width }}; padding: 4px 8px;{% if forloop.first %} display: flex; flex-wrap: nowrap; align-items: center; overflow: visible;{% endif %}">
+                        <div style="width: {{ col.width }}; padding: 4px 8px; box-sizing: border-box;{% if forloop.first %} display: flex; flex-wrap: nowrap; align-items: center; overflow: visible;{% endif %}">
                             {% if forloop.first %}
                             <button type="button" class="{{ section_id }}-action-btn" id="{{ section_id }}AddAllocationBtn" style="margin-left: -4px; display: none; flex-shrink: 0;">
                                 <i class="fas fa-plus"></i> Add Row
@@ -348,6 +397,7 @@ Optional context variables:
             {% endif %}
         </div>
         
+        {% if not hide_viewer %}
         <!-- Right side: PDF Viewer (40% - full height) -->
         <div style="width: 40%; display: flex; flex-direction: column; height: 100%; padding: 6px; padding-right: 0;">
             <div id="{{ section_id }}ViewerSection" class="{{ section_id }}-viewer-container" style="flex: 1; display: flex; flex-direction: column;">
@@ -365,5 +415,6 @@ Optional context variables:
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 </div>

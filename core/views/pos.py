@@ -62,26 +62,31 @@ def po_view(request):
     
     Accepts project_pk as query parameter to enable self-contained operation.
     Example: /core/po/?project_pk=123
+    
+    Returns construction-specific columns when project_type == 'construction'.
     """
     project_pk = request.GET.get('project_pk')
     xero_instance_pk = None
+    is_construction = False
     
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
             xero_instance_pk = project.xero_instance_id if project.xero_instance else None
+            is_construction = (project.project_type == 'construction')
         except Projects.DoesNotExist:
             pass
     
     context = {
         'project_pk': project_pk,
         'xero_instance_pk': xero_instance_pk,
+        'is_construction': is_construction,
         'main_table_columns': [
-            {'header': 'Supplier', 'width': '25%'},
-            {'header': 'First Name', 'width': '10%'},
-            {'header': 'Last Name', 'width': '10%'},
-            {'header': 'Email', 'width': '20%'},
-            {'header': 'Amount', 'width': '12%'},
+            {'header': 'Supplier', 'width': '25%', 'sortable': True},
+            {'header': 'First Name', 'width': '10%', 'sortable': True},
+            {'header': 'Last Name', 'width': '10%', 'sortable': True},
+            {'header': 'Email', 'width': '20%', 'sortable': True},
+            {'header': 'Amount', 'width': '12%', 'sortable': True},
             {'header': 'Sent', 'width': '4%', 'class': 'col-action-first'},
             {'header': 'Update', 'width': '12%', 'class': 'col-action'},
             {'header': 'Email', 'width': '7%', 'class': 'col-action'},

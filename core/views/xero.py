@@ -1,6 +1,9 @@
 """
 Xero management views.
 
+Xero Table Configuration:
+- get_xero_config() - Returns column definitions for allocations_layout.html
+
 Helper Functions (exported to contacts.py):
 1. get_xero_auth - Centralized OAuth authentication + tenant ID retrieval
 2. build_xero_headers - Build standard Xero API request headers
@@ -33,6 +36,27 @@ from urllib.parse import urlencode
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def get_xero_config():
+    """
+    Get the configuration for the Xero instances section.
+    Returns a dict with all context variables needed for allocations_layout.html.
+    """
+    return {
+        'section_id': 'xero',
+        'main_table_columns': [
+            {'header': 'Xero Instance', 'width': '37%', 'sortable': True},
+            {'header': 'Test', 'width': '9%', 'class': 'col-action-first'},
+            {'header': 'Authorise', 'width': '9%', 'class': 'col-action'},
+            {'header': 'Pull Contacts', 'width': '9%', 'class': 'col-action'},
+            {'header': 'Pull Accounts', 'width': '9%', 'class': 'col-action'},
+            {'header': 'Edit', 'width': '9%', 'class': 'col-action'},
+            {'header': 'Delete', 'width': '9%', 'class': 'col-action'},
+        ],
+        'hide_viewer': True,
+        'hide_allocations': True,
+    }
 
 
 def get_xero_auth(instance_pk):

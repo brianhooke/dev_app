@@ -15,7 +15,11 @@ Structure:
    - Navigation bar with dropdown menus
 
 2. Included Modal Templates
-   - {% include 'core/bills_global.html' %} - Bills modals (Inbox, Direct)
+   - Bills Section (using allocations_layout pattern):
+     * {% include 'core/bills_global_buttons.html' %} - Navigation buttons, content loaded via AJAX
+     * bills_global_inbox.html - Uses allocations_layout with hide_allocations=True
+     * bills_global_direct.html - Uses allocations_layout with all 3 sections
+     * bills_global_approvals.html - Uses allocations_layout with all 3 sections
    - {% include 'core/contacts.html' %} - Extended contacts modal with verification
    - {% include 'core/xero_modals.html' %} - Xero instance management
 
@@ -179,33 +183,7 @@ Version: v89 (displayed in navbar bottom-left)
             opacity: 0.8 !important;
         }
         
-        /* Force sticky headers for all workspace tables */
-        #contactsSection .reusable-table thead,
-        #xeroSection .reusable-table thead {
-            position: -webkit-sticky !important;
-            position: sticky !important;
-            top: 0 !important;
-            z-index: 1000 !important;
-            background: var(--gradient-primary) !important;
-        }
-        
-        #contactsSection .reusable-table thead tr,
-        #xeroSection .reusable-table thead tr {
-            position: -webkit-sticky !important;
-            position: sticky !important;
-            top: 0 !important;
-            background: var(--gradient-primary) !important;
-            z-index: 1000 !important;
-        }
-        
-        #contactsSection .reusable-table th,
-        #xeroSection .reusable-table th {
-            position: -webkit-sticky !important;
-            position: sticky !important;
-            top: 0 !important;
-            background: var(--gradient-primary) !important;
-            z-index: 1000 !important;
-        }
+        /* Xero section now uses allocations_layout.html (no custom overrides needed) */
         
         /* Navbar active state is already defined in reusable_navbar.html */
         
@@ -500,56 +478,24 @@ Version: v89 (displayed in navbar bottom-left)
     <!-- Xero Section (hidden initially, shown when Xero clicked) -->
     <div id="xeroSection" style="display: none; height: 100%; flex-direction: column;">
         
-        <!-- Xero Instances Table (scrollable) -->
-        <div style="flex: 1; overflow-y: auto; position: relative;">
-            <style>
-                #xeroSection .reusable-table thead {
-                    position: sticky !important;
-                    top: 0 !important;
-                    z-index: 10 !important;
-                }
-                #xeroSection .reusable-table thead tr {
-                    background: var(--gradient-primary) !important;
-                }
-                #xeroSection .reusable-table th {
-                    position: sticky !important;
-                    top: 0 !important;
-                    background: var(--gradient-primary) !important;
-                    z-index: 10 !important;
-                    border-bottom: 2px solid #dee2e6 !important;
-                }
-            </style>
-            <table class="reusable-table" id="xeroInstancesTable">
-                <thead>
-                    <tr>
-                        <th>Xero Instance</th>
-                        <th>Test</th>
-                        <th>Authorise</th>
-                        <th>Pull Contacts</th>
-                        <th>Pull Accounts</th>
-                        <th>Edit</th>
-                        <th>Delete</th>
-                    </tr>
-                </thead>
-                <tbody id="xeroInstancesTableBody">
-                    <!-- Table rows will be populated by JavaScript -->
-                </tbody>
-            </table>
+        <!-- Xero Table using allocations_layout.html -->
+        <div style="flex: 1; overflow: hidden;">
+            {% include 'core/components/allocations_layout.html' with section_id=xero_config.section_id main_table_columns=xero_config.main_table_columns hide_viewer=xero_config.hide_viewer hide_allocations=xero_config.hide_allocations %}
         </div>
         
-        <!-- Footer Button - sticky at bottom -->
-        <div style="display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; padding: 10px 15px; margin-top: auto; background: var(--gradient-primary); border-radius: 0 0 8px 8px;">
-            <button type="button" class="btn btn-light" id="addNewXeroBtn">Add New</button>
+        <!-- Footer Buttons -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; padding: 10px 0;">
+            <button type="button" class="btn btn-light" id="addNewXeroBtn" style="border: 1px solid black;">Add New</button>
         </div>
     </div>
 
     <!-- Contacts Section (hidden initially, shown when Contacts clicked) -->
     <div id="contactsSection" style="display: none; height: 100%; flex-direction: column;">
         
-        <!-- Xero Instance Dropdown -->
-        <div class="form-group" style="margin-bottom: 20px; max-width: 400px; flex-shrink: 0;">
-            <label for="contactsXeroInstanceSelect">Xero Instance:</label>
-            <select class="form-control" id="contactsXeroInstanceSelect">
+        <!-- Xero Instance Dropdown - inline with label -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-shrink: 0;">
+            <label for="contactsXeroInstanceSelect" style="margin: 0; white-space: nowrap; font-weight: bold;">Xero Instance:</label>
+            <select class="form-control" id="contactsXeroInstanceSelect" style="max-width: 300px;">
                 {% for instance in xero_instances %}
                     <option value="{{ instance.xero_instance_pk }}" {% if forloop.first %}selected{% endif %}>
                         {{ instance.xero_name }}
@@ -558,15 +504,15 @@ Version: v89 (displayed in navbar bottom-left)
             </select>
         </div>
         
-        <!-- Contacts Table (scrollable) -->
-        <div style="flex: 1; overflow-y: auto; position: relative;">
-            {% include 'core/components/data_table.html' with columns=contacts_columns rows=contacts_rows show_totals=False %}
+        <!-- Contacts Table using allocations_layout.html -->
+        <div style="flex: 1; overflow: hidden;">
+            {% include 'core/components/allocations_layout.html' with section_id=contacts_config.section_id main_table_columns=contacts_config.main_table_columns hide_viewer=contacts_config.hide_viewer hide_allocations=contacts_config.hide_allocations %}
         </div>
         
-        <!-- Footer Buttons - sticky at bottom -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; padding: 10px 15px; margin-top: auto; background: var(--gradient-primary); border-radius: 0 0 8px 8px;">
-            <button type="button" class="btn btn-light" id="pullXeroContactsBtn">Pull/Update Xero Contacts</button>
-            <button type="button" class="btn btn-light" id="addContactBtn">Add Contact</button>
+        <!-- Footer Buttons -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; padding: 10px 0;">
+            <button type="button" class="btn btn-light" id="pullXeroContactsBtn" style="border: 1px solid black;">Pull/Update Xero Contacts</button>
+            <button type="button" class="btn btn-light" id="addContactBtn" style="border: 1px solid black;">Add Contact</button>
         </div>
     </div>
 
@@ -576,8 +522,8 @@ Version: v89 (displayed in navbar bottom-left)
     <!-- Projects Section -->
     {% include 'core/projects.html' %}
 
-    <!-- Bills Section -->
-    {% include 'core/bills_global.html' %}
+    <!-- Bills Section (Content loaded via AJAX) -->
+    {% include 'core/bills_global_buttons.html' %}
     
     <!-- Settings Section -->
     {% include 'core/settings.html' %}
@@ -588,12 +534,10 @@ Version: v89 (displayed in navbar bottom-left)
 <!-- {% include 'core/components/data_table.html' with columns=table_columns rows=table_rows show_totals=show_totals %} -->
 
 {{ ... }}
-{% include 'core/xero_modals.html' %}
+{% include 'core/xero.html' %}
 {% include 'core/contacts.html' %}
-{% include 'core/components/reusable_bills_modal.html' %}
 
 <script src="{% static 'core/js/utils.js' %}"></script>
-<script src="{% static 'core/js/xero.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
 <script src="{% static 'core/js/documents.js' %}"></script>
 
@@ -934,6 +878,35 @@ Version: v89 (displayed in navbar bottom-left)
             $('#allocationsTableBody').empty();
             $('#billViewer').hide();
             $('#viewerPlaceholder').show();
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Xero controller - shows inline in workspace
+        $('#xeroLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            window.hideAllSections();
+            
+            // Reset tender view state
+            if (typeof window.resetTenderViewState === 'function') {
+                window.resetTenderViewState();
+            }
+            
+            // Show Xero section and add has-content class to hide background
+            $('#xeroSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Load Xero instances
+            if (typeof loadXeroInstances === 'function') {
+                loadXeroInstances();
+            }
             
             // Scroll to top
             $('html, body').animate({ scrollTop: 0 }, 300);

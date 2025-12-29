@@ -1,0 +1,479 @@
+<!-- HC Variations Section Template -->
+<!-- SELF-CONTAINED: All HC variation logic is in this file -->
+{% load static %}
+
+<style>
+    /* Constrain hc variations main table height */
+    .hcVariation-table-container { max-height: 300px; }
+</style>
+
+{% include "core/components/allocations_layout.html" with section_id="hcVariation" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Variation Allocations" viewer_placeholder_text="Select a variation to view details" viewer_placeholder_icon="fas fa-file-invoice-dollar" hide_viewer=False %}
+
+<!-- Load shared utilities and AllocationsManager -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+<script src="{% static 'core/js/allocations_layout.js' %}"></script>
+
+<!-- Pass context to JavaScript -->
+<script>
+    if ('{{ project_pk }}' && '{{ project_pk }}' !== 'None') {
+        window.projectPk = '{{ project_pk }}';
+    }
+    window.hcVariationIsConstruction = {{ is_construction|yesno:"true,false" }};
+</script>
+
+<!-- Self-Contained HC Variations Section JS -->
+<script>
+(function() {
+    'use strict';
+    
+    // Wait for DOM and ensure we have the table
+    if ($('#hcVariationMainTableBody').length === 0) {
+        console.log('HC Variations section: Table not found, skipping init');
+        return;
+    }
+    
+    console.log('HC Variations section: Self-initializing...');
+    
+    // Get project info from various sources
+    var projectPk = window.projectPk || 
+                    (window.currentConstructionProject && window.currentConstructionProject.pk) ||
+                    (window.currentProject && window.currentProject.pk) ||
+                    Utils.getProjectPkFromUrl();
+    
+    var isConstruction = window.hcVariationIsConstruction || false;
+    
+    // State
+    window.currentSelectedVariation = null;
+    window.newVariationMode = false;
+    window.editingVariationPk = null;
+    window.variationsCostingItems = [];
+    
+    // Initialize AllocationsManager
+    AllocationsManager.init({
+        sectionId: 'hcVariation',
+        features: {
+            saveRowBtn: true,
+            deleteRowBtn: true,
+            constructionMode: isConstruction,
+            gstField: false,
+            confirmDelete: true,
+            reloadAfterDelete: false,  // Use onDeleteSuccess callback instead
+            showSaveButton: true,
+            alwaysShowAddButton: false
+        },
+        data: {
+            pkField: 'hc_variation_pk'
+        },
+        mainTable: {
+            emptyMessage: 'No HC variations found. Click "+ New Variation" to create one.',
+            showFooter: true,
+            alwaysShowFooter: true,
+            footerTotals: [{ colIndex: 2, valueKey: 'total_amount' }],
+            renderRow: function(variation, index, cfg) {
+                var row = $('<tr>')
+                    .attr('data-pk', variation.hc_variation_pk)
+                    .attr('data-variation-pk', variation.hc_variation_pk)
+                    .attr('data-total-amount', variation.total_amount || 0);
+                
+                // Date - format as dd-mmm-yy
+                var dateStr = '-';
+                if (variation.date) {
+                    var d = new Date(variation.date);
+                    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    var day = String(d.getDate()).padStart(2, '0');
+                    var month = months[d.getMonth()];
+                    var year = String(d.getFullYear()).slice(-2);
+                    dateStr = day + '-' + month + '-' + year;
+                }
+                row.append($('<td>').text(dateStr));
+                
+                // $ Amount
+                var amount = variation.total_amount ? parseFloat(variation.total_amount) : 0;
+                var amountText = '$' + Utils.formatMoney(amount);
+                row.append($('<td>').text(amountText));
+                
+                // Update button
+                if (cfg.features.saveRowBtn) {
+                    row.append($('<td>').addClass('col-action-first').append(AllocationsManager.createUpdateButton(variation, cfg)));
+                }
+                
+                // Delete button
+                if (cfg.features.deleteRowBtn) {
+                    row.append($('<td>').addClass('col-action').append(AllocationsManager.createDeleteButton(variation, cfg)));
+                }
+                
+                return row;
+            },
+            onRowSelect: function(row, pk, cfg) {
+                console.log('Variation row selected:', pk);
+                if (window.editingVariationPk) {
+                    AllocationsManager.setEditMode('hcVariation', false);
+                }
+                window.editingVariationPk = null;
+                window.currentSelectedVariation = cfg.data.currentItem;
+            }
+        },
+        allocations: {
+            emptyMessage: 'No allocations for this variation.',
+            editable: true,
+            columnWidths: isConstruction 
+                ? ['25%', '8%', '10%', '12%', '15%', '25%', '5%']  // Item, Unit, Qty, Rate, Amount, Notes, Delete
+                : ['40%', '25%', '30%', '5%'],  // Item, Amount, Notes, Delete
+            renderRow: function(allocation, cfg) {
+                return renderVariationAllocationRow(allocation, false);
+            },
+            renderEditableRow: function(allocation, cfg, onChange) {
+                // Use constructionMode from config to ensure it matches the header columns
+                var useConstructionMode = cfg.features.constructionMode;
+                console.log('renderEditableRow - useConstructionMode:', useConstructionMode, 'isConstruction:', isConstruction);
+                return AllocationsManager.createEditableAllocationRow({
+                    sectionId: 'hcVariation',
+                    allocation: allocation,
+                    isConstruction: useConstructionMode,
+                    costingItems: window.variationsCostingItems || [],
+                    onUpdate: function() {
+                        AllocationsManager.updateStillToAllocate('hcVariation');
+                        if (onChange) onChange();
+                    },
+                    api: {
+                        save: '/core/update_hc_variation_allocation/{pk}/',
+                        delete: '/core/delete_hc_variation_allocation/{pk}/'
+                    }
+                });
+            },
+            onUpdate: function(sectionId, data) {
+                var saveBtn = $('#' + sectionId + 'SaveAllocationsBtn');
+                if (saveBtn.length) {
+                    var isValid = Math.abs(data.remainingNet) < 0.01;
+                    saveBtn.prop('disabled', !isValid);
+                    saveBtn.css('opacity', isValid ? '1' : '0.5');
+                }
+            }
+        },
+        api: {
+            loadAllocations: '/core/get_hc_variation_allocations/{pk}/',
+            save: '/core/save_hc_variation/',
+            delete: '/core/delete_hc_variation/'
+        },
+        callbacks: {
+            onUpdate: function(item, cfg, row) {
+                openVariationForEditing(item);
+            },
+            onAllocationsLoaded: function(sectionId, allocations) {
+                console.log('Variation allocations loaded:', allocations.length);
+            },
+            onSaveNew: function(sectionId, cfg) {
+                // Called when Save button clicked in new mode
+                saveNewVariation();
+            },
+            onSave: function(itemPk, allocations, cfg) {
+                var result = AllocationsManager.updateStillToAllocate('hcVariation');
+                if (!result) {
+                    alert('Unable to calculate allocation totals.');
+                    return false;
+                }
+                
+                for (var i = 0; i < allocations.length; i++) {
+                    if (!allocations[i].item_pk) {
+                        alert('Please select an item for all allocation rows.');
+                        return false;
+                    }
+                }
+                
+                if (Math.abs(result.remainingNet) > 0.01) {
+                    alert('Still to Allocate must be $0.00. Current: $' + result.remainingNet.toFixed(2));
+                    return false;
+                }
+                
+                return true;
+            },
+            onSaveSuccess: function(response, itemPk, cfg) {
+                alert('Variation allocations saved successfully!');
+                AllocationsManager.setEditMode('hcVariation', false);
+                window.editingVariationPk = null;
+                AllocationsManager.loadAllocations('hcVariation', itemPk);
+            },
+            onDeleteSuccess: function(response, itemPk, cfg) {
+                // Clear allocations table and reload variations list
+                $('#hcVariationAllocationsTableBody').empty();
+                $('#hcVariationAddAllocationBtn').hide();
+                $('#hcVariationSaveAllocationsBtn').hide();
+                window.currentSelectedVariation = null;
+                
+                // Reload the variations list
+                loadVariationsData();
+            }
+        }
+    });
+    
+    // Render a variation allocation row (read-only mode)
+    function renderVariationAllocationRow(allocation, editable) {
+        var row = $('<tr>');
+        
+        if (allocation) {
+            row.attr('data-allocation-pk', allocation.hc_variation_allocation_pk || allocation.pk);
+            row.attr('data-item-pk', allocation.costing_pk);
+        }
+        
+        if (isConstruction) {
+            row.append($('<td>').text(allocation.item || '-'));
+            row.append($('<td>').text(allocation.unit || '-'));
+            row.append($('<td>').text(allocation.qty != null ? Utils.formatNumber(allocation.qty, 2) : '-'));
+            row.append($('<td>').text(allocation.rate != null ? '$' + Utils.formatMoney(allocation.rate) : '-'));
+            var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+            row.append($('<td>').text('$' + Utils.formatMoney(amount)));
+            row.append($('<td>').text(allocation.notes || '-'));
+            row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').hide());
+        } else {
+            row.append($('<td>').text(allocation.item || '-'));
+            var amount = allocation.amount ? parseFloat(allocation.amount) : 0;
+            row.append($('<td>').text('$' + Utils.formatMoney(amount)));
+            row.append($('<td>').text(allocation.notes || '-'));
+            row.append($('<td>').addClass('col-action-first').attr('data-edit-only', 'true').hide());
+        }
+        
+        return row;
+    }
+    
+    // Open variation for editing
+    function openVariationForEditing(variation) {
+        console.log('Opening variation for editing:', variation);
+        
+        AllocationsManager.setEditMode('hcVariation', true);
+        
+        window.currentSelectedVariation = variation;
+        window.editingVariationPk = variation.hc_variation_pk;
+        
+        var row = $('#hcVariationMainTableBody tr[data-pk="' + variation.hc_variation_pk + '"]');
+        if (row.length) {
+            if (!row.hasClass('selected-row')) {
+                AllocationsManager.selectRow('hcVariation', row);
+            } else {
+                AllocationsManager.loadAllocations('hcVariation', variation.hc_variation_pk);
+            }
+        }
+    }
+    
+    // Create new variation row with inputs
+    function createNewVariationRow() {
+        window.newVariationMode = true;
+        AllocationsManager.setNewMode('hcVariation', true);
+        
+        var tbody = $('#hcVariationMainTableBody');
+        
+        // Remove any existing new row
+        tbody.find('.new-variation-row').remove();
+        
+        var row = $('<tr class="new-variation-row">');
+        
+        // Date input
+        var today = new Date().toISOString().split('T')[0];
+        var dateInput = $('<input type="date" class="form-control form-control-sm new-hcVariation-date">')
+            .val(today);
+        row.append($('<td>').append(dateInput));
+        
+        // Amount input
+        var amountInput = $('<input type="number" step="0.01" class="form-control form-control-sm new-hcVariation-net" placeholder="0.00">')
+            .on('input change', function() {
+                AllocationsManager.updateStillToAllocate('hcVariation');
+            });
+        row.append($('<td>').append(amountInput));
+        
+        // Empty Update column (save is via allocations footer Save button)
+        row.append($('<td>').addClass('col-action-first'));
+        
+        // Cancel button
+        var cancelBtn = $('<button class="btn btn-sm btn-secondary">')
+            .html('<i class="fas fa-times"></i>')
+            .on('click', function() {
+                cancelNewVariation();
+            });
+        row.append($('<td>').addClass('col-action').append(cancelBtn));
+        
+        // Prepend to table body
+        tbody.prepend(row);
+        
+        // Clear allocations table and show add button
+        $('#hcVariationAllocationsTableBody').empty();
+        $('#hcVariationAddAllocationBtn').show();
+        $('#hcVariationSaveAllocationsBtn').show();
+        
+        // Add one blank editable allocation row by default
+        AllocationsManager.addAllocationRow('hcVariation');
+        
+        // Focus on amount input
+        amountInput.focus();
+        
+        // Update still to allocate
+        AllocationsManager.updateStillToAllocate('hcVariation');
+    }
+    
+    // Save new variation
+    function saveNewVariation() {
+        var date = $('.new-hcVariation-date').val();
+        var amount = parseFloat($('.new-hcVariation-net').val()) || 0;
+        
+        if (!date) {
+            alert('Please enter a date.');
+            return;
+        }
+        
+        if (amount <= 0) {
+            alert('Please enter an amount greater than 0.');
+            return;
+        }
+        
+        // Gather allocations
+        var allocations = AllocationsManager.getAllocations('hcVariation');
+        
+        // Validate allocations - check all have item selected
+        for (var i = 0; i < allocations.length; i++) {
+            if (!allocations[i].item_pk) {
+                alert('Please select an item for all allocation rows.');
+                return;
+            }
+        }
+        
+        // Check still to allocate using the same calculation as the footer
+        var result = AllocationsManager.updateStillToAllocate('hcVariation');
+        if (!result || Math.abs(result.remainingNet) > 0.01) {
+            var remaining = result ? result.remainingNet : amount;
+            alert('Still to Allocate must be $0.00. Current: $' + remaining.toFixed(2));
+            return;
+        }
+        
+        // Save to server
+        $.ajax({
+            url: '/core/save_hc_variation/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                project_pk: projectPk,
+                date: date,
+                total_amount: amount,
+                allocations: allocations
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    alert('Variation saved successfully!');
+                    cancelNewVariation();
+                    loadVariationsData();
+                } else {
+                    alert('Error: ' + (response.message || 'Failed to save variation'));
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('Error saving variation: ' + error);
+            }
+        });
+    }
+    
+    // Cancel new variation
+    function cancelNewVariation() {
+        window.newVariationMode = false;
+        AllocationsManager.setNewMode('hcVariation', false);
+        
+        $('#hcVariationMainTableBody .new-variation-row').remove();
+        $('#hcVariationAllocationsTableBody').empty();
+        $('#hcVariationAddAllocationBtn').hide();
+        $('#hcVariationSaveAllocationsBtn').hide();
+    }
+    
+    // Setup main table height adjustment to fit content
+    function setupMainTableHeight() {
+        var maxRows = 8;
+        var fallbackRowHeight = 40;
+        
+        window.adjustMainTableHeight = window.adjustMainTableHeight || {};
+        window.adjustMainTableHeight['hcVariation'] = function() {
+            var tbody = document.getElementById('hcVariationMainTableBody');
+            if (!tbody) return;
+            
+            var rows = tbody.querySelectorAll('tr');
+            var rowCount = rows.length;
+            
+            var actualRowHeight = fallbackRowHeight;
+            if (rows.length > 0 && rows[0].offsetHeight > 0) {
+                actualRowHeight = rows[0].offsetHeight;
+            }
+            
+            var displayRows = Math.min(Math.max(rowCount, 1), maxRows);
+            var newHeight = displayRows * actualRowHeight + 40; // +40 for header
+            
+            var container = document.querySelector('.hcVariation-table-container');
+            if (container) {
+                container.style.maxHeight = (maxRows * actualRowHeight + 60) + 'px';
+                container.style.height = 'auto';
+            }
+        };
+        
+        // Run immediately
+        window.adjustMainTableHeight['hcVariation']();
+    }
+    
+    // Load variations data
+    function loadVariationsData() {
+        if (!projectPk) {
+            console.error('No project PK for loading variations');
+            return;
+        }
+        
+        console.log('Loading variations for project:', projectPk);
+        
+        // Load costing items first
+        $.ajax({
+            url: '/core/get_project_items/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    window.variationsCostingItems = response.items;
+                    console.log('Loaded costing items:', response.items.length);
+                }
+            }
+        }).always(function() {
+            // Then load variations using custom AJAX like quotes does
+            $.ajax({
+                url: '/core/get_hc_variations/' + projectPk + '/',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        console.log('Loaded variations:', response.variations.length);
+                        AllocationsManager.populateMainTable('hcVariation', response.variations);
+                        // Initialize sortable table after data loads
+                        Utils.initSortableTable('hcVariationMainTable', { tbodyId: 'hcVariationMainTableBody' });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load variations:', error);
+                }
+            }).always(function() {
+                // Adjust table height after data loads
+                if (window.adjustMainTableHeight && window.adjustMainTableHeight['hcVariation']) {
+                    window.adjustMainTableHeight['hcVariation']();
+                }
+            });
+        });
+    }
+    
+    // Initialize - Add New Variation button using shared AllocationsManager function
+    AllocationsManager.addNewItemButton('hcVariation', 'New Variation', createNewVariationRow);
+    setupMainTableHeight();
+    
+    // Make functions globally available
+    window.loadVariationsData = loadVariationsData;
+    window.openVariationForEditing = openVariationForEditing;
+    
+    // Auto-load data
+    if (projectPk) {
+        loadVariationsData();
+    } else {
+        console.log('HC Variations: No project selected');
+        $('#hcVariationMainTableBody').html('<tr><td colspan="4" class="text-center text-muted">Select a project to view HC variations</td></tr>');
+        // Adjust height for empty state
+        if (window.adjustMainTableHeight && window.adjustMainTableHeight['hcVariation']) {
+            window.adjustMainTableHeight['hcVariation']();
+        }
+    }
+    
+})();
+</script>
