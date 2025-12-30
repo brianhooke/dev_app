@@ -32,6 +32,8 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.core.files.base import ContentFile
+from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Prefetch
 from django.forms.models import model_to_dict
@@ -501,6 +503,15 @@ def save_project_quote(request):
     }
     """
     try:
+        # LOGGING: Capture all environment and storage info
+        logger.info(f"=== QUOTE SAVE DEBUG START ===")
+        logger.info(f"DJANGO_SETTINGS_MODULE: {getattr(settings, 'DJANGO_SETTINGS_MODULE', 'NOT SET')}")
+        logger.info(f"DEBUG: {getattr(settings, 'DEBUG', 'NOT SET')}")
+        logger.info(f"MEDIA_URL: {getattr(settings, 'MEDIA_URL', 'NOT SET')}")
+        logger.info(f"DEFAULT_FILE_STORAGE: {getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET')}")
+        logger.info(f"AWS_STORAGE_BUCKET_NAME: {getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'NOT SET')}")
+        logger.info(f"Storage backend class: {type(default_storage).__name__}")
+        
         data = json.loads(request.body)
         
         # Extract data
@@ -555,16 +566,24 @@ def save_project_quote(request):
         pdf_content = None
         if pdf_data_url:
             try:
+                # LOGGING: PDF processing details
+                logger.info(f"Processing PDF upload...")
+                logger.info(f"PDF data URL length: {len(pdf_data_url)}")
+                
                 # Extract base64 data from data URL
                 format_part, imgstr = pdf_data_url.split(';base64,')
                 ext = format_part.split('/')[-1]
+                logger.info(f"PDF extension: {ext}")
                 
                 # Generate unique filename
                 supplier_name = contact.name.replace(' ', '_')
                 unique_filename = f"{supplier_name}_{quote_number}_{uuid.uuid4()}.{ext}"
+                logger.info(f"Generated filename: {unique_filename}")
                 
                 # Decode and create file
                 pdf_content = ContentFile(base64.b64decode(imgstr), name=unique_filename)
+                logger.info(f"PDF ContentFile created, size: {len(pdf_content)} bytes")
+                
             except Exception as e:
                 logger.error(f"Error processing PDF: {str(e)}")
                 return JsonResponse({
@@ -596,8 +615,21 @@ def save_project_quote(request):
                 Quote_allocations.objects.filter(quotes_pk=quote).delete()
                 
                 logger.info(f"Updating quote {quote_pk}")
+                
+                # LOGGING: Check PDF update
+                if pdf_content:
+                    logger.info(f"Updating PDF for quote {quote_pk}")
+                    quote.pdf = pdf_content
+                    logger.info(f"New PDF assigned, saving quote...")
+                quote.save()
+                
+                # Log PDF details after save
+                if quote.pdf:
+                    logger.info(f"After save - Quote.pdf.name: {quote.pdf.name}")
+                    logger.info(f"After save - Quote.pdf.url: {quote.pdf.url}")
             else:
                 # Create new quote
+                logger.info(f"Creating new quote with PDF...")
                 quote = Quotes.objects.create(
                     supplier_quote_number=quote_number,
                     total_cost=total_cost,
@@ -605,6 +637,26 @@ def save_project_quote(request):
                     contact_pk=contact,
                     project=project
                 )
+                
+                # LOGGING: Check where the file was saved
+                if quote.pdf:
+                    logger.info(f"Quote.pdf field: {quote.pdf}")
+                    logger.info(f"Quote.pdf.name: {quote.pdf.name}")
+                    logger.info(f"Quote.pdf.url: {quote.pdf.url}")
+                    logger.info(f"Quote.pdf.storage: {type(quote.pdf.storage).__name__}")
+                    
+                    # Check if file exists in storage
+                    exists = default_storage.exists(quote.pdf.name)
+                    logger.info(f"File exists in storage: {exists}")
+                    
+                    # Try to get the URL
+                    try:
+                        file_url = quote.pdf.url
+                        logger.info(f"Generated file URL: {file_url}")
+                    except Exception as url_err:
+                        logger.error(f"Error getting file URL: {url_err}")
+                else:
+                    logger.error("Quote.pdf is None after save!")
             
             # Create quote allocations
             is_construction = (project.project_type == 'construction')
@@ -658,6 +710,14 @@ def save_project_quote(request):
             
             action = 'updated' if is_update else 'created'
             logger.info(f"Quote {quote.quotes_pk} {action} for project {project.project} with {len(line_items)} allocations")
+            
+            # LOGGING: Final PDF check
+            if quote.pdf and not is_update:
+                logger.info(f"=== FINAL PDF CHECK ===")
+                logger.info(f"Final PDF name: {quote.pdf.name}")
+                logger.info(f"Final PDF URL: {quote.pdf.url}")
+                logger.info(f"Final PDF storage class: {type(quote.pdf.storage).__name__}")
+                logger.info(f"=== QUOTE SAVE DEBUG END ===")
             
             return JsonResponse({
                 'status': 'success',

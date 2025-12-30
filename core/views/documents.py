@@ -87,6 +87,14 @@ from django.core.files.storage import default_storage
 @csrf_exempt
 def upload_design_pdf(request):
     if request.method == 'POST':
+        # LOGGING: Document upload debug
+        logger.info(f"=== DOCUMENT UPLOAD DEBUG START ===")
+        logger.info(f"DJANGO_SETTINGS_MODULE: {getattr(settings, 'DJANGO_SETTINGS_MODULE', 'NOT SET')}")
+        logger.info(f"DEBUG: {getattr(settings, 'DEBUG', 'NOT SET')}")
+        logger.info(f"MEDIA_URL: {getattr(settings, 'MEDIA_URL', 'NOT SET')}")
+        logger.info(f"DEFAULT_FILE_STORAGE: {getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET')}")
+        logger.info(f"Storage backend class: {type(default_storage).__name__}")
+        
         logger.info('Received POST request.')
         try:
             pdf_file = request.FILES['pdfFile']
@@ -122,14 +130,23 @@ def upload_design_pdf(request):
             output_pdf = BytesIO()
             pdf_writer.write(output_pdf)
             output_pdf.seek(0)
-            default_storage.save(output_filename, output_pdf)
-            PlanPdfs.objects.create(
+            
+            # LOGGING: Check storage before save
+            logger.info(f"About to save to storage: {type(default_storage).__name__}")
+            saved_path = default_storage.save(output_filename, output_pdf)
+            logger.info(f"File saved to path: {saved_path}")
+            logger.info(f"File exists in storage: {default_storage.exists(saved_path)}")
+            
+            plan_pdf = PlanPdfs.objects.create(
                 file=output_filename,
                 design_category=category,
                 plan_number=plan_number,
                 rev_number=rev_number
             )
-            logger.info(f'Successfully created PlanPdfs object for page {page_number}.')         
+            logger.info(f'Successfully created PlanPdfs object for page {page_number}.')
+            logger.info(f"PlanPdfs.file field: {plan_pdf.file}")
+            logger.info(f"PlanPdfs.file.url: {plan_pdf.file.url}")
+            logger.info(f"=== DOCUMENT UPLOAD DEBUG END ===")         
     return JsonResponse({'status': 'success'})
 @csrf_exempt
 def get_design_pdf_url(request, design_category, plan_number, rev_number=None):
