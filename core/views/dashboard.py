@@ -2207,7 +2207,8 @@ def get_recent_activities(request):
                 'message': f'Invoice from {supplier_name} moved from Inbox',
                 'detail': f'Project: {project_name}',
                 'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
-                'link': f'/project/{invoice.project.projects_pk}/' if invoice.project else None,
+                'link': None,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
             })
         
         # 2. New projects created
@@ -2223,7 +2224,8 @@ def get_recent_activities(request):
                 'message': f'New project created: {project.project}',
                 'detail': f'Type: {project.project_type or "Not set"}',
                 'timestamp': project.created_at.isoformat() if project.created_at else None,
-                'link': f'/project/{project.projects_pk}/',
+                'link': None,
+                'project_pk': project.projects_pk,
             })
         
         # 3. Invoices allocated (status = 1, recently updated)
@@ -2243,7 +2245,8 @@ def get_recent_activities(request):
                 'message': f'Invoice allocated: {supplier_name}',
                 'detail': f'Project: {project_name}',
                 'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
-                'link': f'/project/{invoice.project.projects_pk}/' if invoice.project else None,
+                'link': None,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
             })
         
         # Sort all activities by timestamp (most recent first)

@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v109 (displayed in navbar bottom-left)
+Version: v110 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -838,11 +838,21 @@ Version: v109 (displayed in navbar bottom-left)
         function renderActivities(activities) {
             var html = '';
             
-            activities.forEach(function(activity) {
+            activities.forEach(function(activity, index) {
                 var timeAgo = formatTimeAgo(activity.timestamp);
+                var isClickable = activity.link || activity.project_pk;
+                var clickHandler = '';
+                
+                if (activity.link) {
+                    // Direct URL link
+                    clickHandler = `onclick="window.location.href='${activity.link}'"`;
+                } else if (activity.project_pk) {
+                    // SPA navigation to project
+                    clickHandler = `onclick="navigateToProjectSection(${activity.project_pk}, null, null)"`;
+                }
                 
                 html += `
-                    <div class="activity-item" style="display: flex; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid #eee; cursor: ${activity.link ? 'pointer' : 'default'};" ${activity.link ? 'onclick="window.location.href=\'' + activity.link + '\'"' : ''}>
+                    <div class="activity-item" style="display: flex; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid #eee; cursor: ${isClickable ? 'pointer' : 'default'};" ${clickHandler}>
                         <div class="activity-icon" style="width: 32px; height: 32px; border-radius: 50%; background-color: ${activity.color}20; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
                             <i class="${activity.icon}" style="color: ${activity.color}; font-size: 14px;"></i>
                         </div>
