@@ -17,9 +17,13 @@ DEBUG = False
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7')
 
 # Security Settings
+# ELB health checks are handled by CanonicalHostRedirectMiddleware
 ALLOWED_HOSTS = [
     'app.mason.build',  # Production domain
     '.elasticbeanstalk.com',  # AWS Elastic Beanstalk domain
+    '.us-east-1.elb.amazonaws.com',  # ELB domain
+    'localhost',
+    '127.0.0.1',
 ]
 
 # Security settings - HTTPS enabled via ALB

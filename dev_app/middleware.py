@@ -2,7 +2,8 @@
 Custom middleware for the dev_app project.
 """
 
-from django.http import HttpResponsePermanentRedirect
+from django.http import HttpResponsePermanentRedirect, HttpResponse
+from django.core.exceptions import DisallowedHost
 
 
 class CanonicalHostRedirectMiddleware:
@@ -15,6 +16,8 @@ class CanonicalHostRedirectMiddleware:
     
     This ensures the app only responds on app.mason.build and redirects
     apex domain requests to the actual company website.
+    
+    Also handles ELB health checks that use internal IPs as HTTP_HOST.
     """
     
     # Where to redirect mason.build requests (your company landing page)
@@ -27,7 +30,18 @@ class CanonicalHostRedirectMiddleware:
         self.get_response = get_response
     
     def __call__(self, request):
-        host = request.get_host().split(':')[0].lower()  # Remove port if present
+        # Check if this is an ELB health check (uses internal IPs)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        if 'ELB-HealthChecker' in user_agent:
+            # Return OK for health checks without checking host
+            return HttpResponse('OK', content_type='text/plain')
+        
+        try:
+            host = request.get_host().split(':')[0].lower()  # Remove port if present
+        except DisallowedHost:
+            # For requests with disallowed hosts, just pass through
+            # Django will handle the error appropriately
+            return self.get_response(request)
         
         # Redirect mason.build (apex) to the landing page
         if host == 'mason.build' or host == 'www.mason.build':
