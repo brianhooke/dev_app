@@ -503,14 +503,12 @@ def save_project_quote(request):
     }
     """
     try:
-        # LOGGING: Capture all environment and storage info
-        logger.info(f"=== QUOTE SAVE DEBUG START ===")
+        # LOGGING: Basic debug info
+        logger.info(f"=== QUOTE SAVE DEBUG ===")
         logger.info(f"DJANGO_SETTINGS_MODULE: {getattr(settings, 'DJANGO_SETTINGS_MODULE', 'NOT SET')}")
         logger.info(f"DEBUG: {getattr(settings, 'DEBUG', 'NOT SET')}")
         logger.info(f"MEDIA_URL: {getattr(settings, 'MEDIA_URL', 'NOT SET')}")
         logger.info(f"DEFAULT_FILE_STORAGE: {getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET')}")
-        logger.info(f"AWS_STORAGE_BUCKET_NAME: {getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'NOT SET')}")
-        logger.info(f"Storage backend class: {type(default_storage).__name__}")
         
         data = json.loads(request.body)
         
@@ -640,21 +638,8 @@ def save_project_quote(request):
                 
                 # LOGGING: Check where the file was saved
                 if quote.pdf:
-                    logger.info(f"Quote.pdf field: {quote.pdf}")
                     logger.info(f"Quote.pdf.name: {quote.pdf.name}")
                     logger.info(f"Quote.pdf.url: {quote.pdf.url}")
-                    logger.info(f"Quote.pdf.storage: {type(quote.pdf.storage).__name__}")
-                    
-                    # Check if file exists in storage
-                    exists = default_storage.exists(quote.pdf.name)
-                    logger.info(f"File exists in storage: {exists}")
-                    
-                    # Try to get the URL
-                    try:
-                        file_url = quote.pdf.url
-                        logger.info(f"Generated file URL: {file_url}")
-                    except Exception as url_err:
-                        logger.error(f"Error getting file URL: {url_err}")
                 else:
                     logger.error("Quote.pdf is None after save!")
             
@@ -713,10 +698,8 @@ def save_project_quote(request):
             
             # LOGGING: Final PDF check
             if quote.pdf and not is_update:
-                logger.info(f"=== FINAL PDF CHECK ===")
                 logger.info(f"Final PDF name: {quote.pdf.name}")
                 logger.info(f"Final PDF URL: {quote.pdf.url}")
-                logger.info(f"Final PDF storage class: {type(quote.pdf.storage).__name__}")
                 logger.info(f"=== QUOTE SAVE DEBUG END ===")
             
             return JsonResponse({
