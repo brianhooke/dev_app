@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v110 (displayed in navbar bottom-left)
+Version: v111 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -722,8 +722,8 @@ Version: v110 (displayed in navbar bottom-left)
             }
         };
         
-        // Navigate to a project section within the SPA
-        function navigateToProjectSection(projectPk, section, subsection) {
+        // Navigate to a project section within the SPA (global for onclick handlers)
+        window.navigateToProjectSection = function(projectPk, section, subsection) {
             if (!projectPk) {
                 console.error('No project PK provided');
                 return;
