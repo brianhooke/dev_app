@@ -1,8 +1,11 @@
 #!/bin/bash
 set -e
 
+# Force production settings in AWS deployment
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-dev_app.settings.production_aws}"
+
 echo "=== Starting Django Application ==="
-echo "DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-NOT SET}"
+echo "DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}"
 echo "RDS_HOSTNAME: ${RDS_HOSTNAME:-NOT SET}"
 echo "AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-NOT SET}"
 echo "AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:+SET}"
