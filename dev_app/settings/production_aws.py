@@ -69,9 +69,10 @@ AWS_S3_OBJECT_PARAMETERS = {
 }
 
 # Static Files (CSS, JavaScript, Images)
-AWS_STATIC_LOCATION = 'static'
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_STATIC_LOCATION}/'
-STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# Serve from local filesystem (baked into Docker image) - more reliable than S3
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+# Note: collectstatic runs during container startup, files are in staticfiles/
 
 # Media Files (User Uploads)
 AWS_MEDIA_LOCATION = 'media'
