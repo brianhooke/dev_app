@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v111 (displayed in navbar bottom-left)
+Version: v112 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -738,12 +738,17 @@ Version: v111 (displayed in navbar bottom-left)
             // First, click on Projects link
             $('#projectsLink').click();
             
-            // Wait for projects to load, then find and click the project
-            setTimeout(function() {
-                // Find the project card with matching pk
+            // Poll for project card to appear (AJAX loading may take time)
+            var attempts = 0;
+            var maxAttempts = 20; // 20 * 200ms = 4 seconds max wait
+            
+            var pollForProjectCard = setInterval(function() {
+                attempts++;
                 var projectCard = $(`.project-card[data-project-pk="${projectPk}"]`);
                 
                 if (projectCard.length) {
+                    clearInterval(pollForProjectCard);
+                    
                     // Click the construction link to open the project
                     projectCard.find('.construction-link').click();
                     
@@ -771,11 +776,12 @@ Version: v111 (displayed in navbar bottom-left)
                         // Clear pending navigation
                         window.pendingProjectNavigation = null;
                     }, 300);
-                } else {
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(pollForProjectCard);
                     console.error('Project card not found for pk:', projectPk);
-                    alert('Project not found. It may have been archived.');
+                    alert('Project not found. It may have been archived or not loaded yet.');
                 }
-            }, 500);
+            }, 200);
         }
         
         // Function to load active projects count

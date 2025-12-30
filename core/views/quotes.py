@@ -80,7 +80,7 @@ def quotes_view(request):
             {'header': 'Item', 'width': '22%'},
             {'header': 'Unit', 'width': '8%'},
             {'header': 'Qty', 'width': '10%'},
-            {'header': 'Rate', 'width': '10%'},
+            {'header': 'Rate', 'width': '12%'},
             {'header': '$ Amount', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
             {'header': 'Notes', 'width': '30%'},
             {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
