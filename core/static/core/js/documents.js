@@ -148,6 +148,17 @@ var DocumentsManager = (function() {
                     folders = response.folders || [];
                     console.log('Loaded folders count:', folders.length);
                     console.log('Folders data:', folders);
+                    
+                    // S3 DIAGNOSTIC LOGGING
+                    if (response.diagnostic) {
+                        console.log('=== S3 DIAGNOSTIC INFO ===');
+                        console.log('DEBUG:', response.diagnostic.DEBUG);
+                        console.log('MEDIA_URL:', response.diagnostic.MEDIA_URL);
+                        console.log('DEFAULT_FILE_STORAGE:', response.diagnostic.DEFAULT_FILE_STORAGE);
+                        console.log('AWS_STORAGE_BUCKET_NAME:', response.diagnostic.AWS_STORAGE_BUCKET_NAME);
+                        console.log('=== END DIAGNOSTIC ===');
+                    }
+                    
                     renderFolderTree();
                 } else {
                     console.error('Error loading folders:', response.message);
@@ -763,6 +774,10 @@ var DocumentsManager = (function() {
             formData.append('files', files[i]);
         }
         
+        console.log('=== UPLOADING FILES ===');
+        console.log('Uploading to folder:', selectedFolderId);
+        console.log('Number of files:', files.length);
+        
         $.ajax({
             url: '/core/upload_files/',
             type: 'POST',
@@ -770,6 +785,23 @@ var DocumentsManager = (function() {
             processData: false,
             contentType: false,
             success: function(response) {
+                console.log('=== UPLOAD RESPONSE ===');
+                console.log('Full response:', response);
+                if (response.uploaded_files) {
+                    response.uploaded_files.forEach(function(file) {
+                        console.log('Uploaded file:', file.file_name);
+                        console.log('File URL:', file.file_url);
+                    });
+                }
+                if (response.diagnostic) {
+                    console.log('=== UPLOAD DIAGNOSTIC INFO ===');
+                    console.log('DEBUG:', response.diagnostic.DEBUG);
+                    console.log('MEDIA_URL:', response.diagnostic.MEDIA_URL);
+                    console.log('DEFAULT_FILE_STORAGE:', response.diagnostic.DEFAULT_FILE_STORAGE);
+                    console.log('AWS_STORAGE_BUCKET_NAME:', response.diagnostic.AWS_STORAGE_BUCKET_NAME);
+                }
+                console.log('=== END UPLOAD RESPONSE ===');
+                
                 if (response.status === 'success') {
                     loadFolderStructure();
                     $('#fileUploadInput').val(''); // Clear input

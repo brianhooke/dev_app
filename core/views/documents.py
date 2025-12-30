@@ -252,9 +252,19 @@ def get_project_folders(request, project_pk):
         
         logger.info(f"Retrieved {len(folders_data)} folders for project {project_pk}")
         
+        # Diagnostic info for S3 debugging
+        diagnostic_info = {
+            'DEBUG': getattr(settings, 'DEBUG', 'NOT SET'),
+            'MEDIA_URL': getattr(settings, 'MEDIA_URL', 'NOT SET'),
+            'DEFAULT_FILE_STORAGE': getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET'),
+            'AWS_STORAGE_BUCKET_NAME': getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'NOT SET'),
+        }
+        logger.info(f"Diagnostic info: {diagnostic_info}")
+        
         return JsonResponse({
             'status': 'success',
-            'folders': folders_data
+            'folders': folders_data,
+            'diagnostic': diagnostic_info
         })
         
     except Exception as e:
@@ -540,17 +550,28 @@ def upload_files(request):
                 file_size=file.size
             )
             
+            file_url = doc_file.file.url if doc_file.file else None
             uploaded_files.append({
                 'file_pk': doc_file.file_pk,
-                'file_name': doc_file.file_name
+                'file_name': doc_file.file_name,
+                'file_url': file_url
             })
             
-            logger.info(f"Uploaded file '{file_name}' to folder '{folder.folder_name}'")
+            logger.info(f"Uploaded file '{file_name}' to folder '{folder.folder_name}', URL: {file_url}")
+        
+        # Diagnostic info for S3 debugging
+        diagnostic_info = {
+            'DEBUG': getattr(settings, 'DEBUG', 'NOT SET'),
+            'MEDIA_URL': getattr(settings, 'MEDIA_URL', 'NOT SET'),
+            'DEFAULT_FILE_STORAGE': getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET'),
+            'AWS_STORAGE_BUCKET_NAME': getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'NOT SET'),
+        }
         
         return JsonResponse({
             'status': 'success',
             'message': f'Uploaded {len(uploaded_files)} file(s)',
-            'files': uploaded_files
+            'uploaded_files': uploaded_files,
+            'diagnostic': diagnostic_info
         })
         
     except Exception as e:

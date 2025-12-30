@@ -33,7 +33,6 @@ from .views.contacts import (
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.debug_settings import debug_settings
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
@@ -232,9 +231,6 @@ urlpatterns = [
     path('delete_unit/', delete_unit, name='delete_unit'),
     path('get_recent_activities/', get_recent_activities, name='get_recent_activities'),
     path('get_action_items/', get_action_items, name='get_action_items'),
-    
-    # Debug endpoint
-    path('debug-settings/', debug_settings, name='debug_settings'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
