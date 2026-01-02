@@ -39,9 +39,9 @@ class CanonicalHostRedirectMiddleware:
         try:
             host = request.get_host().split(':')[0].lower()  # Remove port if present
         except DisallowedHost:
-            # Return 400 directly - don't continue processing since other middleware
-            # (like CommonMiddleware) will also call get_host() and raise the same error
-            return HttpResponse('Bad Request', status=400, content_type='text/plain')
+            # For requests with disallowed hosts, just pass through
+            # Django will handle the error appropriately
+            return self.get_response(request)
         
         # Redirect mason.build (apex) to the landing page
         if host == 'mason.build' or host == 'www.mason.build':

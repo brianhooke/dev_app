@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   web:
     build: .
@@ -6,5 +8,24 @@ services:
     volumes:
       # Persist SQLite database across deployments
       - /var/app/db:/app/db
-    env_file:
-      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE
+      - SECRET_KEY
+      - RDS_DB_NAME
+      - RDS_USERNAME
+      - RDS_PASSWORD
+      - RDS_HOSTNAME
+      - RDS_PORT
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_STORAGE_BUCKET_NAME
+      - AWS_S3_REGION_NAME
+      - PROJECT_NAME
+      - LETTERHEAD_PATH
+      - BACKGROUND_IMAGE_PATH
+      - EMAIL_HOST_USER
+      - EMAIL_HOST_PASSWORD
+      - EMAIL_CC
+      - DEFAULT_FROM_EMAIL
+      - XERO_DATA
+      - XERO_ENCRYPTION_KEY

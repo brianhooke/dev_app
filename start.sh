@@ -7,22 +7,10 @@ export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-dev_app.settings.produc
 echo "=== Starting Django Application ==="
 echo "DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}"
 echo "RDS_HOSTNAME: ${RDS_HOSTNAME:-NOT SET}"
-echo "RDS_DB_NAME: ${RDS_DB_NAME:-NOT SET}"
-echo "RDS_USERNAME: ${RDS_USERNAME:-NOT SET}"
-echo "RDS_PORT: ${RDS_PORT:-NOT SET}"
 echo "AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-NOT SET}"
 echo "AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:+SET}"
 echo "AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:+SET}"
-echo "DEBUG: ${DEBUG:-NOT SET}"
 echo "===================================="
-
-# Test database connection
-echo "Testing PostgreSQL connection..."
-python3 -c "
-import os
-print('Python sees RDS_HOSTNAME:', os.environ.get('RDS_HOSTNAME', 'NOT SET'))
-print('Python sees RDS_DB_NAME:', os.environ.get('RDS_DB_NAME', 'NOT SET'))
-" || echo "Python env check failed"
 
 echo "Collecting static files to S3..."
 python manage.py collectstatic --noinput || echo "Collectstatic failed, continuing..."
