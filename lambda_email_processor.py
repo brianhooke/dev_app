@@ -114,6 +114,7 @@ def extract_email_data(msg, bucket, s3_key):
 def process_attachments(msg, bucket, email_key):
     """
     Extract and upload attachments to S3
+    Filters out embedded images (signatures, logos) and keeps only real attachments
     """
     attachments = []
     
@@ -122,11 +123,31 @@ def process_attachments(msg, bucket, email_key):
     
     attachment_counter = 0
     
+    # Valid attachment types for invoices/bills
+    VALID_ATTACHMENT_TYPES = {
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain',
+        'text/csv'
+    }
+    
     for part in msg.walk():
         # Skip non-attachment parts
         if part.get_content_maintype() == 'multipart':
             continue
-        if part.get('Content-Disposition') is None:
+        
+        # CRITICAL: Only process real attachments, not inline images
+        content_disposition = part.get('Content-Disposition', '')
+        if 'attachment' not in content_disposition:
+            continue
+        
+        # Filter by content type (skip images, signatures, etc.)
+        content_type = part.get_content_type()
+        if content_type not in VALID_ATTACHMENT_TYPES:
+            print(f"Skipping attachment {content_type} - not a valid invoice type")
             continue
         
         filename = part.get_filename()

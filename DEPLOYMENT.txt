@@ -12,8 +12,9 @@ URL: https://app.mason.build
 
 Components:
 - Application: Django 5.0.6 in Docker container
-- Database: SQLite (local to container)
-- Static/Media: Local filesystem
+- Database: AWS RDS PostgreSQL (production)
+- Static Files: Local filesystem (baked into Docker image)
+- Media Files: AWS S3 (dev-app-mason-bucket)
 - Load Balancer: Application Load Balancer with HTTPS
 - DNS: Route 53 with app.mason.build CNAME
 
@@ -54,10 +55,12 @@ WHAT HAPPENS DURING DEPLOYMENT
 6. Container starts using docker-compose.yml
 7. Startup script (start.sh) runs:
    - Runs database migrations automatically
-   - Collects static files
+   - Collects static files to local filesystem
    - Starts gunicorn with Django on port 80
-8. Load balancer switches traffic to new container
-9. Old container is terminated
+
+8. Environment variables are loaded from .env file (created by .ebextensions)
+9. Load balancer switches traffic to new container
+10. Old container is terminated
 
 DEPLOYMENT FEATURES
 -------------------
@@ -71,11 +74,13 @@ IMPORTANT NOTES
 ---------------
 - GitHub is NOT involved in deployment (deploys from local code)
 - Always commit changes to git before deploying
-- Increment version number for each deployment (v39, v40, v41, etc.)
-- Use descriptive version labels (e.g., v39-contacts-update)
+- Increment version number for each deployment (v127, v128, v129, etc.)
+- Use descriptive version labels (e.g., v128-env-var-fix)
 - Migrations run automatically on every deployment
 - Container restarts on every deployment
-- SQLite database is local to container (data persists via volume mount)
+- RDS PostgreSQL database persists across deployments
+- S3 media files persist across deployments
+- Environment variables are passed via .env file (see .ebextensions/04_docker_env.config)
 
 USEFUL AWS CLI COMMANDS
 -----------------------
@@ -93,30 +98,50 @@ aws elasticbeanstalk describe-environment-health --environment-name dev-app-prod
 
 ENVIRONMENT VARIABLES
 ---------------------
-Currently set via AWS EB Console or AWS CLI
+Set via AWS EB Console → Configuration → Environment properties
 
 Settings Module:
-- DJANGO_SETTINGS_MODULE=dev_app.settings.local (uses SQLite)
+- DJANGO_SETTINGS_MODULE=dev_app.settings.production_aws (uses RDS PostgreSQL + S3)
 
-Required variables:
-- SECRET_KEY
-- PROJECT_NAME
+Required RDS Variables:
+- RDS_HOSTNAME - RDS PostgreSQL endpoint
+- RDS_DB_NAME - Database name
+- RDS_USERNAME - Database username
+- RDS_PASSWORD - Database password
+- RDS_PORT - Database port (5432)
 
-Optional variables:
+Required AWS S3 Variables:
+- AWS_STORAGE_BUCKET_NAME - S3 bucket for media files
+- AWS_ACCESS_KEY_ID - AWS access key
+- AWS_SECRET_ACCESS_KEY - AWS secret key
+- AWS_S3_REGION_NAME - AWS region (us-east-1)
+
+Other Required Variables:
+- SECRET_KEY - Django secret key
+- PROJECT_NAME - Project name
+
+Optional Variables:
 - EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_CC, DEFAULT_FROM_EMAIL
 - LETTERHEAD_PATH, BACKGROUND_IMAGE_PATH
-- AWS_REGION (defaults to us-east-1)
+- XERO_DATA, XERO_ENCRYPTION_KEY
+
+IMPORTANT: Environment variables are passed to Docker container via .env file
+(see .ebextensions/04_docker_env.config for implementation)
 
 Note: Xero credentials are now stored in AWS SSM Parameter Store, not environment variables.
 
 KEY FILES FOR DEPLOYMENT
 ------------------------
 Dockerfile              - Defines the Docker image (Python 3.11, dependencies)
-docker-compose.yml      - Defines how container runs (port 80, env vars)
+docker-compose.yml      - Defines how container runs (port 80, env_file)
 start.sh               - Startup script (collectstatic, migrate, gunicorn)
 requirements.txt       - Python dependencies
 .dockerignore          - Files to exclude from Docker build
 .ebignore              - Files to exclude from EB deployment (if exists)
+.ebextensions/         - EB configuration files
+├── 01_timeout.config  - Deployment timeout settings
+├── 02_db_volume.config - Database volume persistence
+└── 04_docker_env.config - Creates .env file from EB environment variables
 
 DOCKER APPROACH BENEFITS
 ------------------------
@@ -170,9 +195,11 @@ If deployment fails:
 
 If app shows errors:
 1. Check logs via AWS EB console or CloudWatch
-2. Verify DJANGO_SETTINGS_MODULE is set to dev_app.settings.local
-3. Check that migrations ran successfully in startup logs
-4. Verify all required environment variables are set
+2. Verify DJANGO_SETTINGS_MODULE is set to dev_app.settings.production_aws
+3. Check that RDS environment variables are set and reaching container (check start.sh logs)
+4. Check that migrations ran successfully in startup logs
+5. Verify all required environment variables are set in EB Console
+6. Check .ebextensions/04_docker_env.config logs for .env file creation
 
 If static files don't load:
 1. Check that collectstatic ran successfully in startup logs
@@ -184,7 +211,7 @@ FUTURE IMPROVEMENTS (OPTIONAL)
 - Set up CI/CD with GitHub Actions for automated deployments
 - Add CloudWatch monitoring and alerts
 - Create staging environment
-- Migrate to RDS PostgreSQL for production data persistence
+✅ Migrated to RDS PostgreSQL for production data persistence
 - Add health check endpoint
 - Configure auto-scaling rules
 - Implement blue-green deployments
@@ -192,9 +219,10 @@ FUTURE IMPROVEMENTS (OPTIONAL)
 RELATED FILES
 -------------
 AWS_DEPLOYMENT_GUIDE.md - Detailed AWS setup documentation
-local.py               - Settings file used in production (SQLite)
+local.py               - Settings file for local development (SQLite fallback)
 base.py                - Base Django settings
-production_aws.py      - AWS-specific settings (RDS PostgreSQL - not currently used)
+production_aws.py      - AWS-specific settings (RDS PostgreSQL + S3 - CURRENTLY USED)
+.ebextensions/         - Elastic Beanstalk configuration files
 
 XERO DATA PERSISTENCE (AWS SSM PARAMETER STORE)
 ------------------------------------------------
@@ -228,21 +256,28 @@ aws ssm get-parameters-by-path --path "/dev-app/xero" --recursive --with-decrypt
 DEPLOYMENT HISTORY
 ------------------
 Recent deployments:
-- v105-po-fixes: Fix PO email quote_numbers key for construction, show real URL in preview after PO sent
-- v104-construction-po-columns: Construction PO PDF shows 6 columns (Description/Units/Qty/Rate/Amount/Quote#) instead of 3
-- v103-construction-allocations: Fix unit display (use Costing.unit), column alignment for allocated tables, category optgroups in quote allocation dropdowns
-- v94-projects-card-grid: Projects card grid layout with modal edit/create, tender/execution navigation preserved
-- v78-s3-media: Use S3 for media file storage in Docker/AWS to persist uploads across deployments
-- v77-cleanup: Remove spaceship/alien animations, change SHIFT+B to SHIFT+BIN for DB wipe
-- v76-po-edit-claim: Add Edit Claim/Cancel buttons, bidirectional %/$ input, comparison email on approval with adjustments
-- v70-po-url-fix: Fix PO URL generation for AWS (use request host instead of hardcoded URL) + Add Pull Contacts/Accounts buttons to Xero table
-- v63-xero-persistence: Auto-restore Xero data from XERO_DATA env var on startup
-- v62-fix-environ: Added django-environ to requirements.txt
-- v61-po-public-improvements: PO Public URL expandable claims, document viewer buttons
-- v40-xero-import: Added Xero instances export/import management commands
-- v39-contacts-update: Added Xero contacts update functionality (BSB, Account, ABN, Email)
-- v38-sqlite: Switched to SQLite database
-- v37-subdomain: Simplified URLs for app.mason.build subdomain
+- v129: Trivial deployment to test S3 media file persistence
+- v128: ✅ FIXED - Environment variable passing to Docker container using .env file and ebextensions
+- v127: Test deployment with all environment variables configured in AWS
+- v126: Rollback to v112 codebase (last known stable version)
+- v125: Rollback to v120 configuration
+- v123: Attempted predeploy hook to create .env file (failed - EB env file path incorrect)
+- v122: Fixed middleware to return 400 for DisallowedHost exceptions
+- v121: Added env var debugging to diagnose RDS connection issue
+- v120: Fixed production_aws to use local static files + S3 for media only
+- v119: Fixed ELB health check failures - handle internal IP hosts in middleware
+- v118: Added S3 diagnostic logging to documents endpoints
+- v117: Added debug-settings endpoint to check current settings
+- v116: Simplified logging to avoid 500 errors
+- v115: Added comprehensive logging for S3 upload debugging
+- v114: Fixed start.sh to default to production_aws settings
+- v113: Test S3 persistence across deployments
+- v112: Fix project navigation polling for AJAX-loaded projects list (LAST STABLE)
+
+CRITICAL FIX (v128):
+- Issue: RDS environment variables not reaching Docker container
+- Solution: .ebextensions/04_docker_env.config creates .env file from EB env vars
+- Result: Django now connects to RDS PostgreSQL instead of local socket
 
 SUPPORT & DOCUMENTATION
 -----------------------
@@ -251,4 +286,4 @@ AWS CLI EB Reference: https://docs.aws.amazon.com/cli/latest/reference/elasticbe
 Docker Documentation: https://docs.docker.com/
 Django Deployment: https://docs.djangoproject.com/en/5.0/howto/deployment/
 
-Last Updated: 2025-12-01
+Last Updated: 2026-01-03
