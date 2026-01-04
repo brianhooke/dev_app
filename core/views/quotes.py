@@ -438,20 +438,15 @@ def delete_quote_allocation(request, allocation_pk):
 @require_http_methods(["GET"])
 def get_project_contacts(request, project_pk):
     """
-    Get all contacts for a project's Xero instance
+    Get all contacts for a project's Xero instance from the database
     
     Returns contacts filtered by the project's xero_instance
     """
-    logger.info(f"🔍 [QUOTE DEBUG] Backend: get_project_contacts called with project_pk={project_pk}")
-    
     try:
         # Get the project
         try:
             project = Projects.objects.select_related('xero_instance').get(projects_pk=project_pk)
-            logger.info(f"🔍 [QUOTE DEBUG] Backend: Found project '{project.project}' (pk={project.projects_pk})")
-            logger.info(f"🔍 [QUOTE DEBUG] Backend: Xero instance: {project.xero_instance.xero_name if project.xero_instance else 'None'}")
         except Projects.DoesNotExist:
-            logger.warning(f"🔍 [QUOTE DEBUG] Backend: Project {project_pk} not found")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Project not found'
@@ -459,56 +454,19 @@ def get_project_contacts(request, project_pk):
         
         # Check if project has a Xero instance
         if not project.xero_instance:
-            logger.warning(f"🔍 [QUOTE DEBUG] Backend: Project {project.project} has no Xero instance assigned")
             return JsonResponse({
                 'status': 'success',
                 'contacts': [],
                 'message': 'Project has no Xero instance assigned'
             })
         
-        # Check Xero instance details
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Xero instance details:")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - PK: {project.xero_instance.xero_instance_pk}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Name: {project.xero_instance.xero_name}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Client ID: {project.xero_instance.xero_client_id}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has encrypted access token: {bool(project.xero_instance.oauth_access_token_encrypted)}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has tenant ID: {bool(project.xero_instance.oauth_tenant_id)}")
-        
-        # Get contacts for this Xero instance
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Querying Contacts for xero_instance_id={project.xero_instance.xero_instance_pk}")
-        
-        # First, let's check if there are ANY contacts in the database
-        total_contacts = Contacts.objects.count()
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Total contacts in database: {total_contacts}")
-        
-        # Check contacts for this specific Xero instance
-        instance_contacts = Contacts.objects.filter(xero_instance=project.xero_instance)
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Contacts for this Xero instance (raw count): {instance_contacts.count()}")
-        
-        # Log some sample contacts from this instance
-        if instance_contacts.exists():
-            sample_contacts = instance_contacts.values('contact_pk', 'name', 'xero_instance_id')[:3]
-            logger.info(f"🔍 [QUOTE DEBUG] Backend: Sample contacts for this instance: {list(sample_contacts)}")
-        
-        # Check if there are contacts for other instances
-        other_instances = Contacts.objects.exclude(xero_instance=project.xero_instance).values('xero_instance__xero_name').distinct()
-        if other_instances.exists():
-            logger.info(f"🔍 [QUOTE DEBUG] Backend: Other Xero instances with contacts: {list(other_instances)}")
-        
+        # Get active contacts for this Xero instance from database
         contacts = Contacts.objects.filter(
-            xero_instance=project.xero_instance
-        ).order_by('name').values('contact_pk', 'name')
+            xero_instance=project.xero_instance,
+            status='ACTIVE'  # Only active suppliers
+        ).values('contact_pk', 'name').order_by('name')
         
         contacts_list = list(contacts)
-        
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Retrieved {len(contacts_list)} contacts for project {project.project}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend: Xero instance: {project.xero_instance.xero_name}")
-        
-        # Log first few contacts for debugging
-        if contacts_list:
-            logger.info(f"🔍 [QUOTE DEBUG] Backend: First 3 contacts: {contacts_list[:3]}")
-        else:
-            logger.warning(f"🔍 [QUOTE DEBUG] Backend: No contacts found for Xero instance {project.xero_instance.xero_name}")
         
         return JsonResponse({
             'status': 'success',
@@ -517,7 +475,7 @@ def get_project_contacts(request, project_pk):
         })
         
     except Exception as e:
-        logger.error(f"🔍 [QUOTE DEBUG] Backend: Error getting project contacts: {str(e)}", exc_info=True)
+        logger.error(f"Error getting project contacts: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting contacts: {str(e)}'
