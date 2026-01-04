@@ -1454,16 +1454,19 @@ var AllocationsManager = (function() {
                 
                 var url = typeof api.save === 'function' ? api.save(pk) : api.save.replace('{pk}', pk);
                 
+                console.log('saveAllocation - pk:', pk, 'url:', url, 'data:', data);
+                
                 $.ajax({
                     url: url,
                     type: 'POST',
                     contentType: 'application/json',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                     data: JSON.stringify(data),
                     success: function(response) {
-                        console.log('Allocation saved:', pk);
+                        console.log('Allocation saved:', pk, 'response:', response);
                     },
                     error: function(xhr, status, error) {
-                        console.error('Error saving allocation:', error);
+                        console.error('Error saving allocation:', pk, error, xhr.responseText);
                     }
                 });
             }, 500); // Debounce 500ms

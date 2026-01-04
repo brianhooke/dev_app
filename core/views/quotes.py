@@ -392,17 +392,26 @@ def update_quote_allocation(request, allocation_pk):
     try:
         allocation = Quote_allocations.objects.get(quote_allocations_pk=allocation_pk)
         
-        item_pk = request.POST.get('item_pk')
-        amount = request.POST.get('amount', 0)
-        notes = request.POST.get('notes', '')
+        # Parse JSON body (JS sends contentType: 'application/json')
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            # Fall back to form data for backwards compatibility
+            data = request.POST
+        
+        item_pk = data.get('item_pk')
+        amount = data.get('amount', 0)
+        notes = data.get('notes', '')
         
         # Construction-specific fields
-        qty = request.POST.get('qty')
-        rate = request.POST.get('rate')
-        unit = request.POST.get('unit', '')
+        qty = data.get('qty')
+        rate = data.get('rate')
+        unit = data.get('unit', '')
         
         if item_pk:
             allocation.item = Costing.objects.get(costing_pk=item_pk)
+        
+        logger.info(f"DEBUG update_quote_allocation: pk={allocation_pk}, item_pk={item_pk}, amount={amount}, qty={qty}, rate={rate}")
         
         # Handle construction mode (qty/rate provided)
         if qty is not None and rate is not None and qty != '' and rate != '':
@@ -410,11 +419,14 @@ def update_quote_allocation(request, allocation_pk):
             allocation.rate = Decimal(str(rate))
             allocation.unit = unit
             allocation.amount = allocation.qty * allocation.rate
+            logger.info(f"DEBUG update_quote_allocation: Construction mode - calculated amount={allocation.amount}")
         else:
-            allocation.amount = Decimal(amount) if amount else Decimal('0')
+            allocation.amount = Decimal(str(amount)) if amount else Decimal('0')
+            logger.info(f"DEBUG update_quote_allocation: Non-construction mode - amount={allocation.amount}")
             
         allocation.notes = notes
         allocation.save()
+        logger.info(f"DEBUG update_quote_allocation: Saved allocation {allocation_pk} with amount={allocation.amount}")
         
         return JsonResponse({'status': 'success'})
     except Quote_allocations.DoesNotExist:
