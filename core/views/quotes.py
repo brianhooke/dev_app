@@ -466,7 +466,34 @@ def get_project_contacts(request, project_pk):
                 'message': 'Project has no Xero instance assigned'
             })
         
+        # Check Xero instance details
+        logger.info(f"🔍 [QUOTE DEBUG] Backend: Xero instance details:")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - PK: {project.xero_instance.xero_instance_pk}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Name: {project.xero_instance.xero_name}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has credentials: {bool(project.xero_instance.access_token)}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Connected: {project.xero_instance.connected}")
+        
         # Get contacts for this Xero instance
+        logger.info(f"🔍 [QUOTE DEBUG] Backend: Querying Contacts for xero_instance_id={project.xero_instance.xero_instance_pk}")
+        
+        # First, let's check if there are ANY contacts in the database
+        total_contacts = Contacts.objects.count()
+        logger.info(f"🔍 [QUOTE DEBUG] Backend: Total contacts in database: {total_contacts}")
+        
+        # Check contacts for this specific Xero instance
+        instance_contacts = Contacts.objects.filter(xero_instance=project.xero_instance)
+        logger.info(f"🔍 [QUOTE DEBUG] Backend: Contacts for this Xero instance (raw count): {instance_contacts.count()}")
+        
+        # Log some sample contacts from this instance
+        if instance_contacts.exists():
+            sample_contacts = instance_contacts.values('contact_pk', 'name', 'xero_instance_id')[:3]
+            logger.info(f"🔍 [QUOTE DEBUG] Backend: Sample contacts for this instance: {list(sample_contacts)}")
+        
+        # Check if there are contacts for other instances
+        other_instances = Contacts.objects.exclude(xero_instance=project.xero_instance).values('xero_instance__xero_name').distinct()
+        if other_instances.exists():
+            logger.info(f"🔍 [QUOTE DEBUG] Backend: Other Xero instances with contacts: {list(other_instances)}")
+        
         contacts = Contacts.objects.filter(
             xero_instance=project.xero_instance
         ).order_by('name').values('contact_pk', 'name')
