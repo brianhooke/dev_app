@@ -203,6 +203,15 @@ Optional context variables:
     #{{ section_id }}AllocationsTable thead th {
         box-sizing: border-box;
         padding: 6px 8px; /* Consistent padding */
+        text-align: left; /* Inherit from data_table_styles.css */
+    }
+    
+    /* Action columns - center-aligned (inherit from data_table_styles.css) */
+    #{{ section_id }}AllocationsTable tbody td.col-action,
+    #{{ section_id }}AllocationsTable tbody td.col-action-first,
+    #{{ section_id }}AllocationsTable thead th.col-action,
+    #{{ section_id }}AllocationsTable thead th.col-action-first {
+        text-align: center;
     }
     
     /* Inputs in allocations table - fixed width to prevent alignment drift */
