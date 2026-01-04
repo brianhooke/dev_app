@@ -17,7 +17,7 @@ from datetime import datetime
 LOCAL_API_URL = "http://localhost:8000/core/api/receive_email/"
 
 # API secret key (must match your local settings)
-API_SECRET_KEY = "05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e"
+API_SECRET_KEY = "change-me-in-production-use-strong-random-key"
 
 # Sample email data
 email_data = {
@@ -86,6 +86,29 @@ def test_local_email():
             print(f"Attachments Saved: {result.get('attachment_count')}")
             print(f"Invoices Created: {result.get('invoices_count')}")
             print(f"Invoice IDs: {result.get('invoices_created')}")
+
+            # Simulate moving invoices from inbox to trigger recent activity
+            if result.get('invoices_created'):
+                print(f"\n🔄 Simulating 'move from inbox' action for recent activity...")
+                import django
+                import os
+                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dev_app.settings.local')
+                django.setup()
+                
+                from core.models import Bills
+                from django.utils import timezone
+                import time
+                
+                # Update the invoices to simulate moving from inbox
+                invoices = Bills.objects.filter(bill_pk__in=result['invoices_created'])
+                for invoice in invoices:
+                    # Update status and timestamp to simulate moving from inbox
+                    invoice.bill_status = 0  # Move to Direct status
+                    invoice.updated_at = timezone.now()
+                    invoice.save()
+                    print(f"  ✓ Moved invoice {invoice.bill_pk} from inbox")
+                
+                print(f"✅ Recent activity entries created!")
             print("\nCheck your local admin:")
             print("  http://localhost:8000/admin/core/receivedemail/")
             print("  http://localhost:8000/admin/core/invoices/?auto_created__exact=1")

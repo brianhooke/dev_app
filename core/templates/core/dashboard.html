@@ -709,6 +709,13 @@ Version: v129 (displayed in navbar bottom-left)
                     // Navigate to project's Bills > Unallocated
                     navigateToProjectSection(projectPk, 'bills', 'unallocated');
                     break;
+                case 'unassigned_bills':
+                    // Navigate to Bills > Unassigned (no project filter)
+                    $('#billsLink').click();
+                    setTimeout(function() {
+                        $('.btn-outline-secondary:contains("Direct")').click();
+                    }, 100);
+                    break;
                 case 'project_allocated':
                     // Navigate to project's Bills > Allocated
                     navigateToProjectSection(projectPk, 'bills', 'allocated');

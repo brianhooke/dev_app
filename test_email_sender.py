@@ -12,7 +12,7 @@ import random
 
 # Configuration
 API_URL = "http://localhost:8000/core/api/receive_email/"
-API_SECRET_KEY = "05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e"
+API_SECRET_KEY = "change-me-in-production-use-strong-random-key"
 
 # Sample supplier email addresses and names
 suppliers = [
@@ -186,6 +186,30 @@ def send_test_email(email_index):
             print(f"   Subject: {email_data['subject']}")
             print(f"   Attachments: {len(attachments)}")
             print(f"   Response: {result}")
+            
+            # Simulate moving invoices from inbox to trigger recent activity
+            if result.get('invoices_created'):
+                print(f"   🔄 Simulating 'move from inbox' action...")
+                import django
+                import os
+                import time
+                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dev_app.settings.local')
+                django.setup()
+                
+                from core.models import Bills
+                from django.utils import timezone
+                
+                # Update the invoices to simulate moving from inbox
+                invoices = Bills.objects.filter(bill_pk__in=result['invoices_created'])
+                for invoice in invoices:
+                    # Update status and timestamp to simulate moving from inbox
+                    invoice.bill_status = 0  # Move to Direct status
+                    invoice.updated_at = timezone.now()
+                    invoice.save()
+                print(f"   ✓ Recent activity entries created for {len(invoices)} invoices")
+            
+            print()
+            time.sleep(1)  # Small delay between emails
         else:
             print(f"❌ Error sending email {email_index + 1}: {response.status_code}")
             print(f"   Response: {response.text}")

@@ -2171,9 +2171,14 @@ def get_recent_activities(request):
     'Recent' = within 24 workday hours (last 24 hours for now).
     
     Activities tracked:
-    1. Invoices moved from Inbox (email invoices that were processed - have email_attachment and status > -2)
-    2. New projects created
-    3. Invoices allocated (status changed to 1)
+    1. Archived Bills (email bills that were moved to archive - have email_attachment and bills_status -1)
+    2. Bills Allocated
+    3. Bills sent for Approval
+    4. Bills sent to Xero
+    5. New projects created
+    6. Quotes Created
+    7. Purchase Orders Sent
+    8. Documents added
     """
     try:
         # Calculate 24 hours ago
@@ -2182,36 +2187,102 @@ def get_recent_activities(request):
         
         activities = []
         
-        # 1. Invoices moved from Inbox
-        # These are invoices that came from email (have email_attachment or received_email)
-        # and have been moved out of inbox (status > -2, meaning they were processed)
-        # We look at updated_at to see when they were moved
-        inbox_moved = Bills.objects.filter(
+        # 1. Archived Bills (email bills moved to archive - status -1)
+        archived_bills = Bills.objects.filter(
             updated_at__gte=cutoff,
-            bill_status__gt=-2,  # Not in unprocessed state
+            bill_status=-1,  # Archived status
         ).filter(
-            # Has email origin (came from inbox)
+            # Has email origin
             models.Q(email_attachment__isnull=False) | models.Q(received_email__isnull=False)
         ).exclude(
             # Exclude if created_at == updated_at (meaning just created, not moved)
             created_at=models.F('updated_at')
         ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
         
-        for invoice in inbox_moved:
-            supplier_name = invoice.contact_pk.name if invoice.contact_pk else 'Unknown'
-            project_name = invoice.project.project if invoice.project else 'Unassigned'
+        for bill in archived_bills:
+            supplier_name = bill.contact_pk.name if bill.contact_pk else 'Unknown'
+            project_name = bill.project.project if bill.project else 'Unassigned'
             activities.append({
-                'type': 'inbox_moved',
-                'icon': 'fas fa-inbox',
-                'color': '#17a2b8',  # info blue
-                'message': f'Invoice from {supplier_name} moved from Inbox',
+                'type': 'bill_archived',
+                'icon': 'fas fa-archive',
+                'color': '#6c757d',  # gray
+                'message': f'Bill from {supplier_name} archived',
                 'detail': f'Project: {project_name}',
-                'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
+                'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
                 'link': None,
-                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'project_pk': bill.project.projects_pk if bill.project else None,
             })
         
-        # 2. New projects created
+        # 2. Bills Allocated (status = 1)
+        allocated_bills = Bills.objects.filter(
+            updated_at__gte=cutoff,
+            bill_status=1,  # Allocated status
+        ).exclude(
+            # Exclude if created_at == updated_at (meaning just created, not moved)
+            created_at=models.F('updated_at')
+        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        
+        for bill in allocated_bills:
+            supplier_name = bill.contact_pk.name if bill.contact_pk else 'Unknown'
+            project_name = bill.project.project if bill.project else 'Unassigned'
+            activities.append({
+                'type': 'bill_allocated',
+                'icon': 'fas fa-check-circle',
+                'color': '#17a2b8',  # info blue
+                'message': f'Bill allocated: {supplier_name}',
+                'detail': f'Project: {project_name}',
+                'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
+                'link': None,
+                'project_pk': bill.project.projects_pk if bill.project else None,
+            })
+        
+        # 3. Bills sent for Approval (status = 2)
+        approval_bills = Bills.objects.filter(
+            updated_at__gte=cutoff,
+            bill_status=2,  # Sent for approval status
+        ).exclude(
+            # Exclude if created_at == updated_at (meaning just created, not moved)
+            created_at=models.F('updated_at')
+        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        
+        for bill in approval_bills:
+            supplier_name = bill.contact_pk.name if bill.contact_pk else 'Unknown'
+            project_name = bill.project.project if bill.project else 'Unassigned'
+            activities.append({
+                'type': 'bill_approval',
+                'icon': 'fas fa-user-check',
+                'color': '#fd7e14',  # orange
+                'message': f'Bill sent for approval: {supplier_name}',
+                'detail': f'Project: {project_name}',
+                'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
+                'link': None,
+                'project_pk': bill.project.projects_pk if bill.project else None,
+            })
+        
+        # 4. Bills sent to Xero (status = 3)
+        xero_bills = Bills.objects.filter(
+            updated_at__gte=cutoff,
+            bill_status=3,  # Sent to Xero status
+        ).exclude(
+            # Exclude if created_at == updated_at (meaning just created, not moved)
+            created_at=models.F('updated_at')
+        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        
+        for bill in xero_bills:
+            supplier_name = bill.contact_pk.name if bill.contact_pk else 'Unknown'
+            project_name = bill.project.project if bill.project else 'Unassigned'
+            activities.append({
+                'type': 'bill_xero',
+                'icon': 'fas fa-cloud-upload-alt',
+                'color': '#28a745',  # success green
+                'message': f'Bill sent to Xero: {supplier_name}',
+                'detail': f'Project: {project_name}',
+                'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
+                'link': None,
+                'project_pk': bill.project.projects_pk if bill.project else None,
+            })
+        
+        # 5. New projects created
         new_projects = Projects.objects.filter(
             created_at__gte=cutoff
         ).order_by('-created_at')[:10]
@@ -2220,7 +2291,7 @@ def get_recent_activities(request):
             activities.append({
                 'type': 'project_created',
                 'icon': 'fas fa-folder-plus',
-                'color': '#28a745',  # success green
+                'color': '#6f42c1',  # purple
                 'message': f'New project created: {project.project}',
                 'detail': f'Type: {project.project_type or "Not set"}',
                 'timestamp': project.created_at.isoformat() if project.created_at else None,
@@ -2228,25 +2299,68 @@ def get_recent_activities(request):
                 'project_pk': project.projects_pk,
             })
         
-        # 3. Invoices allocated (status = 1, recently updated)
-        # These are invoices that were allocated to a project
-        allocated_invoices = Bills.objects.filter(
-            updated_at__gte=cutoff,
-            bill_status=1,  # Allocated status
-        ).select_related('project', 'contact_pk').order_by('-updated_at')[:20]
+        # 6. Quotes Created
+        from core.models import Quotes
+        new_quotes = Quotes.objects.filter(
+            created_at__gte=cutoff
+        ).select_related('project', 'contact_pk').order_by('-created_at')[:10]
         
-        for invoice in allocated_invoices:
-            supplier_name = invoice.contact_pk.name if invoice.contact_pk else 'Unknown'
-            project_name = invoice.project.project if invoice.project else 'Unassigned'
+        for quote in new_quotes:
+            project_name = quote.project.project if quote.project else 'Unassigned'
+            contact_name = quote.contact_pk.name if quote.contact_pk else 'Unknown'
             activities.append({
-                'type': 'invoice_allocated',
-                'icon': 'fas fa-check-circle',
-                'color': '#6f42c1',  # purple
-                'message': f'Invoice allocated: {supplier_name}',
+                'type': 'quote_created',
+                'icon': 'fas fa-file-contract',
+                'color': '#20c997',  # teal
+                'message': f'Quote created for {contact_name}',
                 'detail': f'Project: {project_name}',
-                'timestamp': invoice.updated_at.isoformat() if invoice.updated_at else None,
+                'timestamp': quote.created_at.isoformat() if quote.created_at else None,
                 'link': None,
-                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'project_pk': quote.project.projects_pk if quote.project else None,
+            })
+        
+        # 7. Purchase Orders Sent
+        from core.models import Po_orders
+        sent_pos = Po_orders.objects.filter(
+            updated_at__gte=cutoff,
+            po_sent=True,  # PO has been sent
+        ).exclude(
+            # Exclude if created_at == updated_at (meaning just created, not sent)
+            created_at=models.F('updated_at')
+        ).select_related('project', 'po_supplier').order_by('-updated_at')[:10]
+        
+        for po in sent_pos:
+            project_name = po.project.project if po.project else 'Unassigned'
+            contact_name = po.po_supplier.name if po.po_supplier else 'Unknown'
+            activities.append({
+                'type': 'po_sent',
+                'icon': 'fas fa-shopping-cart',
+                'color': '#e83e8c',  # pink
+                'message': f'Purchase Order sent to {contact_name}',
+                'detail': f'Project: {project_name}',
+                'timestamp': po.updated_at.isoformat() if po.updated_at else None,
+                'link': None,
+                'project_pk': po.project.projects_pk if po.project else None,
+            })
+        
+        # 8. Documents added
+        from core.models import Document_files
+        new_documents = Document_files.objects.filter(
+            uploaded_at__gte=cutoff
+        ).select_related('folder', 'folder__project').order_by('-uploaded_at')[:15]
+        
+        for doc in new_documents:
+            project_name = doc.folder.project.project if doc.folder and doc.folder.project else 'Unassigned'
+            folder_name = doc.folder.folder_name if doc.folder else 'Unknown'
+            activities.append({
+                'type': 'document_added',
+                'icon': 'fas fa-file-upload',
+                'color': '#007bff',  # primary blue
+                'message': f'Document added: {doc.file_name}',
+                'detail': f'Folder: {folder_name} | Project: {project_name}',
+                'timestamp': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                'link': None,
+                'project_pk': doc.folder.project.projects_pk if doc.folder and doc.folder.project else None,
             })
         
         # Sort all activities by timestamp (most recent first)
@@ -2314,6 +2428,12 @@ def get_action_items(request):
             unallocated_by_project[key] += 1
         
         for (project_pk, project_name), count in unallocated_by_project.items():
+            # Use different action type for unassigned bills
+            if project_pk is None:
+                action_type = 'unassigned_bills'
+            else:
+                action_type = 'project_bills'
+            
             action_items.append({
                 'type': 'allocate',
                 'icon': 'fas fa-file-invoice-dollar',
@@ -2324,7 +2444,7 @@ def get_action_items(request):
                 'count': count,
                 'message': f'{count} bill{"s" if count > 1 else ""} need allocation',
                 'action': 'Allocate',
-                'action_type': 'project_invoices',
+                'action_type': action_type,
                 'project_pk': project_pk,
             })
         

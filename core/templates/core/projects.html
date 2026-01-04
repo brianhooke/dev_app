@@ -1028,7 +1028,7 @@ $(document).ready(function() {
         formData.append('xero_sales_account', $('#modalSalesAccount').val());
         
         $.ajax({
-            url: '/core/update_project/',
+            url: `/core/update_project/${currentModalProject.projects_pk}/`,
             type: 'POST',
             data: formData,
             processData: false,
