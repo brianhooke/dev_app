@@ -470,8 +470,9 @@ def get_project_contacts(request, project_pk):
         logger.info(f"🔍 [QUOTE DEBUG] Backend: Xero instance details:")
         logger.info(f"🔍 [QUOTE DEBUG] Backend:   - PK: {project.xero_instance.xero_instance_pk}")
         logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Name: {project.xero_instance.xero_name}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has credentials: {bool(project.xero_instance.access_token)}")
-        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Connected: {project.xero_instance.connected}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Client ID: {project.xero_instance.xero_client_id}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has encrypted access token: {bool(project.xero_instance.oauth_access_token_encrypted)}")
+        logger.info(f"🔍 [QUOTE DEBUG] Backend:   - Has tenant ID: {bool(project.xero_instance.oauth_tenant_id)}")
         
         # Get contacts for this Xero instance
         logger.info(f"🔍 [QUOTE DEBUG] Backend: Querying Contacts for xero_instance_id={project.xero_instance.xero_instance_pk}")
