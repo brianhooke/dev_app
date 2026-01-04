@@ -210,7 +210,10 @@ def update_quote(request):
                         logger.info(f"Created construction allocation: Item {item_pk}, Qty {qty}, Rate {rate}, Amount {amount}")
                     else:
                         # Non-construction: use provided amount
-                        amount = line_item.get('amount', 0)
+                        raw_amount = line_item.get('amount', 0)
+                        logger.info(f"DEBUG UPDATE_QUOTE: Raw amount data: {raw_amount}, type: {type(raw_amount)}")
+                        amount = Decimal(str(raw_amount))
+                        logger.info(f"DEBUG UPDATE_QUOTE: Converted amount: {amount}, type: {type(amount)}")
                         
                         Quote_allocations.objects.create(
                             quotes_pk=quote,
@@ -218,7 +221,7 @@ def update_quote(request):
                             amount=amount,
                             notes=notes
                         )
-                        logger.info(f"Created allocation: Item {item_pk}, Amount {amount}")
+                        logger.info(f"DEBUG UPDATE_QUOTE: Created allocation: Item {item_pk}, Amount {amount}")
                         
                 except Costing.DoesNotExist:
                     logger.error(f"Costing {item_pk} not found, skipping allocation")
@@ -683,7 +686,10 @@ def save_project_quote(request):
                     )
                 else:
                     # Non-construction: use provided amount
-                    amount = item_data.get('amount')
+                    raw_amount = item_data.get('amount', 0)
+                    logger.info(f"DEBUG: Raw amount data: {raw_amount}, type: {type(raw_amount)}")
+                    amount = Decimal(str(raw_amount))
+                    logger.info(f"DEBUG: Converted amount: {amount}, type: {type(amount)}")
                     
                     Quote_allocations.objects.create(
                         quotes_pk=quote,
@@ -691,6 +697,7 @@ def save_project_quote(request):
                         amount=amount,
                         notes=notes
                     )
+                    logger.info(f"DEBUG: Created allocation with amount: {amount}")
             
             action = 'updated' if is_update else 'created'
             logger.info(f"Quote {quote.quotes_pk} {action} for project {project.project} with {len(line_items)} allocations")
