@@ -785,8 +785,12 @@ var AllocationsManager = (function() {
         }
         
         // Apply column widths if configured
+        console.log('🔍 [ALLOCATIONS DEBUG] Checking column widths for', sectionId + ':', cfg.allocations.columnWidths);
         if (cfg.allocations.columnWidths) {
+            console.log('🔍 [ALLOCATIONS DEBUG] Applying column styles:', cfg.allocations.columnWidths);
             Utils.applyColumnStyles(sectionId, cfg.allocations.columnWidths, { addEditableClass: showEditable });
+        } else {
+            console.log('🔍 [ALLOCATIONS DEBUG] No column widths configured for', sectionId);
         }
     }
     

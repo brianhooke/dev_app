@@ -19,6 +19,9 @@
         window.projectPk = '{{ project_pk }}';
     }
     window.quoteIsConstruction = {{ is_construction|yesno:"true,false" }};
+    // Column widths from Python context (single source of truth)
+    window.quoteAllocationWidths = [{% for col in allocations_columns %}'{{ col.width }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    console.log('🔍 [QUOTE DEBUG] Allocation widths from template:', window.quoteAllocationWidths);
 </script>
 
 <!-- Self-Contained Quotes Section JS -->
@@ -55,6 +58,7 @@
     
     
     // Initialize AllocationsManager
+    console.log('🔍 [QUOTE DEBUG] About to init AllocationsManager with widths:', window.quoteAllocationWidths);
     AllocationsManager.init({
         sectionId: 'quote',
         features: {
@@ -121,9 +125,7 @@
         allocations: {
             emptyMessage: 'No allocations for this quote',
             editable: true,
-            columnWidths: isConstruction 
-                ? ['22%', '8%', '10%', '10%', '15%', '30%', '5%']  // Item, Unit, Qty, Rate, Amount, Notes, Delete
-                : ['40%', '20%', '35%', '5%'],  // Item, Net, Notes, Delete
+            columnWidths: window.quoteAllocationWidths || [],  // Use template widths like bills
             renderRow: function(alloc, cfg) {
                 return renderQuoteAllocationRow(alloc, false);
             },

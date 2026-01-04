@@ -146,6 +146,7 @@ function isConstructionProject(sectionId) {
  * @param {Object} options - Optional settings { addEditableClass: true }
  */
 function applyColumnStyles(sectionId, widths, options) {
+    console.log('🔍 [UTILS DEBUG] applyColumnStyles called with:', sectionId, widths, options);
     var tableId = sectionId + 'AllocationsTable';
     var opts = options || {};
     
