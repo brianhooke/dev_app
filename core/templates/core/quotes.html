@@ -79,7 +79,7 @@ $(document).ready(function() {
             showFooter: true,
             alwaysShowFooter: true,
             footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
-            renderRow: function(quote, cfg) {
+            renderRow: function(quote, index, cfg) {
                 var row = $('<tr>').attr('data-pk', quote.quotes_pk);
                 // Store quote data on row for later access
                 row.data('quote', quote);
