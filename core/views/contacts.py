@@ -222,9 +222,9 @@ def pull_xero_contacts(request, instance_pk):
             bank_details = bank_account_details
             tax_number = xero_contact.get('TaxNumber', '')
             
-            # Check if contact already exists
+            # Check if contact already exists for this Xero instance
             try:
-                existing_contact = Contacts.objects.get(xero_contact_id=contact_id)
+                existing_contact = Contacts.objects.get(xero_contact_id=contact_id, xero_instance=xero_instance)
                 
                 # Compare and update if any field has changed
                 fields_to_update = {
