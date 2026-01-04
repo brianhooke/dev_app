@@ -1558,7 +1558,7 @@ var AllocationsManager = (function() {
             row.append($('<td>').append(notesInput));
             
         } else {
-            // Non-construction mode: Item | $ Net | $ GST | Notes | Del
+            // Non-construction mode: Item | $ Net | Notes | Del (GST only for bills, not quotes)
             
             // Save on change and update validation
             itemSelect.on('change', function() {
@@ -1586,12 +1586,14 @@ var AllocationsManager = (function() {
                             $(this).val(parseFloat(value).toFixed(2));
                         }
                     }
-                    // Auto-calculate GST as 10%
-                    var gstInputEl = $(this).closest('tr').find('.' + cls + '-gst-input');
-                    if (!gstInputEl.data('manually-edited')) {
-                        var netVal = parseFloat($(this).val());
-                        if (!isNaN(netVal)) {
-                            gstInputEl.val((netVal * 0.1).toFixed(2));
+                    // Only calculate GST for bills, not quotes
+                    if (sectionId !== 'quote') {
+                        var gstInputEl = $(this).closest('tr').find('.' + cls + '-gst-input');
+                        if (!gstInputEl.data('manually-edited')) {
+                            var netVal = parseFloat($(this).val());
+                            if (!isNaN(netVal)) {
+                                gstInputEl.val((netVal * 0.1).toFixed(2));
+                            }
                         }
                     }
                     onUpdate();
@@ -1599,34 +1601,36 @@ var AllocationsManager = (function() {
                 });
             row.append($('<td>').append(netInput));
             
-            // 3. $ GST input
-            var gstInput = $('<input>')
-                .attr('type', 'number')
-                .attr('step', '0.01')
-                .attr('min', '0')
-                .addClass('form-control form-control-sm ' + cls + '-gst-input')
-                .val(alloc.gst_amount || '')
-                .on('focus', function() {
-                    $(this).data('manually-edited', true);
-                })
-                .on('input', function() {
-                    var value = $(this).val();
-                    if (parseFloat(value) < 0) {
-                        $(this).val(0);
-                        return;
-                    }
-                    if (value.includes('.')) {
-                        var parts = value.split('.');
-                        if (parts[1] && parts[1].length > 2) {
-                            $(this).val(parseFloat(value).toFixed(2));
+            // 3. GST input only for bills, not quotes
+            if (sectionId !== 'quote') {
+                var gstInput = $('<input>')
+                    .attr('type', 'number')
+                    .attr('step', '0.01')
+                    .attr('min', '0')
+                    .addClass('form-control form-control-sm ' + cls + '-gst-input')
+                    .val(alloc.gst_amount || '')
+                    .on('focus', function() {
+                        $(this).data('manually-edited', true);
+                    })
+                    .on('input', function() {
+                        var value = $(this).val();
+                        if (parseFloat(value) < 0) {
+                            $(this).val(0);
+                            return;
                         }
-                    }
-                    onUpdate();
-                    saveAllocation();
-                });
-            row.append($('<td>').append(gstInput));
+                        if (value.includes('.')) {
+                            var parts = value.split('.');
+                            if (parts[1] && parts[1].length > 2) {
+                                $(this).val(parseFloat(value).toFixed(2));
+                            }
+                        }
+                        onUpdate();
+                        saveAllocation();
+                    });
+                row.append($('<td>').append(gstInput));
+            }
             
-            // 4. Notes input
+            // 4. Notes input (or 3rd column for quotes)
             var notesInput = $('<input>')
                 .attr('type', 'text')
                 .addClass('form-control form-control-sm ' + cls + '-notes-input')
