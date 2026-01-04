@@ -314,8 +314,12 @@ def toggle_project_archive(request, project_pk):
         
         # Get new archived status
         archived = request.POST.get('archived', '0')
+        logger.info(f"Archive request for project {project_pk}: received archived={archived}")
+        
         project.archived = 1 if archived == '1' else 0
         project.save()
+        
+        logger.info(f"Project {project.project} archived status updated to: {project.archived}")
         
         action = 'archived' if project.archived == 1 else 'unarchived'
         logger.info(f"Project {action}: {project.project} (pk={project.projects_pk})")

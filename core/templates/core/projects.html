@@ -725,7 +725,7 @@ $(document).ready(function() {
             const typeClass = project.project_type || 'general';
             
             const card = $(`
-                <div class="project-card" data-project-pk="${project.projects_pk}">
+                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}">
                     <div class="card-header">
                         <h5 class="card-title">${project.project}</h5>
                     </div>
@@ -1141,7 +1141,7 @@ $(document).ready(function() {
         const card = $(this).closest('.project-card');
         const projectPk = card.data('project-pk');
         const projectName = card.find('.card-title').text();
-        const isCurrentlyArchived = $('#toggleArchiveBtn').data('showing-archived') === 1;
+        const isCurrentlyArchived = card.data('project-archived') === 1;
         const action = isCurrentlyArchived ? 'restore' : 'archive';
         
         if (!confirm(`Are you sure you want to ${action} "${projectName}"?`)) {
@@ -1152,14 +1152,16 @@ $(document).ready(function() {
             url: '/core/toggle_project_archive/' + projectPk + '/',
             type: 'POST',
             data: {
-                archive: !isCurrentlyArchived
+                archived: isCurrentlyArchived ? '0' : '1'  // Send as string '0' or '1'
             },
             headers: {
                 'X-CSRFToken': Utils.getCSRFToken()
             },
             success: function(response) {
                 if (response.status === 'success') {
-                    loadProjects(isCurrentlyArchived);
+                    // Reload the current view (archived or active projects)
+                    const showingArchived = $('#toggleArchiveBtn').data('showing-archived') === 1;
+                    loadProjects(showingArchived);
                 } else {
                     alert('Error: ' + response.message);
                 }
