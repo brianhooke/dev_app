@@ -68,7 +68,7 @@ $(document).ready(function() {
             gstField: false,
             confirmDelete: true,
             reloadAfterDelete: false,  // Use onDeleteSuccess callback instead
-            showSaveButton: true,
+            showSaveButton: false,  // Using main table Save button instead of footer
             alwaysShowAddButton: false
         },
         data: {
@@ -79,12 +79,10 @@ $(document).ready(function() {
             showFooter: true,
             alwaysShowFooter: true,
             footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
-            renderRow: function(quote, index, cfg) {
-                var pdfUrl = quote.pdf_url || '';
-                var row = $('<tr>')
-                    .attr('data-pk', quote.quotes_pk)
-                    .attr('data-quote-pk', quote.quotes_pk)
-                    .attr('data-pdf-url', pdfUrl);
+            renderRow: function(quote, cfg) {
+                var row = $('<tr>').attr('data-pk', quote.quotes_pk);
+                // Store quote data on row for later access
+                row.data('quote', quote);
                 
                 // Supplier
                 var supplierName = quote.supplier_name || '-';
@@ -117,6 +115,8 @@ $(document).ready(function() {
                 if (window.editingQuotePk) {
                     console.log('Cancelling edit mode - user clicked another row');
                     AllocationsManager.setEditMode('quote', false);
+                    // Revert the Save button back to Update button
+                    revertSaveToUpdateButton(window.editingQuotePk);
                 }
                 window.editingQuotePk = null;
                 window.currentSelectedQuote = cfg.data.currentItem;
@@ -147,12 +147,26 @@ $(document).ready(function() {
                 });
             },
             onUpdate: function(sectionId, data) {
-                // Enable/disable Save button based on remainingNet
-                var saveBtn = $('#' + sectionId + 'SaveAllocationsBtn');
-                if (saveBtn.length) {
-                    var isValid = Math.abs(data.remainingNet) < 0.01;
-                    saveBtn.prop('disabled', !isValid);
-                    saveBtn.css('opacity', isValid ? '1' : '0.5');
+                // For quotes in edit mode, update the main table Save button (not footer)
+                if (window.editingQuotePk) {
+                    var mainSaveBtn = $('#quoteMainTableBody tr[data-pk="' + window.editingQuotePk + '"] .quote-save-btn');
+                    if (mainSaveBtn.length) {
+                        var isValid = Math.abs(data.remainingNet) < 0.01;
+                        // Check all allocations have items selected
+                        var allocations = AllocationsManager.getAllocations('quote');
+                        for (var i = 0; i < allocations.length; i++) {
+                            if (!allocations[i].item_pk) {
+                                isValid = false;
+                                break;
+                            }
+                        }
+                        mainSaveBtn.prop('disabled', !isValid);
+                        if (isValid) {
+                            mainSaveBtn.removeClass('btn-warning btn-secondary').addClass('btn-success');
+                        } else {
+                            mainSaveBtn.removeClass('btn-success btn-warning').addClass('btn-secondary');
+                        }
+                    }
                 }
                 // Also validate new quote if in new mode
                 if (window.newQuoteMode && typeof window.validateNewQuote === 'function') {
@@ -199,6 +213,10 @@ $(document).ready(function() {
             onSaveSuccess: function(response, itemPk, cfg) {
                 alert('Quote allocations saved successfully!');
                 AllocationsManager.setEditMode('quote', false);
+                
+                // Revert Save button back to Update button
+                revertSaveToUpdateButton(itemPk);
+                
                 window.editingQuotePk = null;
                 // Reload allocations to show saved state
                 AllocationsManager.loadAllocations('quote', itemPk);
@@ -261,6 +279,28 @@ $(document).ready(function() {
     
     // NOTE: updateRowAmount removed - now handled by AllocationsManager.createEditableAllocationRow
     
+    // Helper function to revert Save button back to Update button
+    function revertSaveToUpdateButton(quotePk) {
+        var row = $('#quoteMainTableBody tr[data-pk="' + quotePk + '"]');
+        var saveBtn = row.find('.quote-save-btn');
+        if (saveBtn.length) {
+            // Get the quote data from the row
+            var quoteData = row.data('quote') || { quotes_pk: quotePk };
+            
+            saveBtn
+                .removeClass('btn-success btn-secondary quote-save-btn')
+                .addClass('btn-warning quote-update-btn')
+                .text('Update')
+                .attr('title', 'Update')
+                .prop('disabled', false)
+                .off('click')
+                .on('click', function(e) {
+                    e.stopPropagation();
+                    openQuoteForEditing(quoteData);
+                });
+        }
+    }
+    
     // Open quote for editing
     function openQuoteForEditing(quote) {
         console.log('Opening quote for editing:', quote);
@@ -271,8 +311,26 @@ $(document).ready(function() {
         window.currentSelectedQuote = quote;
         window.editingQuotePk = quote.quotes_pk;
         
-        // Select the row (will load allocations)
+        // Change Update button to Save button in the main table
         var row = $('#quoteMainTableBody tr[data-pk="' + quote.quotes_pk + '"]');
+        var updateBtn = row.find('.quote-update-btn');
+        if (updateBtn.length) {
+            updateBtn
+                .removeClass('btn-warning quote-update-btn')
+                .addClass('btn-secondary quote-save-btn')
+                .text('Save')
+                .attr('title', 'Save allocations')
+                .off('click')
+                .on('click', function(e) {
+                    e.stopPropagation();
+                    // Use AllocationsManager to save
+                    AllocationsManager.saveItem('quote', quote.quotes_pk);
+                });
+        }
+        
+        // Hide the footer Save button (we're using the main table Save button now)
+        $('#quoteSaveAllocationsBtn').hide();
+        
         if (row.length) {
             if (!row.hasClass('selected-row')) {
                 // Row not selected - select it (this will load allocations with editMode: true)
