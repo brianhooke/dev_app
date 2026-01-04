@@ -155,6 +155,37 @@ function applyColumnStyles(sectionId, widths, options) {
         $('#' + tableId).addClass('editable-allocations');
     }
     
+    // Get the actual table width for precise pixel calculations
+    var $table = $('#' + tableId);
+    var tableWidth = $table.width();
+    console.log('🔍 [UTILS DEBUG] Table width for', sectionId + ':', tableWidth + 'px');
+    
+    // Calculate pixel widths using the table's actual width (not available space)
+    // This ensures perfect alignment by using the same calculation the browser uses
+    var pixelWidths = [];
+    widths.forEach(function(w, i) {
+        // Use the table's actual width for calculation (like browser does for percentages)
+        var pixelWidth = Math.round(tableWidth * parseFloat(w) / 100);
+        pixelWidths.push(pixelWidth);
+        console.log('🔍 [UTILS DEBUG] Column', (i + 1), '- Width:', w, '=', pixelWidth + 'px');
+    });
+    
+    // Ensure table fits within container by using available width for calculations
+    var containerWidth = $('#' + tableId).parent().width();
+    console.log('🔍 [UTILS DEBUG] Container width for', sectionId + ':', containerWidth + 'px');
+    
+    // Recalculate pixel widths based on container width (not table width)
+    pixelWidths = [];
+    widths.forEach(function(w, i) {
+        var pixelWidth = Math.round(containerWidth * parseFloat(w) / 100);
+        pixelWidths.push(pixelWidth);
+        console.log('🔍 [UTILS DEBUG] Column', (i + 1), '- Width:', w, '=', pixelWidth + 'px (based on container)');
+    });
+    
+    // Ensure table fits perfectly
+    $('#' + tableId).css('width', '100%');
+    console.log('🔍 [UTILS DEBUG] Table set to 100% container width');
+    
     // Inject CSS to apply column widths to both thead and tbody
     // (needed because tbody uses display:block for scrolling)
     var styleId = tableId + 'ColumnStyles';
@@ -164,12 +195,10 @@ function applyColumnStyles(sectionId, widths, options) {
         $('head').append(styleEl);
     }
     var css = '';
-    widths.forEach(function(w, i) {
+    pixelWidths.forEach(function(pixelWidth, i) {
+        // Use precise pixel widths for both th and td, overriding inline styles
         css += '#' + tableId + ' thead th:nth-child(' + (i + 1) + '),\n';
-        css += '#' + tableId + ' tbody td:nth-child(' + (i + 1) + ') { width: ' + w + ' !important; }\n';
-        // Add more specific rules to override any conflicting styles
-        css += '#' + tableId + '.editable-allocations thead th:nth-child(' + (i + 1) + '),\n';
-        css += '#' + tableId + '.editable-allocations tbody td:nth-child(' + (i + 1) + ') { width: ' + w + ' !important; min-width: ' + w + ' !important; max-width: ' + w + ' !important; box-sizing: border-box !important; }\n';
+        css += '#' + tableId + ' tbody td:nth-child(' + (i + 1) + ') { width: ' + pixelWidth + 'px !important; min-width: ' + pixelWidth + 'px !important; max-width: ' + pixelWidth + 'px !important; box-sizing: border-box !important; padding: 8px !important; margin: 0 !important; border: 1px solid #ddd !important; }\n';
     });
     console.log('🔍 [UTILS DEBUG] Generated CSS for', sectionId + ':', css);
     styleEl.text(css);

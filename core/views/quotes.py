@@ -89,7 +89,7 @@ def quotes_view(request):
         ]
     else:
         allocations_columns = [
-            {'header': 'Item', 'width': '40%'},
+            {'header': 'Item', 'width': '37%'},
             {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
             {'header': 'Notes', 'width': '35%'},
             {'header': 'Delete', 'width': '8%', 'class': 'col-action-first', 'edit_only': True},
