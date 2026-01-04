@@ -1020,13 +1020,21 @@ var AllocationsManager = (function() {
         $('#' + sectionId + 'AllocationsTableBody tr').each(function() {
             var row = $(this);
             var itemSelect = row.find('.' + sectionId + '-allocation-item-select');
+            // For non-construction, the amount input uses class '-net-input', not '-amount-input'
             var amountInput = row.find('.' + sectionId + '-allocation-amount-input');
+            if (amountInput.length === 0) {
+                // Fall back to -net-input for non-construction mode
+                amountInput = row.find('.' + sectionId + '-allocation-net-input');
+            }
             var notesInput = row.find('.' + sectionId + '-allocation-notes-input');
             
             if (itemSelect.length && itemSelect.val()) {
+                var amountVal = parseFloat(amountInput.val()) || 0;
+                console.log('getAllocations - sectionId:', sectionId, 'item_pk:', itemSelect.val(), 'amount:', amountVal, 'isConstruction:', isConstruction);
+                
                 var alloc = {
                     item_pk: itemSelect.val(),
-                    amount: parseFloat(amountInput.val()) || 0,
+                    amount: amountVal,
                     notes: notesInput.val() || '',
                     allocation_pk: row.attr('data-allocation-pk') || null
                 };
