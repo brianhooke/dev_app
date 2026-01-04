@@ -92,7 +92,7 @@ def quotes_view(request):
             {'header': 'Item', 'width': '40%'},
             {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'RemainingNet'},
             {'header': 'Notes', 'width': '35%'},
-            {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
+            {'header': 'Delete', 'width': '8%', 'class': 'col-action-first', 'edit_only': True},
         ]
     
     context = {

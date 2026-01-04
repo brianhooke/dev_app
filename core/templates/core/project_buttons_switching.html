@@ -662,15 +662,10 @@ $(document).ready(function() {
                     console.log('🔍 [QUOTE DEBUG] Contacts count:', response.contacts ? response.contacts.length : 'null');
                     
                     if (response.status === 'success' && response.contacts) {
-                        console.log('🔍 [QUOTE DEBUG] Contacts data:', response.contacts);
                         response.contacts.forEach(function(contact, index) {
-                            console.log('🔍 [QUOTE DEBUG] Adding contact', index, ':', {
-                                contact_pk: contact.contact_pk,
-                                name: contact.name
-                            });
                             supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
                         });
-                        console.log('🔍 [QUOTE DEBUG] Supplier dropdown options count after population:', supplierSelect.find('option').length);
+                        console.log('🔍 [QUOTE DEBUG] Supplier dropdown populated with', response.contacts.length, 'contacts');
                     } else {
                         console.warn('⚠️ [QUOTE DEBUG] No contacts in response or status not success');
                     }

@@ -21,12 +21,12 @@
     window.quoteIsConstruction = {{ is_construction|yesno:"true,false" }};
     // Column widths from Python context (single source of truth)
     window.quoteAllocationWidths = [{% for col in allocations_columns %}'{{ col.width }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    console.log('🔍 [QUOTE DEBUG] Allocation widths from template:', window.quoteAllocationWidths);
+    console.log('🔍 [QUOTE DEBUG] Template widths loaded:', window.quoteAllocationWidths);
 </script>
 
 <!-- Self-Contained Quotes Section JS -->
 <script>
-(function() {
+$(document).ready(function() {
     'use strict';
     
     // Wait for DOM and ensure we have the table
@@ -58,7 +58,7 @@
     
     
     // Initialize AllocationsManager
-    console.log('🔍 [QUOTE DEBUG] About to init AllocationsManager with widths:', window.quoteAllocationWidths);
+    console.log('🔍 [QUOTE DEBUG] Document ready, initializing AllocationsManager with widths:', window.quoteAllocationWidths);
     AllocationsManager.init({
         sectionId: 'quote',
         features: {
@@ -216,6 +216,15 @@
         }
     });
     
+    // Manually trigger column width application for quotes (since allocations might not load immediately)
+    console.log('🔍 [QUOTE DEBUG] Manually applying column styles for quotes');
+    if (window.quoteAllocationWidths && window.quoteAllocationWidths.length > 0) {
+        Utils.applyColumnStyles('quote', window.quoteAllocationWidths, { addEditableClass: true });
+        console.log('🔍 [QUOTE DEBUG] Manual column styles applied for quotes');
+    } else {
+        console.log('🔍 [QUOTE DEBUG] No quote widths available for manual application');
+    }
+    
     // NOTE: Column widths now handled by AllocationsManager via allocations.columnWidths config
     
     // Render a quote allocation row (read-only mode only - editable uses shared createEditableAllocationRow)
@@ -326,5 +335,5 @@
         loadQuotesData();
     }
     
-})();
+});
 </script>

@@ -146,7 +146,7 @@ function isConstructionProject(sectionId) {
  * @param {Object} options - Optional settings { addEditableClass: true }
  */
 function applyColumnStyles(sectionId, widths, options) {
-    console.log('🔍 [UTILS DEBUG] applyColumnStyles called with:', sectionId, widths, options);
+    console.log('🔍 [UTILS DEBUG] applyColumnStyles called:', { sectionId: sectionId, widths: widths, options: options });
     var tableId = sectionId + 'AllocationsTable';
     var opts = options || {};
     
@@ -167,8 +167,13 @@ function applyColumnStyles(sectionId, widths, options) {
     widths.forEach(function(w, i) {
         css += '#' + tableId + ' thead th:nth-child(' + (i + 1) + '),\n';
         css += '#' + tableId + ' tbody td:nth-child(' + (i + 1) + ') { width: ' + w + ' !important; }\n';
+        // Add more specific rules to override any conflicting styles
+        css += '#' + tableId + '.editable-allocations thead th:nth-child(' + (i + 1) + '),\n';
+        css += '#' + tableId + '.editable-allocations tbody td:nth-child(' + (i + 1) + ') { width: ' + w + ' !important; min-width: ' + w + ' !important; max-width: ' + w + ' !important; box-sizing: border-box !important; }\n';
     });
+    console.log('🔍 [UTILS DEBUG] Generated CSS for', sectionId + ':', css);
     styleEl.text(css);
+    console.log('🔍 [UTILS DEBUG] CSS injected into DOM for', sectionId);
 }
 
 /**
