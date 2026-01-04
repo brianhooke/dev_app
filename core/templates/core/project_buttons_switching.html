@@ -639,18 +639,53 @@ $(document).ready(function() {
         var projectPk = window.projectPk || 
                         (window.currentConstructionProject && window.currentConstructionProject.pk) ||
                         (window.currentTenderProject && window.currentTenderProject.pk);
+        
+        console.log('🔍 [QUOTE DEBUG] New Quote - Supplier Dropdown Population');
+        console.log('🔍 [QUOTE DEBUG] Project PK sources:', {
+            'window.projectPk': window.projectPk,
+            'window.currentConstructionProject.pk': window.currentConstructionProject ? window.currentConstructionProject.pk : null,
+            'window.currentTenderProject.pk': window.currentTenderProject ? window.currentTenderProject.pk : null,
+            'final projectPk': projectPk
+        });
+        
         if (projectPk) {
+            console.log('🔍 [QUOTE DEBUG] Making AJAX call to load contacts for project:', projectPk);
             $.ajax({
                 url: '/core/get_project_contacts/' + projectPk + '/',
                 type: 'GET',
+                beforeSend: function() {
+                    console.log('🔍 [QUOTE DEBUG] About to call /core/get_project_contacts/' + projectPk + '/');
+                },
                 success: function(response) {
+                    console.log('🔍 [QUOTE DEBUG] AJAX response received:', response);
+                    console.log('🔍 [QUOTE DEBUG] Response status:', response.status);
+                    console.log('🔍 [QUOTE DEBUG] Contacts count:', response.contacts ? response.contacts.length : 'null');
+                    
                     if (response.status === 'success' && response.contacts) {
-                        response.contacts.forEach(function(contact) {
+                        console.log('🔍 [QUOTE DEBUG] Contacts data:', response.contacts);
+                        response.contacts.forEach(function(contact, index) {
+                            console.log('🔍 [QUOTE DEBUG] Adding contact', index, ':', {
+                                contact_pk: contact.contact_pk,
+                                name: contact.name
+                            });
                             supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
                         });
+                        console.log('🔍 [QUOTE DEBUG] Supplier dropdown options count after population:', supplierSelect.find('option').length);
+                    } else {
+                        console.warn('⚠️ [QUOTE DEBUG] No contacts in response or status not success');
                     }
+                },
+                error: function(xhr, status, error) {
+                    console.error('❌ [QUOTE DEBUG] AJAX error loading contacts:', {
+                        status: status,
+                        error: error,
+                        responseText: xhr.responseText,
+                        statusCode: xhr.status
+                    });
                 }
             });
+        } else {
+            console.error('❌ [QUOTE DEBUG] No projectPk found - cannot load suppliers');
         }
         supplierCell.append(supplierSelect);
         newRow.append(supplierCell);
