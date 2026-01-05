@@ -376,7 +376,6 @@ $(document).ready(function() {
             
             // Load categories and items for a project
             function loadProjectItems(projectPk) {
-                console.log('Loading items for project:', projectPk);
                 
                 // Load categories
                 $.ajax({
@@ -385,7 +384,6 @@ $(document).ready(function() {
                     success: function(response) {
                         if (response.status === 'success') {
                             window.itemsCategories = response.categories;
-                            console.log('Loaded categories:', window.itemsCategories);
                             updateCategoryOrderDropdown();
                             updateItemCategoryDropdown();
                             loadItems(projectPk);
@@ -407,7 +405,6 @@ $(document).ready(function() {
                     success: function(response) {
                         if (response.status === 'success') {
                             window.itemsItems = response.items;
-                            console.log('Loaded items:', window.itemsItems);
                             renderItemsTable();
                         } else {
                             console.error('Error loading items:', response.message);
@@ -792,7 +789,6 @@ $(document).ready(function() {
                     }),
                     success: function(response) {
                         if (response.status === 'success') {
-                            console.log('Category created:', response.category);
                             
                             // Reload all categories since order may have changed
                             loadProjectItems(window.currentTenderProject.pk);
@@ -847,7 +843,6 @@ $(document).ready(function() {
                     }),
                     success: function(response) {
                         if (response.status === 'success') {
-                            console.log('Item created:', response.item);
                             
                             // Reload all items since order may have changed
                             loadProjectItems(window.currentTenderProject.pk);

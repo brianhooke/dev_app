@@ -123,7 +123,6 @@ $(document).ready(function() {
         const xeroInstancePk = card.data('xero-instance-pk');
         const projectType = card.data('project-type');
         
-        console.log(`Opening tender view for project: ${projectName} (pk=${projectPk})`);
         
         // Store current project info globally
         window.currentTenderProject = {
@@ -155,9 +154,6 @@ $(document).ready(function() {
         const xeroInstancePk = card.data('xero-instance-pk');
         const projectType = card.data('project-type');
         
-        console.log(`Opening construction view for project: ${projectName} (pk=${projectPk})`);
-        console.log(`Xero Instance PK: ${xeroInstancePk}`);
-        console.log(`Project Type: ${projectType}`);
         
         // Store current project info globally
         window.currentConstructionProject = {
@@ -202,7 +198,6 @@ $(document).ready(function() {
     // Handle Construction navigation button clicks
     $(document).on('click', '.construction-nav-btn', function() {
         const section = $(this).data('section');
-        console.log(`Construction section clicked: ${section}`);
         
         // Remove active class from all buttons (except bills main btn which is handled separately)
         $('.construction-nav-btn:not(.bills-main-btn)').removeClass('btn-primary').addClass('btn-outline-primary');
@@ -246,7 +241,6 @@ $(document).ready(function() {
     // Handle Bills sub-menu button clicks
     $(document).on('click', '.bills-sub-btn', function() {
         const subsection = $(this).data('subsection');
-        console.log(`Bills subsection clicked: ${subsection}`);
         
         // Update active state on sub-buttons
         $('.bills-sub-btn').removeClass('active');
@@ -259,7 +253,6 @@ $(document).ready(function() {
     // Handle Tender navigation button clicks
     $(document).on('click', '.tender-nav-btn', function() {
         const section = $(this).data('section');
-        console.log(`Tender section clicked: ${section}`);
         
         // Remove active class from all buttons
         $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
@@ -277,7 +270,6 @@ $(document).ready(function() {
             // Load Items section from hidden storage - items.html self-initializes
             var itemsContent = $('#itemsTemplateStorage').html();
             $('#tenderContentArea').html(itemsContent);
-            console.log('Items section loaded - items.html handles initialization');
         } else if (section === 'documents') {
             loadDocumentsSection();
         } else if (section === 'contract-budget') {
@@ -297,7 +289,6 @@ $(document).ready(function() {
     
     // Load the quotes section view for CONSTRUCTION
     function loadConstructionQuotesSection() {
-        console.log('Loading quotes section - quotes.html handles initialization');
         
         // Set shared project reference for quotes (quotes.html will use this)
         window.currentQuotesProject = {
@@ -316,7 +307,6 @@ $(document).ready(function() {
                     if (response.status === 'success') {
                         window.constructionProjectContacts = response.contacts;
                         window.currentQuotesProject.contacts = response.contacts;
-                        console.log('Loaded', response.contacts.length, 'contacts for quotes');
                     }
                 }
             });
@@ -382,7 +372,6 @@ $(document).ready(function() {
             type: 'GET',
             success: function(response) {
                 $('#constructionContentArea').html(response);
-                console.log('HC Variations section loaded for project:', projectPk);
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load HC Variations section:', error);
@@ -408,7 +397,6 @@ $(document).ready(function() {
     }
     
     function loadConstructionBillsSection(subsection) {
-        console.log(`Loading bills section: ${subsection}`);
         
         var projectPk = window.currentConstructionProject ? window.currentConstructionProject.pk : null;
         var templateType = subsection === 'allocated' ? 'allocated' : 'unallocated';
@@ -437,7 +425,6 @@ $(document).ready(function() {
     // ==========================================
     
     function loadQuotesSection() {
-        console.log('Loading quotes section for Tender - quotes.html handles initialization');
         
         // Set shared project reference for quotes (quotes.html will use this)
         window.currentQuotesProject = {
@@ -456,7 +443,6 @@ $(document).ready(function() {
                     if (response.status === 'success') {
                         window.projectContacts = response.contacts;
                         window.currentQuotesProject.contacts = response.contacts;
-                        console.log('Loaded', response.contacts.length, 'contacts for Tender quotes');
                     }
                 }
             });
@@ -524,7 +510,6 @@ $(document).ready(function() {
             containerSelector: `#${contentAreaId}`
         });
         
-        console.log('Documents section loaded for project:', projectObj.pk, 'in container:', contentAreaId);
     };
     
     window.loadSharedContractBudgetSection = function(config) {
@@ -548,7 +533,6 @@ $(document).ready(function() {
             type: 'GET',
             success: function(response) {
                 $(`#${contentAreaId}`).html(response);
-                console.log('Contract Budget section loaded for project:', projectObj.pk, 'in container:', contentAreaId);
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load Contract Budget section:', error);
@@ -596,7 +580,6 @@ $(document).ready(function() {
     
     // Shared function to handle quote PDF selection
     function handleQuotePdfSelection(file) {
-        console.log('Quote PDF selected:', file.name);
         
         // Create blob URL for the PDF viewer
         var pdfUrl = URL.createObjectURL(file);
@@ -640,47 +623,21 @@ $(document).ready(function() {
                         (window.currentConstructionProject && window.currentConstructionProject.pk) ||
                         (window.currentTenderProject && window.currentTenderProject.pk);
         
-        console.log('🔍 [QUOTE DEBUG] New Quote - Supplier Dropdown Population');
-        console.log('🔍 [QUOTE DEBUG] Project PK sources:', {
-            'window.projectPk': window.projectPk,
-            'window.currentConstructionProject.pk': window.currentConstructionProject ? window.currentConstructionProject.pk : null,
-            'window.currentTenderProject.pk': window.currentTenderProject ? window.currentTenderProject.pk : null,
-            'final projectPk': projectPk
-        });
-        
         if (projectPk) {
-            console.log('🔍 [QUOTE DEBUG] Making AJAX call to load contacts for project:', projectPk);
             $.ajax({
                 url: '/core/get_project_contacts/' + projectPk + '/',
                 type: 'GET',
-                beforeSend: function() {
-                    console.log('🔍 [QUOTE DEBUG] About to call /core/get_project_contacts/' + projectPk + '/');
-                },
                 success: function(response) {
-                    console.log('🔍 [QUOTE DEBUG] AJAX response received:', response);
-                    console.log('🔍 [QUOTE DEBUG] Response status:', response.status);
-                    console.log('🔍 [QUOTE DEBUG] Contacts count:', response.contacts ? response.contacts.length : 'null');
-                    
                     if (response.status === 'success' && response.contacts) {
                         response.contacts.forEach(function(contact, index) {
                             supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
                         });
-                        console.log('🔍 [QUOTE DEBUG] Supplier dropdown populated with', response.contacts.length, 'contacts');
-                    } else {
-                        console.warn('⚠️ [QUOTE DEBUG] No contacts in response or status not success');
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('❌ [QUOTE DEBUG] AJAX error loading contacts:', {
-                        status: status,
-                        error: error,
-                        responseText: xhr.responseText,
-                        statusCode: xhr.status
-                    });
+                    console.error('Failed to load contacts:', error);
                 }
             });
-        } else {
-            console.error('❌ [QUOTE DEBUG] No projectPk found - cannot load suppliers');
         }
         supplierCell.append(supplierSelect);
         newRow.append(supplierCell);

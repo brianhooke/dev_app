@@ -456,6 +456,100 @@ def create_contact(request, instance_pk):
 
 @csrf_exempt
 @handle_xero_request_errors
+def create_supplier(request):
+    """
+    Create a new supplier (contact with IsSupplier=true) in Xero and local database.
+    Simplified version of create_contact - only requires name.
+    Used by Bills Inbox for quick supplier creation.
+    """
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        xero_instance_id = data.get('xero_instance_id')
+        
+        # Validation: Name is required
+        if not name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Supplier name is required'
+            }, status=400)
+        
+        if not xero_instance_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Xero instance ID is required'
+            }, status=400)
+            
+        # Get Xero authentication
+        xero_instance, access_token, tenant_id = get_xero_auth(xero_instance_id)
+        if not xero_instance:
+            return access_token  # This is the error response
+        
+        # Prepare contact data for Xero - minimal supplier
+        contact_data = {
+            'Contacts': [{
+                'Name': name,
+                'IsSupplier': True
+            }]
+        }
+        
+        logger.info(f"Creating supplier - Name: {name} for Xero instance: {xero_instance.xero_name}")
+        
+        create_response = requests.post(
+            'https://api.xero.com/api.xro/2.0/Contacts',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Xero-tenant-id': tenant_id
+            },
+            json=contact_data,
+            timeout=30
+        )
+        
+        if create_response.status_code != 200:
+            error_message = parse_xero_validation_errors(create_response) or f'Failed to create supplier in Xero: {create_response.status_code}'
+            return JsonResponse({
+                'status': 'error',
+                'message': error_message
+            }, status=400)
+        
+        # Extract the created contact from Xero response
+        response_data = create_response.json()
+        xero_contact = response_data['Contacts'][0]
+        xero_contact_id = xero_contact['ContactID']
+        contact_status = xero_contact.get('ContactStatus', 'ACTIVE')
+        
+        # Save to local database
+        new_contact = Contacts(
+            xero_instance=xero_instance,
+            xero_contact_id=xero_contact_id,
+            name=name,
+            status=contact_status,
+            checked=0
+        )
+        new_contact.save()
+        
+        logger.info(f"Successfully created supplier {name} with ID {new_contact.contact_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Supplier created successfully',
+            'supplier': {
+                'contact_pk': new_contact.contact_pk,
+                'name': new_contact.name,
+                'xero_instance_id': xero_instance_id
+            }
+        })
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
+@handle_xero_request_errors
 def update_contact_details(request, instance_pk, contact_pk):
     """
     Update a contact's details in Xero using OAuth2 tokens.

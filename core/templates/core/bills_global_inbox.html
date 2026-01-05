@@ -15,11 +15,9 @@
     
     // Wait for DOM and ensure we have the table
     if ($('#billsInboxMainTableBody').length === 0) {
-        console.log('Bills Inbox section: Table not found, skipping init');
         return;
     }
     
-    console.log('Bills Inbox section: Self-initializing...');
     
     // Initialize AllocationsManager for Bills Inbox
     AllocationsManager.init({
@@ -83,12 +81,16 @@
                 }
                 row.append($('<td>').append(combinedSelect));
                 
-                // 2. Supplier dropdown
+                // 2. Supplier dropdown with inline new supplier form
+                var supplierCell = $('<td>').addClass('supplier-cell');
                 var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
                 supplierSelect.append($('<option>').val('').text('Select Supplier...'));
                 
                 var xeroInstanceId = bill.xero_instance_id;
                 if (xeroInstanceId && window.billsInboxData && window.billsInboxData.suppliers) {
+                    // Add "+ New Supplier" option
+                    supplierSelect.append($('<option>').val('__new__').text('+ New Supplier').addClass('new-supplier-option'));
+                    
                     window.billsInboxData.suppliers.forEach(function(supplier) {
                         if (supplier.xero_instance_id === xeroInstanceId) {
                             var option = $('<option>')
@@ -104,7 +106,19 @@
                     supplierSelect.prop('disabled', true);
                     supplierSelect.find('option:first').text('Select Xero Instance first...');
                 }
-                row.append($('<td>').append(supplierSelect));
+                supplierCell.append(supplierSelect);
+                
+                // Inline new supplier form (hidden by default)
+                var newSupplierForm = $('<div>').addClass('new-supplier-form').hide();
+                newSupplierForm.html(`
+                    <div style="display: flex; gap: 4px; margin-top: 4px; align-items: center;">
+                        <input type="text" class="form-control form-control-sm new-supplier-name" placeholder="Supplier Name" style="flex: 1; min-width: 100px;">
+                        <button type="button" class="btn btn-sm btn-success create-supplier-btn" title="Create"><i class="fas fa-check"></i></button>
+                        <button type="button" class="btn btn-sm btn-secondary cancel-new-supplier-btn" title="Cancel"><i class="fas fa-times"></i></button>
+                    </div>
+                `);
+                supplierCell.append(newSupplierForm);
+                row.append(supplierCell);
                 
                 // 3. Bill # input
                 var billNumberInput = $('<input>')
@@ -162,7 +176,6 @@
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Bill row selected:', pk);
                 window.currentSelectedBillPk = pk;
                 window.currentBillData = cfg.data.currentItem;
                 // Validate send button
@@ -204,13 +217,11 @@
     
     // Load Bills Inbox data
     window.loadBillsInbox = function() {
-        console.log('Loading Bills Inbox...');
         
         $.ajax({
             url: '{% url "core:get_bills_list" %}',
             type: 'GET',
             success: function(response) {
-                console.log('Bills loaded:', response);
                 
                 // Store data globally
                 window.billsInboxData = response;
@@ -263,6 +274,10 @@
         var supplierSelect = row.find('.supplier-select');
         supplierSelect.empty().append($('<option>').val('').text('Select Supplier...'));
         
+        // Hide any open new supplier form
+        row.find('.new-supplier-form').hide();
+        row.find('.supplier-select').show();
+        
         var xeroInstanceId = null;
         if (selectedValue && selectedValue.startsWith('xero_')) {
             xeroInstanceId = parseInt(selectedValue.replace('xero_', ''));
@@ -274,8 +289,14 @@
             if (project) xeroInstanceId = project.xero_instance_id;
         }
         
+        // Store xeroInstanceId on the row for later use
+        row.attr('data-xero-instance-id', xeroInstanceId || '');
+        
         if (xeroInstanceId && window.billsInboxData && window.billsInboxData.suppliers) {
             supplierSelect.prop('disabled', false);
+            // Add "+ New Supplier" option
+            supplierSelect.append($('<option>').val('__new__').text('+ New Supplier'));
+            
             window.billsInboxData.suppliers.forEach(function(supplier) {
                 if (supplier.xero_instance_id === xeroInstanceId) {
                     supplierSelect.append($('<option>').val(supplier.contact_pk).text(supplier.name));
@@ -286,6 +307,133 @@
             supplierSelect.find('option:first').text('Select Xero Instance first...');
         }
     }
+    
+    // Handle "+ New Supplier" selection - show inline form
+    $(document).off('change.billsInbox', '.supplier-select');
+    $(document).on('change.billsInbox', '.supplier-select', function() {
+        var row = $(this).closest('tr');
+        var selectedValue = $(this).val();
+        
+        if (selectedValue === '__new__') {
+            // Show inline form, hide dropdown
+            row.find('.supplier-select').hide();
+            row.find('.new-supplier-form').show();
+            row.find('.new-supplier-name').val('').focus();
+        }
+        
+        // Trigger validation
+        var billPk = row.attr('data-bill-pk');
+        validateInboxSendButton(billPk);
+    });
+    
+    // Cancel new supplier form
+    $(document).off('click.billsInbox', '.cancel-new-supplier-btn');
+    $(document).on('click.billsInbox', '.cancel-new-supplier-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var row = $(this).closest('tr');
+        row.find('.new-supplier-form').hide();
+        row.find('.supplier-select').show().val('');
+        
+        var billPk = row.attr('data-bill-pk');
+        validateInboxSendButton(billPk);
+    });
+    
+    // Create new supplier
+    $(document).off('click.billsInbox', '.create-supplier-btn');
+    $(document).on('click.billsInbox', '.create-supplier-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var btn = $(this);
+        var row = btn.closest('tr');
+        var supplierName = row.find('.new-supplier-name').val().trim();
+        
+        if (!supplierName) {
+            row.find('.new-supplier-name').focus();
+            return;
+        }
+        
+        // Get xero instance ID from row or from the dropdown selection
+        var xeroInstanceId = row.attr('data-xero-instance-id');
+        if (!xeroInstanceId) {
+            var xeroProjectVal = row.find('.xero-project-select').val();
+            if (xeroProjectVal && xeroProjectVal.startsWith('xero_')) {
+                xeroInstanceId = parseInt(xeroProjectVal.replace('xero_', ''));
+            } else if (xeroProjectVal && xeroProjectVal.startsWith('project_')) {
+                var projectPk = parseInt(xeroProjectVal.replace('project_', ''));
+                var project = window.billsInboxData.projects.find(function(p) {
+                    return p.projects_pk === projectPk;
+                });
+                if (project) xeroInstanceId = project.xero_instance_id;
+            }
+        }
+        
+        if (!xeroInstanceId) {
+            alert('Please select a Xero Instance or Project first.');
+            return;
+        }
+        
+        // Show loading state
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/create_supplier/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                name: supplierName,
+                xero_instance_id: parseInt(xeroInstanceId)
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    var newSupplier = response.supplier;
+                    
+                    // Add to beginning of global suppliers list (so it stays at top on refresh)
+                    if (window.billsInboxData && window.billsInboxData.suppliers) {
+                        window.billsInboxData.suppliers.unshift(newSupplier);
+                    }
+                    
+                    // Add option to dropdown right after "+ New Supplier" and select it
+                    var supplierSelect = row.find('.supplier-select');
+                    var newOption = $('<option>').val(newSupplier.contact_pk).text(newSupplier.name);
+                    // Insert after the "+ New Supplier" option (which is the second option)
+                    supplierSelect.find('option[value="__new__"]').after(newOption);
+                    supplierSelect.val(newSupplier.contact_pk);
+                    
+                    // Hide form, show dropdown
+                    row.find('.new-supplier-form').hide();
+                    supplierSelect.show();
+                    
+                    // Validate send button
+                    var billPk = row.attr('data-bill-pk');
+                    validateInboxSendButton(billPk);
+                } else {
+                    alert('Error creating supplier: ' + response.message);
+                    btn.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                }
+            },
+            error: function(xhr) {
+                var errorMsg = 'Failed to create supplier.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                alert('Error: ' + errorMsg);
+                btn.prop('disabled', false).html('<i class="fas fa-check"></i>');
+            }
+        });
+    });
+    
+    // Handle Enter key in new supplier name input
+    $(document).off('keypress.billsInbox', '.new-supplier-name');
+    $(document).on('keypress.billsInbox', '.new-supplier-name', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $(this).closest('.new-supplier-form').find('.create-supplier-btn').click();
+        }
+    });
     
     // Archive button handler
     $(document).off('click.billsInbox', '.archive-bill-btn');

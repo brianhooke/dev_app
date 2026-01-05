@@ -60,7 +60,6 @@ $(document).ready(function() {
         return;
     }
     
-    console.log('Initializing PO section for project:', projectPk);
     
     // Store for callbacks
     var poStatus = {};
@@ -153,7 +152,6 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.status === 'success') {
                     var quotes = response.quotes || [];
-                    console.log('Loaded', quotes.length, 'quotes for PO suppliers');
                     
                     var supplierMap = {};
                     quotes.forEach(function(quote) {
@@ -175,7 +173,6 @@ $(document).ready(function() {
                     
                     var suppliers = Object.values(supplierMap);
                     suppliers.sort(function(a, b) { return a.name.localeCompare(b.name); });
-                    console.log('Found', suppliers.length, 'unique suppliers');
                     
                     $.ajax({
                         url: '/core/get_po_status/' + projectPk + '/',

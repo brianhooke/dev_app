@@ -26,7 +26,6 @@ var DocumentsManager = (function() {
             return;
         }
         
-        console.log('DocumentsManager initializing for project:', projectPk, 'in container:', containerSelector);
         
         // Wait for DOM to be ready
         setTimeout(function() {
@@ -38,7 +37,6 @@ var DocumentsManager = (function() {
             
             // Now move the modals from the current container to body
             if ($(containerSelector + ' #newFolderModal').length) {
-                console.log('Moving modals to body level from container:', containerSelector);
                 var newFolderModal = $(containerSelector + ' #newFolderModal').detach();
                 var renameFolderModal = $(containerSelector + ' #renameFolderModal').detach();
                 $('body').append(newFolderModal);
@@ -48,7 +46,6 @@ var DocumentsManager = (function() {
                 newFolderModal.css('z-index', 1055);
                 renameFolderModal.css('z-index', 1055);
                 
-                console.log('Modals moved to body with z-index:', newFolderModal.css('z-index'));
             }
             
             // Load folders and files
@@ -57,7 +54,6 @@ var DocumentsManager = (function() {
             // Attach event handlers
             attachEventHandlers();
             
-            console.log('DocumentsManager initialized for container:', containerSelector);
         }, 100);
     }
     
@@ -65,18 +61,15 @@ var DocumentsManager = (function() {
      * Attach all event handlers
      */
     function attachEventHandlers() {
-        console.log('Attaching event handlers for container:', containerSelector);
         
         // Check if button exists in this container
         var newFolderBtn = $(containerSelector + ' #newFolderBtn');
-        console.log('Found #newFolderBtn in', containerSelector, ':', newFolderBtn.length > 0);
         
         // Use event delegation from the specific container to handle dynamically loaded content
         // New Folder button - scope to this container
         $(containerSelector).off('click', '#newFolderBtn').on('click', '#newFolderBtn', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('New Folder button clicked in container:', containerSelector);
             showNewFolderModal();
         });
         
@@ -131,32 +124,21 @@ var DocumentsManager = (function() {
             }
         });
         
-        console.log('All event handlers attached with delegation');
     }
     
     /**
      * Load folder structure from backend
      */
     function loadFolderStructure() {
-        console.log('Loading folder structure for project:', projectPk);
         $.ajax({
             url: '/core/get_project_folders/' + projectPk + '/',
             type: 'GET',
             success: function(response) {
-                console.log('Folder structure response:', response);
                 if (response.status === 'success') {
                     folders = response.folders || [];
-                    console.log('Loaded folders count:', folders.length);
-                    console.log('Folders data:', folders);
                     
                     // S3 DIAGNOSTIC LOGGING
                     if (response.diagnostic) {
-                        console.log('=== S3 DIAGNOSTIC INFO ===');
-                        console.log('DEBUG:', response.diagnostic.DEBUG);
-                        console.log('MEDIA_URL:', response.diagnostic.MEDIA_URL);
-                        console.log('DEFAULT_FILE_STORAGE:', response.diagnostic.DEFAULT_FILE_STORAGE);
-                        console.log('AWS_STORAGE_BUCKET_NAME:', response.diagnostic.AWS_STORAGE_BUCKET_NAME);
-                        console.log('=== END DIAGNOSTIC ===');
                     }
                     
                     renderFolderTree();
@@ -175,16 +157,9 @@ var DocumentsManager = (function() {
      * Render the folder tree
      */
     function renderFolderTree() {
-        console.log('renderFolderTree called with', folders.length, 'folders for container:', containerSelector);
         
         // CRITICAL: Target the #folderTree that's in the current container, not template storage
         var treeContainer = $(containerSelector + ' #folderTree');
-        console.log('Found #folderTree container in', containerSelector, ':', treeContainer.length > 0);
-        console.log('#folderTree is visible:', treeContainer.is(':visible'));
-        console.log('#folderTree parent:', treeContainer.parent().attr('id'));
-        console.log('#folderTree parent is visible:', treeContainer.parent().is(':visible'));
-        console.log('#folderTree CSS display:', treeContainer.css('display'));
-        console.log('#folderTree CSS visibility:', treeContainer.css('visibility'));
         
         // CRITICAL FIX: Ensure containers are visible
         // Need to force display with CSS, not just .show()
@@ -197,21 +172,17 @@ var DocumentsManager = (function() {
             var parentId = $(this).attr('id');
             // Skip the template storage divs
             if (parentId === 'documentsTemplateStorage' || parentId === 'itemsTemplateStorage') {
-                console.log('Skipping template storage:', parentId);
                 return; // Continue to next parent
             }
             if ($(this).css('display') === 'none') {
-                console.log('Found hidden parent:', parentId || $(this)[0].tagName);
                 $(this).css('display', 'block');
             }
         });
         
-        console.log('Forced containers to show. #folderTree is now visible:', treeContainer.is(':visible'));
         
         treeContainer.empty();
         
         if (folders.length === 0) {
-            console.log('No folders to render, showing empty state');
             treeContainer.html(`
                 <div style="text-align: center; padding: 40px; color: #6c757d;">
                     <i class="fa fa-folder-open" style="font-size: 48px; margin-bottom: 15px;"></i>
@@ -223,9 +194,7 @@ var DocumentsManager = (function() {
         
         // Build tree structure (root folders first)
         var rootFolders = folders.filter(f => !f.parent_folder_id);
-        console.log('Root folders count:', rootFolders.length);
         rootFolders.forEach(function(folder) {
-            console.log('Rendering folder:', folder.folder_name);
             renderFolder(folder, treeContainer, 0);
         });
     }
@@ -234,15 +203,12 @@ var DocumentsManager = (function() {
      * Recursively render a folder and its children
      */
     function renderFolder(folder, container, level) {
-        console.log('renderFolder called for:', folder.folder_name, 'at level:', level);
-        console.log('Container:', container);
         
         var folderDiv = $('<div></div>')
             .addClass('folder-item')
             .attr('data-folder-id', folder.folder_pk)
             .css('margin-left', (level * 20) + 'px');
         
-        console.log('Created folder div:', folderDiv);
         
         if (selectedFolderId === folder.folder_pk) {
             folderDiv.addClass('selected');
@@ -284,13 +250,10 @@ var DocumentsManager = (function() {
             }
         });
         
-        console.log('Appending folder div to container...');
         container.append(folderDiv);
-        console.log('Folder div appended. Container children count:', container.children().length);
         
         // Render files in this folder
         if (folder.files && folder.files.length > 0) {
-            console.log('Rendering', folder.files.length, 'files in folder');
             var filesContainer = $('<div></div>')
                 .addClass('folder-children')
                 .css('margin-left', ((level + 1) * 20) + 'px');
@@ -304,7 +267,6 @@ var DocumentsManager = (function() {
         
         // Render subfolders
         var subfolders = folders.filter(f => f.parent_folder_id === folder.folder_pk);
-        console.log('Found', subfolders.length, 'subfolders');
         subfolders.forEach(function(subfolder) {
             renderFolder(subfolder, container, level + 1);
         });
@@ -385,11 +347,9 @@ var DocumentsManager = (function() {
         
         // Click handler to view file
         fileDiv.on('click', function() {
-            console.log('File clicked:', file.file_name);
             viewFile(file);
         });
         
-        console.log('Rendered file item:', file.file_name);
         container.append(fileDiv);
     }
     
@@ -400,25 +360,20 @@ var DocumentsManager = (function() {
         selectedFolderId = folderId;
         $('.folder-item').removeClass('selected');
         $('.folder-item[data-folder-id="' + folderId + '"]').addClass('selected');
-        console.log('Selected folder:', folderId);
     }
     
     /**
      * Show new folder modal
      */
     function showNewFolderModal() {
-        console.log('showNewFolderModal called');
         
         // Get the modal and ensure we're using the one at body level
         var modal = $('#newFolderModal');
-        console.log('Found #newFolderModal count:', modal.length);
         
         // CRITICAL: Move modal to body if it's not already there
         // This needs to happen every time because template reloads reset the position
         if (modal.parent()[0].tagName !== 'BODY') {
-            console.log('Modal not at body level, moving now...');
             modal.detach().appendTo('body');
-            console.log('Modal parent AFTER move:', modal.parent()[0].tagName);
         }
         
         // Now work with the modal that's at body level
@@ -426,14 +381,11 @@ var DocumentsManager = (function() {
         var folderNameInput = modal.find('#newFolderName');
         var parentSelect = modal.find('#parentFolderSelect');
         
-        console.log('Using modal at:', modal.parent()[0].tagName);
-        console.log('Found input in modal:', folderNameInput.length > 0);
         
         // Clear the input
         folderNameInput.val('');
         
         // Populate parent folder dropdown
-        console.log('Found #parentFolderSelect:', parentSelect.length > 0);
         parentSelect.empty();
         parentSelect.append('<option value="">Root (No parent)</option>');
         
@@ -454,7 +406,6 @@ var DocumentsManager = (function() {
             parentSelect.val(selectedFolderId);
         }
         
-        console.log('Showing modal...');
         
         // First hide any existing modals
         $('.modal').modal('hide');
@@ -480,9 +431,6 @@ var DocumentsManager = (function() {
                     $(this).attr('style', 'z-index: 1050 !important;');
                 });
                 
-                console.log('Modal shown with z-index:', modal.css('z-index'));
-                console.log('Backdrop count:', backdrop.length);
-                console.log('Backdrop z-index:', backdrop.css('z-index'));
                 
                 // Focus on the first input
                 $('#newFolderName').focus();
@@ -505,31 +453,22 @@ var DocumentsManager = (function() {
      * Create a new folder
      */
     function createFolder() {
-        console.log('createFolder called');
         
         // Get inputs from the modal that's at body level
         var modal = $('#newFolderModal');
         var folderNameInput = modal.find('#newFolderName');
         var parentFolderSelect = modal.find('#parentFolderSelect');
         
-        console.log('Found modal:', modal.length > 0);
-        console.log('Modal parent:', modal.parent()[0].tagName);
-        console.log('Found #newFolderName input in modal:', folderNameInput.length > 0);
-        console.log('Input value RAW:', folderNameInput.val());
         
         var folderName = folderNameInput.val().trim();
-        console.log('Input value TRIMMED:', folderName);
-        console.log('Folder name length:', folderName.length);
         
         var parentFolderId = parentFolderSelect.val() || null;
-        console.log('Parent folder ID:', parentFolderId);
         
         if (!folderName) {
             alert('Please enter a folder name');
             return;
         }
         
-        console.log('Sending AJAX request to create folder...');
         
         $.ajax({
             url: '/core/create_folder/',
@@ -774,9 +713,6 @@ var DocumentsManager = (function() {
             formData.append('files', files[i]);
         }
         
-        console.log('=== UPLOADING FILES ===');
-        console.log('Uploading to folder:', selectedFolderId);
-        console.log('Number of files:', files.length);
         
         $.ajax({
             url: '/core/upload_files/',
@@ -785,22 +721,12 @@ var DocumentsManager = (function() {
             processData: false,
             contentType: false,
             success: function(response) {
-                console.log('=== UPLOAD RESPONSE ===');
-                console.log('Full response:', response);
                 if (response.uploaded_files) {
                     response.uploaded_files.forEach(function(file) {
-                        console.log('Uploaded file:', file.file_name);
-                        console.log('File URL:', file.file_url);
                     });
                 }
                 if (response.diagnostic) {
-                    console.log('=== UPLOAD DIAGNOSTIC INFO ===');
-                    console.log('DEBUG:', response.diagnostic.DEBUG);
-                    console.log('MEDIA_URL:', response.diagnostic.MEDIA_URL);
-                    console.log('DEFAULT_FILE_STORAGE:', response.diagnostic.DEFAULT_FILE_STORAGE);
-                    console.log('AWS_STORAGE_BUCKET_NAME:', response.diagnostic.AWS_STORAGE_BUCKET_NAME);
                 }
-                console.log('=== END UPLOAD RESPONSE ===');
                 
                 if (response.status === 'success') {
                     loadFolderStructure();
@@ -820,9 +746,6 @@ var DocumentsManager = (function() {
      * View a file
      */
     function viewFile(file) {
-        console.log('viewFile called for:', file.file_name);
-        console.log('File type:', file.file_type);
-        console.log('File URL:', file.file_url);
         
         currentFileId = file.file_pk;
         $('.file-item').removeClass('selected');
@@ -833,8 +756,6 @@ var DocumentsManager = (function() {
         var currentFileName = $(containerSelector + ' #currentFileName');
         var currentFileInfo = $(containerSelector + ' #currentFileInfo');
         
-        console.log('Found fileInfoBar in', containerSelector, ':', fileInfoBar.length > 0);
-        console.log('Found currentFileName:', currentFileName.length > 0);
         
         currentFileName.text(file.file_name);
         currentFileInfo.html(
@@ -846,7 +767,6 @@ var DocumentsManager = (function() {
         
         // Clear viewer - target within current container
         var viewer = $(containerSelector + ' #fileViewer');
-        console.log('Found fileViewer in', containerSelector, ':', viewer.length > 0);
         viewer.empty();
         
         // Render based on file type
@@ -914,7 +834,6 @@ var DocumentsManager = (function() {
             }),
             success: function(response) {
                 if (response.status === 'success') {
-                    console.log('Folder deleted successfully');
                     
                     // If the deleted folder was selected, clear selection
                     if (selectedFolderId === folderId) {
@@ -1023,12 +942,10 @@ var DocumentsManager = (function() {
      * Call DocumentsManager.clearModals() from console if stuck
      */
     function clearModals() {
-        console.log('Clearing all modals and backdrops...');
         $('.modal').modal('hide');
         $('.modal-backdrop').remove();
         $('body').removeClass('modal-open');
         $('body').css('padding-right', '');
-        console.log('Modals cleared');
     }
     
     // Public API

@@ -28,7 +28,7 @@ from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
 from .views.contacts import (
     verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
-    create_contact, update_contact_details, update_contact_status
+    create_contact, create_supplier, update_contact_details, update_contact_status
 )
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
@@ -208,6 +208,7 @@ urlpatterns = [
     path('pull_xero_contacts/<int:instance_pk>/', pull_xero_contacts, name='pull_xero_contacts'),
     path('get_contacts_by_instance/<int:instance_pk>/', get_contacts_by_instance, name='get_contacts_by_instance'),
     path('create_contact/<int:instance_pk>/', create_contact, name='create_contact'),
+    path('create_supplier/', create_supplier, name='create_supplier'),
     path('update_contact_details/<int:instance_pk>/<int:contact_pk>/', update_contact_details, name='update_contact_details'),
     path('update_contact_status/<int:instance_pk>/<int:contact_pk>/', update_contact_status, name='update_contact_status'),
     path('verify_contact_details/<int:contact_pk>/', verify_contact_details, name='verify_contact_details'),

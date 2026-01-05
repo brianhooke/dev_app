@@ -251,7 +251,6 @@
                     // Bills allocations are managed differently (Xero accounts)
                 }
             });
-            console.log('Bills AllocationsManager initialized');
         }
         
         // Load Bills - Inbox function (called when navbar link is clicked)
@@ -260,7 +259,6 @@
                 url: '{% url "core:get_bills_list" %}',
                 type: 'GET',
                 success: function(response) {
-                    console.log('Bills loaded:', response);
                     
                     // Store data globally for later use
                     window.billsData = response;
@@ -324,7 +322,6 @@
             // Filter bills using provided filter function
             var filteredBills = billsData.bills.filter(filterFn);
             
-            console.log('populateBillsTable - modalType:', modalType, 'Total bills:', billsData.bills.length, 'Filtered bills:', filteredBills.length);
             
             if (filteredBills.length === 0) {
                 $('#billsTableBody').html('<tr><td colspan="8" style="text-align: center;">No bills to display</td></tr>');
@@ -657,7 +654,6 @@
                 url: '{% url "core:get_bills_list" %}',
                 type: 'GET',
                 success: function(response) {
-                    console.log('Bills loaded:', response);
                     
                     // Store data globally for later use
                     window.billsData = response;
@@ -686,7 +682,6 @@
             
             // Prevent double-clicks during loading
             if (window.approvalsLoading) {
-                console.log('Approvals already loading, ignoring click');
                 return;
             }
             
@@ -758,7 +753,6 @@
                 url: '{% url "core:get_approved_bills" %}',
                 type: 'GET',
                 success: function(response) {
-                    console.log('Approved bills loaded:', response);
                     window.approvedBillsData = response.bills;
                     populateApprovalsTable(response.bills);
                 },
@@ -931,7 +925,6 @@
                     'X-CSRFToken': Utils.getCSRFToken()
                 },
                 success: function(response) {
-                    console.log('Bill returned to project:', response);
                     // Remove the row from the table
                     $('tr[data-bill-pk="' + billPk + '"]').fadeOut(300, function() {
                         $(this).remove();
@@ -1035,7 +1028,6 @@
                 contentType: 'application/json',
                 data: JSON.stringify(updateData),
                 success: function(response) {
-                    console.log('Updated bill Xero Instance/Project');
                 },
                 error: function(xhr, status, error) {
                     console.error('Error updating bill:', error);
@@ -1050,7 +1042,6 @@
                     contentType: 'application/json',
                     data: JSON.stringify({ bill_pk: billPk }),
                     success: function(response) {
-                        console.log('Nulled allocation Xero fields');
                         // If this is the selected row, clear dropdowns in UI
                         if (currentSelectedBillPk === billPk) {
                             $('#allocationsTableBody tr').each(function() {
@@ -1746,7 +1737,6 @@
                             contentType: 'application/json',
                             data: JSON.stringify(data),
                             success: function(response) {
-                                console.log('Updated allocation', allocationPk, field, value);
                             },
                             error: function(xhr, status, error) {
                                 console.error('Error updating allocation:', error);
@@ -1817,7 +1807,6 @@
                                     contact_pk: supplierPk
                                 }),
                                 success: function(response) {
-                                    console.log('Updated bill supplier');
                                 },
                                 error: function(xhr, status, error) {
                                     console.error('Error updating bill supplier:', error);
@@ -1843,7 +1832,6 @@
                                 supplier_bill_number: billNumber
                             }),
                             success: function(response) {
-                                console.log('Updated bill number');
                             },
                             error: function(xhr, status, error) {
                                 console.error('Error updating bill number:', error);
@@ -1868,7 +1856,6 @@
                                 total_net: netValue
                             }),
                             success: function(response) {
-                                console.log('Updated bill net amount');
                                 // Update currentBillData if this is the selected row
                                 if (currentSelectedBillPk === billPk && currentBillData) {
                                     currentBillData.total_net = parseFloat(netValue);
@@ -1898,7 +1885,6 @@
                                 total_gst: gstValue
                             }),
                             success: function(response) {
-                                console.log('Updated bill gst amount');
                                 // Update currentBillData if this is the selected row
                                 if (currentSelectedBillPk === billPk && currentBillData) {
                                     currentBillData.total_gst = parseFloat(gstValue);
@@ -2045,7 +2031,6 @@
                                                 success: function(response) {
                                                     if (response.status === 'success') {
                                                         row.attr('data-allocation-pk', response.allocation_pk);
-                                                        console.log('Created allocation:', response.allocation_pk);
                                                     }
                                                 },
                                                 error: function(xhr, status, error) {
@@ -2118,7 +2103,6 @@
                             success: function(response) {
                                 if (response.status === 'success') {
                                     row.attr('data-allocation-pk', response.allocation_pk);
-                                    console.log('Created new allocation:', response.allocation_pk);
                                 }
                             },
                             error: function(xhr, status, error) {

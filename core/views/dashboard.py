@@ -84,18 +84,18 @@ def dashboard_view(request):
     """
     spv_data = SPVData.objects.first()
     
-    # Navigation items for navbar
+    # Navigation items for navbar (with Font Awesome icons for collapsed mode)
     nav_items = [
-        {'label': 'Dashboard', 'url': '/', 'id': 'dashboardLink', 'page_id': 'dashboard'},
+        {'label': 'Dashboard', 'url': '/', 'id': 'dashboardLink', 'page_id': 'dashboard', 'icon': 'fa-home'},
         {'divider': True},
-        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills'},
-        {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects'},
-        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True},
-        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True},
-        {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts'},
-        {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero'},
+        {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'icon': 'fa-file-invoice-dollar'},
+        {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects', 'icon': 'fa-project-diagram'},
+        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True, 'icon': 'fa-boxes'},
+        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True, 'icon': 'fa-user-clock'},
+        {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts', 'icon': 'fa-address-book'},
+        {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero', 'icon': 'fa-sync-alt'},
         {'divider': True},
-        {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings'},
+        {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings', 'icon': 'fa-cog'},
     ]
     
     # Contacts table configuration - uses allocations_layout.html with full config
@@ -595,10 +595,10 @@ def create_item(request, project_pk):
                     'message': 'Invalid unit selected'
                 }, status=400)
         
-        if len(item_name) > 20:
+        if len(item_name) > 100:
             return JsonResponse({
                 'status': 'error',
-                'message': 'Item name must be 20 characters or less'
+                'message': 'Item name must be 100 characters or less'
             }, status=400)
         
         if not category_pk:

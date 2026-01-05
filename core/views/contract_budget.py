@@ -65,13 +65,14 @@ def contract_budget_view(request):
                 {'header': 'Committed', 'width': '12%', 'field': 'committed'},
             ]
         else:
-            # Tender + Non-construction: 5 columns
+            # Tender + Non-construction: 6 columns (added Notes)
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '35%', 'field': 'item'},
-                {'header': 'Unit', 'width': '10%', 'field': 'unit'},
-                {'header': 'Working Budget', 'width': '18%', 'field': 'working_budget'},
-                {'header': 'Uncommitted', 'width': '18%', 'field': 'uncommitted_amount', 'input': True},
-                {'header': 'Committed', 'width': '19%', 'field': 'committed'},
+                {'header': 'Category / Item', 'width': '30%', 'field': 'item'},
+                {'header': 'Unit', 'width': '8%', 'field': 'unit'},
+                {'header': 'Working Budget', 'width': '16%', 'field': 'working_budget'},
+                {'header': 'Uncommitted', 'width': '16%', 'field': 'uncommitted_amount', 'input': True},
+                {'header': 'Notes', 'width': '6%', 'field': 'uncommitted_notes', 'icon': True},
+                {'header': 'Committed', 'width': '16%', 'field': 'committed'},
             ]
     else:
         if is_construction:
@@ -91,17 +92,18 @@ def contract_budget_view(request):
                 {'header': 'Fixed on Site', 'width': '6%', 'field': 'fixed_on_site'},
             ]
         else:
-            # Execution + Non-construction: 9 columns
+            # Execution + Non-construction: 10 columns (added Notes)
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '20%', 'field': 'item'},
-                {'header': 'Unit', 'width': '6%', 'field': 'unit'},
-                {'header': 'Contract Budget', 'width': '12%', 'field': 'contract_budget'},
-                {'header': 'Working Budget', 'width': '12%', 'field': 'working_budget'},
-                {'header': 'Uncommitted', 'width': '12%', 'field': 'uncommitted_amount', 'input': True},
-                {'header': 'Committed', 'width': '12%', 'field': 'committed'},
-                {'header': 'Cost to Complete', 'width': '9%', 'field': 'cost_to_complete'},
-                {'header': 'Billed', 'width': '9%', 'field': 'billed'},
-                {'header': 'Fixed on Site', 'width': '8%', 'field': 'fixed_on_site'},
+                {'header': 'Category / Item', 'width': '18%', 'field': 'item'},
+                {'header': 'Unit', 'width': '5%', 'field': 'unit'},
+                {'header': 'Contract Budget', 'width': '10%', 'field': 'contract_budget'},
+                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
+                {'header': 'Uncommitted', 'width': '10%', 'field': 'uncommitted_amount', 'input': True},
+                {'header': 'Notes', 'width': '5%', 'field': 'uncommitted_notes', 'icon': True},
+                {'header': 'Committed', 'width': '10%', 'field': 'committed'},
+                {'header': 'Cost to Complete', 'width': '10%', 'field': 'cost_to_complete'},
+                {'header': 'Billed', 'width': '10%', 'field': 'billed'},
+                {'header': 'Fixed on Site', 'width': '10%', 'field': 'fixed_on_site'},
             ]
     
     context = {

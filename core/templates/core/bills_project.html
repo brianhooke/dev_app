@@ -42,7 +42,6 @@ $(document).ready(function() {
     // Store for use in functions
     window.billProjectPk = projectPk;
     
-    console.log('Initializing bills section for project:', projectPk, 'template:', templateType);
     
     // Store for callbacks
     var currentSelectedBill = null;
@@ -228,8 +227,6 @@ $(document).ready(function() {
         AllocationsManager.loadData('bill', { projectPk: projectPk }, function(response) {
             billCostingItems = response.costing_items || [];
             billSectionSuppliers = response.suppliers || [];
-            console.log('Loaded bills:', (response.bills || []).length);
-            console.log('Loaded costing items:', billCostingItems.length);
             // Initialize sortable table after data loads
             Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });
         });
@@ -396,14 +393,12 @@ $(document).ready(function() {
     
     // Load allocated bills data
     function loadAllocatedBills() {
-        console.log('Loading allocated bills for project:', projectPk);
         
         $.ajax({
             url: '/core/get_project_bills/' + projectPk + '/?status=1',
             type: 'GET',
             success: function(response) {
                 if (response.status === 'success') {
-                    console.log('Loaded allocated bills:', response.bills.length);
                     populateAllocatedBillsTable(response.bills, response.suppliers);
                     // Initialize sortable table after data loads
                     Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });

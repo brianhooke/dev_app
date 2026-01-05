@@ -164,21 +164,18 @@ Column Behaviors:
 (function() {
     'use strict';
     
-    console.log('Contract Budget script loaded');
     
     // Get configuration from backend
     var projectPk = window.contractBudgetProjectPk;
     var isConstruction = window.contractBudgetIsConstruction || false;
     var isTender = window.contractBudgetIsTender || false;
     
-    console.log('Contract Budget config: projectPk=' + projectPk + ', isConstruction=' + isConstruction + ', isTender=' + isTender);
     
     // Initialize when DOM is ready
     setTimeout(function() {
         if (projectPk) {
             loadContractBudget(projectPk);
         } else {
-            console.log('Contract Budget: No project_pk provided');
             $('#contractBudgetMainTableBody').html(
                 '<tr><td colspan="' + getColCount() + '" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No project selected</td></tr>'
             );
@@ -186,17 +183,17 @@ Column Behaviors:
     }, 100);
     
     // Get column count based on mode
+    // Now both construction and non-construction have Notes column
     function getColCount() {
         if (isTender) {
-            return isConstruction ? 8 : 5;  // 8 cols with Notes sub-column
+            return isConstruction ? 8 : 6;  // +1 for Notes in non-construction
         } else {
-            return isConstruction ? 12 : 9;  // 12 cols with Notes sub-column
+            return isConstruction ? 12 : 10;  // +1 for Notes in non-construction
         }
     }
     
     // Load contract budget data
     function loadContractBudget(pk) {
-        console.log('Loading contract budget for project:', pk);
         
         var tbody = $('#contractBudgetMainTableBody');
         var tfoot = $('#contractBudgetMainTableFooter');
@@ -214,7 +211,6 @@ Column Behaviors:
             var items = results[1].items || [];
             var committedAmounts = results[2].committed_amounts || {};
             
-            console.log('Loaded:', categories.length, 'categories,', items.length, 'items');
             renderTable(categories, items, committedAmounts);
         }).catch(function(error) {
             console.error('Error loading contract budget:', error);
@@ -320,6 +316,7 @@ Column Behaviors:
             row.append('<td class="subtotal-cell"></td>');  // Notes (empty)
         } else {
             row.append('<td class="subtotal-cell" data-subtotal="uncommitted"></td>');  // Uncommitted
+            row.append('<td class="subtotal-cell"></td>');  // Notes (empty)
         }
         
         // Committed subtotal
@@ -415,15 +412,32 @@ Column Behaviors:
                 row.append($('<td style="text-align: center;"></td>').append(notesIcon));
             }
         } else {
-            // Uncommitted: single Amount field (non-construction mode)
+            // Uncommitted: single Amount field with click-to-edit (non-construction mode)
             if (isInternal) {
                 row.append('<td>-</td>');
+                row.append('<td>-</td>');  // Notes
             } else {
-                var amountInput = $('<input type="number" step="0.01" min="0" class="uncommitted-amount-input">');
-                amountInput.attr('data-item-pk', item.costing_pk);
-                amountInput.val(parseFloat(item.uncommitted_amount || 0).toFixed(2));
-                amountInput.on('input', function() { updateWorkingBudget(item.costing_pk); });
-                row.append($('<td></td>').append(amountInput));
+                // Amount - clickable text that becomes input (same UX as construction)
+                var amountVal = parseFloat(item.uncommitted_amount || 0);
+                var amountTd = $('<td class="amount-cell" data-item-pk="' + item.costing_pk + '"></td>');
+                var amountLink = $('<a href="#" class="click-to-edit amount-display" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(amountVal) + '</a>');
+                amountLink.on('click', function(e) {
+                    e.preventDefault();
+                    convertToInputNonConstruction(item.costing_pk);
+                });
+                amountTd.append(amountLink);
+                row.append(amountTd);
+                
+                // Notes - notepad icon (same as construction)
+                var hasNotes = item.uncommitted_notes && item.uncommitted_notes.trim() !== '';
+                row.attr('data-notes', item.uncommitted_notes || '');
+                var notesIcon = $('<i class="fas fa-sticky-note notes-icon' + (hasNotes ? ' has-notes' : '') + '" data-item-pk="' + item.costing_pk + '"></i>');
+                notesIcon.attr('title', hasNotes ? item.uncommitted_notes : 'Add notes');
+                notesIcon.on('click', function() {
+                    var currentNotes = $('tr.item-row[data-item-pk="' + item.costing_pk + '"]').attr('data-notes') || '';
+                    toggleNotesRow(item.costing_pk, currentNotes);
+                });
+                row.append($('<td style="text-align: center;"></td>').append(notesIcon));
             }
         }
         
@@ -475,6 +489,76 @@ Column Behaviors:
             });
             td.empty().append(newLink);
         });
+    }
+    
+    // Convert click-to-edit link to input field (non-construction mode)
+    function convertToInputNonConstruction(itemPk) {
+        var displaySelector = '.amount-display[data-item-pk="' + itemPk + '"]';
+        var display = $(displaySelector);
+        if (!display.length) return;
+        
+        var currentVal = parseFloat(display.text().replace(/[^0-9.-]/g, '')) || 0;
+        var td = display.parent();
+        
+        // Create input
+        var input = $('<input type="number" step="0.01" min="0">')
+            .addClass('uncommitted-amount-input')
+            .attr('data-item-pk', itemPk)
+            .val(currentVal.toFixed(2))
+            .css('width', '100%');
+        
+        // Replace link with input
+        td.empty().append(input);
+        input.focus().select();
+        
+        // Handle input changes - update working budget live
+        input.on('input', function() {
+            updateWorkingBudget(itemPk);
+        });
+        
+        // Handle blur - convert back to link and save
+        input.on('blur', function() {
+            var newVal = parseFloat($(this).val()) || 0;
+            var newLink = $('<a href="#" class="click-to-edit amount-display" data-item-pk="' + itemPk + '">' + Utils.formatCurrency(newVal) + '</a>');
+            newLink.on('click', function(e) {
+                e.preventDefault();
+                convertToInputNonConstruction(itemPk);
+            });
+            td.empty().append(newLink);
+            
+            // Save to database
+            saveUncommittedNonConstruction(itemPk, newVal);
+        });
+    }
+    
+    // Save uncommitted amount for non-construction mode
+    function saveUncommittedNonConstruction(itemPk, amount) {
+        var data = {
+            costing_pk: itemPk,
+            uncommitted: amount
+        };
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+            },
+            error: function(error) {
+                console.error('Error saving uncommitted:', error);
+            }
+        });
+    }
+    
+    // Get amount value for non-construction (from input or display link)
+    function getAmountValue(itemPk) {
+        var input = $('.uncommitted-amount-input[data-item-pk="' + itemPk + '"]');
+        if (input.length) return parseFloat(input.val()) || 0;
+        var display = $('.amount-display[data-item-pk="' + itemPk + '"]');
+        if (display.length) return parseFloat(display.text().replace(/[^0-9.-]/g, '')) || 0;
+        return 0;
     }
     
     // Get qty value (from input or display link)
@@ -565,7 +649,7 @@ Column Behaviors:
             if (isConstruction) {
                 uncommitted = getQtyValue(itemPk) * getRateValue(itemPk);
             } else {
-                uncommitted = parseFloat($('.uncommitted-amount-input[data-item-pk="' + itemPk + '"]').val()) || 0;
+                uncommitted = getAmountValue(itemPk);
             }
             
             // Committed (from display cell)
@@ -672,7 +756,6 @@ Column Behaviors:
             contentType: 'application/json',
             data: JSON.stringify(data),
             success: function(response) {
-                console.log('Saved notes for item:', itemPk);
                 
                 // Update local data on the row so re-clicking shows current value
                 $('tr.item-row[data-item-pk="' + itemPk + '"]').attr('data-notes', notes);
@@ -715,7 +798,7 @@ Column Behaviors:
         if (isConstruction) {
             uncommitted = getQtyValue(itemPk) * getRateValue(itemPk);
         } else {
-            uncommitted = parseFloat($('.uncommitted-amount-input[data-item-pk="' + itemPk + '"]').val()) || 0;
+            uncommitted = getAmountValue(itemPk);
         }
         
         // Committed is display-only - parse from cell text
@@ -740,7 +823,7 @@ Column Behaviors:
             if (isConstruction) {
                 uncommitted = getQtyValue(itemPk) * getRateValue(itemPk);
             } else {
-                uncommitted = parseFloat($('.uncommitted-amount-input[data-item-pk="' + itemPk + '"]').val()) || 0;
+                uncommitted = getAmountValue(itemPk);
             }
             
             // Committed is display-only - parse from cell text
@@ -779,6 +862,7 @@ Column Behaviors:
             row.append('<td></td>');  // Notes
         } else {
             row.append('<td id="totalUncommitted">' + Utils.formatCurrency(totals.uncommitted) + '</td>');
+            row.append('<td></td>');  // Notes
         }
         
         row.append('<td id="totalCommitted">' + Utils.formatCurrency(totals.committed) + '</td>');
@@ -811,7 +895,6 @@ Column Behaviors:
             contentType: 'application/json',
             data: JSON.stringify(data),
             success: function(response) {
-                console.log('Saved uncommitted for item:', itemPk);
             },
             error: function(error) {
                 console.error('Error saving uncommitted:', error);

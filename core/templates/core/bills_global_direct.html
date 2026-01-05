@@ -15,11 +15,9 @@
     
     // Wait for DOM and ensure we have the table
     if ($('#billsDirectMainTableBody').length === 0) {
-        console.log('Bills Direct section: Table not found, skipping init');
         return;
     }
     
-    console.log('Bills Direct section: Self-initializing...');
     
     // Initialize AllocationsManager for Bills Direct
     AllocationsManager.init({
@@ -113,7 +111,6 @@
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Direct bill row selected:', pk);
                 window.currentSelectedBillPk = pk;
                 
                 // Find full bill data
@@ -298,7 +295,6 @@
     function validateBillOnLoad(bill) {
         var button = $('button[data-bill-pk="' + bill.bill_pk + '"].send-to-xero-btn');
         if (button.length === 0) {
-            console.log('validateBillOnLoad: button not found for bill', bill.bill_pk);
             return;
         }
         
@@ -342,7 +338,6 @@
             }
         }
         
-        console.log('validateBillOnLoad:', bill.bill_pk, 'isValid:', isValid, reason);
         
         if (isValid) {
             button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
@@ -388,13 +383,11 @@
     
     // Load Bills Direct data
     window.loadBillsDirect = function() {
-        console.log('Loading Bills Direct...');
         
         $.ajax({
             url: '{% url "core:get_bills_list" %}',
             type: 'GET',
             success: function(response) {
-                console.log('Bills loaded:', response);
                 
                 // Store data globally
                 window.billsDirectData = response;
@@ -695,7 +688,6 @@
                         if (row) {
                             row.attr('data-allocation-pk', response.allocation_pk);
                         }
-                        console.log('Created allocation:', response.allocation_pk);
                     }
                 }
             });

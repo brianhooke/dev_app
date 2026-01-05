@@ -69,9 +69,9 @@ def quotes_view(request):
     
     # Main table columns (same for both project types)
     main_table_columns = [
-        {'header': 'Supplier', 'width': '50%', 'sortable': True},
-        {'header': '$ Net', 'width': '15%', 'sortable': True},
-        {'header': 'Quote #', 'width': '15%', 'sortable': True},
+        {'header': 'Supplier', 'width': '40%', 'sortable': True},
+        {'header': '$ Net', 'width': '20%', 'sortable': True},
+        {'header': 'Quote #', 'width': '20%', 'sortable': True},
         {'header': 'Update', 'width': '12%', 'class': 'col-action-first'},
         {'header': 'Delete', 'width': '8%', 'class': 'col-action'},
     ]

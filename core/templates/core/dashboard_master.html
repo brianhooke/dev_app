@@ -24,5 +24,72 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
+<!-- Centralized Background Sync (runs once per session) -->
+<script>
+(function() {
+    'use strict';
+    
+    // Only run once per browser session
+    if (sessionStorage.getItem('xeroSyncComplete')) {
+        console.log('[Xero Sync] Already synced this session');
+        return;
+    }
+    
+    // Get CSRF token
+    function getCSRFToken() {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, 10) === 'csrftoken=') {
+                    cookieValue = decodeURIComponent(cookie.substring(10));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Fetch Xero instances and sync contacts for each
+    $.ajax({
+        url: '/core/get_xero_instances/',
+        type: 'GET',
+        success: function(instances) {
+            if (!instances || instances.length === 0) {
+                console.log('[Xero Sync] No Xero instances found');
+                sessionStorage.setItem('xeroSyncComplete', 'true');
+                return;
+            }
+            
+            console.log('[Xero Sync] Starting background sync for', instances.length, 'instances');
+            
+            var syncPromises = instances.map(function(instance) {
+                return $.ajax({
+                    url: '/core/pull_xero_contacts/' + instance.xero_instance_pk + '/',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                    timeout: 60000
+                }).then(function(response) {
+                    console.log('[Xero Sync] Synced contacts for', instance.xero_name, ':', 
+                        response.details ? response.details.new_contacts_added + ' new' : 'done');
+                }).catch(function(err) {
+                    console.log('[Xero Sync] Failed for', instance.xero_name);
+                });
+            });
+            
+            $.when.apply($, syncPromises).always(function() {
+                sessionStorage.setItem('xeroSyncComplete', 'true');
+                console.log('[Xero Sync] All syncs complete');
+            });
+        },
+        error: function() {
+            console.log('[Xero Sync] Could not fetch instances');
+            sessionStorage.setItem('xeroSyncComplete', 'true');
+        }
+    });
+})();
+</script>
+
 </body>
 </html>

@@ -21,7 +21,6 @@
     window.quoteIsConstruction = {{ is_construction|yesno:"true,false" }};
     // Column widths from Python context (single source of truth)
     window.quoteAllocationWidths = [{% for col in allocations_columns %}'{{ col.width }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
-    console.log('🔍 [QUOTE DEBUG] Template widths loaded:', window.quoteAllocationWidths);
 </script>
 
 <!-- Self-Contained Quotes Section JS -->
@@ -31,11 +30,9 @@ $(document).ready(function() {
     
     // Wait for DOM and ensure we have the table
     if ($('#quoteMainTableBody').length === 0) {
-        console.log('Quotes section: Table not found, skipping init');
         return;
     }
     
-    console.log('Quotes section: Self-initializing...');
     
     // Get project info from various sources
     var projectPk = window.projectPk || 
@@ -58,7 +55,6 @@ $(document).ready(function() {
     
     
     // Initialize AllocationsManager
-    console.log('🔍 [QUOTE DEBUG] Document ready, initializing AllocationsManager with widths:', window.quoteAllocationWidths);
     AllocationsManager.init({
         sectionId: 'quote',
         features: {
@@ -81,6 +77,11 @@ $(document).ready(function() {
             footerTotals: [{ colIndex: 2, valueKey: 'total_cost' }],
             renderRow: function(quote, index, cfg) {
                 var row = $('<tr>').attr('data-pk', quote.quotes_pk);
+                // Set PDF URL for iviewer - check both pdf_url and pdf fields
+                var pdfUrl = quote.pdf_url || quote.pdf || null;
+                if (pdfUrl) {
+                    row.attr('data-pdf-url', pdfUrl);
+                }
                 // Store quote data on row for later access
                 row.data('quote', quote);
                 
@@ -110,10 +111,8 @@ $(document).ready(function() {
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Quote row selected:', pk);
                 // If we were in edit mode, cancel it (switch to read-only view)
                 if (window.editingQuotePk) {
-                    console.log('Cancelling edit mode - user clicked another row');
                     AllocationsManager.setEditMode('quote', false);
                     // Revert the Save button back to Update button
                     revertSaveToUpdateButton(window.editingQuotePk);
@@ -184,7 +183,6 @@ $(document).ready(function() {
                 openQuoteForEditing(item);
             },
             onAllocationsLoaded: function(sectionId, allocations) {
-                console.log('Quote allocations loaded:', allocations.length);
             },
             onSave: function(itemPk, allocations, cfg) {
                 // Validate allocations before saving
@@ -235,12 +233,9 @@ $(document).ready(function() {
     });
     
     // Manually trigger column width application for quotes (since allocations might not load immediately)
-    console.log('🔍 [QUOTE DEBUG] Manually applying column styles for quotes');
     if (window.quoteAllocationWidths && window.quoteAllocationWidths.length > 0) {
         Utils.applyColumnStyles('quote', window.quoteAllocationWidths, { addEditableClass: true });
-        console.log('🔍 [QUOTE DEBUG] Manual column styles applied for quotes');
     } else {
-        console.log('🔍 [QUOTE DEBUG] No quote widths available for manual application');
     }
     
     // NOTE: Column widths now handled by AllocationsManager via allocations.columnWidths config
@@ -303,7 +298,6 @@ $(document).ready(function() {
     
     // Open quote for editing
     function openQuoteForEditing(quote) {
-        console.log('Opening quote for editing:', quote);
         
         // Set edit mode BEFORE anything else
         AllocationsManager.setEditMode('quote', true);
@@ -350,7 +344,6 @@ $(document).ready(function() {
             return;
         }
         
-        console.log('Loading quotes for project:', pk);
         
         // Load items first
         $.ajax({
@@ -360,7 +353,6 @@ $(document).ready(function() {
                 if (response.status === 'success') {
                     window.itemsItems = response.items;
                     window.quotesCostingItems = response.items;
-                    console.log('Loaded costing items:', response.items.length);
                 }
             }
         }).always(function() {
@@ -370,7 +362,6 @@ $(document).ready(function() {
                 type: 'GET',
                 success: function(response) {
                     if (response.status === 'success') {
-                        console.log('Loaded quotes:', response.quotes.length);
                         AllocationsManager.populateMainTable('quote', response.quotes);
                         // Initialize sortable table after data loads
                         Utils.initSortableTable('quoteMainTable', { tbodyId: 'quoteMainTableBody' });

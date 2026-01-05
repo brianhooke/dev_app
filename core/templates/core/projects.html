@@ -702,7 +702,6 @@ $(document).ready(function() {
     function populateProjectsTable(projects, showingArchived) {
         const grid = $('#projectsGrid');
         
-        console.log('📊 Populating projects grid with', projects.length, 'projects');
         
         // Clear existing cards
         grid.empty();
@@ -720,7 +719,6 @@ $(document).ready(function() {
         
         // Add project cards
         projects.forEach(project => {
-            console.log(`📁 Project: ${project.project}`);
             
             const typeClass = project.project_type || 'general';
             

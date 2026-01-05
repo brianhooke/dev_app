@@ -565,5 +565,4 @@
         }
     };
     
-    console.log('ProjectTypeConfig loaded');
 })();

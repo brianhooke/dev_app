@@ -123,7 +123,6 @@ CONFIGURATION OPTIONS
 
 // Prevent re-initialization when loaded via AJAX (preserves existing configs)
 if (typeof window.AllocationsManager !== 'undefined' && window.AllocationsManager._initialized) {
-    console.log('AllocationsManager: Already initialized, skipping re-init');
 } else {
 
 var AllocationsManager = (function() {
@@ -214,7 +213,6 @@ var AllocationsManager = (function() {
         // Set up dynamic height adjustment for allocations table
         setupAllocationsHeightAdjustment(sectionId);
         
-        console.log('AllocationsManager initialized for section:', sectionId);
         return configs[sectionId];
     }
     
@@ -627,7 +625,6 @@ var AllocationsManager = (function() {
                 var itemPk = item[pkField] || item.pk || item.quotes_pk || item.invoice_pk || item.hc_variation_pk;
                 return String(itemPk) === String(pk);
             }) || null;
-            console.log('selectRow currentItem:', cfg.data.currentItem);
         }
         
         // Update PDF viewer
@@ -655,7 +652,6 @@ var AllocationsManager = (function() {
         var cfg = configs[sectionId];
         
         if (!cfg.api.loadAllocations) {
-            console.log('AllocationsManager: No loadAllocations API configured');
             return;
         }
         
@@ -751,17 +747,12 @@ var AllocationsManager = (function() {
         }
         
         // Update footer label and button visibility based on config
-        console.log('populateAllocationsTable:', sectionId, 'showEditable:', showEditable, 'isNewMode:', st.isNewMode, 'editMode:', st.editMode, 'alwaysShowAddButton:', cfg.features.alwaysShowAddButton);
-        console.log('Footer exists:', $('#' + sectionId + 'AllocationsFooter').length, 'Footer HTML:', $('#' + sectionId + 'AllocationsFooter').html() ? $('#' + sectionId + 'AllocationsFooter').html().substring(0, 200) : 'EMPTY');
-        console.log('Button elements found - AddBtn:', $('#' + sectionId + 'AddAllocationBtn').length, 'SaveBtn:', $('#' + sectionId + 'SaveAllocationsBtn').length);
         if (showEditable) {
             $('#' + sectionId + 'AllocationFooterLabel').text('Still to Allocate:');
             $('#' + sectionId + 'AddAllocationBtn').show();
-            console.log('Showing AddAllocationBtn for', sectionId);
             // Only show Save button if configured
             if (cfg.features.showSaveButton) {
                 $('#' + sectionId + 'SaveAllocationsBtn').show();
-                console.log('Showing SaveAllocationsBtn for', sectionId);
             } else {
                 $('#' + sectionId + 'SaveAllocationsBtn').hide();
             }
@@ -785,13 +776,9 @@ var AllocationsManager = (function() {
         }
         
         // Apply column widths if configured
-        console.log('🔍 [ALLOCATIONS DEBUG] Section', sectionId, '- checking column widths:', cfg.allocations.columnWidths);
         if (cfg.allocations.columnWidths) {
-            console.log('🔍 [ALLOCATIONS DEBUG] Applying column styles for', sectionId, ':', cfg.allocations.columnWidths);
             Utils.applyColumnStyles(sectionId, cfg.allocations.columnWidths, { addEditableClass: showEditable });
-            console.log('🔍 [ALLOCATIONS DEBUG] Column styles applied for', sectionId);
         } else {
-            console.log('🔍 [ALLOCATIONS DEBUG] No column widths configured for', sectionId);
         }
     }
     
@@ -918,7 +905,6 @@ var AllocationsManager = (function() {
             }
         } else if (cfg.data.currentItem) {
             totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
-            console.log('updateStillToAllocate totalNet from currentItem:', totalNet, 'currentItem:', cfg.data.currentItem);
             if (hasGst) {
                 totalGst = parseFloat(cfg.data.currentItem.total_gst || 0);
             }
@@ -926,11 +912,9 @@ var AllocationsManager = (function() {
         
         // Calculate allocated amounts
         var allocatedNet = 0, allocatedGst = 0;
-        console.log('updateStillToAllocate - sectionId:', sectionId, 'looking for class:', cls + '-net-input');
         $('#' + sectionId + 'AllocationsTableBody tr').each(function(index) {
             // Net amount - use standardized class name
             var netInput = $(this).find('.' + cls + '-net-input');
-            console.log('  Row', index, '- netInput found:', netInput.length, 'value:', netInput.val());
             if (netInput.length) {
                 allocatedNet += parseFloat(netInput.val()) || 0;
             } else {
@@ -942,7 +926,6 @@ var AllocationsManager = (function() {
                     // Read-only row - parse from text (column index varies)
                     var amountCell = $(this).find('td:eq(1)');
                     var text = amountCell.text().replace(/[$,]/g, '');
-                    console.log('  Row', index, '- fallback text parse from td:eq(1):', text);
                     allocatedNet += parseFloat(text) || 0;
                 }
             }
@@ -958,7 +941,6 @@ var AllocationsManager = (function() {
         
         var remainingNet = totalNet - allocatedNet;
         var remainingGst = hasGst ? totalGst - allocatedGst : 0;
-        console.log('updateStillToAllocate RESULT - totalNet:', totalNet, 'allocatedNet:', allocatedNet, 'remainingNet:', remainingNet);
         
         // Update Net display
         var netDisplayEl = $('#' + sectionId + 'RemainingNet');
@@ -1030,7 +1012,6 @@ var AllocationsManager = (function() {
             
             if (itemSelect.length && itemSelect.val()) {
                 var amountVal = parseFloat(amountInput.val()) || 0;
-                console.log('getAllocations - sectionId:', sectionId, 'item_pk:', itemSelect.val(), 'amount:', amountVal, 'isConstruction:', isConstruction);
                 
                 var alloc = {
                     item_pk: itemSelect.val(),
@@ -1075,7 +1056,6 @@ var AllocationsManager = (function() {
         // Show the footer
         $('#' + sectionId + 'MainTableFooter').show();
         
-        console.log(buttonText + ' button added to table footer');
     }
     
     /**
@@ -1100,11 +1080,9 @@ var AllocationsManager = (function() {
      * Set edit mode (for updating existing items)
      */
     function setEditMode(sectionId, isEdit) {
-        console.log('setEditMode called:', sectionId, 'isEdit:', isEdit);
         var st = state[sectionId];
         st.editMode = isEdit;
         st.isNewMode = false;
-        console.log('State after setEditMode:', 'editMode:', st.editMode, 'isNewMode:', st.isNewMode);
         
         // Show/hide edit-only columns (e.g., Delete column)
         toggleEditOnlyColumns(sectionId, isEdit);
@@ -1454,7 +1432,6 @@ var AllocationsManager = (function() {
                 
                 var url = typeof api.save === 'function' ? api.save(pk) : api.save.replace('{pk}', pk);
                 
-                console.log('saveAllocation - pk:', pk, 'url:', url, 'data:', data);
                 
                 $.ajax({
                     url: url,
@@ -1463,7 +1440,6 @@ var AllocationsManager = (function() {
                     headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                     data: JSON.stringify(data),
                     success: function(response) {
-                        console.log('Allocation saved:', pk, 'response:', response);
                     },
                     error: function(xhr, status, error) {
                         console.error('Error saving allocation:', pk, error, xhr.responseText);
@@ -1493,7 +1469,6 @@ var AllocationsManager = (function() {
             itemSelect.find('optgroup').last().append(option);
         });
         
-        console.log('createEditableAllocationRow - isConstruction:', isConstruction, 'sectionId:', sectionId);
         
         if (isConstruction) {
             // Construction mode: Item | Unit | Qty | $ Rate | $ Amount | Notes | Del
@@ -1557,7 +1532,6 @@ var AllocationsManager = (function() {
             if (calcAmount === 0 && alloc.qty && alloc.rate) {
                 calcAmount = parseFloat(alloc.qty) * parseFloat(alloc.rate);
             }
-            console.log('createEditableAllocationRow construction - alloc.amount:', alloc.amount, 'calcAmount:', calcAmount, 'qty:', alloc.qty, 'rate:', alloc.rate);
             var amountDisplay = $('<span>').addClass(cls + '-amount-display')
                 .text('$' + Utils.formatMoney(calcAmount));
             var amountHidden = $('<input>').attr('type', 'hidden')
@@ -1668,7 +1642,6 @@ var AllocationsManager = (function() {
                         url: url,
                         type: 'POST',
                         success: function(response) {
-                            console.log('Allocation deleted:', pk);
                             row.remove();
                             onUpdate();
                         },

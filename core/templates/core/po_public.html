@@ -1013,7 +1013,6 @@
                     });
                 }
             });
-            console.log('[PO Public] Saved claim values (dollar as source of truth):', savedClaimValues);
         }
         
         // Restore saved claim values
@@ -1194,12 +1193,9 @@
             
             // Update the dollar input field
             const dollarInput = row.querySelector('.this-claim-dollar-input');
-            console.log('[PO Public] validateAndCalculatePercent - dollarInput:', dollarInput, 'thisClaimAmount:', thisClaimAmount);
             if (dollarInput) {
                 dollarInput.value = thisClaimAmount.toFixed(2);
-                console.log('[PO Public] Set dollar input value to:', dollarInput.value);
             } else {
-                console.log('[PO Public] ERROR: dollarInput not found in row!');
             }
             
             // Calculate Still to Claim % and $

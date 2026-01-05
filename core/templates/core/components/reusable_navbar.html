@@ -1,19 +1,38 @@
 {% load static %}
 
 <style>
+  /* ===== Collapsible Navbar - Rail/Icon Mode ===== */
+  :root {
+    --navbar-expanded-width: 180px;
+    --navbar-collapsed-width: 54px;
+    --navbar-transition: 0.25s ease;
+  }
+  
   .reusable-navbar {
     height: 100%;
-    width: 160px;
+    width: var(--navbar-expanded-width);
     position: fixed;
-    z-index: 1;
+    z-index: 100;
     top: 0;
     left: 0;
     background-color: white;
-    border: 3px solid;
+    border-right: 3px solid;
     border-image: var(--gradient-primary-45deg) 1;
-    padding: 10px;
+    padding: 10px 0;
     padding-top: 20px;
     overflow-x: hidden;
+    overflow-y: auto;
+    transition: width var(--navbar-transition);
+  }
+  
+  /* Collapsed state */
+  .reusable-navbar.collapsed {
+    width: var(--navbar-collapsed-width);
+  }
+  
+  /* Expand on hover when collapsed (JS-controlled with delay) */
+  .reusable-navbar.collapsed.hover-expanded {
+    width: var(--navbar-expanded-width);
   }
   
   .reusable-navbar ul {
@@ -29,17 +48,27 @@
   .reusable-navbar a {
     color: black !important;
     text-decoration: none;
-    display: block;
-    padding: 10px 15px;
-    font-size: 18px;
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    font-size: 16px;
     font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
   }
   
   .reusable-navbar a:hover {
-    opacity: 0.7;
+    background-color: rgba(0, 0, 0, 0.05);
   }
   
   .reusable-navbar a.active {
+    background: var(--gradient-primary-45deg);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .reusable-navbar a.active .nav-icon {
     background: var(--gradient-primary-45deg);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -53,16 +82,48 @@
     opacity: 0.5;
   }
   
+  /* Nav icons */
+  .reusable-navbar .nav-icon {
+    width: 24px;
+    min-width: 24px;
+    text-align: center;
+    font-size: 18px;
+    margin-right: 12px;
+    transition: margin var(--navbar-transition);
+  }
+  
+  /* When collapsed, center the icon */
+  .reusable-navbar.collapsed .nav-icon {
+    margin-right: 0;
+  }
+  
+  /* Nav label - hide when collapsed, show on hover */
+  .reusable-navbar .nav-label {
+    opacity: 1;
+    transition: opacity var(--navbar-transition);
+  }
+  
+  .reusable-navbar.collapsed .nav-label {
+    opacity: 0;
+  }
+  
+  .reusable-navbar.collapsed.hover-expanded .nav-label {
+    opacity: 1;
+  }
+  
+  /* Divider */
   .reusable-navbar .divider {
-    height: 3px;
+    height: 2px;
     background: var(--gradient-primary-45deg);
-    margin: 5px 0;
+    margin: 8px 10px;
+    transition: margin var(--navbar-transition);
   }
   
-  .reusable-navbar .nav-dropdown {
-    /* No position needed - let it flow naturally */
+  .reusable-navbar.collapsed .divider {
+    margin: 8px 5px;
   }
   
+  /* Dropdown styles */
   .reusable-navbar .nav-dropdown-toggle {
     cursor: pointer;
     position: relative;
@@ -71,9 +132,17 @@
   .reusable-navbar .nav-dropdown-toggle::after {
     content: '▶';
     font-size: 10px;
-    margin-left: 5px;
-    transition: transform 0.3s ease;
+    margin-left: auto;
+    transition: transform 0.3s ease, opacity var(--navbar-transition);
     display: inline-block;
+  }
+  
+  .reusable-navbar.collapsed .nav-dropdown-toggle::after {
+    opacity: 0;
+  }
+  
+  .reusable-navbar.collapsed.hover-expanded .nav-dropdown-toggle::after {
+    opacity: 1;
   }
   
   .reusable-navbar .nav-dropdown.open .nav-dropdown-toggle::after {
@@ -88,9 +157,9 @@
     padding: 0;
     padding-left: 15px;
     transition: max-height 0.3s ease-out;
-    position: static;  /* Ensure it stays in document flow */
-    border: none;  /* Remove box/outline */
-    box-shadow: none;  /* Remove any shadow */
+    position: static;
+    border: none;
+    box-shadow: none;
   }
   
   .reusable-navbar .nav-dropdown-menu.show {
@@ -99,12 +168,42 @@
   }
   
   .reusable-navbar .nav-dropdown-menu a {
-    font-size: 16px;
+    font-size: 14px;
     padding: 8px 15px;
+  }
+  
+  /* Version indicator */
+  .reusable-navbar .version-indicator {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity var(--navbar-transition);
+  }
+  
+  .reusable-navbar.collapsed .version-indicator {
+    opacity: 0;
+  }
+  
+  .reusable-navbar.collapsed.hover-expanded .version-indicator {
+    opacity: 1;
+  }
+  
+  /* Main content margin adjustment */
+  body {
+    --main-content-margin: var(--navbar-expanded-width);
+  }
+  
+  body.navbar-collapsed {
+    --main-content-margin: var(--navbar-collapsed-width);
   }
 </style>
 
-<div class="reusable-navbar">
+<div class="reusable-navbar" id="mainNavbar">
     <ul>
         {% for item in nav_items %}
             {% if item.divider %}
@@ -113,16 +212,17 @@
                 <li class="nav-dropdown">
                     <a href="#" 
                        id="{{ item.id }}" 
-                       class="nav-dropdown-toggle {% if current_page == item.page_id %}active{% endif %}">
-                        {{ item.label }}
+                       class="nav-dropdown-toggle nav-item-link {% if current_page == item.page_id %}active{% endif %}">
+                        <i class="fas {{ item.icon }} nav-icon"></i>
+                        <span class="nav-label">{{ item.label }}</span>
                     </a>
                     <ul class="nav-dropdown-menu" id="{{ item.id }}-menu">
                         {% for subitem in item.submenu %}
                             <li>
                                 <a href="#" 
                                    id="{{ subitem.id }}" 
-                                   class="{% if current_page == subitem.page_id %}active{% endif %}">
-                                    {{ subitem.label }}
+                                   class="nav-item-link {% if current_page == subitem.page_id %}active{% endif %}">
+                                    <span class="nav-label">{{ subitem.label }}</span>
                                 </a>
                             </li>
                         {% endfor %}
@@ -132,8 +232,9 @@
                 <li>
                     <a href="{{ item.url }}" 
                        id="{{ item.id }}" 
-                       class="{% if current_page == item.page_id %}active{% endif %}{% if item.disabled %} disabled{% endif %}">
-                        {{ item.label }}
+                       class="nav-item-link {% if current_page == item.page_id %}active{% endif %}{% if item.disabled %} disabled{% endif %}">
+                        <i class="fas {{ item.icon }} nav-icon"></i>
+                        <span class="nav-label">{{ item.label }}</span>
                     </a>
                 </li>
             {% endif %}
@@ -141,8 +242,8 @@
     </ul>
     
     <!-- Version indicator -->
-    <div style="position: absolute; bottom: 10px; left: 10px; font-size: 11px; color: #666;">
-        v154
+    <div class="version-indicator">
+        v156
         {% if 'test' in settings.SETTINGS_MODULE %}
             <span style="padding: 2px 6px; background: #ff9800; color: white; border-radius: 3px; font-weight: bold;">TEST</span>
         {% else %}
@@ -150,3 +251,51 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var HOVER_DELAY = 500; // milliseconds before expanding on hover
+    var navbar = document.getElementById('mainNavbar');
+    var hoverTimer = null;
+    
+    // Hover expand with delay (only when collapsed)
+    function handleMouseEnter() {
+        if (!navbar.classList.contains('collapsed')) return;
+        
+        hoverTimer = setTimeout(function() {
+            navbar.classList.add('hover-expanded');
+        }, HOVER_DELAY);
+    }
+    
+    function handleMouseLeave() {
+        // Clear any pending expand
+        if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+        }
+        // Remove hover-expanded class
+        navbar.classList.remove('hover-expanded');
+    }
+    
+    // Initialize navbar as collapsed by default
+    function initNavbarState() {
+        navbar.classList.add('collapsed');
+        document.body.classList.add('navbar-collapsed');
+    }
+    
+    // Event listeners
+    if (navbar) {
+        navbar.addEventListener('mouseenter', handleMouseEnter);
+        navbar.addEventListener('mouseleave', handleMouseLeave);
+    }
+    
+    // Initialize on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initNavbarState);
+    } else {
+        initNavbarState();
+    }
+})();
+</script>

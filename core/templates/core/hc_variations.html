@@ -28,11 +28,9 @@
     
     // Wait for DOM and ensure we have the table
     if ($('#hcVariationMainTableBody').length === 0) {
-        console.log('HC Variations section: Table not found, skipping init');
         return;
     }
     
-    console.log('HC Variations section: Self-initializing...');
     
     // Get project info from various sources
     var projectPk = window.projectPk || 
@@ -105,7 +103,6 @@
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Variation row selected:', pk);
                 if (window.editingVariationPk) {
                     AllocationsManager.setEditMode('hcVariation', false);
                 }
@@ -125,7 +122,6 @@
             renderEditableRow: function(allocation, cfg, onChange) {
                 // Use constructionMode from config to ensure it matches the header columns
                 var useConstructionMode = cfg.features.constructionMode;
-                console.log('renderEditableRow - useConstructionMode:', useConstructionMode, 'isConstruction:', isConstruction);
                 return AllocationsManager.createEditableAllocationRow({
                     sectionId: 'hcVariation',
                     allocation: allocation,
@@ -160,7 +156,6 @@
                 openVariationForEditing(item);
             },
             onAllocationsLoaded: function(sectionId, allocations) {
-                console.log('Variation allocations loaded:', allocations.length);
             },
             onSaveNew: function(sectionId, cfg) {
                 // Called when Save button clicked in new mode
@@ -237,7 +232,6 @@
     
     // Open variation for editing
     function openVariationForEditing(variation) {
-        console.log('Opening variation for editing:', variation);
         
         AllocationsManager.setEditMode('hcVariation', true);
         
@@ -418,7 +412,6 @@
             return;
         }
         
-        console.log('Loading variations for project:', projectPk);
         
         // Load costing items first
         $.ajax({
@@ -427,7 +420,6 @@
             success: function(response) {
                 if (response.status === 'success') {
                     window.variationsCostingItems = response.items;
-                    console.log('Loaded costing items:', response.items.length);
                 }
             }
         }).always(function() {
@@ -437,7 +429,6 @@
                 type: 'GET',
                 success: function(response) {
                     if (response.status === 'success') {
-                        console.log('Loaded variations:', response.variations.length);
                         AllocationsManager.populateMainTable('hcVariation', response.variations);
                         // Initialize sortable table after data loads
                         Utils.initSortableTable('hcVariationMainTable', { tbodyId: 'hcVariationMainTableBody' });
@@ -467,7 +458,6 @@
     if (projectPk) {
         loadVariationsData();
     } else {
-        console.log('HC Variations: No project selected');
         $('#hcVariationMainTableBody').html('<tr><td colspan="4" class="text-center text-muted">Select a project to view HC variations</td></tr>');
         // Adjust height for empty state
         if (window.adjustMainTableHeight && window.adjustMainTableHeight['hcVariation']) {

@@ -15,11 +15,9 @@
     
     // Wait for DOM and ensure we have the table
     if ($('#billsApprovalsMainTableBody').length === 0) {
-        console.log('Bills Approvals section: Table not found, skipping init');
         return;
     }
     
-    console.log('Bills Approvals section: Self-initializing...');
     
     // Initialize AllocationsManager for Bills Approvals
     AllocationsManager.init({
@@ -89,7 +87,6 @@
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
-                console.log('Approvals bill row selected:', pk);
                 window.currentSelectedBillPk = pk;
                 
                 // Find full bill data
@@ -145,13 +142,11 @@
     
     // Load Approved Bills data
     window.loadApprovedBills = function() {
-        console.log('Loading Bills Approvals...');
         
         $.ajax({
             url: '{% url "core:get_approved_bills" %}',
             type: 'GET',
             success: function(response) {
-                console.log('Approved bills loaded:', response);
                 
                 // Store data globally
                 window.billsApprovalsData = response.bills;

@@ -87,10 +87,11 @@ table {
     display: block;
   }
   
-  /* Content styling */
+  /* Content styling - uses CSS variable from navbar for responsive margin */
   .main-content {
-    margin-left: 160px; /* Same as custom-navbar width */
+    margin-left: var(--main-content-margin, 180px);
     padding: 0;
+    transition: margin-left 0.25s ease;
   }
   
   #leftSide {
