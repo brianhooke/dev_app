@@ -541,6 +541,14 @@ def upload_files(request):
             # Guess MIME type
             mime_type, _ = mimetypes.guess_type(file_name)
             
+            # Check for existing file with same name and delete it (replace)
+            existing_file = Document_files.objects.filter(folder=folder, file_name=file_name).first()
+            if existing_file:
+                if existing_file.file:
+                    existing_file.file.delete(save=False)
+                existing_file.delete()
+                logger.info(f"Replaced existing file '{file_name}' in folder '{folder.folder_name}'")
+            
             # Create document file
             doc_file = Document_files.objects.create(
                 folder=folder,
@@ -668,4 +676,169 @@ def delete_file(request):
         return JsonResponse({
             'status': 'error',
             'message': f'Error deleting file: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def move_file(request):
+    """
+    Move a file to a different folder
+    
+    Expected POST data:
+    {
+        "file_pk": int,
+        "new_folder_pk": int
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        file_pk = data.get('file_pk')
+        new_folder_pk = data.get('new_folder_pk')
+        
+        if not file_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File PK is required'
+            }, status=400)
+        
+        if not new_folder_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New folder PK is required'
+            }, status=400)
+        
+        # Get file
+        try:
+            doc_file = Document_files.objects.get(file_pk=file_pk)
+        except Document_files.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'File not found'
+            }, status=404)
+        
+        # Get new folder
+        try:
+            new_folder = Document_folders.objects.get(folder_pk=new_folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Target folder not found'
+            }, status=404)
+        
+        # Check for existing file with same name in target folder and delete it (replace)
+        existing_file = Document_files.objects.filter(folder=new_folder, file_name=doc_file.file_name).first()
+        if existing_file and existing_file.file_pk != doc_file.file_pk:
+            if existing_file.file:
+                existing_file.file.delete(save=False)
+            existing_file.delete()
+            logger.info(f"Replaced existing file '{doc_file.file_name}' in folder '{new_folder.folder_name}'")
+        
+        old_folder_name = doc_file.folder.folder_name
+        doc_file.folder = new_folder
+        doc_file.save()
+        
+        logger.info(f"Moved file '{doc_file.file_name}' from '{old_folder_name}' to '{new_folder.folder_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'File moved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error moving file: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error moving file: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def move_folder(request):
+    """
+    Move a folder to a different parent folder
+    
+    Expected POST data:
+    {
+        "folder_pk": int,
+        "new_parent_pk": int
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        folder_pk = data.get('folder_pk')
+        new_parent_pk = data.get('new_parent_pk')
+        
+        if not folder_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder PK is required'
+            }, status=400)
+        
+        if not new_parent_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New parent folder PK is required'
+            }, status=400)
+        
+        # Get folder
+        try:
+            folder = Document_folders.objects.get(folder_pk=folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder not found'
+            }, status=404)
+        
+        # Get new parent folder
+        try:
+            new_parent = Document_folders.objects.get(folder_pk=new_parent_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Target parent folder not found'
+            }, status=404)
+        
+        # Prevent moving folder into itself
+        if folder_pk == new_parent_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Cannot move folder into itself'
+            }, status=400)
+        
+        # Prevent moving folder into its own descendants
+        def is_descendant(potential_child_pk, potential_parent_pk):
+            child_folders = Document_folders.objects.filter(parent_folder_id=potential_parent_pk)
+            for child in child_folders:
+                if child.folder_pk == potential_child_pk:
+                    return True
+                if is_descendant(potential_child_pk, child.folder_pk):
+                    return True
+            return False
+        
+        if is_descendant(new_parent_pk, folder_pk):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Cannot move folder into its own subfolder'
+            }, status=400)
+        
+        old_parent_name = folder.parent_folder.folder_name if folder.parent_folder else 'Root'
+        folder.parent_folder = new_parent
+        folder.save()
+        
+        logger.info(f"Moved folder '{folder.folder_name}' from '{old_parent_name}' to '{new_parent.folder_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Folder moved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error moving folder: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error moving folder: {str(e)}'
         }, status=500)

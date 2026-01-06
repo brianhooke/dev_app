@@ -92,107 +92,234 @@
 </div>
 
 <style>
-/* Folder tree styling */
-.folder-item {
-    padding: 5px 10px;
-    margin: 2px 0;
+/* Modern Folder Tree Styling */
+.folder-tree-node {
+    position: relative;
+}
+
+.folder-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    margin: 1px 0;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     user-select: none;
+    transition: background-color 0.15s ease;
 }
 
-.folder-item:hover {
-    background-color: #e9ecef;
+.folder-row:hover {
+    background-color: #f0f4f8;
 }
 
-.folder-item.selected {
-    background-color: #007bff;
-    color: white;
+.folder-row.selected {
+    background-color: #e3f2fd;
+    border-left: 3px solid #2196f3;
 }
 
-.folder-item.selected:hover {
-    background-color: #0056b3;
+.folder-row.selected:hover {
+    background-color: #bbdefb;
 }
 
-.folder-item .folder-icon {
-    margin-right: 5px;
+.folder-toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    color: #6c757d;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
 }
 
-.folder-item .folder-actions {
-    float: right;
+.folder-toggle:hover {
+    color: #495057;
+    background-color: rgba(0,0,0,0.05);
+    border-radius: 4px;
+}
+
+.folder-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.folder-toggle.no-children {
+    visibility: hidden;
+}
+
+.folder-icon {
+    margin-right: 8px;
+    font-size: 14px;
+    color: #ffc107;
+    flex-shrink: 0;
+}
+
+.folder-icon.open {
+    color: #ff9800;
+}
+
+.folder-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 4px;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.15s ease;
+    margin-left: 8px;
 }
 
-.folder-item:hover .folder-actions {
+.folder-row:hover .folder-actions {
     opacity: 1;
 }
 
-.folder-item .folder-actions button {
-    padding: 0 5px;
-    font-size: 12px;
-    margin-left: 3px;
+.folder-actions button {
+    padding: 2px 6px;
+    font-size: 11px;
+    border-radius: 4px;
 }
 
 .folder-children {
-    margin-left: 20px;
+    margin-left: 24px;
+    overflow: hidden;
+    transition: max-height 0.25s ease-out;
+    border-left: 1px solid #e0e0e0;
+    padding-left: 8px;
 }
 
-.file-item {
-    padding: 5px 10px;
-    margin: 2px 0;
+.folder-children.collapsed {
+    max-height: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* File styling */
+.file-row {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    margin: 1px 0;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 13px;
     color: #495057;
+    transition: background-color 0.15s ease;
 }
 
-.file-item:hover {
-    background-color: #e9ecef;
+.file-row:hover {
+    background-color: #f0f4f8;
 }
 
-.file-item.selected {
-    background-color: #28a745;
-    color: white;
+.file-row.selected {
+    background-color: #e8f5e9;
+    border-left: 3px solid #4caf50;
 }
 
-.file-item .file-icon {
-    margin-right: 5px;
+.file-row.selected:hover {
+    background-color: #c8e6c9;
 }
 
-.file-item .file-size {
-    float: right;
+.file-icon {
+    margin-right: 8px;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.file-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-name:hover {
+    text-decoration: underline;
+}
+
+.file-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.file-size {
     font-size: 11px;
-    color: #6c757d;
+    color: #9e9e9e;
+    white-space: nowrap;
 }
 
-.file-item.selected .file-size {
-    color: #fff;
-}
-
-.file-item .file-actions {
-    float: right;
+.file-actions {
+    display: flex;
+    gap: 4px;
     opacity: 0;
-    transition: opacity 0.2s;
-    margin-right: 5px;
+    transition: opacity 0.15s ease;
 }
 
-.file-item:hover .file-actions {
+.file-row:hover .file-actions {
     opacity: 1;
 }
 
-.file-item .file-actions button {
-    padding: 0 5px;
-    font-size: 12px;
-    margin-left: 3px;
+.file-actions button {
+    padding: 2px 6px;
+    font-size: 11px;
+    border-radius: 4px;
 }
 
-.file-item .file-name-text {
-    cursor: pointer;
+/* Empty state */
+.folder-tree-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #9e9e9e;
 }
 
-.file-item .file-name-text:hover {
-    text-decoration: underline;
+.folder-tree-empty i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #bdbdbd;
+}
+
+/* Drag and drop styling */
+.folder-row.dragging,
+.file-row.dragging {
+    opacity: 0.5;
+    background-color: #e3f2fd;
+}
+
+.folder-row.drag-over {
+    background-color: #bbdefb;
+    border: 2px dashed #2196f3;
+    border-radius: 6px;
+}
+
+.folder-row.uploading {
+    background-color: #fff3e0;
+    position: relative;
+}
+
+.folder-row.uploading::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ff9800;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: translateY(-50%) rotate(360deg); }
 }
 
 /* Ensure modals appear above backdrop */
@@ -210,3 +337,1414 @@
     z-index: 1050 !important;
 }
 </style>
+
+<script>
+/**
+ * Documents Management Module
+ * Handles folder structure and file management for projects
+ */
+var DocumentsManager = (function() {
+    'use strict';
+    
+    // Private variables
+    var projectPk = null;
+    var folders = [];
+    var currentFolderId = null;
+    var currentFileId = null;
+    var selectedFolderId = null;
+    var containerSelector = null;
+    var expandedFolders = {};  // Track expanded state by folder ID
+    var currentDragData = null;  // Store drag data for dragenter/dragleave
+    
+    /**
+     * Initialize the documents manager
+     */
+    function init(options) {
+        projectPk = options.projectPk;
+        containerSelector = options.containerSelector || '#tenderContentArea';
+        
+        if (!projectPk) {
+            console.error('Project PK is required for Documents Manager');
+            return;
+        }
+        
+        // Wait for DOM to be ready
+        setTimeout(function() {
+            // Move modals to body level so Bootstrap can display them properly
+            $('body > #newFolderModal').remove();
+            $('body > #renameFolderModal').remove();
+            
+            if ($(containerSelector + ' #newFolderModal').length) {
+                var newFolderModal = $(containerSelector + ' #newFolderModal').detach();
+                var renameFolderModal = $(containerSelector + ' #renameFolderModal').detach();
+                $('body').append(newFolderModal);
+                $('body').append(renameFolderModal);
+                
+                newFolderModal.css('z-index', 1055);
+                renameFolderModal.css('z-index', 1055);
+            }
+            
+            loadFolderStructure();
+            attachEventHandlers();
+        }, 100);
+    }
+    
+    /**
+     * Attach all event handlers
+     */
+    function attachEventHandlers() {
+        var newFolderBtn = $(containerSelector + ' #newFolderBtn');
+        
+        $(containerSelector).off('click', '#newFolderBtn').on('click', '#newFolderBtn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            showNewFolderModal();
+        });
+        
+        $(document).off('click', '#createFolderBtn').on('click', '#createFolderBtn', function() {
+            createFolder();
+        });
+        
+        $(containerSelector).off('click', '#uploadFileBtn').on('click', '#uploadFileBtn', function() {
+            if (!selectedFolderId) {
+                alert('Please select a folder first');
+                return;
+            }
+            $(containerSelector + ' #fileUploadInput').click();
+        });
+        
+        $(containerSelector).off('change', '#fileUploadInput').on('change', '#fileUploadInput', function(e) {
+            uploadFiles(e.target.files);
+        });
+        
+        $(containerSelector).off('click', '#downloadFileBtn').on('click', '#downloadFileBtn', function() {
+            if (currentFileId) {
+                downloadFile(currentFileId);
+            }
+        });
+        
+        $(containerSelector).off('click', '#deleteFileBtn').on('click', '#deleteFileBtn', function() {
+            if (currentFileId) {
+                deleteFile(currentFileId);
+            }
+        });
+        
+        $(document).off('click', '#renameFolderBtn').on('click', '#renameFolderBtn', function() {
+            renameFolder();
+        });
+        
+        $(document).off('keypress', '#newFolderName').on('keypress', '#newFolderName', function(e) {
+            if (e.which === 13) {
+                createFolder();
+            }
+        });
+        
+        $(document).off('keypress', '#renameFolderName').on('keypress', '#renameFolderName', function(e) {
+            if (e.which === 13) {
+                renameFolder();
+            }
+        });
+    }
+    
+    /**
+     * Load folder structure from backend
+     */
+    function loadFolderStructure() {
+        $.ajax({
+            url: '/core/get_project_folders/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    folders = response.folders || [];
+                    renderFolderTree();
+                } else {
+                    console.error('Error loading folders:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX error loading folders:', error);
+            }
+        });
+    }
+    
+    /**
+     * Render the folder tree
+     */
+    function renderFolderTree() {
+        var treeContainer = $(containerSelector + ' #folderTree');
+        
+        $(containerSelector + ' #documentsContainer').css('display', 'flex');
+        $(containerSelector + ' #folderTreeContainer').css('display', 'block');
+        treeContainer.css('display', 'block');
+        
+        treeContainer.parents().each(function() {
+            var parentId = $(this).attr('id');
+            if (parentId === 'documentsTemplateStorage' || parentId === 'itemsTemplateStorage') {
+                return;
+            }
+            if ($(this).css('display') === 'none') {
+                $(this).css('display', 'block');
+            }
+        });
+        
+        treeContainer.empty();
+        
+        if (folders.length === 0) {
+            treeContainer.html(
+                '<div class="folder-tree-empty">' +
+                '<i class="fa fa-folder-open"></i>' +
+                '<p>No folders yet. Click "New Folder" to create one.</p>' +
+                '</div>'
+            );
+            return;
+        }
+        
+        var rootFolders = folders.filter(function(f) { return !f.parent_folder_id; });
+        rootFolders.forEach(function(folder) {
+            renderFolder(folder, treeContainer);
+        });
+    }
+    
+    /**
+     * Recursively render a folder and its children
+     */
+    function renderFolder(folder, container) {
+        var subfolders = folders.filter(function(f) { return f.parent_folder_id === folder.folder_pk; });
+        var hasChildren = (folder.files && folder.files.length > 0) || subfolders.length > 0;
+        var isExpanded = expandedFolders[folder.folder_pk] === true; // Default to collapsed
+        
+        // Create folder node container
+        var nodeDiv = $('<div></div>')
+            .addClass('folder-tree-node')
+            .attr('data-folder-id', folder.folder_pk);
+        
+        // Create folder row (draggable and droppable)
+        var folderRow = $('<div></div>')
+            .addClass('folder-row')
+            .attr('data-folder-id', folder.folder_pk)
+            .attr('draggable', 'true')
+            .on('dragstart', function(e) {
+                currentDragData = {
+                    type: 'folder',
+                    id: folder.folder_pk,
+                    name: folder.folder_name
+                };
+                e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(currentDragData));
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+                $(this).addClass('dragging');
+            })
+            .on('dragend', function(e) {
+                $(this).removeClass('dragging');
+                $('.folder-row').removeClass('drag-over');
+                currentDragData = null;
+            })
+            .on('dragover', function(e) {
+                e.preventDefault();
+                e.originalEvent.dataTransfer.dropEffect = 'move';
+            })
+            .on('dragenter', function(e) {
+                e.preventDefault();
+                // Show drag-over for external files OR valid internal drops
+                var hasFiles = e.originalEvent.dataTransfer.types.indexOf('Files') !== -1;
+                if (hasFiles || (currentDragData && isValidDrop(currentDragData, folder.folder_pk))) {
+                    $(this).addClass('drag-over');
+                }
+            })
+            .on('dragleave', function(e) {
+                // Only remove if leaving to outside element
+                var rect = this.getBoundingClientRect();
+                var x = e.originalEvent.clientX;
+                var y = e.originalEvent.clientY;
+                if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                    $(this).removeClass('drag-over');
+                }
+            })
+            .on('drop', function(e) {
+                e.preventDefault();
+                $(this).removeClass('drag-over');
+                
+                // Check for external files first
+                var files = e.originalEvent.dataTransfer.files;
+                if (files && files.length > 0) {
+                    uploadFilesToFolder(files, folder.folder_pk, $(this));
+                    return;
+                }
+                
+                // Internal drag/drop
+                if (currentDragData && isValidDrop(currentDragData, folder.folder_pk)) {
+                    handleDrop(currentDragData, folder.folder_pk);
+                }
+            });
+        
+        if (selectedFolderId === folder.folder_pk) {
+            folderRow.addClass('selected');
+        }
+        
+        // Toggle chevron
+        var toggleDiv = $('<div></div>')
+            .addClass('folder-toggle')
+            .html('<i class="fa fa-chevron-right"></i>');
+        
+        if (!hasChildren) {
+            toggleDiv.addClass('no-children');
+        } else if (isExpanded) {
+            toggleDiv.addClass('expanded');
+        }
+        
+        toggleDiv.on('click', function(e) {
+            e.stopPropagation();
+            toggleFolder(folder.folder_pk);
+        });
+        
+        // Folder icon
+        var folderIcon = $('<i></i>')
+            .addClass('fa folder-icon')
+            .addClass(isExpanded && hasChildren ? 'fa-folder-open open' : 'fa-folder');
+        
+        // Folder name (double-click to edit)
+        var folderName = $('<span></span>')
+            .addClass('folder-name')
+            .text(folder.folder_name)
+            .on('dblclick', function(e) {
+                e.stopPropagation();
+                makeFolderNameEditable($(this), folder);
+            });
+        
+        // Actions
+        var actionsDiv = $('<div></div>').addClass('folder-actions');
+        
+        var renameBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-warning')
+            .html('<i class="fa fa-edit"></i>')
+            .attr('title', 'Rename folder')
+            .on('click', function(e) {
+                e.stopPropagation();
+                showRenameFolderModal(folder);
+            });
+        
+        var deleteBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-danger')
+            .html('<i class="fa fa-trash"></i>')
+            .attr('title', 'Delete folder')
+            .on('click', function(e) {
+                e.stopPropagation();
+                deleteFolderPrompt(folder.folder_pk);
+            });
+        
+        actionsDiv.append(renameBtn).append(deleteBtn);
+        
+        // Assemble folder row
+        folderRow.append(toggleDiv).append(folderIcon).append(folderName).append(actionsDiv);
+        
+        // Click to select folder
+        folderRow.on('click', function(e) {
+            if ($(e.target).closest('.folder-actions').length === 0 && 
+                $(e.target).closest('.folder-toggle').length === 0) {
+                selectFolder(folder.folder_pk);
+            }
+        });
+        
+        nodeDiv.append(folderRow);
+        
+        // Create children container
+        if (hasChildren) {
+            var childrenDiv = $('<div></div>')
+                .addClass('folder-children')
+                .attr('data-parent-folder', folder.folder_pk);
+            
+            if (!isExpanded) {
+                childrenDiv.addClass('collapsed');
+            }
+            
+            // Render files first
+            if (folder.files && folder.files.length > 0) {
+                folder.files.forEach(function(file) {
+                    renderFile(file, childrenDiv);
+                });
+            }
+            
+            // Render subfolders
+            subfolders.forEach(function(subfolder) {
+                renderFolder(subfolder, childrenDiv);
+            });
+            
+            nodeDiv.append(childrenDiv);
+        }
+        
+        container.append(nodeDiv);
+    }
+    
+    /**
+     * Toggle folder expand/collapse
+     */
+    function toggleFolder(folderId) {
+        var isCurrentlyExpanded = expandedFolders[folderId] === true; // Match renderFolder logic
+        expandedFolders[folderId] = !isCurrentlyExpanded;
+        
+        var nodeDiv = $('.folder-tree-node[data-folder-id="' + folderId + '"]');
+        var toggleDiv = nodeDiv.find('> .folder-row .folder-toggle');
+        var folderIcon = nodeDiv.find('> .folder-row .folder-icon');
+        var childrenDiv = nodeDiv.find('> .folder-children');
+        
+        if (expandedFolders[folderId]) {
+            toggleDiv.addClass('expanded');
+            folderIcon.removeClass('fa-folder').addClass('fa-folder-open open');
+            childrenDiv.removeClass('collapsed');
+        } else {
+            toggleDiv.removeClass('expanded');
+            folderIcon.removeClass('fa-folder-open open').addClass('fa-folder');
+            childrenDiv.addClass('collapsed');
+        }
+    }
+    
+    /**
+     * Get drag data from event
+     */
+    function getDragData(e) {
+        try {
+            var data = e.originalEvent.dataTransfer.getData('text/plain');
+            return data ? JSON.parse(data) : null;
+        } catch (err) {
+            return null;
+        }
+    }
+    
+    /**
+     * Check if drop is valid (prevent dropping folder into itself or its children)
+     */
+    function isValidDrop(dragData, targetFolderId) {
+        if (!dragData) return false;
+        
+        // Files can be dropped on any folder
+        if (dragData.type === 'file') {
+            return true;
+        }
+        
+        // Folders cannot be dropped on themselves
+        if (dragData.type === 'folder' && dragData.id === targetFolderId) {
+            return false;
+        }
+        
+        // Folders cannot be dropped on their own children (would create circular reference)
+        if (dragData.type === 'folder') {
+            return !isDescendantOf(targetFolderId, dragData.id);
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Check if targetId is a descendant of parentId
+     */
+    function isDescendantOf(targetId, parentId) {
+        var folder = folders.find(function(f) { return f.folder_pk === targetId; });
+        if (!folder) return false;
+        if (folder.parent_folder_id === parentId) return true;
+        if (folder.parent_folder_id) {
+            return isDescendantOf(folder.parent_folder_id, parentId);
+        }
+        return false;
+    }
+    
+    /**
+     * Handle drop event
+     */
+    function handleDrop(dragData, targetFolderId) {
+        if (dragData.type === 'file') {
+            moveFile(dragData.id, targetFolderId, dragData.name);
+        } else if (dragData.type === 'folder') {
+            moveFolder(dragData.id, targetFolderId);
+        }
+    }
+    
+    /**
+     * Move file to new folder
+     */
+    function moveFile(filePk, newFolderPk, fileName) {
+        // Check for duplicates in target folder
+        if (fileName) {
+            var duplicates = checkForDuplicates([fileName], newFolderPk);
+            if (duplicates.length > 0) {
+                var msg = 'A file named "' + fileName + '" already exists in this folder.\n\n';
+                msg += 'Click OK to replace, or Cancel to abort.';
+                
+                if (!confirm(msg)) {
+                    return; // User cancelled
+                }
+            }
+        }
+        
+        $.ajax({
+            url: '/core/move_file/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            data: JSON.stringify({
+                file_pk: filePk,
+                new_folder_pk: newFolderPk
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadFolderStructure();
+                } else {
+                    alert('Error moving file: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error moving file:', error);
+                alert('Error moving file. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Move folder to new parent
+     */
+    function moveFolder(folderPk, newParentPk) {
+        $.ajax({
+            url: '/core/move_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            data: JSON.stringify({
+                folder_pk: folderPk,
+                new_parent_pk: newParentPk
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadFolderStructure();
+                } else {
+                    alert('Error moving folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error moving folder:', error);
+                alert('Error moving folder. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Check for duplicate files in a folder
+     */
+    function checkForDuplicates(fileNames, folderId) {
+        var folder = folders.find(function(f) { return f.folder_pk === folderId; });
+        if (!folder || !folder.files) return [];
+        
+        var existingNames = folder.files.map(function(f) { return f.file_name.toLowerCase(); });
+        var duplicates = [];
+        
+        for (var i = 0; i < fileNames.length; i++) {
+            if (existingNames.indexOf(fileNames[i].toLowerCase()) !== -1) {
+                duplicates.push(fileNames[i]);
+            }
+        }
+        
+        return duplicates;
+    }
+    
+    /**
+     * Upload external files to a specific folder (drag from desktop)
+     */
+    function uploadFilesToFolder(files, folderId, folderRowElement) {
+        if (!files || files.length === 0) return;
+        
+        // Check for duplicates
+        var fileNames = [];
+        for (var i = 0; i < files.length; i++) {
+            fileNames.push(files[i].name);
+        }
+        
+        var duplicates = checkForDuplicates(fileNames, folderId);
+        if (duplicates.length > 0) {
+            var msg = 'The following file(s) already exist in this folder:\n\n';
+            msg += duplicates.join('\n');
+            msg += '\n\nClick OK to replace, or Cancel to abort.';
+            
+            if (!confirm(msg)) {
+                return; // User cancelled
+            }
+        }
+        
+        // Show uploading indicator
+        folderRowElement.addClass('uploading');
+        
+        var formData = new FormData();
+        formData.append('folder_pk', folderId);
+        
+        for (var i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
+        
+        $.ajax({
+            url: '/core/upload_files/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            timeout: 120000,
+            success: function(response) {
+                folderRowElement.removeClass('uploading');
+                if (response.status === 'success') {
+                    // Expand the folder to show new files
+                    expandedFolders[folderId] = true;
+                    loadFolderStructure();
+                } else {
+                    alert('Error uploading files: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                folderRowElement.removeClass('uploading');
+                console.error('Error uploading files:', error);
+                
+                var errorMsg = 'Error uploading files.\n\n';
+                if (status === 'timeout') {
+                    errorMsg += 'The request timed out. Try smaller files or check your connection.';
+                } else if (xhr.status === 0) {
+                    errorMsg += 'Could not connect. Check if files are available locally (not in cloud storage).';
+                } else {
+                    errorMsg += 'Please try again.';
+                }
+                alert(errorMsg);
+            }
+        });
+    }
+    
+    /**
+     * Render a file item
+     */
+    function renderFile(file, container) {
+        var fileRow = $('<div></div>')
+            .addClass('file-row')
+            .attr('data-file-id', file.file_pk)
+            .attr('draggable', 'true')
+            .on('dragstart', function(e) {
+                currentDragData = {
+                    type: 'file',
+                    id: file.file_pk,
+                    name: file.file_name,
+                    folderId: file.folder_pk
+                };
+                e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(currentDragData));
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+                $(this).addClass('dragging');
+            })
+            .on('dragend', function(e) {
+                $(this).removeClass('dragging');
+                $('.folder-row').removeClass('drag-over');
+                currentDragData = null;
+            });
+        
+        if (currentFileId === file.file_pk) {
+            fileRow.addClass('selected');
+        }
+        
+        var icon = 'fa-file';
+        var iconColor = '';
+        var textFileTypes = ['txt', 'csv', 'log', 'md', 'json', 'xml', 'html', 'htm', 'css', 'js', 'py', 'sql', 'yaml', 'yml', 'ini', 'conf', 'cfg'];
+        var codeFileTypes = ['json', 'xml', 'html', 'htm', 'css', 'js', 'py', 'sql', 'yaml', 'yml'];
+        
+        if (file.file_type === 'pdf') {
+            icon = 'fa-file-pdf';
+            iconColor = '#dc3545';
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].indexOf(file.file_type) !== -1) {
+            icon = 'fa-file-image';
+            iconColor = '#007bff';
+        } else if (codeFileTypes.indexOf(file.file_type) !== -1) {
+            icon = 'fa-file-code';
+            iconColor = '#fd7e14';
+        } else if (textFileTypes.indexOf(file.file_type) !== -1) {
+            icon = 'fa-file-alt';
+            iconColor = '#6c757d';
+        } else if (file.file_type === 'csv') {
+            icon = 'fa-file-csv';
+            iconColor = '#28a745';
+        }
+        
+        var fileIcon = $('<i></i>')
+            .addClass('fa ' + icon + ' file-icon')
+            .css('color', iconColor);
+        
+        var fileName = $('<span></span>')
+            .addClass('file-name')
+            .text(file.file_name)
+            .attr('data-original-name', file.file_name)
+            .on('dblclick', function(e) {
+                e.stopPropagation();
+                makeFileNameEditable($(this), file.file_pk);
+            });
+        
+        var fileMeta = $('<div></div>').addClass('file-meta');
+        
+        var fileActions = $('<div></div>').addClass('file-actions');
+        
+        var editBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-warning')
+            .html('<i class="fa fa-edit"></i>')
+            .attr('title', 'Rename file')
+            .on('click', function(e) {
+                e.stopPropagation();
+                makeFileNameEditable(fileName, file.file_pk);
+            });
+        
+        var deleteBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-danger')
+            .html('<i class="fa fa-trash"></i>')
+            .attr('title', 'Delete file')
+            .on('click', function(e) {
+                e.stopPropagation();
+                deleteFile(file.file_pk);
+            });
+        
+        fileActions.append(editBtn).append(deleteBtn);
+        
+        var fileSize = $('<span></span>')
+            .addClass('file-size')
+            .text(formatFileSize(file.file_size));
+        
+        fileMeta.append(fileActions).append(fileSize);
+        
+        fileRow.append(fileIcon).append(fileName).append(fileMeta);
+        
+        fileRow.on('click', function() {
+            viewFile(file);
+        });
+        
+        container.append(fileRow);
+    }
+    
+    /**
+     * Select a folder
+     */
+    function selectFolder(folderId) {
+        selectedFolderId = folderId;
+        $('.folder-row').removeClass('selected');
+        $('.folder-row[data-folder-id="' + folderId + '"]').addClass('selected');
+    }
+    
+    /**
+     * Show new folder modal
+     */
+    function showNewFolderModal() {
+        var modal = $('#newFolderModal');
+        
+        if (modal.parent()[0].tagName !== 'BODY') {
+            modal.detach().appendTo('body');
+        }
+        
+        modal = $('#newFolderModal');
+        var folderNameInput = modal.find('#newFolderName');
+        var parentSelect = modal.find('#parentFolderSelect');
+        
+        folderNameInput.val('');
+        
+        parentSelect.empty();
+        parentSelect.append('<option value="">Root (No parent)</option>');
+        
+        folders.forEach(function(folder) {
+            var indent = '';
+            var level = getFolderLevel(folder.folder_pk);
+            for (var i = 0; i < level; i++) {
+                indent += '-- ';
+            }
+            parentSelect.append(
+                '<option value="' + folder.folder_pk + '">' + indent + folder.folder_name + '</option>'
+            );
+        });
+        
+        if (selectedFolderId) {
+            parentSelect.val(selectedFolderId);
+        }
+        
+        $('.modal').modal('hide');
+        $('.modal-backdrop').remove();
+        
+        setTimeout(function() {
+            modal.modal({
+                backdrop: true,
+                keyboard: true,
+                focus: true,
+                show: true
+            });
+            
+            setTimeout(function() {
+                modal.attr('style', 'z-index: 1055 !important; display: block;');
+                $('.modal-backdrop').each(function() {
+                    $(this).attr('style', 'z-index: 1050 !important;');
+                });
+                $('#newFolderName').focus();
+            }, 50);
+        }, 50);
+    }
+    
+    /**
+     * Get folder nesting level
+     */
+    function getFolderLevel(folderId, level) {
+        level = level || 0;
+        var folder = folders.find(function(f) { return f.folder_pk === folderId; });
+        if (!folder || !folder.parent_folder_id) {
+            return level;
+        }
+        return getFolderLevel(folder.parent_folder_id, level + 1);
+    }
+    
+    /**
+     * Create a new folder
+     */
+    function createFolder() {
+        var modal = $('#newFolderModal');
+        var folderNameInput = modal.find('#newFolderName');
+        var parentFolderSelect = modal.find('#parentFolderSelect');
+        
+        var folderName = folderNameInput.val().trim();
+        var parentFolderId = parentFolderSelect.val() || null;
+        
+        if (!folderName) {
+            alert('Please enter a folder name');
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/create_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                project_pk: projectPk,
+                folder_name: folderName,
+                parent_folder_id: parentFolderId
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#newFolderModal').modal('hide');
+                    loadFolderStructure();
+                } else {
+                    alert('Error creating folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error creating folder:', error);
+                alert('Error creating folder. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Show rename folder modal
+     */
+    function showRenameFolderModal(folder) {
+        currentFolderId = folder.folder_pk;
+        $('#renameFolderName').val(folder.folder_name);
+        
+        var modal = $('#renameFolderModal');
+        
+        if (modal.parent()[0].tagName !== 'BODY') {
+            modal.detach().appendTo('body');
+        }
+        
+        $('.modal').modal('hide');
+        $('.modal-backdrop').remove();
+        
+        setTimeout(function() {
+            modal.modal({
+                backdrop: true,
+                keyboard: true,
+                focus: true,
+                show: true
+            });
+            
+            setTimeout(function() {
+                modal.attr('style', 'z-index: 1055 !important; display: block;');
+                $('.modal-backdrop').each(function() {
+                    $(this).attr('style', 'z-index: 1050 !important;');
+                });
+                $('#renameFolderName').focus();
+            }, 50);
+        }, 50);
+    }
+    
+    /**
+     * Rename a folder
+     */
+    function renameFolder() {
+        var newName = $('#renameFolderName').val().trim();
+        
+        if (!newName) {
+            alert('Please enter a folder name');
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/rename_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                folder_pk: currentFolderId,
+                new_name: newName
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    $('#renameFolderModal').modal('hide');
+                    loadFolderStructure();
+                } else {
+                    alert('Error renaming folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error renaming folder:', error);
+                alert('Error renaming folder. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Make folder name editable inline (double-click)
+     */
+    function makeFolderNameEditable(folderNameSpan, folder) {
+        if (folderNameSpan.find('input').length > 0) {
+            return;
+        }
+        
+        var originalName = folderNameSpan.text();
+        var input = $('<input type="text">')
+            .val(originalName)
+            .css({
+                'width': '180px',
+                'font-size': '13px',
+                'padding': '2px 5px',
+                'border': '1px solid #2196f3',
+                'border-radius': '3px',
+                'font-weight': '500'
+            })
+            .on('click', function(e) {
+                e.stopPropagation();
+            })
+            .on('blur', function() {
+                saveFolderNameInline(folderNameSpan, folder.folder_pk, originalName);
+            })
+            .on('keydown', function(e) {
+                if (e.which === 13) { // Enter
+                    e.preventDefault();
+                    $(this).blur();
+                } else if (e.which === 27) { // Escape
+                    e.preventDefault();
+                    folderNameSpan.text(originalName);
+                }
+            });
+        
+        folderNameSpan.empty().append(input);
+        input.focus().select();
+    }
+    
+    /**
+     * Save inline folder name edit
+     */
+    function saveFolderNameInline(folderNameSpan, folderPk, originalName) {
+        var input = folderNameSpan.find('input');
+        if (input.length === 0) return;
+        
+        var newName = input.val().trim();
+        
+        // If empty or unchanged, revert
+        if (!newName || newName === originalName) {
+            folderNameSpan.text(originalName);
+            return;
+        }
+        
+        // Show saving indicator
+        folderNameSpan.text('Saving...');
+        
+        $.ajax({
+            url: '/core/rename_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            data: JSON.stringify({
+                folder_pk: folderPk,
+                new_name: newName
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    folderNameSpan.text(newName);
+                    // Update the folder object in our local array
+                    var folder = folders.find(function(f) { return f.folder_pk === folderPk; });
+                    if (folder) {
+                        folder.folder_name = newName;
+                    }
+                } else {
+                    alert('Error renaming folder: ' + response.message);
+                    folderNameSpan.text(originalName);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error renaming folder:', error);
+                alert('Error renaming folder. Please try again.');
+                folderNameSpan.text(originalName);
+            }
+        });
+    }
+    
+    /**
+     * Make file name editable inline
+     */
+    function makeFileNameEditable(fileNameSpan, filePk) {
+        if (fileNameSpan.find('input').length > 0) {
+            return;
+        }
+        
+        var originalName = fileNameSpan.text();
+        var input = $('<input type="text">')
+            .val(originalName)
+            .css({
+                'width': '200px',
+                'font-size': '13px',
+                'padding': '2px 5px',
+                'border': '1px solid #007bff',
+                'border-radius': '3px'
+            })
+            .on('click', function(e) {
+                e.stopPropagation();
+            })
+            .on('blur', function() {
+                saveFileNameInline(fileNameSpan, filePk, originalName);
+            })
+            .on('keydown', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    $(this).blur();
+                } else if (e.which === 27) {
+                    e.preventDefault();
+                    fileNameSpan.text(originalName);
+                }
+            });
+        
+        fileNameSpan.empty().append(input);
+        input.focus().select();
+    }
+    
+    /**
+     * Save inline file name edit
+     */
+    function saveFileNameInline(fileNameSpan, filePk, originalName) {
+        var input = fileNameSpan.find('input');
+        if (input.length === 0) return;
+        
+        var newName = input.val().trim();
+        
+        if (!newName || newName === originalName) {
+            fileNameSpan.text(originalName);
+            return;
+        }
+        
+        fileNameSpan.text('Saving...');
+        
+        $.ajax({
+            url: '/core/rename_file/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                file_pk: filePk,
+                new_name: newName
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    fileNameSpan.text(newName);
+                    fileNameSpan.attr('data-original-name', newName);
+                } else {
+                    alert('Error renaming file: ' + response.message);
+                    fileNameSpan.text(originalName);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error renaming file:', error);
+                alert('Error renaming file. Please try again.');
+                fileNameSpan.text(originalName);
+            }
+        });
+    }
+    
+    /**
+     * Delete folder prompt
+     */
+    function deleteFolderPrompt(folderId) {
+        var folder = folders.find(function(f) { return f.folder_pk === folderId; });
+        if (!folder) {
+            alert('Folder not found');
+            return;
+        }
+        
+        var subfolders = folders.filter(function(f) { return f.parent_folder_id === folderId; });
+        var fileCount = (folder.files && folder.files.length) || 0;
+        
+        var message = 'Are you sure you want to delete the folder "' + folder.folder_name + '"?';
+        
+        if (subfolders.length > 0 || fileCount > 0) {
+            message += '\n\nThis will also delete:';
+            if (fileCount > 0) {
+                message += '\n• ' + fileCount + ' file(s)';
+            }
+            if (subfolders.length > 0) {
+                message += '\n• ' + subfolders.length + ' subfolder(s) and all their contents';
+            }
+        }
+        
+        if (!confirm(message)) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/delete_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                folder_pk: folderId
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (selectedFolderId === folderId) {
+                        selectedFolderId = null;
+                    }
+                    
+                    if (currentFileId) {
+                        var currentFile = null;
+                        folders.forEach(function(f) {
+                            if (f.files) {
+                                var file = f.files.find(function(file) { return file.file_pk === currentFileId; });
+                                if (file) currentFile = file;
+                            }
+                        });
+                        
+                        if (currentFile && folder.files && folder.files.find(function(f) { return f.file_pk === currentFileId; })) {
+                            clearFileViewer();
+                        }
+                    }
+                    
+                    loadFolderStructure();
+                } else {
+                    alert('Error deleting folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error deleting folder:', error);
+                var errorMessage = 'Error deleting folder. Please try again.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    }
+    
+    /**
+     * Delete a folder
+     */
+    function deleteFolder(folderId) {
+        $.ajax({
+            url: '/core/delete_folder/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                folder_pk: folderId
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (selectedFolderId === folderId) {
+                        selectedFolderId = null;
+                    }
+                    loadFolderStructure();
+                    clearFileViewer();
+                } else {
+                    alert('Error deleting folder: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error deleting folder:', error);
+                alert('Error deleting folder. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Upload files to selected folder
+     */
+    function uploadFiles(files) {
+        if (!files || files.length === 0) return;
+        if (!selectedFolderId) {
+            alert('Please select a folder first');
+            return;
+        }
+        
+        // Check for duplicates
+        var fileNames = [];
+        for (var i = 0; i < files.length; i++) {
+            fileNames.push(files[i].name);
+        }
+        
+        var duplicates = checkForDuplicates(fileNames, selectedFolderId);
+        if (duplicates.length > 0) {
+            var msg = 'The following file(s) already exist in this folder:\n\n';
+            msg += duplicates.join('\n');
+            msg += '\n\nClick OK to replace, or Cancel to abort.';
+            
+            if (!confirm(msg)) {
+                $(containerSelector + ' #fileUploadInput').val('');
+                return; // User cancelled
+            }
+        }
+        
+        console.log('[DocumentsManager] Starting file upload...');
+        console.log('[DocumentsManager] Selected folder ID:', selectedFolderId);
+        console.log('[DocumentsManager] Number of files:', files.length);
+        
+        var formData = new FormData();
+        formData.append('folder_pk', selectedFolderId);
+        
+        for (var i = 0; i < files.length; i++) {
+            console.log('[DocumentsManager] File ' + i + ':', files[i].name, 'Size:', files[i].size);
+            formData.append('files', files[i]);
+        }
+        
+        var csrfToken = getCSRFToken();
+        console.log('[DocumentsManager] CSRF Token:', csrfToken ? 'Found (' + csrfToken.substring(0, 10) + '...)' : 'NOT FOUND');
+        
+        $.ajax({
+            url: '/core/upload_files/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRFToken': csrfToken },
+            timeout: 60000,
+            beforeSend: function(xhr) {
+                console.log('[DocumentsManager] Sending request to /core/upload_files/');
+            },
+            success: function(response) {
+                console.log('[DocumentsManager] Upload response:', response);
+                if (response.status === 'success') {
+                    loadFolderStructure();
+                    $(containerSelector + ' #fileUploadInput').val('');
+                } else {
+                    alert('Error uploading files: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[DocumentsManager] Upload error - Status:', status);
+                console.error('[DocumentsManager] Upload error - Error:', error);
+                console.error('[DocumentsManager] Upload error - XHR status:', xhr.status);
+                console.error('[DocumentsManager] Upload error - XHR response:', xhr.responseText);
+                
+                var errorMsg = 'Error uploading files.\n\n';
+                
+                if (status === 'timeout') {
+                    errorMsg += 'The request timed out. Possible causes:\n';
+                    errorMsg += '• File is too large\n';
+                    errorMsg += '• Cloud storage (OneDrive/iCloud/Dropbox) not synced\n';
+                    errorMsg += '• Network connection issue\n';
+                    errorMsg += '• Server is not responding';
+                } else if (xhr.status === 0) {
+                    errorMsg += 'Could not connect to server. Possible causes:\n';
+                    errorMsg += '• File stored in cloud (OneDrive/iCloud/Dropbox) but not available offline\n';
+                    errorMsg += '• Network connection lost\n';
+                    errorMsg += '• Server is not running';
+                } else if (xhr.status === 403) {
+                    errorMsg += 'Permission denied. Please refresh the page and try again.';
+                } else if (xhr.status === 413) {
+                    errorMsg += 'File is too large. Please try a smaller file.';
+                } else if (xhr.status >= 500) {
+                    errorMsg += 'Server error. Please try again later.';
+                } else {
+                    errorMsg += 'Status: ' + status + '\n';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg += xhr.responseJSON.message;
+                    }
+                }
+                
+                alert(errorMsg);
+            }
+        });
+    }
+    
+    /**
+     * View a file
+     */
+    function viewFile(file) {
+        currentFileId = file.file_pk;
+        $('.file-row').removeClass('selected');
+        $('.file-row[data-file-id="' + file.file_pk + '"]').addClass('selected');
+        
+        var fileInfoBar = $(containerSelector + ' #fileInfoBar');
+        var currentFileName = $(containerSelector + ' #currentFileName');
+        var currentFileInfo = $(containerSelector + ' #currentFileInfo');
+        
+        currentFileName.text(file.file_name);
+        currentFileInfo.html(
+            'Type: ' + file.file_type.toUpperCase() + ' | ' +
+            'Size: ' + formatFileSize(file.file_size) + ' | ' +
+            'Uploaded: ' + formatDate(file.uploaded_at)
+        );
+        fileInfoBar.show();
+        
+        var viewer = $(containerSelector + ' #fileViewer');
+        viewer.empty();
+        
+        var textFileTypes = ['txt', 'csv', 'log', 'md', 'json', 'xml', 'html', 'htm', 'css', 'js', 'py', 'sql', 'yaml', 'yml', 'ini', 'conf', 'cfg'];
+        
+        if (file.file_type === 'pdf') {
+            viewer.html('<iframe src="' + file.file_url + '" style="width: 100%; height: 100%; border: none;"></iframe>');
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].indexOf(file.file_type) !== -1) {
+            viewer.html('<img src="' + file.file_url + '" style="max-width: 100%; max-height: 100%; object-fit: contain;">');
+        } else if (textFileTypes.indexOf(file.file_type) !== -1) {
+            viewer.html('<div style="padding: 20px; text-align: center;"><i class="fa fa-spinner fa-spin"></i> Loading...</div>');
+            $.ajax({
+                url: file.file_url,
+                type: 'GET',
+                dataType: 'text',
+                success: function(content) {
+                    viewer.html(
+                        '<pre style="width: 100%; height: 100%; margin: 0; padding: 15px; overflow: auto; ' +
+                        'background-color: #f8f9fa; border: none; font-family: Consolas, Monaco, monospace; ' +
+                        'font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; text-align: left;">' +
+                        escapeHtml(content) +
+                        '</pre>'
+                    );
+                },
+                error: function() {
+                    viewer.html(
+                        '<div style="text-align: center; color: #6c757d; padding: 40px;">' +
+                        '<i class="fa fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; color: #ffc107;"></i>' +
+                        '<p>Unable to load text content</p>' +
+                        '<p style="font-size: 12px;">Click "Download" to view this file</p>' +
+                        '</div>'
+                    );
+                }
+            });
+        } else {
+            viewer.html(
+                '<div style="text-align: center; color: #6c757d; padding: 40px;">' +
+                '<i class="fa fa-file" style="font-size: 64px; margin-bottom: 20px;"></i>' +
+                '<p>File type not supported for preview</p>' +
+                '<p style="font-size: 12px;">Click "Download" to view this file</p>' +
+                '</div>'
+            );
+        }
+    }
+    
+    /**
+     * Download a file
+     */
+    function downloadFile(fileId) {
+        window.open('/core/download_file/' + fileId + '/', '_blank');
+    }
+    
+    /**
+     * Delete a file
+     */
+    function deleteFile(fileId) {
+        if (!confirm('Are you sure you want to delete this file?')) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/delete_file/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                file_pk: fileId
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    clearFileViewer();
+                    loadFolderStructure();
+                } else {
+                    alert('Error deleting file: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error deleting file:', error);
+                alert('Error deleting file. Please try again.');
+            }
+        });
+    }
+    
+    /**
+     * Clear file viewer
+     */
+    function clearFileViewer() {
+        currentFileId = null;
+        $(containerSelector + ' #fileInfoBar').hide();
+        $(containerSelector + ' #fileViewer').html(
+            '<div style="text-align: center; color: #6c757d;">' +
+            '<i class="fa fa-file" style="font-size: 64px; margin-bottom: 20px;"></i>' +
+            '<p>Select a file to view</p>' +
+            '</div>'
+        );
+        $('.file-row').removeClass('selected');
+    }
+    
+    /**
+     * Format file size for display
+     */
+    function formatFileSize(bytes) {
+        if (!bytes) return '0 B';
+        var k = 1024;
+        var sizes = ['B', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    }
+    
+    /**
+     * Format date for display
+     */
+    function formatDate(dateString) {
+        var date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+    
+    /**
+     * Escape HTML to prevent XSS when displaying text content
+     */
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    /**
+     * Get CSRF token from cookies
+     */
+    function getCSRFToken() {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, 10) === 'csrftoken=') {
+                    cookieValue = decodeURIComponent(cookie.substring(10));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    /**
+     * Emergency function to clear stuck modal backdrops
+     */
+    function clearModals() {
+        $('.modal').modal('hide');
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        $('body').css('padding-right', '');
+    }
+    
+    // Public API
+    return {
+        init: init,
+        reload: loadFolderStructure,
+        clearModals: clearModals
+    };
+})();
+
+window.DocumentsManager = DocumentsManager;
+</script>

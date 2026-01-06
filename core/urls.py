@@ -22,7 +22,7 @@ from .views.hc_variations import (
     delete_hc_variation_allocation
 )
 from .views.pos import get_quotes_by_supplier, po_view
-from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file
+from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file, move_file, move_folder
 from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection, migrate_xero_to_ssm
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
@@ -199,6 +199,8 @@ urlpatterns = [
     path('upload_files/', upload_files, name='upload_files'),
     path('download_file/<int:file_pk>/', download_file, name='download_file'),
     path('delete_file/', delete_file, name='delete_file'),
+    path('move_file/', move_file, name='move_file'),
+    path('move_folder/', move_folder, name='move_folder'),
     
     # PO public view - REDIRECT to top-level URL (backwards compatibility)
     # Development can continue in core/views/pos.py with the view function
