@@ -1406,7 +1406,17 @@
     
     // Create entry via AJAX - handles both project_type and project modes
     function createRatesEntry(modelType, name, orderInList, categoryPk, mode, modeValue, onReload) {
+        console.log('[CreateEntry] Called with:', {
+            modelType: modelType,
+            name: name,
+            orderInList: orderInList,
+            categoryPk: categoryPk,
+            mode: mode,
+            modeValue: modeValue
+        });
+        
         if (!modeValue) {
+            console.error('[CreateEntry] No modeValue provided');
             alert(mode === 'project_type' ? 'Please select a project type first.' : 'No project selected.');
             return;
         }
@@ -1429,25 +1439,58 @@
         }
         
         var csrfToken = typeof getCSRFToken === 'function' ? getCSRFToken() : $('input[name=csrfmiddlewaretoken]').val();
+        console.log('[CreateEntry] CSRF Token:', csrfToken);
+        console.log('[CreateEntry] Payload:', JSON.stringify(payload, null, 2));
+        
+        var requestUrl = '/core/create_new_category_costing_unit_quantity/';
+        console.log('[CreateEntry] Making POST request to:', requestUrl);
         
         $.ajax({
-            url: '/core/create_new_category_costing_unit_quantity/',
+            url: requestUrl,
             type: 'POST',
             contentType: 'application/json',
             headers: { 'X-CSRFToken': csrfToken },
+            xhrFields: { withCredentials: true },
             data: JSON.stringify(payload),
-            success: function(response) {
-                if (response.status === 'success') {
+            success: function(response, textStatus, xhr) {
+                console.log('[CreateEntry] AJAX success callback');
+                console.log('[CreateEntry] Response status code:', xhr.status);
+                console.log('[CreateEntry] Full response:', response);
+                console.log('[CreateEntry] Response type:', typeof response);
+                
+                if (response && response.status === 'success') {
+                    console.log('[CreateEntry] Entry created successfully, pk:', response.pk);
                     if (onReload) onReload();
                 } else {
-                    alert('Error: ' + response.message);
+                    console.error('[CreateEntry] Response status not success');
+                    console.error('[CreateEntry] response.message:', response ? response.message : 'no response');
+                    alert('Error: ' + (response ? response.message : 'Unknown error'));
                 }
             },
             error: function(xhr, status, error) {
-                console.error('Error creating ' + modelType + ':', error);
+                console.error('[CreateEntry] AJAX error callback');
+                console.error('[CreateEntry] XHR status:', xhr.status);
+                console.error('[CreateEntry] XHR statusText:', xhr.statusText);
+                console.error('[CreateEntry] XHR responseText:', xhr.responseText);
+                console.error('[CreateEntry] Status:', status);
+                console.error('[CreateEntry] Error:', error);
+                
                 var errorMsg = 'Error creating ' + modelType + '.';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
+                try {
+                    var errorResponse = JSON.parse(xhr.responseText);
+                    console.error('[CreateEntry] Parsed error response:', errorResponse);
+                    if (errorResponse.message) {
+                        errorMsg = errorResponse.message;
+                    }
+                    if (errorResponse.traceback) {
+                        console.error('[CreateEntry] Server traceback:', errorResponse.traceback);
+                    }
+                } catch(e) {
+                    console.error('[CreateEntry] Could not parse responseText as JSON');
+                    if (xhr.responseText && xhr.responseText.includes('<!DOCTYPE html>')) {
+                        console.error('[CreateEntry] Response appears to be HTML (likely login redirect)');
+                        errorMsg = 'Session expired. Please refresh the page.';
+                    }
                 }
                 alert(errorMsg);
             }
