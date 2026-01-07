@@ -713,7 +713,9 @@ $(document).ready(function() {
             type: 'POST',
             success: function(response) {
                 if (response.status === 'success') {
-                    removeAllocatedBillRow(row);
+                    AllocationsManager.showSuccessAndFadeRow(btn, row, function() {
+                        removeAllocatedBillRowCleanup();
+                    });
                 } else {
                     btn.prop('disabled', false).text(originalText);
                     alert('Failed to unallocate bill: ' + response.message);
