@@ -222,16 +222,23 @@
     // Load all rates data for selected project type
     function loadRatesData(projectType) {
         console.log('[Rates] loadRatesData called with projectType:', projectType);
+        console.log('[Rates] Document cookies:', document.cookie);
+        console.log('[Rates] Session cookie present:', document.cookie.includes('sessionid'));
+        console.log('[Rates] CSRF cookie present:', document.cookie.includes('csrftoken'));
         $('#ratesTableContainer').html('<div class="rates-flex-empty">Loading data for ' + projectType + ' projects...</div>');
         
         var requestUrl = '/core/get_rates_data/';
         var requestData = { project_type: projectType };
+        var csrfToken = getCSRFToken();
         console.log('[Rates] Making AJAX request to:', requestUrl, 'with data:', requestData);
+        console.log('[Rates] CSRF Token:', csrfToken);
         
         $.ajax({
             url: requestUrl,
             type: 'GET',
             data: requestData,
+            headers: { 'X-CSRFToken': csrfToken },
+            xhrFields: { withCredentials: true },
             success: function(response, textStatus, xhr) {
                 console.log('[Rates] AJAX success callback');
                 console.log('[Rates] Response status code:', xhr.status);
