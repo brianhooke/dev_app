@@ -3,6 +3,8 @@ Rates views for managing rates by project type.
 """
 
 import json
+import logging
+import traceback
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
@@ -12,6 +14,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from core.models import Categories, Costing, Units, Projects
 
+logger = logging.getLogger(__name__)
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -20,9 +24,12 @@ def get_rates_data(request):
     Get all rates data (categories, items, units) filtered by project_type.
     Returns data for populating the List dropdowns and the RHS table.
     """
+    logger.info("[get_rates_data] Endpoint called")
     project_type = request.GET.get('project_type', '')
+    logger.info(f"[get_rates_data] project_type parameter: '{project_type}'")
     
     if not project_type:
+        logger.warning("[get_rates_data] Missing project_type parameter")
         return JsonResponse({
             'status': 'error',
             'message': 'project_type is required'
@@ -30,13 +37,16 @@ def get_rates_data(request):
     
     # Validate project_type
     valid_types = [choice[0] for choice in Projects.PROJECT_TYPE_CHOICES]
+    logger.info(f"[get_rates_data] Valid project types: {valid_types}")
     if project_type not in valid_types:
+        logger.warning(f"[get_rates_data] Invalid project_type: {project_type}")
         return JsonResponse({
             'status': 'error',
             'message': f'Invalid project_type. Must be one of: {", ".join(valid_types)}'
         }, status=400)
     
     try:
+        logger.info(f"[get_rates_data] Querying categories for project_type={project_type}, project__isnull=True")
         # Get template categories for this project type (project=null means template data)
         categories = Categories.objects.filter(
             project__isnull=True,
@@ -44,7 +54,10 @@ def get_rates_data(request):
         ).order_by('order_in_list').values(
             'categories_pk', 'category', 'order_in_list'
         )
+        categories_count = categories.count()
+        logger.info(f"[get_rates_data] Found {categories_count} categories")
         
+        logger.info(f"[get_rates_data] Querying items for project_type={project_type}, project__isnull=True")
         # Get template items (costings) for this project type (project=null means template data)
         items = Costing.objects.filter(
             project__isnull=True,
@@ -56,7 +69,10 @@ def get_rates_data(request):
             'category__categories_pk', 'category__category',
             'unit__unit_name', 'operator', 'operator_value'
         )
+        items_count = items.count()
+        logger.info(f"[get_rates_data] Found {items_count} items")
         
+        logger.info(f"[get_rates_data] Querying units for project_type={project_type}, project__isnull=True")
         # Get template units for this project type (project=null means template data)
         units = Units.objects.filter(
             project__isnull=True,
@@ -64,7 +80,10 @@ def get_rates_data(request):
         ).order_by('order_in_list').values(
             'unit_pk', 'unit_name', 'order_in_list'
         )
+        units_count = units.count()
+        logger.info(f"[get_rates_data] Found {units_count} units")
         
+        logger.info("[get_rates_data] Formatting categories list")
         # Format categories for response
         categories_list = [
             {
@@ -74,7 +93,9 @@ def get_rates_data(request):
             }
             for c in categories
         ]
+        logger.info(f"[get_rates_data] Formatted {len(categories_list)} categories")
         
+        logger.info("[get_rates_data] Formatting items list")
         # Format items for response
         items_list = [
             {
@@ -89,7 +110,9 @@ def get_rates_data(request):
             }
             for i in items
         ]
+        logger.info(f"[get_rates_data] Formatted {len(items_list)} items")
         
+        logger.info("[get_rates_data] Formatting units list")
         # Format units for response
         units_list = [
             {
@@ -99,7 +122,9 @@ def get_rates_data(request):
             }
             for u in units
         ]
+        logger.info(f"[get_rates_data] Formatted {len(units_list)} units")
         
+        logger.info("[get_rates_data] Returning success response")
         return JsonResponse({
             'status': 'success',
             'project_type': project_type,
@@ -109,9 +134,12 @@ def get_rates_data(request):
         })
         
     except Exception as e:
+        logger.error(f"[get_rates_data] Exception occurred: {str(e)}")
+        logger.error(f"[get_rates_data] Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'traceback': traceback.format_exc()
         }, status=500)
 
 

@@ -221,30 +221,62 @@
     
     // Load all rates data for selected project type
     function loadRatesData(projectType) {
+        console.log('[Rates] loadRatesData called with projectType:', projectType);
         $('#ratesTableContainer').html('<div class="rates-flex-empty">Loading data for ' + projectType + ' projects...</div>');
         
+        var requestUrl = '/core/get_rates_data/';
+        var requestData = { project_type: projectType };
+        console.log('[Rates] Making AJAX request to:', requestUrl, 'with data:', requestData);
+        
         $.ajax({
-            url: '/core/get_rates_data/',
+            url: requestUrl,
             type: 'GET',
-            data: { project_type: projectType },
-            success: function(response) {
-                if (response.status === 'success') {
+            data: requestData,
+            success: function(response, textStatus, xhr) {
+                console.log('[Rates] AJAX success callback');
+                console.log('[Rates] Response status code:', xhr.status);
+                console.log('[Rates] Response headers:', xhr.getAllResponseHeaders());
+                console.log('[Rates] Full response object:', response);
+                console.log('[Rates] Response type:', typeof response);
+                console.log('[Rates] Response.status:', response ? response.status : 'response is null/undefined');
+                
+                if (response && response.status === 'success') {
+                    console.log('[Rates] Response status is success');
+                    console.log('[Rates] Categories count:', response.categories ? response.categories.length : 0);
+                    console.log('[Rates] Items count:', response.items ? response.items.length : 0);
+                    console.log('[Rates] Units count:', response.units ? response.units.length : 0);
+                    
                     ratesData.categories = response.categories || [];
                     ratesData.items = response.items || [];
                     ratesData.units = response.units || [];
                     
-                    // Render input forms using component
+                    console.log('[Rates] About to render input forms');
                     renderRatesInputFormsUI();
                     
-                    // Render table
+                    console.log('[Rates] About to render items table');
                     renderRatesItemsTable();
+                    console.log('[Rates] Rendering complete');
                 } else {
-                    console.error('Error loading rates data:', response.message);
+                    console.error('[Rates] Error loading rates data - response.status is not success');
+                    console.error('[Rates] response:', response);
+                    console.error('[Rates] response.message:', response ? response.message : 'no response');
+                    console.error('[Rates] Full error details:', JSON.stringify(response, null, 2));
                     clearAllData();
                 }
             },
             error: function(xhr, status, error) {
-                console.error('Error loading rates data:', error);
+                console.error('[Rates] AJAX error callback');
+                console.error('[Rates] XHR status:', xhr.status);
+                console.error('[Rates] XHR statusText:', xhr.statusText);
+                console.error('[Rates] XHR responseText:', xhr.responseText);
+                console.error('[Rates] Status:', status);
+                console.error('[Rates] Error:', error);
+                try {
+                    var errorResponse = JSON.parse(xhr.responseText);
+                    console.error('[Rates] Parsed error response:', errorResponse);
+                } catch(e) {
+                    console.error('[Rates] Could not parse responseText as JSON');
+                }
                 clearAllData();
             }
         });
