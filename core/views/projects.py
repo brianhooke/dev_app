@@ -6,7 +6,7 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from core.models import Projects, XeroInstances, XeroAccounts, Categories, Costing
+from core.models import Projects, XeroInstances, XeroAccounts, Categories, Costing, Units
 
 logger = logging.getLogger(__name__)
 
@@ -74,30 +74,95 @@ def create_project(request):
         
         logger.info(f"Created project: {project.project} (pk={project.projects_pk})")
         
-        # Auto-create "Internal" category with order_in_list=0
-        internal_category = Categories.objects.create(
-            project=project,
-            category='Internal',
-            invoice_category='Internal',
-            order_in_list=0,
-            division=0
-        )
-        logger.info(f"Created Internal category for project {project.projects_pk}")
+        # Copy template data from rates tables based on project_type
+        # Find template categories (where project is null and project_type matches)
+        template_categories = Categories.objects.filter(
+            project__isnull=True,
+            project_type=project_type
+        ).order_by('order_in_list')
         
-        # Auto-create "Margin" item within Internal category with order_in_list=1
-        margin_item = Costing.objects.create(
-            project=project,
-            category=internal_category,
-            item='Margin',
-            order_in_list=1,
-            xero_account_code='',
-            contract_budget=0,
-            uncommitted_amount=0,
-            fixed_on_site=0,
-            sc_invoiced=0,
-            sc_paid=0
-        )
-        logger.info(f"Created Margin item in Internal category for project {project.projects_pk}")
+        # Map old category pks to new category objects for item duplication
+        category_pk_map = {}
+        
+        for template_cat in template_categories:
+            new_category = Categories.objects.create(
+                project=project,
+                project_type=None,  # Clear project_type for project-specific data
+                division=template_cat.division,
+                category=template_cat.category,
+                invoice_category=template_cat.invoice_category,
+                order_in_list=template_cat.order_in_list
+            )
+            category_pk_map[template_cat.categories_pk] = new_category
+            logger.info(f"Copied category '{template_cat.category}' to project {project.projects_pk}")
+        
+        # Find template items (where project is null and project_type matches)
+        template_items = Costing.objects.filter(
+            project__isnull=True,
+            project_type=project_type
+        ).order_by('category__order_in_list', 'order_in_list')
+        
+        for template_item in template_items:
+            # Get the new category for this item
+            new_category = category_pk_map.get(template_item.category_id)
+            if new_category:
+                Costing.objects.create(
+                    project=project,
+                    project_type=None,  # Clear project_type for project-specific data
+                    category=new_category,
+                    item=template_item.item,
+                    order_in_list=template_item.order_in_list,
+                    unit=template_item.unit,
+                    operator=template_item.operator,
+                    operator_value=template_item.operator_value,
+                    xero_account_code='',
+                    contract_budget=0,
+                    uncommitted_amount=0,
+                    fixed_on_site=0,
+                    sc_invoiced=0,
+                    sc_paid=0
+                )
+                logger.info(f"Copied item '{template_item.item}' to project {project.projects_pk}")
+        
+        # Find template units (where project is null and project_type matches)
+        template_units = Units.objects.filter(
+            project__isnull=True,
+            project_type=project_type
+        ).order_by('order_in_list')
+        
+        for template_unit in template_units:
+            Units.objects.create(
+                project=project,
+                project_type=None,  # Clear project_type for project-specific data
+                unit_name=template_unit.unit_name,
+                order_in_list=template_unit.order_in_list
+            )
+            logger.info(f"Copied unit '{template_unit.unit_name}' to project {project.projects_pk}")
+        
+        # If no template categories were found, create default Internal/Margin
+        if not template_categories.exists():
+            internal_category = Categories.objects.create(
+                project=project,
+                category='Internal',
+                invoice_category='Internal',
+                order_in_list=0,
+                division=0
+            )
+            logger.info(f"Created default Internal category for project {project.projects_pk}")
+            
+            Costing.objects.create(
+                project=project,
+                category=internal_category,
+                item='Margin',
+                order_in_list=1,
+                xero_account_code='',
+                contract_budget=0,
+                uncommitted_amount=0,
+                fixed_on_site=0,
+                sc_invoiced=0,
+                sc_paid=0
+            )
+            logger.info(f"Created default Margin item for project {project.projects_pk}")
         
         # Return project data
         return JsonResponse({

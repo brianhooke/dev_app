@@ -345,6 +345,12 @@ class Po_globals(models.Model):
 class Categories(models.Model):
     categories_pk = models.AutoField(primary_key=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
+    project_type = models.CharField(
+        max_length=20,
+        choices=Projects.PROJECT_TYPE_CHOICES,
+        null=True,
+        blank=True
+    )
     division = models.IntegerField()
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
@@ -357,14 +363,22 @@ class Categories(models.Model):
 # SERVICE: units
 class Units(models.Model):
     unit_pk = models.AutoField(primary_key=True)
-    unit_name = models.CharField(max_length=50, unique=True)
-    order_in_list = models.IntegerField(unique=True)
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
+    unit_name = models.CharField(max_length=50)
+    order_in_list = models.IntegerField()
+    project_type = models.CharField(
+        max_length=20,
+        choices=Projects.PROJECT_TYPE_CHOICES,
+        null=True,
+        blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
         ordering = ['order_in_list']
         verbose_name_plural = "Units"
+        unique_together = [['unit_name', 'project_type'], ['order_in_list', 'project_type']]
     
     def __str__(self):
         return self.unit_name
@@ -373,12 +387,21 @@ class Units(models.Model):
 class Costing(models.Model):
     costing_pk = models.AutoField(primary_key=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
+    project_type = models.CharField(
+        max_length=20,
+        choices=Projects.PROJECT_TYPE_CHOICES,
+        null=True,
+        blank=True
+    )
     category = models.ForeignKey(Categories, on_delete=models.CASCADE)
     item = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0, default=1)
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     unit = models.ForeignKey(Units, on_delete=models.SET_NULL, null=True, blank=True)
+    rate = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
+    operator = models.IntegerField(null=True, blank=True)  # 1 = multiply (*), 2 = divide (/)
+    operator_value = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
     uncommitted_amount = models.DecimalField(max_digits=10, decimal_places=2)
     uncommitted_qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     uncommitted_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v155 (displayed in navbar bottom-left)
+Version: v156 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -566,6 +566,9 @@ Version: v155 (displayed in navbar bottom-left)
     
     <!-- Settings Section -->
     {% include 'core/settings.html' %}
+    
+    <!-- Rates Section -->
+    {% include 'core/rates.html' %}
     </div>
 </div>
 
@@ -595,6 +598,7 @@ Version: v155 (displayed in navbar bottom-left)
             $('#projectsSection').hide();
             $('#xeroSection').hide();
             $('#settingsSection').hide();
+            $('#ratesSection').hide();
             
             // Remove tender view background image and overlay
             $('#dynamicContentArea').css({
@@ -1021,6 +1025,30 @@ Version: v155 (displayed in navbar bottom-left)
             
             // Show settings section and add has-content class to hide background
             $('#settingsSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Rates controller - shows inline in workspace
+        $('#ratesLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            window.hideAllSections();
+            
+            // Reset tender view state
+            if (typeof window.resetTenderViewState === 'function') {
+                window.resetTenderViewState();
+            }
+            
+            // Show rates section and add has-content class to hide background
+            $('#ratesSection').css('display', 'flex').show();
             $('#dynamicContentArea').addClass('has-content');
             
             // Scroll to top

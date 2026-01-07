@@ -93,4 +93,7 @@ from .dashboard import (
     get_recent_activities, get_action_items
 )
 
+# Rates views
+from .rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_category_name, update_item_name
+
 # DEPRECATED: get_xero_token, get_xero_contacts - use OAuth2 in xero_oauth.py instead

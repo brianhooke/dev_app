@@ -1,0 +1,1457 @@
+<!-- Shared Rates Table Component - Flexbox Category/Item Display -->
+<style>
+    /* CSS Variables for rates table */
+    :root {
+        --color-bg-surface: #ffffff;
+        --color-bg-muted: #f8f9fa;
+        --color-border: #dee2e6;
+        --color-text: #212529;
+        --color-text-muted: #6c757d;
+        --onyx-blue: #0d6efd;
+    }
+    
+    /* ========================================
+       FLEXBOX TABLE - Rates Table Component
+       ======================================== */
+    
+    .rates-table-container {
+        height: 100%;
+        overflow-y: auto;
+    }
+    
+    .rates-flex-table {
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    /* Header Row 1 - Main headings */
+    .rates-flex-header-row1 {
+        display: flex;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-muted);
+        padding: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 1;
+        color: var(--color-text);
+    }
+    
+    .rates-flex-header-row1 .col-name {
+        width: 200px;
+        min-width: 200px;
+        padding: 0 6px;
+    }
+    
+    .rates-flex-header-row1 .col-rate {
+        width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-header-row1 .col-bom-group {
+        flex: 1;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    /* Header Row 2 - Sub-headings */
+    .rates-flex-header-row2 {
+        display: flex;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-muted);
+        padding: 4px 6px;
+        font-weight: 500;
+        font-size: 12px;
+        line-height: 1;
+        color: var(--color-text-muted);
+    }
+    
+    .rates-flex-header-row2 .col-name {
+        width: 200px;
+        min-width: 200px;
+        padding: 0 6px;
+    }
+    
+    .rates-flex-header-row2 .col-rate {
+        width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-header-row2 .col-unit,
+    .rates-flex-header-row2 .col-operator,
+    .rates-flex-header-row2 .col-value {
+        flex: 1;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    /* Body container */
+    .rates-flex-body {
+        overflow-y: auto;
+    }
+    
+    /* Category Row - ~25px height */
+    .rates-flex-category {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid var(--color-border);
+        padding: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        background: var(--color-bg-muted);
+        color: var(--color-text);
+        cursor: pointer;
+    }
+    
+    .rates-flex-category:hover {
+        background: #e9ecef;
+    }
+    
+    .rates-flex-category.internal-category {
+        background-color: #e6d5f5;
+        color: #6f2da8;
+    }
+    
+    .rates-flex-category.internal-category:hover {
+        background-color: #d9c5ed;
+    }
+    
+    .rates-flex-category .col-name {
+        width: 200px;
+        min-width: 200px;
+        padding: 0 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .rates-flex-category .col-rate {
+        width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-category .col-unit,
+    .rates-flex-category .col-operator,
+    .rates-flex-category .col-value {
+        flex: 1;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    /* Collapse indicator */
+    .rates-collapse-indicator {
+        font-size: 10px;
+        color: var(--color-text-muted);
+        width: 14px;
+        transition: transform 0.2s;
+    }
+    
+    .rates-collapse-indicator.collapsed {
+        transform: rotate(0deg);
+    }
+    
+    .rates-collapse-indicator.expanded {
+        transform: rotate(90deg);
+    }
+    
+    /* Items Container (collapsible) - slide/roll animation */
+    .rates-flex-items-container {
+        overflow: hidden;
+        max-height: 2000px; /* Large enough for any reasonable number of items */
+        transition: max-height 0.3s ease-out;
+    }
+    
+    .rates-flex-items-container.collapsed {
+        max-height: 0;
+        transition: max-height 0.2s ease-in;
+    }
+    
+    /* Item Row - ~21px height */
+    .rates-flex-item {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid var(--color-border);
+        padding: 4px 6px;
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1;
+        background: var(--color-bg-surface);
+        color: var(--color-text);
+    }
+    
+    .rates-flex-item:hover {
+        background: var(--color-bg-muted);
+    }
+    
+    .rates-flex-item.internal-item {
+        color: #6f2da8;
+    }
+    
+    .rates-flex-item .col-name {
+        width: 200px;
+        min-width: 200px;
+        padding: 0 6px 0 30px; /* indent for hierarchy */
+    }
+    
+    .rates-flex-item .col-rate {
+        width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+        color: var(--color-text-muted);
+    }
+    
+    .rates-flex-item .col-unit,
+    .rates-flex-item .col-operator,
+    .rates-flex-item .col-value {
+        flex: 1;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+        color: var(--color-text-muted);
+    }
+    
+    /* Unit dropdown styling */
+    .rates-flex-item .unit-select {
+        width: 100%;
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid var(--color-border);
+        border-radius: 3px;
+        background: var(--color-bg-surface);
+        color: var(--color-text);
+        cursor: pointer;
+    }
+    
+    .rates-flex-item .unit-select:hover {
+        border-color: var(--onyx-blue);
+    }
+    
+    .rates-flex-item .unit-select:focus {
+        outline: none;
+        border-color: var(--onyx-blue);
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
+    
+    /* Operator dropdown styling */
+    .rates-flex-item .operator-select {
+        width: 100%;
+        padding: 2px 4px;
+        font-size: 13px;
+        border: 1px solid var(--color-border);
+        border-radius: 3px;
+        background: var(--color-bg-surface);
+        color: var(--color-text);
+        cursor: pointer;
+        text-align: center;
+    }
+    
+    .rates-flex-item .operator-select:hover {
+        border-color: var(--onyx-blue);
+    }
+    
+    .rates-flex-item .operator-select:focus {
+        outline: none;
+        border-color: var(--onyx-blue);
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
+    
+    /* Click-to-edit display spans */
+    .name-display,
+    .unit-display,
+    .operator-display,
+    .value-display {
+        cursor: pointer;
+        display: inline-block;
+        padding: 2px 4px;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        min-height: 1em;
+        min-width: 20px;
+    }
+    
+    .name-display:hover,
+    .unit-display:hover,
+    .operator-display:hover,
+    .value-display:hover {
+        background: var(--color-bg-muted);
+        border-color: var(--color-border);
+    }
+    
+    /* Name input styling */
+    .name-input {
+        width: calc(100% - 50px);
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid var(--onyx-blue);
+        border-radius: 3px;
+        background: var(--color-bg-surface);
+        color: var(--color-text);
+        box-sizing: border-box;
+    }
+    
+    .name-input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
+    
+    /* Value input styling */
+    .rates-flex-item .value-input {
+        width: 100%;
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid var(--onyx-blue);
+        border-radius: 3px;
+        background: var(--color-bg-surface);
+        color: var(--color-text);
+        text-align: center;
+        box-sizing: border-box;
+    }
+    
+    .rates-flex-item .value-input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
+    
+    /* Draggable rows */
+    .rates-flex-category.draggable,
+    .rates-flex-item.draggable {
+        cursor: grab;
+    }
+    
+    .rates-flex-category.draggable:active,
+    .rates-flex-item.draggable:active {
+        cursor: grabbing;
+    }
+    
+    /* Drag handle icon */
+    .rates-drag-handle {
+        color: var(--color-text-muted);
+        font-size: 12px;
+        margin-right: 6px;
+        cursor: grab;
+    }
+    
+    /* Drag-and-drop styles */
+    .rates-drag-over {
+        border-top: 3px solid var(--onyx-blue) !important;
+        background-color: #e3f2fd !important;
+    }
+    
+    /* Delete button styling */
+    .rates-delete-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0 5px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .rates-delete-btn:hover {
+        opacity: 1;
+    }
+    
+    .rates-delete-btn:disabled {
+        color: var(--color-text-muted);
+        cursor: not-allowed;
+        opacity: 0.3;
+    }
+    
+    /* Empty state */
+    .rates-flex-empty {
+        padding: 20px;
+        text-align: center;
+        color: var(--color-text-muted);
+        font-size: 13px;
+    }
+</style>
+
+<script>
+// Rates Table Component - Reusable table rendering for categories/items
+(function() {
+    'use strict';
+    
+    // Track collapsed state for categories (shared across instances)
+    var ratesCollapsedCategories = {};
+    
+    // Expose render function globally
+    window.renderRatesTable = function(containerSelector, categories, items, options) {
+        options = options || {};
+        var allowDrag = options.allowDrag !== false; // default true
+        var allowDelete = options.allowDelete !== false; // default true
+        var projectPk = options.projectPk || (window.currentTenderProject ? window.currentTenderProject.pk : null);
+        var units = options.units || []; // Units list for dropdown
+        
+        var container = $(containerSelector);
+        if (container.length === 0) {
+            console.error('Rates table container not found:', containerSelector);
+            return;
+        }
+        
+        container.empty();
+        
+        // Create the table wrapper
+        var tableWrapper = $('<div class="rates-flex-table"></div>');
+        
+        // Create header row 1 - main headings
+        var headerRow1 = $('<div class="rates-flex-header-row1"></div>');
+        headerRow1.append('<div class="col-name">Category / Item</div>');
+        headerRow1.append('<div class="col-rate">Rate ($)</div>');
+        headerRow1.append('<div class="col-bom-group">BOM Calculation Inputs</div>');
+        tableWrapper.append(headerRow1);
+        
+        // Create header row 2 - sub-headings
+        var headerRow2 = $('<div class="rates-flex-header-row2"></div>');
+        headerRow2.append('<div class="col-name"></div>');
+        headerRow2.append('<div class="col-rate"></div>');
+        headerRow2.append('<div class="col-unit">Unit</div>');
+        headerRow2.append('<div class="col-operator">Operator</div>');
+        headerRow2.append('<div class="col-value">Value</div>');
+        tableWrapper.append(headerRow2);
+        
+        // Create body container
+        var bodyContainer = $('<div class="rates-flex-body"></div>');
+        
+        if ((!items || items.length === 0) && (!categories || categories.length === 0)) {
+            bodyContainer.append('<div class="rates-flex-empty">No categories or items yet. Add a category and items to get started.</div>');
+            tableWrapper.append(bodyContainer);
+            container.append(tableWrapper);
+            return;
+        }
+        
+        // Group items by category
+        var groupedItems = {};
+        (items || []).forEach(function(item) {
+            var categoryName = item.category__category;
+            if (!groupedItems[categoryName]) {
+                groupedItems[categoryName] = [];
+            }
+            groupedItems[categoryName].push(item);
+        });
+        
+        // Sort categories by order_in_list
+        var sortedCategories = (categories || []).slice().sort(function(a, b) {
+            return a.order_in_list - b.order_in_list;
+        });
+        
+        // Render each category and its items
+        sortedCategories.forEach(function(category) {
+            var categoryItems = groupedItems[category.category] || [];
+            
+            // Sort items by order_in_list
+            categoryItems.sort(function(a, b) {
+                return (a.order_in_list || 0) - (b.order_in_list || 0);
+            });
+            
+            // Check collapsed state (default to collapsed)
+            var isCollapsed = ratesCollapsedCategories[category.categories_pk] !== false;
+            
+            // Render category header row
+            var isInternal = category.category === 'Internal';
+            var categoryRow = $('<div></div>')
+                .addClass('rates-flex-category')
+                .attr('data-category-pk', category.categories_pk)
+                .attr('data-category-order', category.order_in_list);
+            
+            if (isInternal) {
+                categoryRow.addClass('internal-category');
+            } else if (allowDrag) {
+                categoryRow.addClass('draggable').attr('draggable', 'true');
+            }
+            
+            // Build category name cell with collapse indicator and drag handle
+            var nameCell = $('<div class="col-name"></div>');
+            
+            // Collapse indicator
+            var collapseIndicator = $('<span class="rates-collapse-indicator"></span>')
+                .addClass(isCollapsed ? 'collapsed' : 'expanded')
+                .text('▶');
+            nameCell.append(collapseIndicator);
+            
+            // Drag handle (only for non-internal and if drag allowed)
+            if (!isInternal && allowDrag) {
+                nameCell.append('<span class="rates-drag-handle">⋮⋮</span>');
+            }
+            
+            // Category name - click to edit
+            var categoryNameDisplay = $('<span class="name-display" data-category-pk="' + category.categories_pk + '">' + category.category + '</span>');
+            var categoryNameInput = $('<input type="text" class="name-input" data-category-pk="' + category.categories_pk + '" data-type="category" style="display:none;">');
+            categoryNameInput.val(category.category);
+            nameCell.append(categoryNameDisplay);
+            nameCell.append(categoryNameInput);
+            categoryRow.append(nameCell);
+            
+            // Empty cells for category rows (categories don't have values)
+            categoryRow.append('<div class="col-rate"></div>');
+            categoryRow.append('<div class="col-unit"></div>');
+            categoryRow.append('<div class="col-operator"></div>');
+            categoryRow.append('<div class="col-value"></div>');
+            
+            bodyContainer.append(categoryRow);
+            
+            // Items container (collapsible)
+            var itemsContainer = $('<div class="rates-flex-items-container"></div>')
+                .attr('data-category-pk', category.categories_pk);
+            if (isCollapsed) {
+                itemsContainer.addClass('collapsed');
+            }
+            
+            // Render items under this category
+            categoryItems.forEach(function(item, itemIndex) {
+                var itemRow = $('<div></div>')
+                    .addClass('rates-flex-item')
+                    .attr('data-item-pk', item.costing_pk)
+                    .attr('data-category-pk', category.categories_pk)
+                    .attr('data-item-order', item.order_in_list || (itemIndex + 1));
+                
+                if (allowDrag) {
+                    itemRow.addClass('draggable').attr('draggable', 'true');
+                }
+                
+                if (isInternal) {
+                    itemRow.addClass('internal-item');
+                }
+                
+                // Item name cell - click to edit
+                var itemNameCell = $('<div class="col-name"></div>');
+                var itemNameDisplay = $('<span class="name-display" data-item-pk="' + item.costing_pk + '">' + item.item + '</span>');
+                var itemNameInput = $('<input type="text" class="name-input" data-item-pk="' + item.costing_pk + '" data-type="item" style="display:none;">');
+                itemNameInput.val(item.item);
+                itemNameCell.append(itemNameDisplay);
+                itemNameCell.append(itemNameInput);
+                itemRow.append(itemNameCell);
+                
+                // Rate cell (placeholder for now)
+                itemRow.append('<div class="col-rate">-</div>');
+                
+                // Unit cell - click to show dropdown
+                var unitCell = $('<div class="col-unit"></div>');
+                var unitDisplayText = item.unit || '';
+                var unitDisplay = $('<span class="unit-display" data-item-pk="' + item.costing_pk + '">' + unitDisplayText + '</span>');
+                var unitSelect = $('<select class="unit-select" data-item-pk="' + item.costing_pk + '" style="display:none;"></select>');
+                unitSelect.append('<option value=""></option>');
+                units.forEach(function(u) {
+                    var selected = (item.unit === u.unit_name) ? ' selected' : '';
+                    unitSelect.append('<option value="' + u.unit_pk + '"' + selected + '>' + u.unit_name + '</option>');
+                });
+                unitCell.append(unitDisplay);
+                unitCell.append(unitSelect);
+                itemRow.append(unitCell);
+                
+                // Operator cell - click to show dropdown
+                var operatorCell = $('<div class="col-operator"></div>');
+                var operatorDisplayText = item.operator === 1 ? '×' : (item.operator === 2 ? '÷' : '');
+                var operatorDisplay = $('<span class="operator-display" data-item-pk="' + item.costing_pk + '">' + operatorDisplayText + '</span>');
+                var operatorSelect = $('<select class="operator-select" data-item-pk="' + item.costing_pk + '" style="display:none;"></select>');
+                operatorSelect.append('<option value=""></option>');
+                operatorSelect.append('<option value="1"' + (item.operator === 1 ? ' selected' : '') + '>×</option>');
+                operatorSelect.append('<option value="2"' + (item.operator === 2 ? ' selected' : '') + '>÷</option>');
+                operatorCell.append(operatorDisplay);
+                operatorCell.append(operatorSelect);
+                itemRow.append(operatorCell);
+                
+                // Value cell - click to edit
+                var valueCell = $('<div class="col-value"></div>');
+                // Format with thousand separators, preserving up to 5dp
+                var displayValue = '';
+                if (item.operator_value !== null && item.operator_value !== undefined) {
+                    displayValue = parseFloat(item.operator_value).toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 5
+                    });
+                }
+                var valueDisplay = $('<span class="value-display" data-item-pk="' + item.costing_pk + '">' + displayValue + '</span>');
+                var valueInput = $('<input type="number" class="value-input" data-item-pk="' + item.costing_pk + '" step="0.00001" style="display:none;">');
+                valueInput.val(item.operator_value || '');
+                valueCell.append(valueDisplay);
+                valueCell.append(valueInput);
+                itemRow.append(valueCell);
+                
+                itemsContainer.append(itemRow);
+            });
+            
+            bodyContainer.append(itemsContainer);
+        });
+        
+        // Finalize table structure
+        tableWrapper.append(bodyContainer);
+        container.append(tableWrapper);
+        
+        // Attach event handlers
+        attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, options.onReload, options.useRatesEndpoint, options.projectType);
+    };
+    
+    // Attach event handlers for the rates table
+    function attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, onReload, useRatesEndpoint, projectType) {
+        var container = $(containerSelector);
+        
+        // Unit display click handler - show dropdown
+        container.find('.unit-display').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var $display = $(this);
+            var $select = $display.siblings('.unit-select');
+            $display.hide();
+            $select.show().focus();
+        });
+        
+        // Unit select change/blur handler
+        container.find('.unit-select').off('change blur').on('change blur', function(e) {
+            var $select = $(this);
+            var $display = $select.siblings('.unit-display');
+            var itemPk = $select.attr('data-item-pk');
+            var unitPk = $select.val() || null;
+            var selectedText = $select.find('option:selected').text();
+            
+            if (e.type === 'change') {
+                $.ajax({
+                    url: '/core/update_item_unit/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        item_pk: itemPk,
+                        unit_pk: unitPk,
+                        project_type: projectType
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            $display.text(selectedText);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to update unit';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            }
+            
+            $select.hide();
+            $display.show();
+        });
+        
+        // Operator display click handler - show dropdown
+        container.find('.operator-display').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var $display = $(this);
+            var $select = $display.siblings('.operator-select');
+            $display.hide();
+            $select.show().focus();
+        });
+        
+        // Operator select change/blur handler
+        container.find('.operator-select').off('change blur').on('change blur', function(e) {
+            var $select = $(this);
+            var $display = $select.siblings('.operator-display');
+            var itemPk = $select.attr('data-item-pk');
+            var operatorVal = $select.val() || null;
+            var selectedText = $select.find('option:selected').text();
+            
+            if (e.type === 'change') {
+                $.ajax({
+                    url: '/core/update_item_operator/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        item_pk: itemPk,
+                        operator: operatorVal ? parseInt(operatorVal) : null
+                    }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            $display.text(selectedText);
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to update operator';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            }
+            
+            $select.hide();
+            $display.show();
+        });
+        
+        // Name display click handler - show input
+        container.find('.name-display').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var $display = $(this);
+            var $input = $display.siblings('.name-input');
+            $display.hide();
+            $input.show().focus().select();
+        });
+        
+        // Name input blur/enter handler
+        container.find('.name-input').off('blur keydown').on('blur keydown', function(e) {
+            if (e.type === 'keydown' && e.key !== 'Enter') return;
+            if (e.type === 'keydown') e.preventDefault();
+            
+            var $input = $(this);
+            var $display = $input.siblings('.name-display');
+            var newName = $input.val().trim();
+            var dataType = $input.attr('data-type');
+            var pk = dataType === 'category' ? $input.attr('data-category-pk') : $input.attr('data-item-pk');
+            var url = dataType === 'category' ? '/core/update_category_name/' : '/core/update_item_name/';
+            
+            if (!newName) {
+                $input.hide();
+                $display.show();
+                return;
+            }
+            
+            $.ajax({
+                url: url,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    pk: pk,
+                    name: newName
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $display.text(newName);
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to update name';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+            
+            $input.hide();
+            $display.show();
+        });
+        
+        // Value display click handler - show input
+        container.find('.value-display').off('click').on('click', function() {
+            var $display = $(this);
+            var $input = $display.siblings('.value-input');
+            $display.hide();
+            $input.show().focus().select();
+        });
+        
+        // Value input - constrain to 5dp max while typing
+        container.find('.value-input').off('input').on('input', function() {
+            var val = $(this).val();
+            if (val.indexOf('.') !== -1) {
+                var parts = val.split('.');
+                if (parts[1] && parts[1].length > 5) {
+                    $(this).val(parts[0] + '.' + parts[1].substring(0, 5));
+                }
+            }
+        });
+        
+        // Value input blur/enter handler - save and show display
+        container.find('.value-input').off('blur keydown').on('blur keydown', function(e) {
+            if (e.type === 'keydown' && e.key !== 'Enter') return;
+            if (e.type === 'keydown') e.preventDefault();
+            
+            var $input = $(this);
+            var $display = $input.siblings('.value-display');
+            var itemPk = $input.attr('data-item-pk');
+            var newValue = $input.val();
+            
+            // Round to 5dp if needed
+            if (newValue !== '') {
+                newValue = parseFloat(newValue);
+                if (!isNaN(newValue)) {
+                    newValue = Math.round(newValue * 100000) / 100000;
+                } else {
+                    newValue = null;
+                }
+            } else {
+                newValue = null;
+            }
+            
+            $.ajax({
+                url: '/core/update_item_operator_value/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    item_pk: itemPk,
+                    operator_value: newValue
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        var formattedValue = '';
+                        if (newValue !== null) {
+                            formattedValue = parseFloat(newValue).toLocaleString('en-US', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 5
+                            });
+                        }
+                        $display.text(formattedValue);
+                        $input.val(newValue || '');
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to update value';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+            
+            $input.hide();
+            $display.show();
+        });
+        
+        // Category collapse toggle
+        container.find('.rates-flex-category').off('click').on('click', function(e) {
+            if ($(e.target).hasClass('rates-delete-btn') || $(e.target).closest('.rates-delete-btn').length) {
+                return;
+            }
+            
+            var categoryPk = $(this).attr('data-category-pk');
+            var indicator = $(this).find('.rates-collapse-indicator');
+            var itemsContainer = container.find('.rates-flex-items-container[data-category-pk="' + categoryPk + '"]');
+            
+            if (indicator.hasClass('expanded')) {
+                indicator.removeClass('expanded').addClass('collapsed');
+                itemsContainer.addClass('collapsed');
+                ratesCollapsedCategories[categoryPk] = true;
+            } else {
+                indicator.removeClass('collapsed').addClass('expanded');
+                itemsContainer.removeClass('collapsed');
+                ratesCollapsedCategories[categoryPk] = false;
+            }
+        });
+        
+        // Enable drag for rates endpoint (uses projectType) or project-based endpoint (uses projectPk)
+        var canDrag = allowDrag && (projectPk || useRatesEndpoint);
+        
+        if (canDrag) {
+            var draggedElement = null;
+            var draggedType = null;
+            
+            // Category drag handlers
+            container.find('.rates-flex-category.draggable').on('dragstart', function(e) {
+                draggedElement = this;
+                draggedType = 'category';
+                $(this).css('opacity', '0.4');
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+            });
+            
+            container.find('.rates-flex-category').on('dragend', function() {
+                $(this).css('opacity', '1');
+                container.find('.rates-drag-over').removeClass('rates-drag-over');
+            });
+            
+            container.find('.rates-flex-category').on('dragover', function(e) {
+                e.preventDefault();
+                e.originalEvent.dataTransfer.dropEffect = 'move';
+                if (this !== draggedElement) {
+                    $(this).addClass('rates-drag-over');
+                }
+                return false;
+            });
+            
+            container.find('.rates-flex-category').on('dragleave', function() {
+                $(this).removeClass('rates-drag-over');
+            });
+            
+            container.find('.rates-flex-category').on('drop', function(e) {
+                e.stopPropagation();
+                $(this).removeClass('rates-drag-over');
+                
+                if (draggedElement !== this && draggedType === 'category') {
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryOrder = parseInt($(this).attr('data-category-order'));
+                    
+                    if (useRatesEndpoint) {
+                        reorderRatesEntry('category', projectType, draggedCategoryPk, targetCategoryOrder, null, onReload);
+                    } else {
+                        reorderCategory(projectPk, draggedCategoryPk, targetCategoryOrder, onReload);
+                    }
+                }
+                return false;
+            });
+            
+            // Item drag handlers
+            var currentDropTarget = null;
+            
+            container.find('.rates-flex-item.draggable').on('dragstart', function(e) {
+                draggedElement = this;
+                draggedType = 'item';
+                $(this).css('opacity', '0.4');
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+                // Store dragged element data for reference
+                e.originalEvent.dataTransfer.setData('text/plain', $(this).attr('data-item-pk'));
+            });
+            
+            container.find('.rates-flex-item').on('dragend', function() {
+                $(this).css('opacity', '1');
+                container.find('.rates-drag-over').removeClass('rates-drag-over');
+                currentDropTarget = null;
+            });
+            
+            // Use dragenter instead of dragover for more stable highlighting
+            container.find('.rates-flex-item').on('dragenter', function(e) {
+                e.preventDefault();
+                
+                if (draggedType !== 'item' || this === draggedElement) return;
+                
+                var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                var targetCategoryPk = $(this).attr('data-category-pk');
+                var allowCrossCategory = useRatesEndpoint;
+                
+                if (allowCrossCategory || draggedCategoryPk === targetCategoryPk) {
+                    // Clear previous highlight
+                    if (currentDropTarget && currentDropTarget !== this) {
+                        $(currentDropTarget).removeClass('rates-drag-over');
+                    }
+                    currentDropTarget = this;
+                    $(this).addClass('rates-drag-over');
+                }
+            });
+            
+            container.find('.rates-flex-item').on('dragover', function(e) {
+                e.preventDefault();
+                if (draggedType === 'item' && this !== draggedElement) {
+                    var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                    var targetCategoryPk = $(this).attr('data-category-pk');
+                    var allowCrossCategory = useRatesEndpoint;
+                    
+                    if (allowCrossCategory || draggedCategoryPk === targetCategoryPk) {
+                        e.originalEvent.dataTransfer.dropEffect = 'move';
+                    } else {
+                        e.originalEvent.dataTransfer.dropEffect = 'none';
+                    }
+                }
+                return false;
+            });
+            
+            container.find('.rates-flex-item').on('dragleave', function(e) {
+                // Only remove highlight if we're leaving the element entirely (not entering a child)
+                var relatedTarget = e.originalEvent.relatedTarget;
+                if (!relatedTarget || !$.contains(this, relatedTarget)) {
+                    if (currentDropTarget === this) {
+                        $(this).removeClass('rates-drag-over');
+                        currentDropTarget = null;
+                    }
+                }
+            });
+            
+            container.find('.rates-flex-item').on('drop', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                $(this).removeClass('rates-drag-over');
+                currentDropTarget = null;
+                
+                var draggedCategoryPk = $(draggedElement).attr('data-category-pk');
+                var targetCategoryPk = $(this).attr('data-category-pk');
+                var allowCrossCategory = useRatesEndpoint;
+                
+                if (draggedElement !== this && draggedType === 'item') {
+                    if (allowCrossCategory || draggedCategoryPk === targetCategoryPk) {
+                        var draggedItemPk = $(draggedElement).attr('data-item-pk');
+                        var draggedItemOrder = parseInt($(draggedElement).attr('data-item-order'));
+                        var targetItemOrder = parseInt($(this).attr('data-item-order'));
+                        
+                        console.log('[Drag] Item drag/drop:', {
+                            draggedPk: draggedItemPk,
+                            draggedOrder: draggedItemOrder,
+                            targetOrder: targetItemOrder,
+                            targetCategoryPk: targetCategoryPk
+                        });
+                        
+                        if (useRatesEndpoint) {
+                            reorderRatesEntry('item', projectType, draggedItemPk, targetItemOrder, targetCategoryPk, onReload);
+                        } else {
+                            reorderItem(projectPk, draggedItemPk, targetItemOrder, onReload);
+                        }
+                    }
+                }
+                return false;
+            });
+        }
+        
+        if (allowDelete && projectPk) {
+            // Delete category handler
+            container.find('.rates-delete-category-btn').off('click').on('click', function(e) {
+                e.stopPropagation();
+                var categoryPk = $(this).attr('data-category-pk');
+                var categoryName = $(this).attr('data-category-name');
+                
+                var itemCount = container.find('.rates-flex-items-container[data-category-pk="' + categoryPk + '"] .rates-flex-item').length;
+                var message = 'Are you sure you want to delete the category "' + categoryName + '"?';
+                if (itemCount > 0) {
+                    message += '\n\nThis will also delete ' + itemCount + ' item(s) in this category.';
+                }
+                
+                if (!confirm(message)) return;
+                
+                $.ajax({
+                    url: '/core/delete_category/' + projectPk + '/' + categoryPk + '/',
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            if (onReload) onReload();
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to delete category';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            });
+            
+            // Delete item handler
+            container.find('.rates-delete-item-btn').off('click').on('click', function(e) {
+                e.stopPropagation();
+                var itemPk = $(this).attr('data-item-pk');
+                var itemName = $(this).attr('data-item-name');
+                
+                if (!confirm('Are you sure you want to delete the item "' + itemName + '"?')) return;
+                
+                $.ajax({
+                    url: '/core/delete_item/' + projectPk + '/' + itemPk + '/',
+                    type: 'POST',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            if (onReload) onReload();
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to delete item';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            });
+        }
+    }
+    
+    // Reorder category via AJAX
+    function reorderCategory(projectPk, categoryPk, newOrder, onReload) {
+        $.ajax({
+            url: '/core/reorder_category/' + projectPk + '/' + categoryPk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ new_order: newOrder }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (onReload) onReload();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Failed to reorder category';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                alert(msg);
+            }
+        });
+    }
+    
+    // Reorder item via AJAX
+    function reorderItem(projectPk, itemPk, newOrder, onReload) {
+        $.ajax({
+            url: '/core/reorder_item/' + projectPk + '/' + itemPk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ new_order: newOrder }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (onReload) onReload();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Failed to reorder item';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                alert(msg);
+            }
+        });
+    }
+    
+    // Reorder category/item via rates endpoint (uses project_type instead of project_pk)
+    function reorderRatesEntry(entryType, projectType, pk, newOrder, newCategoryPk, onReload) {
+        var payload = {
+            type: entryType,
+            project_type: projectType,
+            pk: pk,
+            new_order: newOrder
+        };
+        
+        // For items, include target category pk for cross-category moves
+        if (entryType === 'item' && newCategoryPk) {
+            payload.new_category_pk = newCategoryPk;
+        }
+        
+        $.ajax({
+            url: '/core/update_category_costing_order_in_list/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (onReload) onReload();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Failed to reorder ' + entryType;
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                alert(msg);
+            }
+        });
+    }
+    
+    /**
+     * Render Add Category/Item/Unit input forms
+     * @param {string} containerSelector - jQuery selector for container
+     * @param {object} options
+     *   - mode: 'project_type' or 'project'
+     *   - modeValue: project_type string or project_pk number
+     *   - categories: array of categories for dropdowns
+     *   - items: array of items for dropdowns
+     *   - units: array of units for dropdowns
+     *   - onReload: callback function to reload data after create
+     *   - showListColumn: boolean, whether to show List column (default true for project_type mode)
+     */
+    window.renderRatesInputForms = function(containerSelector, options) {
+        var container = $(containerSelector);
+        container.empty();
+        
+        var mode = options.mode || 'project_type';
+        var modeValue = options.modeValue;
+        var categories = options.categories || [];
+        var items = options.items || [];
+        var units = options.units || [];
+        var onReload = options.onReload;
+        var showListColumn = options.showListColumn !== false && mode === 'project_type';
+        
+        // Generate unique prefix for IDs to avoid conflicts
+        var prefix = mode === 'project_type' ? 'rates' : 'items';
+        
+        // Build Category Order dropdown options
+        var categoryOrderOptions = '';
+        for (var i = 1; i <= categories.length + 1; i++) {
+            categoryOrderOptions += '<option value="' + i + '">' + i + '</option>';
+        }
+        if (!categoryOrderOptions) categoryOrderOptions = '<option value="1">1</option>';
+        
+        // Build Category List dropdown options
+        var categoryListOptions = '<option value="">Select...</option>';
+        categories.forEach(function(cat) {
+            var catPk = cat.categories_pk || cat.pk;
+            var catName = cat.category || cat.name;
+            categoryListOptions += '<option value="' + catPk + '">' + catName + '</option>';
+        });
+        
+        // Build Item Category dropdown options
+        var itemCategoryOptions = '<option value="">Select category...</option>';
+        categories.forEach(function(cat) {
+            var catPk = cat.categories_pk || cat.pk;
+            var catName = cat.category || cat.name;
+            itemCategoryOptions += '<option value="' + catPk + '">' + catName + '</option>';
+        });
+        
+        // Build Item List dropdown options
+        var itemListOptions = '<option value="">Select...</option>';
+        items.forEach(function(item) {
+            var itemPk = item.costing_pk || item.pk;
+            var itemName = item.item || item.name;
+            itemListOptions += '<option value="' + itemPk + '">' + itemName + '</option>';
+        });
+        
+        // Build Unit Order dropdown options
+        var unitOrderOptions = '';
+        for (var i = 1; i <= units.length + 1; i++) {
+            unitOrderOptions += '<option value="' + i + '">' + i + '</option>';
+        }
+        if (!unitOrderOptions) unitOrderOptions = '<option value="1">1</option>';
+        
+        // Build Unit List dropdown options
+        var unitListOptions = '<option value="">Select...</option>';
+        units.forEach(function(unit) {
+            var unitPk = unit.unit_pk || unit.pk;
+            var unitName = unit.unit_name || unit.name;
+            unitListOptions += '<option value="' + unitPk + '">' + unitName + '</option>';
+        });
+        
+        var listColHeader = showListColumn ? '<th class="col-list">List</th>' : '';
+        var listColAddClass = showListColumn ? 'col-add' : '';
+        
+        // Add Category Section
+        var categoryListCell = showListColumn ? 
+            '<td class="col-list"><select id="' + prefix + 'CategoryListSelect">' + categoryListOptions + '</select></td>' : '';
+        
+        var categoryHtml = '<div class="rates-section">' +
+            '<h5>Add Category</h5>' +
+            '<table class="reusable-table"><thead><tr>' +
+            '<th>Category</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '</tr></thead><tbody><tr>' +
+            '<td><input type="text" id="' + prefix + 'CategoryNameInput" maxlength="100" placeholder="Enter category name"></td>' +
+            '<td><select id="' + prefix + 'CategoryOrderSelect">' + categoryOrderOptions + '</select></td>' +
+            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddCategoryBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
+            categoryListCell +
+            '</tr></tbody></table></div>';
+        
+        // Add Item Section
+        var itemListCell = showListColumn ?
+            '<td class="col-list"><select id="' + prefix + 'ItemListSelect">' + itemListOptions + '</select></td>' : '';
+        
+        var itemHtml = '<div class="rates-section">' +
+            '<h5>Add Item</h5>' +
+            '<table class="reusable-table"><thead><tr>' +
+            '<th>Category</th><th>Item</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '</tr></thead><tbody><tr>' +
+            '<td><select id="' + prefix + 'ItemCategorySelect">' + itemCategoryOptions + '</select></td>' +
+            '<td><input type="text" id="' + prefix + 'ItemNameInput" maxlength="100" placeholder="Enter item name"></td>' +
+            '<td><select id="' + prefix + 'ItemOrderSelect"><option value="1">1</option></select></td>' +
+            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddItemBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
+            itemListCell +
+            '</tr></tbody></table></div>';
+        
+        // Add Unit Section
+        var unitListCell = showListColumn ?
+            '<td class="col-list"><select id="' + prefix + 'UnitListSelect">' + unitListOptions + '</select></td>' : '';
+        
+        var unitHtml = '<div class="rates-section">' +
+            '<h5>Add BOM Calculation Unit</h5>' +
+            '<table class="reusable-table"><thead><tr>' +
+            '<th>Unit</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '</tr></thead><tbody><tr>' +
+            '<td><input type="text" id="' + prefix + 'UnitNameInput" maxlength="50" placeholder="Enter unit name"></td>' +
+            '<td><select id="' + prefix + 'UnitOrderSelect">' + unitOrderOptions + '</select></td>' +
+            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
+            unitListCell +
+            '</tr></tbody></table></div>';
+        
+        container.append(categoryHtml);
+        container.append(itemHtml);
+        container.append(unitHtml);
+        
+        // Attach event handlers
+        attachInputFormHandlers(prefix, mode, modeValue, categories, onReload);
+    };
+    
+    // Attach event handlers for input forms
+    function attachInputFormHandlers(prefix, mode, modeValue, categories, onReload) {
+        // Category name input validation
+        $('#' + prefix + 'CategoryNameInput').off('input').on('input', function() {
+            var name = $(this).val().trim();
+            var btn = $('#' + prefix + 'AddCategoryBtn');
+            if (name) {
+                btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+            } else {
+                btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+            }
+        });
+        
+        // Item category select - update order dropdown
+        $('#' + prefix + 'ItemCategorySelect').off('change').on('change', function() {
+            var categoryPk = $(this).val();
+            var orderSelect = $('#' + prefix + 'ItemOrderSelect');
+            
+            if (!categoryPk) {
+                orderSelect.html('<option value="">Select category first...</option>').prop('disabled', true);
+                return;
+            }
+            
+            // Count items in selected category
+            var itemCount = 0;
+            categories.forEach(function(cat) {
+                var catPk = cat.categories_pk || cat.pk;
+                if (catPk == categoryPk && cat.items) {
+                    itemCount = cat.items.length;
+                }
+            });
+            
+            // Build order options
+            var orderOptions = '';
+            for (var i = 1; i <= itemCount + 1; i++) {
+                orderOptions += '<option value="' + i + '">' + i + '</option>';
+            }
+            if (!orderOptions) orderOptions = '<option value="1">1</option>';
+            
+            orderSelect.html(orderOptions).prop('disabled', false);
+            orderSelect.val(itemCount + 1);
+            
+            // Re-validate item form
+            validateItemForm(prefix);
+        });
+        
+        // Item name input validation
+        $('#' + prefix + 'ItemNameInput').off('input').on('input', function() {
+            validateItemForm(prefix);
+        });
+        
+        // Unit name input validation
+        $('#' + prefix + 'UnitNameInput').off('input').on('input', function() {
+            var name = $(this).val().trim();
+            var btn = $('#' + prefix + 'AddUnitBtn');
+            if (name) {
+                btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+            } else {
+                btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+            }
+        });
+        
+        // Add Category button click
+        $('#' + prefix + 'AddCategoryBtn').off('click').on('click', function() {
+            if ($(this).hasClass('disabled')) return;
+            
+            var name = $('#' + prefix + 'CategoryNameInput').val().trim();
+            var order = parseInt($('#' + prefix + 'CategoryOrderSelect').val()) || 1;
+            
+            if (!name) {
+                alert('Please enter a category name.');
+                return;
+            }
+            
+            createRatesEntry('category', name, order, null, mode, modeValue, onReload);
+            
+            // Clear input
+            $('#' + prefix + 'CategoryNameInput').val('');
+            $(this).removeClass('enabled').addClass('disabled').prop('disabled', true);
+        });
+        
+        // Add Item button click
+        $('#' + prefix + 'AddItemBtn').off('click').on('click', function() {
+            if ($(this).hasClass('disabled')) return;
+            
+            var categoryPk = $('#' + prefix + 'ItemCategorySelect').val();
+            var name = $('#' + prefix + 'ItemNameInput').val().trim();
+            var order = parseInt($('#' + prefix + 'ItemOrderSelect').val()) || 1;
+            
+            if (!categoryPk) {
+                alert('Please select a category.');
+                return;
+            }
+            if (!name) {
+                alert('Please enter an item name.');
+                return;
+            }
+            
+            createRatesEntry('item', name, order, parseInt(categoryPk), mode, modeValue, onReload);
+            
+            // Clear input
+            $('#' + prefix + 'ItemNameInput').val('');
+            $(this).removeClass('enabled').addClass('disabled').prop('disabled', true);
+        });
+        
+        // Add Unit button click
+        $('#' + prefix + 'AddUnitBtn').off('click').on('click', function() {
+            if ($(this).hasClass('disabled')) return;
+            
+            var name = $('#' + prefix + 'UnitNameInput').val().trim();
+            var order = parseInt($('#' + prefix + 'UnitOrderSelect').val()) || 1;
+            
+            if (!name) {
+                alert('Please enter a unit name.');
+                return;
+            }
+            
+            createRatesEntry('unit', name, order, null, mode, modeValue, onReload);
+            
+            // Clear input
+            $('#' + prefix + 'UnitNameInput').val('');
+            $(this).removeClass('enabled').addClass('disabled').prop('disabled', true);
+        });
+    }
+    
+    // Validate item form
+    function validateItemForm(prefix) {
+        var category = $('#' + prefix + 'ItemCategorySelect').val();
+        var name = $('#' + prefix + 'ItemNameInput').val().trim();
+        var btn = $('#' + prefix + 'AddItemBtn');
+        
+        if (category && name) {
+            btn.removeClass('disabled').addClass('enabled').prop('disabled', false);
+        } else {
+            btn.removeClass('enabled').addClass('disabled').prop('disabled', true);
+        }
+    }
+    
+    // Create entry via AJAX - handles both project_type and project modes
+    function createRatesEntry(modelType, name, orderInList, categoryPk, mode, modeValue, onReload) {
+        if (!modeValue) {
+            alert(mode === 'project_type' ? 'Please select a project type first.' : 'No project selected.');
+            return;
+        }
+        
+        var payload = {
+            model_type: modelType,
+            name: name,
+            order_in_list: orderInList
+        };
+        
+        // Set either project_type or project_pk based on mode
+        if (mode === 'project_type') {
+            payload.project_type = modeValue;
+        } else {
+            payload.project_pk = modeValue;
+        }
+        
+        if (categoryPk) {
+            payload.category_pk = categoryPk;
+        }
+        
+        var csrfToken = typeof getCSRFToken === 'function' ? getCSRFToken() : $('input[name=csrfmiddlewaretoken]').val();
+        
+        $.ajax({
+            url: '/core/create_new_category_costing_unit_quantity/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': csrfToken },
+            data: JSON.stringify(payload),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (onReload) onReload();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error creating ' + modelType + ':', error);
+                var errorMsg = 'Error creating ' + modelType + '.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                alert(errorMsg);
+            }
+        });
+    }
+})();
+</script>

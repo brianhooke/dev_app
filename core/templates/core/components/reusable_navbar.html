@@ -256,7 +256,7 @@
 (function() {
     'use strict';
     
-    var HOVER_DELAY = 500; // milliseconds before expanding on hover
+    var HOVER_DELAY = 1000; // milliseconds before expanding on hover (doubled)
     var navbar = document.getElementById('mainNavbar');
     var hoverTimer = null;
     
@@ -266,6 +266,7 @@
         
         hoverTimer = setTimeout(function() {
             navbar.classList.add('hover-expanded');
+            document.body.classList.remove('navbar-collapsed');
         }, HOVER_DELAY);
     }
     
@@ -275,8 +276,9 @@
             clearTimeout(hoverTimer);
             hoverTimer = null;
         }
-        // Remove hover-expanded class
+        // Remove hover-expanded class and restore collapsed body margin
         navbar.classList.remove('hover-expanded');
+        document.body.classList.add('navbar-collapsed');
     }
     
     // Initialize navbar as collapsed by default

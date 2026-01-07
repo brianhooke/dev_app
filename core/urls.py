@@ -33,6 +33,7 @@ from .views.contacts import (
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_category_name, update_item_name
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
@@ -229,6 +230,14 @@ urlpatterns = [
     path('download_items_csv_template/', download_items_csv_template, name='download_items_csv_template'),
     path('upload_items_csv/<int:project_pk>/', upload_items_csv, name='upload_items_csv'),
     path('get_units/', get_units, name='get_units'),
+    path('get_rates_data/', get_rates_data, name='get_rates_data'),
+    path('create_new_category_costing_unit_quantity/', create_new_category_costing_unit_quantity, name='create_new_category_costing_unit_quantity'),
+    path('update_category_costing_order_in_list/', update_category_costing_order_in_list, name='update_category_costing_order_in_list'),
+    path('update_item_unit/', update_item_unit, name='update_item_unit'),
+    path('update_item_operator/', update_item_operator, name='update_item_operator'),
+    path('update_item_operator_value/', update_item_operator_value, name='update_item_operator_value'),
+    path('update_category_name/', update_category_name, name='update_category_name'),
+    path('update_item_name/', update_item_name, name='update_item_name'),
     path('add_unit/', add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', reorder_unit, name='reorder_unit'),
     path('delete_unit/', delete_unit, name='delete_unit'),
