@@ -199,8 +199,48 @@
     
     // Initialize on page load
     $(document).ready(function() {
-        // Initial state is handled by clearAllData and component rendering
+        // Render empty UI on page load (forms disabled, empty table)
+        renderEmptyUI();
     });
+    
+    // Render empty UI with all headings and empty tables visible
+    function renderEmptyUI() {
+        // Render input forms in disabled state (no project type selected)
+        if (typeof window.renderRatesInputForms === 'function') {
+            window.renderRatesInputForms('#ratesInputFormsContainer', {
+                mode: 'project_type',
+                modeValue: null,  // No project type selected
+                categories: [],
+                items: [],
+                units: [],
+                showListColumn: true,
+                disabled: true,  // Disable forms until project type selected
+                onReload: function() {
+                    if (selectedProjectType) {
+                        loadRatesData(selectedProjectType);
+                    }
+                }
+            });
+        }
+        
+        // Render empty table
+        if (typeof window.renderRatesTable === 'function') {
+            window.renderRatesTable('#ratesTableContainer', [], [], {
+                allowDrag: false,
+                allowDelete: false,
+                projectPk: null,
+                useRatesEndpoint: true,
+                projectType: null,
+                units: [],
+                emptyMessage: 'Select a project type to view items.',
+                onReload: function() {
+                    if (selectedProjectType) {
+                        loadRatesData(selectedProjectType);
+                    }
+                }
+            });
+        }
+    }
     
     // Project type selection change handler
     $('#ratesProjectTypeSelect').on('change', function() {
@@ -215,8 +255,7 @@
     // Clear all data and reset UI
     function clearAllData() {
         ratesData = { categories: [], items: [], units: [] };
-        $('#ratesInputFormsContainer').empty();
-        $('#ratesTableContainer').html('<div class="rates-flex-empty">Select a project type to view items.</div>');
+        renderEmptyUI();
     }
     
     // Load all rates data for selected project type

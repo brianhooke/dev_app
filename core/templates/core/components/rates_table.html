@@ -434,7 +434,8 @@
         var bodyContainer = $('<div class="rates-flex-body"></div>');
         
         if ((!items || items.length === 0) && (!categories || categories.length === 0)) {
-            bodyContainer.append('<div class="rates-flex-empty">No categories or items yet. Add a category and items to get started.</div>');
+            var emptyMessage = options.emptyMessage || 'No categories or items yet. Add a category and items to get started.';
+            bodyContainer.append('<div class="rates-flex-empty">' + emptyMessage + '</div>');
             tableWrapper.append(bodyContainer);
             container.append(tableWrapper);
             return;
@@ -1159,6 +1160,7 @@
         var units = options.units || [];
         var onReload = options.onReload;
         var showListColumn = options.showListColumn !== false && mode === 'project_type';
+        var isDisabled = options.disabled === true;
         
         // Generate unique prefix for IDs to avoid conflicts
         var prefix = mode === 'project_type' ? 'rates' : 'items';
@@ -1211,49 +1213,50 @@
         
         var listColHeader = showListColumn ? '<th class="col-list">List</th>' : '';
         var listColAddClass = showListColumn ? 'col-add' : '';
+        var disabledAttr = isDisabled ? ' disabled' : '';
         
         // Add Category Section
         var categoryListCell = showListColumn ? 
-            '<td class="col-list"><select id="' + prefix + 'CategoryListSelect">' + categoryListOptions + '</select></td>' : '';
+            '<td class="col-list"><select id="' + prefix + 'CategoryListSelect"' + disabledAttr + '>' + categoryListOptions + '</select></td>' : '';
         
         var categoryHtml = '<div class="rates-section">' +
             '<h5>Add Category</h5>' +
             '<table class="reusable-table"><thead><tr>' +
             '<th>Category</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
             '</tr></thead><tbody><tr>' +
-            '<td><input type="text" id="' + prefix + 'CategoryNameInput" maxlength="100" placeholder="Enter category name"></td>' +
-            '<td><select id="' + prefix + 'CategoryOrderSelect">' + categoryOrderOptions + '</select></td>' +
+            '<td><input type="text" id="' + prefix + 'CategoryNameInput" maxlength="100" placeholder="Enter category name"' + disabledAttr + '></td>' +
+            '<td><select id="' + prefix + 'CategoryOrderSelect"' + disabledAttr + '>' + categoryOrderOptions + '</select></td>' +
             '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddCategoryBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
             categoryListCell +
             '</tr></tbody></table></div>';
         
         // Add Item Section
         var itemListCell = showListColumn ?
-            '<td class="col-list"><select id="' + prefix + 'ItemListSelect">' + itemListOptions + '</select></td>' : '';
+            '<td class="col-list"><select id="' + prefix + 'ItemListSelect"' + disabledAttr + '>' + itemListOptions + '</select></td>' : '';
         
         var itemHtml = '<div class="rates-section">' +
             '<h5>Add Item</h5>' +
             '<table class="reusable-table"><thead><tr>' +
             '<th>Category</th><th>Item</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
             '</tr></thead><tbody><tr>' +
-            '<td><select id="' + prefix + 'ItemCategorySelect">' + itemCategoryOptions + '</select></td>' +
-            '<td><input type="text" id="' + prefix + 'ItemNameInput" maxlength="100" placeholder="Enter item name"></td>' +
-            '<td><select id="' + prefix + 'ItemOrderSelect"><option value="1">1</option></select></td>' +
+            '<td><select id="' + prefix + 'ItemCategorySelect"' + disabledAttr + '>' + itemCategoryOptions + '</select></td>' +
+            '<td><input type="text" id="' + prefix + 'ItemNameInput" maxlength="100" placeholder="Enter item name"' + disabledAttr + '></td>' +
+            '<td><select id="' + prefix + 'ItemOrderSelect"' + disabledAttr + '><option value="1">1</option></select></td>' +
             '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddItemBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
             itemListCell +
             '</tr></tbody></table></div>';
         
         // Add Unit Section
         var unitListCell = showListColumn ?
-            '<td class="col-list"><select id="' + prefix + 'UnitListSelect">' + unitListOptions + '</select></td>' : '';
+            '<td class="col-list"><select id="' + prefix + 'UnitListSelect"' + disabledAttr + '>' + unitListOptions + '</select></td>' : '';
         
         var unitHtml = '<div class="rates-section">' +
             '<h5>Add BOM Calculation Unit</h5>' +
             '<table class="reusable-table"><thead><tr>' +
             '<th>Unit</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
             '</tr></thead><tbody><tr>' +
-            '<td><input type="text" id="' + prefix + 'UnitNameInput" maxlength="50" placeholder="Enter unit name"></td>' +
-            '<td><select id="' + prefix + 'UnitOrderSelect">' + unitOrderOptions + '</select></td>' +
+            '<td><input type="text" id="' + prefix + 'UnitNameInput" maxlength="50" placeholder="Enter unit name"' + disabledAttr + '></td>' +
+            '<td><select id="' + prefix + 'UnitOrderSelect"' + disabledAttr + '>' + unitOrderOptions + '</select></td>' +
             '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
             unitListCell +
             '</tr></tbody></table></div>';
@@ -1262,8 +1265,10 @@
         container.append(itemHtml);
         container.append(unitHtml);
         
-        // Attach event handlers
-        attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload);
+        // Only attach event handlers if not disabled
+        if (!isDisabled) {
+            attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload);
+        }
     };
     
     // Attach event handlers for input forms
