@@ -37,15 +37,17 @@ def get_rates_data(request):
         }, status=400)
     
     try:
-        # Get categories for this project type (or null project_type for shared categories)
+        # Get template categories for this project type (project=null means template data)
         categories = Categories.objects.filter(
+            project__isnull=True,
             project_type=project_type
         ).order_by('order_in_list').values(
             'categories_pk', 'category', 'order_in_list'
         )
         
-        # Get items (costings) for this project type
+        # Get template items (costings) for this project type (project=null means template data)
         items = Costing.objects.filter(
+            project__isnull=True,
             project_type=project_type
         ).select_related('category', 'unit').order_by(
             'category__order_in_list', 'order_in_list'
@@ -55,8 +57,9 @@ def get_rates_data(request):
             'unit__unit_name', 'operator', 'operator_value'
         )
         
-        # Get units for this project type
+        # Get template units for this project type (project=null means template data)
         units = Units.objects.filter(
+            project__isnull=True,
             project_type=project_type
         ).order_by('order_in_list').values(
             'unit_pk', 'unit_name', 'order_in_list'
