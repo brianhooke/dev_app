@@ -17,18 +17,14 @@ from core.models import Categories, Costing, Units, Projects
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+@login_required
 @require_http_methods(["GET"])
 def get_rates_data(request):
     """
     Get all rates data (categories, items, units) filtered by project_type.
     Returns data for populating the List dropdowns and the RHS table.
-    
-    Note: Temporarily removed @login_required to debug session issue.
-    The page itself (dashboard) requires login, so this data is still protected.
     """
     logger.info("[get_rates_data] Endpoint called")
-    logger.info(f"[get_rates_data] User authenticated: {request.user.is_authenticated}")
     project_type = request.GET.get('project_type', '')
     logger.info(f"[get_rates_data] project_type parameter: '{project_type}'")
     
@@ -148,6 +144,7 @@ def get_rates_data(request):
 
 
 @csrf_exempt
+@login_required
 @require_http_methods(["POST"])
 def create_new_category_costing_unit_quantity(request):
     """
@@ -158,9 +155,6 @@ def create_new_category_costing_unit_quantity(request):
     Supports two modes:
     - project_type mode: Creates template data (project=null, project_type=value)
     - project mode: Creates project-specific data (project=value, project_type=null)
-    
-    Note: Temporarily removed @login_required to debug session issue.
-    The page itself (dashboard) requires login, so this data is still protected.
     
     Expected JSON payload:
     {

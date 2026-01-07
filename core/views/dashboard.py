@@ -38,6 +38,7 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -78,6 +79,7 @@ def success_response(message, data=None):
     return JsonResponse(response)
 
 
+@login_required
 def dashboard_view(request):
     """
     Main dashboard view - serves as the application homepage.
