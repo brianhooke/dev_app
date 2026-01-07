@@ -1263,11 +1263,11 @@
         container.append(unitHtml);
         
         // Attach event handlers
-        attachInputFormHandlers(prefix, mode, modeValue, categories, onReload);
+        attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload);
     };
     
     // Attach event handlers for input forms
-    function attachInputFormHandlers(prefix, mode, modeValue, categories, onReload) {
+    function attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload) {
         // Category name input validation
         $('#' + prefix + 'CategoryNameInput').off('input').on('input', function() {
             var name = $(this).val().trim();
@@ -1289,12 +1289,12 @@
                 return;
             }
             
-            // Count items in selected category
+            // Count items in selected category from the items array
             var itemCount = 0;
-            categories.forEach(function(cat) {
-                var catPk = cat.categories_pk || cat.pk;
-                if (catPk == categoryPk && cat.items) {
-                    itemCount = cat.items.length;
+            items.forEach(function(item) {
+                var itemCatPk = item.category_pk || (item.category && item.category.categories_pk);
+                if (itemCatPk == categoryPk) {
+                    itemCount++;
                 }
             });
             

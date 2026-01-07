@@ -1920,12 +1920,26 @@ def download_po_pdf(request, project_pk, supplier_pk):
 @csrf_exempt
 def get_units(request):
     """
-    Get all units ordered by order_in_list
+    Get units ordered by order_in_list.
+    Optional query params:
+    - project_pk: filter by specific project
+    - project_type: filter by project type (for template units)
     """
     try:
         from core.models import Units
         
-        units = Units.objects.all().order_by('order_in_list')
+        project_pk = request.GET.get('project_pk')
+        project_type = request.GET.get('project_type')
+        
+        if project_pk:
+            # Get units for a specific project
+            units = Units.objects.filter(project_id=project_pk).order_by('order_in_list')
+        elif project_type:
+            # Get template units for a project type
+            units = Units.objects.filter(project__isnull=True, project_type=project_type).order_by('order_in_list')
+        else:
+            # Get all units (legacy behavior)
+            units = Units.objects.all().order_by('order_in_list')
         
         units_data = [{
             'unit_pk': unit.unit_pk,

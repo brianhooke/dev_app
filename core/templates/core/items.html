@@ -8,12 +8,12 @@
     }
     
     .items-left-panel {
-        width: 50%;
+        width: 40%;
         overflow-y: auto;
     }
     
     .items-right-panel {
-        width: 50%;
+        width: 60%;
         overflow-y: auto;
     }
     
@@ -160,10 +160,14 @@ $(document).ready(function() {
                 select.innerHTML = optionsHTML;
             }
             
-            // Load and populate unit dropdown
-            function loadAndPopulateUnits() {
+            // Load and populate unit dropdown for specific project
+            function loadAndPopulateUnits(projectPk) {
+                var url = '/core/get_units/';
+                if (projectPk) {
+                    url += '?project_pk=' + projectPk;
+                }
                 $.ajax({
-                    url: '/core/get_units/',
+                    url: url,
                     type: 'GET',
                     success: function(response) {
                         if (response.status === 'success') {
@@ -229,11 +233,10 @@ $(document).ready(function() {
                 return category ? category.category : '';
             }
             
-            // Load units for the unit dropdown
-            loadAndPopulateUnits();
-            
             // Load categories and items for current project
             if (window.currentTenderProject && window.currentTenderProject.pk) {
+                // Load units for the specific project
+                loadAndPopulateUnits(window.currentTenderProject.pk);
                 loadProjectItems(window.currentTenderProject.pk);
             }
             
