@@ -33,13 +33,13 @@ from .views.contacts import (
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_category_name, update_item_name
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
     get_project_categories, get_project_items, create_category as dashboard_create_category,
     create_item as dashboard_create_item, reorder_category, reorder_item,
-    download_items_csv_template, upload_items_csv, generate_po_html, get_po_status,
+    generate_po_html, get_po_status,
     preview_po, send_po_email as dashboard_send_po_email, download_po_pdf,
     get_units, add_unit, reorder_unit, delete_unit, get_recent_activities, get_action_items
 )
@@ -227,8 +227,6 @@ urlpatterns = [
     path('dashboard_create_item/<int:project_pk>/', dashboard_create_item, name='dashboard_create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', reorder_category, name='reorder_category'),
     path('reorder_item/<int:project_pk>/<int:item_pk>/', reorder_item, name='reorder_item'),
-    path('download_items_csv_template/', download_items_csv_template, name='download_items_csv_template'),
-    path('upload_items_csv/<int:project_pk>/', upload_items_csv, name='upload_items_csv'),
     path('get_units/', get_units, name='get_units'),
     path('get_rates_data/', get_rates_data, name='get_rates_data'),
     path('create_new_category_costing_unit_quantity/', create_new_category_costing_unit_quantity, name='create_new_category_costing_unit_quantity'),
@@ -236,8 +234,10 @@ urlpatterns = [
     path('update_item_unit/', update_item_unit, name='update_item_unit'),
     path('update_item_operator/', update_item_operator, name='update_item_operator'),
     path('update_item_operator_value/', update_item_operator_value, name='update_item_operator_value'),
+    path('update_item_rate/', update_item_rate, name='update_item_rate'),
     path('update_category_name/', update_category_name, name='update_category_name'),
     path('update_item_name/', update_item_name, name='update_item_name'),
+    path('delete_category_or_item/', delete_category_or_item, name='delete_category_or_item'),
     path('add_unit/', add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', reorder_unit, name='reorder_unit'),
     path('delete_unit/', delete_unit, name='delete_unit'),

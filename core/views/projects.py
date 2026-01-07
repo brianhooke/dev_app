@@ -113,6 +113,7 @@ def create_project(request):
                     item=template_item.item,
                     order_in_list=template_item.order_in_list,
                     unit=template_item.unit,
+                    rate=template_item.rate,
                     operator=template_item.operator,
                     operator_value=template_item.operator_value,
                     xero_account_code='',

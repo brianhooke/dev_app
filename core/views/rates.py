@@ -65,7 +65,7 @@ def get_rates_data(request):
         ).select_related('category', 'unit').order_by(
             'category__order_in_list', 'order_in_list'
         ).values(
-            'costing_pk', 'item', 'order_in_list',
+            'costing_pk', 'item', 'order_in_list', 'rate',
             'category__categories_pk', 'category__category',
             'unit__unit_name', 'operator', 'operator_value'
         )
@@ -105,6 +105,7 @@ def get_rates_data(request):
                 'category_pk': i['category__categories_pk'],
                 'category': i['category__category'],
                 'unit': i['unit__unit_name'] or '',
+                'rate': float(i['rate']) if i['rate'] is not None else None,
                 'operator': i['operator'],
                 'operator_value': float(i['operator_value']) if i['operator_value'] is not None else None
             }
@@ -596,9 +597,65 @@ def update_item_operator_value(request):
     """
     try:
         data = json.loads(request.body)
+        logger.info(f"[update_item_operator_value] Received data: {data}")
         
         item_pk = data.get('item_pk')
         operator_value = data.get('operator_value')
+        
+        logger.info(f"[update_item_operator_value] item_pk={item_pk}, operator_value={operator_value}")
+        
+        if not item_pk:
+            return JsonResponse({'status': 'error', 'message': 'item_pk is required'}, status=400)
+        
+        # Get the item
+        try:
+            item = Costing.objects.get(costing_pk=item_pk)
+            logger.info(f"[update_item_operator_value] Found item: {item.item}, current operator_value={item.operator_value}")
+        except Costing.DoesNotExist:
+            logger.error(f"[update_item_operator_value] Item not found: {item_pk}")
+            return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+        
+        # Convert to Decimal if provided
+        if operator_value is not None:
+            from decimal import Decimal, ROUND_HALF_UP
+            operator_value = Decimal(str(operator_value)).quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
+            logger.info(f"[update_item_operator_value] Converted to Decimal: {operator_value}")
+        
+        item.operator_value = operator_value
+        item.save()
+        logger.info(f"[update_item_operator_value] Saved. New operator_value={item.operator_value}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Operator value updated successfully'
+        })
+    
+    except json.JSONDecodeError:
+        logger.error("[update_item_operator_value] Invalid JSON")
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_item_operator_value] Exception: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_item_rate(request):
+    """
+    Update the rate for a Costing (Item).
+    
+    Expected JSON payload:
+    {
+        "item_pk": 123,
+        "rate": 1.23456 (up to 5dp) or null
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        item_pk = data.get('item_pk')
+        rate = data.get('rate')
         
         if not item_pk:
             return JsonResponse({'status': 'error', 'message': 'item_pk is required'}, status=400)
@@ -610,16 +667,16 @@ def update_item_operator_value(request):
             return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
         
         # Convert to Decimal if provided
-        if operator_value is not None:
+        if rate is not None:
             from decimal import Decimal, ROUND_HALF_UP
-            operator_value = Decimal(str(operator_value)).quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
+            rate = Decimal(str(rate)).quantize(Decimal('0.00001'), rounding=ROUND_HALF_UP)
         
-        item.operator_value = operator_value
+        item.rate = rate
         item.save()
         
         return JsonResponse({
             'status': 'success',
-            'message': 'Operator value updated successfully'
+            'message': 'Rate updated successfully'
         })
     
     except json.JSONDecodeError:
@@ -711,4 +768,114 @@ def update_item_name(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def delete_category_or_item(request):
+    """
+    Delete a Category (and all associated Costings) or a single Costing (Item).
+    
+    Supports two modes:
+    - project_type mode: Deletes template data (where project is null and project_type matches)
+    - project mode: Deletes project-specific data (where project matches)
+    
+    Expected JSON payload for category:
+    {
+        "category_pk": 123,
+        "project_type": "construction" OR "project_pk": 456
+    }
+    
+    Expected JSON payload for item:
+    {
+        "item_pk": 123,
+        "project_type": "construction" OR "project_pk": 456
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        category_pk = data.get('category_pk')
+        item_pk = data.get('item_pk')
+        project_type = data.get('project_type')
+        project_pk = data.get('project_pk')
+        
+        # Must have either category_pk or item_pk
+        if not category_pk and not item_pk:
+            return JsonResponse({'status': 'error', 'message': 'Either category_pk or item_pk is required'}, status=400)
+        
+        # Must have either project_type or project_pk
+        if not project_type and not project_pk:
+            return JsonResponse({'status': 'error', 'message': 'Either project_type or project_pk is required'}, status=400)
+        
+        with transaction.atomic():
+            if category_pk:
+                # Delete category and all associated costings
+                try:
+                    category = Categories.objects.get(categories_pk=category_pk)
+                except Categories.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': 'Category not found'}, status=404)
+                
+                # Verify category belongs to the correct project/project_type
+                if project_pk:
+                    if category.project_id != int(project_pk):
+                        return JsonResponse({'status': 'error', 'message': 'Category does not belong to this project'}, status=403)
+                else:
+                    if category.project_id is not None or category.project_type != project_type:
+                        return JsonResponse({'status': 'error', 'message': 'Category does not belong to this project type'}, status=403)
+                
+                # Delete all costings associated with this category for the same project/project_type
+                if project_pk:
+                    deleted_costings = Costing.objects.filter(
+                        category=category,
+                        project_id=project_pk
+                    ).delete()[0]
+                else:
+                    deleted_costings = Costing.objects.filter(
+                        category=category,
+                        project__isnull=True,
+                        project_type=project_type
+                    ).delete()[0]
+                
+                category_name = category.category
+                category.delete()
+                
+                logger.info(f"[delete_category_or_item] Deleted category '{category_name}' (pk={category_pk}) and {deleted_costings} associated costings")
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f'Category "{category_name}" and {deleted_costings} item(s) deleted successfully'
+                })
+            
+            else:
+                # Delete single item (costing)
+                try:
+                    item = Costing.objects.get(costing_pk=item_pk)
+                except Costing.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+                
+                # Verify item belongs to the correct project/project_type
+                if project_pk:
+                    if item.project_id != int(project_pk):
+                        return JsonResponse({'status': 'error', 'message': 'Item does not belong to this project'}, status=403)
+                else:
+                    if item.project_id is not None or item.project_type != project_type:
+                        return JsonResponse({'status': 'error', 'message': 'Item does not belong to this project type'}, status=403)
+                
+                item_name = item.item
+                item.delete()
+                
+                logger.info(f"[delete_category_or_item] Deleted item '{item_name}' (pk={item_pk})")
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f'Item "{item_name}" deleted successfully'
+                })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[delete_category_or_item] Error: {str(e)}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

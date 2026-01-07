@@ -86,7 +86,6 @@ from .dashboard import (
     error_response, success_response, dashboard_view,
     send_bill, get_project_categories, get_project_items,
     create_category, create_item, reorder_category, reorder_item,
-    download_items_csv_template, upload_items_csv,
     generate_po_html, get_po_status, preview_po,
     send_po_email as dashboard_send_po_email, download_po_pdf,
     get_units, add_unit, reorder_unit, delete_unit,

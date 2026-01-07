@@ -632,7 +632,7 @@ def bills_view(request):
         try:
             project = Projects.objects.get(pk=project_pk)
             xero_instance_pk = project.xero_instance_id if project.xero_instance else None
-            is_construction = (project.project_type == 'construction')
+            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
         except Projects.DoesNotExist:
             pass
     

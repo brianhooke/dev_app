@@ -229,6 +229,46 @@
         color: var(--color-text-muted);
     }
     
+    /* Quantity column styling */
+    .col-quantity {
+        width: 100px;
+        min-width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-item .col-quantity {
+        color: var(--color-text-muted);
+    }
+    
+    /* Delete column styling */
+    .col-delete {
+        width: 40px;
+        min-width: 40px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .delete-icon {
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 12px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+    
+    .delete-icon:hover {
+        opacity: 1;
+    }
+    
+    .rates-flex-category .delete-icon {
+        font-size: 11px;
+    }
+    
     /* Unit dropdown styling */
     .rates-flex-item .unit-select {
         width: 100%;
@@ -239,6 +279,7 @@
         background: var(--color-bg-surface);
         color: var(--color-text);
         cursor: pointer;
+        text-align: center;
     }
     
     .rates-flex-item .unit-select:hover {
@@ -278,7 +319,8 @@
     .name-display,
     .unit-display,
     .operator-display,
-    .value-display {
+    .value-display,
+    .rate-display {
         cursor: pointer;
         display: inline-block;
         padding: 2px 4px;
@@ -286,14 +328,25 @@
         border-radius: 3px;
         min-height: 1em;
         min-width: 20px;
+        width: 100%;
+        box-sizing: border-box;
     }
     
     .name-display:hover,
     .unit-display:hover,
     .operator-display:hover,
-    .value-display:hover {
+    .value-display:hover,
+    .rate-display:hover {
         background: var(--color-bg-muted);
         border-color: var(--color-border);
+    }
+    
+    /* Make entire cell clickable */
+    .rates-flex-item .col-unit,
+    .rates-flex-item .col-operator,
+    .rates-flex-item .col-value,
+    .rates-flex-item .col-rate {
+        cursor: pointer;
     }
     
     /* Name input styling */
@@ -313,8 +366,9 @@
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
     }
     
-    /* Value input styling */
-    .rates-flex-item .value-input {
+    /* Value and Rate input styling */
+    .rates-flex-item .value-input,
+    .rates-flex-item .rate-input {
         width: 100%;
         padding: 2px 4px;
         font-size: 11px;
@@ -326,7 +380,8 @@
         box-sizing: border-box;
     }
     
-    .rates-flex-item .value-input:focus {
+    .rates-flex-item .value-input:focus,
+    .rates-flex-item .rate-input:focus {
         outline: none;
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
     }
@@ -402,6 +457,7 @@
         var allowDelete = options.allowDelete !== false; // default true
         var projectPk = options.projectPk || (window.currentTenderProject ? window.currentTenderProject.pk : null);
         var units = options.units || []; // Units list for dropdown
+        var showQuantityColumn = options.showQuantityColumn === true; // default false
         
         var container = $(containerSelector);
         if (container.length === 0) {
@@ -419,6 +475,10 @@
         headerRow1.append('<div class="col-name">Category / Item</div>');
         headerRow1.append('<div class="col-rate">Rate ($)</div>');
         headerRow1.append('<div class="col-bom-group">BOM Calculation Inputs</div>');
+        if (showQuantityColumn) {
+            headerRow1.append('<div class="col-quantity">Quantity</div>');
+        }
+        headerRow1.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow1);
         
         // Create header row 2 - sub-headings
@@ -428,6 +488,10 @@
         headerRow2.append('<div class="col-unit">Unit</div>');
         headerRow2.append('<div class="col-operator">Operator</div>');
         headerRow2.append('<div class="col-value">Value</div>');
+        if (showQuantityColumn) {
+            headerRow2.append('<div class="col-quantity"></div>');
+        }
+        headerRow2.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow2);
         
         // Create body container
@@ -508,6 +572,16 @@
             categoryRow.append('<div class="col-unit"></div>');
             categoryRow.append('<div class="col-operator"></div>');
             categoryRow.append('<div class="col-value"></div>');
+            if (showQuantityColumn) {
+                categoryRow.append('<div class="col-quantity"></div>');
+            }
+            
+            // Delete cell for category (not for Internal category)
+            var categoryDeleteCell = $('<div class="col-delete"></div>');
+            if (!isInternal) {
+                categoryDeleteCell.append('<i class="fas fa-trash delete-icon delete-category" data-category-pk="' + category.categories_pk + '" data-category-name="' + category.category.replace(/"/g, '&quot;') + '"></i>');
+            }
+            categoryRow.append(categoryDeleteCell);
             
             bodyContainer.append(categoryRow);
             
@@ -543,8 +617,21 @@
                 itemNameCell.append(itemNameInput);
                 itemRow.append(itemNameCell);
                 
-                // Rate cell (placeholder for now)
-                itemRow.append('<div class="col-rate">-</div>');
+                // Rate cell - click to edit
+                var rateCell = $('<div class="col-rate"></div>');
+                var rateDisplayValue = '';
+                if (item.rate !== null && item.rate !== undefined) {
+                    rateDisplayValue = parseFloat(item.rate).toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 5
+                    });
+                }
+                var rateDisplay = $('<span class="rate-display" data-item-pk="' + item.costing_pk + '">' + rateDisplayValue + '</span>');
+                var rateInput = $('<input type="number" class="rate-input" data-item-pk="' + item.costing_pk + '" step="0.00001" style="display:none;">');
+                rateInput.val(item.rate || '');
+                rateCell.append(rateDisplay);
+                rateCell.append(rateInput);
+                itemRow.append(rateCell);
                 
                 // Unit cell - click to show dropdown
                 var unitCell = $('<div class="col-unit"></div>');
@@ -588,6 +675,27 @@
                 valueCell.append(valueDisplay);
                 valueCell.append(valueInput);
                 itemRow.append(valueCell);
+                
+                // Quantity cell (optional, only shown when showQuantityColumn is true)
+                if (showQuantityColumn) {
+                    var quantityCell = $('<div class="col-quantity"></div>');
+                    var quantityDisplayValue = '';
+                    if (item.quantity !== null && item.quantity !== undefined) {
+                        quantityDisplayValue = parseFloat(item.quantity).toLocaleString('en-US', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2
+                        });
+                    }
+                    quantityCell.text(quantityDisplayValue);
+                    itemRow.append(quantityCell);
+                }
+                
+                // Delete cell for item (not for Internal items)
+                var itemDeleteCell = $('<div class="col-delete"></div>');
+                if (!isInternal) {
+                    itemDeleteCell.append('<i class="fas fa-trash delete-icon delete-item" data-item-pk="' + item.costing_pk + '" data-item-name="' + item.item.replace(/"/g, '&quot;') + '"></i>');
+                }
+                itemRow.append(itemDeleteCell);
                 
                 itemsContainer.append(itemRow);
             });
@@ -780,6 +888,8 @@
             var itemPk = $input.attr('data-item-pk');
             var newValue = $input.val();
             
+            console.log('[Value Update] itemPk:', itemPk, 'raw value:', newValue);
+            
             // Round to 5dp if needed
             if (newValue !== '') {
                 newValue = parseFloat(newValue);
@@ -792,6 +902,8 @@
                 newValue = null;
             }
             
+            console.log('[Value Update] Sending to server - itemPk:', itemPk, 'operator_value:', newValue);
+            
             $.ajax({
                 url: '/core/update_item_operator_value/',
                 type: 'POST',
@@ -801,6 +913,7 @@
                     operator_value: newValue
                 }),
                 success: function(response) {
+                    console.log('[Value Update] Server response:', response);
                     if (response.status === 'success') {
                         var formattedValue = '';
                         if (newValue !== null) {
@@ -812,10 +925,13 @@
                         $display.text(formattedValue);
                         $input.val(newValue || '');
                     } else {
+                        console.error('[Value Update] Error from server:', response.message);
                         alert('Error: ' + response.message);
                     }
                 },
-                error: function(xhr) {
+                error: function(xhr, status, error) {
+                    console.error('[Value Update] AJAX error:', status, error);
+                    console.error('[Value Update] Response:', xhr.responseText);
                     var msg = 'Failed to update value';
                     if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
                     alert(msg);
@@ -826,9 +942,207 @@
             $display.show();
         });
         
+        // Rate display click handler - show input
+        container.find('.rate-display').off('click').on('click', function() {
+            var $display = $(this);
+            var $input = $display.siblings('.rate-input');
+            $display.hide();
+            $input.show().focus().select();
+        });
+        
+        // Rate cell click handler - make whole cell clickable
+        container.find('.col-rate').off('click').on('click', function(e) {
+            if ($(e.target).hasClass('rate-input')) return; // Don't trigger if clicking input
+            var $display = $(this).find('.rate-display');
+            var $input = $(this).find('.rate-input');
+            if ($display.length && $input.length) {
+                $display.hide();
+                $input.show().focus().select();
+            }
+        });
+        
+        // Rate input - constrain to 5dp max while typing
+        container.find('.rate-input').off('input').on('input', function() {
+            var val = $(this).val();
+            if (val.indexOf('.') !== -1) {
+                var parts = val.split('.');
+                if (parts[1] && parts[1].length > 5) {
+                    $(this).val(parts[0] + '.' + parts[1].substring(0, 5));
+                }
+            }
+        });
+        
+        // Rate input blur/enter handler - save and show display
+        container.find('.rate-input').off('blur keydown').on('blur keydown', function(e) {
+            if (e.type === 'keydown' && e.key !== 'Enter') return;
+            if (e.type === 'keydown') e.preventDefault();
+            
+            var $input = $(this);
+            var $display = $input.siblings('.rate-display');
+            var itemPk = $input.attr('data-item-pk');
+            var newRate = $input.val();
+            
+            // Round to 5dp if needed
+            if (newRate !== '') {
+                newRate = parseFloat(newRate);
+                if (!isNaN(newRate)) {
+                    newRate = Math.round(newRate * 100000) / 100000;
+                } else {
+                    newRate = null;
+                }
+            } else {
+                newRate = null;
+            }
+            
+            $.ajax({
+                url: '/core/update_item_rate/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    item_pk: itemPk,
+                    rate: newRate
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        var formattedRate = '';
+                        if (newRate !== null) {
+                            formattedRate = parseFloat(newRate).toLocaleString('en-US', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 5
+                            });
+                        }
+                        $display.text(formattedRate);
+                        $input.val(newRate || '');
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to update rate';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+            
+            $input.hide();
+            $display.show();
+        });
+        
+        // Value cell click handler - make whole cell clickable
+        container.find('.col-value').off('click').on('click', function(e) {
+            if ($(e.target).hasClass('value-input')) return; // Don't trigger if clicking input
+            var $display = $(this).find('.value-display');
+            var $input = $(this).find('.value-input');
+            if ($display.length && $input.length) {
+                $display.hide();
+                $input.show().focus().select();
+            }
+        });
+        
+        // Unit cell click handler - make whole cell clickable
+        container.find('.col-unit').off('click').on('click', function(e) {
+            if ($(e.target).hasClass('unit-select')) return; // Don't trigger if clicking select
+            var $display = $(this).find('.unit-display');
+            var $select = $(this).find('.unit-select');
+            if ($display.length && $select.length) {
+                $display.hide();
+                $select.show().focus();
+            }
+        });
+        
+        // Operator cell click handler - make whole cell clickable
+        container.find('.col-operator').off('click').on('click', function(e) {
+            if ($(e.target).hasClass('operator-select')) return; // Don't trigger if clicking select
+            var $display = $(this).find('.operator-display');
+            var $select = $(this).find('.operator-select');
+            if ($display.length && $select.length) {
+                $display.hide();
+                $select.show().focus();
+            }
+        });
+        
+        // Delete category handler (works for both project_type and project modes)
+        container.find('.delete-category').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var categoryPk = $(this).attr('data-category-pk');
+            var categoryName = $(this).attr('data-category-name');
+            
+            var itemCount = container.find('.rates-flex-items-container[data-category-pk="' + categoryPk + '"] .rates-flex-item').length;
+            var message = 'Are you sure you want to delete the "' + categoryName + '" Category?';
+            if (itemCount > 0) {
+                message += '\n\nThis will also delete ' + itemCount + ' item(s) in this category.';
+            }
+            
+            if (!confirm(message)) return;
+            
+            var deleteData = { category_pk: categoryPk };
+            if (useRatesEndpoint && projectType) {
+                deleteData.project_type = projectType;
+            } else if (projectPk) {
+                deleteData.project_pk = projectPk;
+            }
+            
+            $.ajax({
+                url: '/core/delete_category_or_item/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(deleteData),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        if (onReload) onReload();
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to delete category';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+        });
+        
+        // Delete item handler (works for both project_type and project modes)
+        container.find('.delete-item').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var itemPk = $(this).attr('data-item-pk');
+            var itemName = $(this).attr('data-item-name');
+            
+            if (!confirm('Are you sure you want to delete the "' + itemName + '" Costing?')) return;
+            
+            var deleteData = { item_pk: itemPk };
+            if (useRatesEndpoint && projectType) {
+                deleteData.project_type = projectType;
+            } else if (projectPk) {
+                deleteData.project_pk = projectPk;
+            }
+            
+            $.ajax({
+                url: '/core/delete_category_or_item/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(deleteData),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        if (onReload) onReload();
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to delete item';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+        });
+        
         // Category collapse toggle
         container.find('.rates-flex-category').off('click').on('click', function(e) {
             if ($(e.target).hasClass('rates-delete-btn') || $(e.target).closest('.rates-delete-btn').length) {
+                return;
+            }
+            if ($(e.target).hasClass('delete-icon') || $(e.target).closest('.delete-icon').length) {
                 return;
             }
             

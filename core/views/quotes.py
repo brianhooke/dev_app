@@ -63,7 +63,7 @@ def quotes_view(request):
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
-            is_construction = (project.project_type == 'construction')
+            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
         except Projects.DoesNotExist:
             pass
     
@@ -178,7 +178,7 @@ def update_quote(request):
             Quote_allocations.objects.filter(quotes_pk=quote).delete()
             
             # Check if construction project
-            is_construction = (quote.project and quote.project.project_type == 'construction')
+            is_construction = (quote.project and quote.project.project_type in ['construction', 'pods', 'precast'])
             
             for line_item in line_items:
                 item_pk = line_item.get('item')
@@ -658,7 +658,7 @@ def save_project_quote(request):
                     logger.error("Quote.pdf is None after save!")
             
             # Create quote allocations
-            is_construction = (project.project_type == 'construction')
+            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
             
             for item_data in line_items:
                 item_pk = item_data.get('item')
@@ -937,7 +937,7 @@ def save_quote_allocations(request):
             }, status=404)
         
         # Check if construction project
-        is_construction = (quote.project and quote.project.project_type == 'construction')
+        is_construction = (quote.project and quote.project.project_type in ['construction', 'pods', 'precast'])
         
         with transaction.atomic():
             # Delete existing allocations and recreate

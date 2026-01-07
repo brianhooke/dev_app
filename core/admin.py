@@ -85,10 +85,12 @@ class HcVariationAllocationsForm(forms.ModelForm):
 
 # Custom admin classes
 class CategoriesAdmin(admin.ModelAdmin):
-    list_display = ("categories_pk", "division", "category", "invoice_category", "order_in_list")
+    list_display = ("categories_pk", "project", "project_type", "division", "category", "invoice_category", "order_in_list")
+    list_filter = ('project', 'project_type')
 
 class UnitsAdmin(admin.ModelAdmin):
-    list_display = ("unit_pk", "unit_name", "order_in_list")
+    list_display = ("unit_pk", "project", "project_type", "unit_name", "order_in_list")
+    list_filter = ('project', 'project_type')
 
 class XeroInstancesAdmin(admin.ModelAdmin):
     list_display = ("xero_instance_pk", "xero_name", "xero_client_id")
@@ -112,11 +114,12 @@ class QuotesAdmin(admin.ModelAdmin):
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "category", "item", "xero_account_code", "contract_budget", "uncommitted_amount", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
+    list_filter = ('project', 'project_type', 'category')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
     form = QuoteAllocationsForm
-    list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "notes")
+    list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "qty", "unit", "rate", "notes")
 
 class DesignCategoriesAdmin(admin.ModelAdmin):
     list_display = ("design_category_pk", "design_category")

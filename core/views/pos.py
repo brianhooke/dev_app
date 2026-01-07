@@ -73,7 +73,7 @@ def po_view(request):
         try:
             project = Projects.objects.get(pk=project_pk)
             xero_instance_pk = project.xero_instance_id if project.xero_instance else None
-            is_construction = (project.project_type == 'construction')
+            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
         except Projects.DoesNotExist:
             pass
     
@@ -353,7 +353,7 @@ def view_po_by_unique_id(request, unique_id):
             po_order = most_recent_po
         
         # Check if construction project
-        is_construction = project.project_type == 'construction'
+        is_construction = project.project_type in ['construction', 'pods', 'precast']
         
         # Get all quotes for this project and supplier
         quotes = Quotes.objects.filter(
@@ -1245,7 +1245,7 @@ def get_po_table_data_for_invoice(request, bill_pk):
             return JsonResponse({'status': 'error', 'message': 'No PO found for this invoice'}, status=404)
         
         # Check if construction project
-        is_construction = project.project_type == 'construction'
+        is_construction = project.project_type in ['construction', 'pods', 'precast']
         
         # Get all quotes for this project and supplier
         quotes = Quotes.objects.filter(

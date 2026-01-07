@@ -55,7 +55,7 @@
     
     <!-- Tender navigation buttons -->
     <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
-        <button class="btn btn-primary tender-nav-btn" data-section="items">Items</button>
+        <button class="btn btn-primary tender-nav-btn" data-section="bom">BOM</button>
         <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
         <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
         <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
@@ -266,10 +266,10 @@ $(document).ready(function() {
         // Update content area based on section
         if (section === 'quotes') {
             loadQuotesSection();
-        } else if (section === 'items') {
-            // Load Items section from hidden storage - items.html self-initializes
-            var itemsContent = $('#itemsTemplateStorage').html();
-            $('#tenderContentArea').html(itemsContent);
+        } else if (section === 'bom') {
+            // Load BOM section from hidden storage - bom.html self-initializes
+            var bomContent = $('#bomTemplateStorage').html();
+            $('#tenderContentArea').html(bomContent);
         } else if (section === 'documents') {
             loadDocumentsSection();
         } else if (section === 'contract-budget') {
@@ -601,8 +601,8 @@ $(document).ready(function() {
         
         // Create editable row in main table
         var isConstruction = window.quoteIsConstruction || 
-                            (window.currentConstructionProject && window.currentConstructionProject.project_type === 'construction') ||
-                            (window.currentTenderProject && window.currentTenderProject.project_type === 'construction');
+                            (window.currentConstructionProject && ['construction', 'pods', 'precast'].indexOf(window.currentConstructionProject.project_type) !== -1) ||
+                            (window.currentTenderProject && ['construction', 'pods', 'precast'].indexOf(window.currentTenderProject.project_type) !== -1);
         
         var mainTbody = $('#quoteMainTableBody');
         mainTbody.empty();

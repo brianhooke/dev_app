@@ -25,9 +25,9 @@
     
     window.ProjectTypeConfig = {
         
-        // Check if project type is construction
+        // Check if project type uses Qty | Rate | Amount columns (construction, pods, precast)
         isConstruction: function(projectType) {
-            return projectType === 'construction';
+            return projectType === 'construction' || projectType === 'pods' || projectType === 'precast';
         },
         
         // =====================================================================

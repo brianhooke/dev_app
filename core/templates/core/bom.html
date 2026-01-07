@@ -67,33 +67,6 @@
     <div class="items-left-panel">
         <!-- Add Category/Item/Unit forms container (rendered by component) -->
         <div id="itemsInputFormsContainer"></div>
-        
-        <!-- Bulk Upload via CSV Section -->
-        <div class="items-section">
-            <h5>Bulk Upload via CSV</h5>
-            <div style="padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
-                <p style="margin-bottom: 10px; font-size: 12px; color: #6c757d;">
-                    Upload categories and items in bulk using a CSV file. Download the example template below to see the required format.
-                </p>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button id="downloadExampleCsvBtn" class="btn btn-sm btn-info">
-                        <i class="fas fa-download"></i> Download Example CSV
-                    </button>
-                    
-                    <button id="uploadCsvBtn" class="btn btn-sm btn-success">
-                        <i class="fas fa-upload"></i> Upload CSV
-                    </button>
-                </div>
-                
-                <!-- Hidden file input -->
-                <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
-                
-                <p style="margin-top: 10px; margin-bottom: 0; font-size: 11px; color: #dc3545;">
-                    <strong>Note:</strong> Upload will add to existing categories/items, not replace them.
-                </p>
-            </div>
-        </div>
     </div>
     
     <!-- Right Panel: Category / Item Display Table (uses shared component) -->
@@ -309,6 +282,7 @@ $(document).ready(function() {
                         allowDelete: true,
                         projectPk: window.currentTenderProject ? window.currentTenderProject.pk : null,
                         units: window.itemsUnits || [],
+                        showQuantityColumn: true,
                         onReload: function() {
                             loadProjectItems(window.currentTenderProject.pk);
                         }
@@ -322,100 +296,6 @@ $(document).ready(function() {
             function validateItemForm() {}
             function updateItemOrderDropdown() {}
             
-            // Download Example CSV button
-            $('#tenderContentArea').off('click', '#downloadExampleCsvBtn').on('click', '#downloadExampleCsvBtn', function() {
-                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
-                    alert('No project selected');
-                    return;
-                }
-                
-                // Trigger download of example CSV
-                window.location.href = '/core/download_items_csv_template/';
-            });
-            
-            // Upload CSV button - triggers file picker
-            $('#tenderContentArea').off('click', '#uploadCsvBtn').on('click', '#uploadCsvBtn', function() {
-                if (!window.currentTenderProject || !window.currentTenderProject.pk) {
-                    alert('No project selected');
-                    return;
-                }
-                
-                // Trigger the hidden file input
-                $('#tenderContentArea #csvFileInput').click();
-            });
-            
-            // CSV File input change handler - immediately upload when file selected
-            $('#tenderContentArea').off('change', '#csvFileInput').on('change', '#csvFileInput', function() {
-                const fileInput = this;
-                
-                if (!fileInput.files || fileInput.files.length === 0) {
-                    return;
-                }
-                
-                const file = fileInput.files[0];
-                
-                // Validate file type
-                if (!file.name.endsWith('.csv')) {
-                    alert('Please select a valid CSV file');
-                    fileInput.value = '';
-                    return;
-                }
-                
-                // Create FormData and upload
-                const formData = new FormData();
-                formData.append('csv_file', file);
-                formData.append('project_pk', window.currentTenderProject.pk);
-                
-                // Show uploading state on upload button
-                const uploadBtn = $('#uploadCsvBtn');
-                const originalText = uploadBtn.html();
-                uploadBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Uploading...');
-                
-                $.ajax({
-                    url: '/core/upload_items_csv/' + window.currentTenderProject.pk + '/',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.status === 'success') {
-                            let message = `Success! Created ${response.categories_created} categories and ${response.items_created} items.`;
-                            
-                            // Add warnings if any
-                            if (response.warnings && response.warnings.length > 0) {
-                                message += '\n\nWarnings:\n' + response.warnings.slice(0, 5).join('\n');
-                                if (response.warnings.length > 5) {
-                                    message += `\n... and ${response.warnings.length - 5} more warnings`;
-                                }
-                            }
-                            
-                            alert(message);
-                            
-                            // Reload items to show new data
-                            loadProjectItems(window.currentTenderProject.pk);
-                            
-                            // Clear file input
-                            fileInput.value = '';
-                        } else {
-                            alert('Error: ' + response.message);
-                        }
-                        
-                        uploadBtn.prop('disabled', false).html(originalText);
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Failed to upload CSV:', error);
-                        let errorMessage = 'Failed to upload CSV';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errorMessage = xhr.responseJSON.message;
-                        } else if (error) {
-                            errorMessage = 'Failed to upload CSV: ' + error;
-                        }
-                        alert(errorMessage);
-                        uploadBtn.prop('disabled', false).html(originalText);
-                        fileInput.value = '';
-                    }
-                });
-            });
         }
     });
 </script>

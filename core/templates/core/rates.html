@@ -12,6 +12,8 @@
     .rates-left-panel {
         width: 40%;
         overflow-y: auto;
+        border-right: 1px solid #dee2e6;
+        padding-right: 15px;
     }
     
     .rates-right-panel {
@@ -370,6 +372,7 @@
                     category__category: item.category,  // Component expects this format
                     order_in_list: item.order_in_list,
                     unit: item.unit || '',
+                    rate: item.rate,
                     operator: item.operator,
                     operator_value: item.operator_value
                 };

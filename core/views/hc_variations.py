@@ -31,7 +31,7 @@ def hc_variations_view(request):
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
-            is_construction = (project.project_type == 'construction')
+            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
         except Projects.DoesNotExist:
             pass
     

@@ -42,7 +42,7 @@ $(document).ready(function() {
                     Utils.getProjectPkFromUrl();
     
     var isConstruction = window.quoteIsConstruction || 
-                         (window.currentQuotesProject && window.currentQuotesProject.project_type === 'construction') ||
+                         (window.currentQuotesProject && ['construction', 'pods', 'precast'].indexOf(window.currentQuotesProject.project_type) !== -1) ||
                          false;
     
     // State
