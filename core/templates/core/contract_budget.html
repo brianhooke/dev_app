@@ -32,6 +32,12 @@ Column Behaviors:
 <style>
     /* Contract Budget specific styles - extend allocations_layout styles */
     
+    /* Make table container scrollable with max height */
+    #contractBudgetTableContainer {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+    
     /* Internal category styling - purple */
     .contractBudget-container .reusable-table tr.category-row.internal-category {
         background-color: #e6d5f5;
@@ -183,12 +189,12 @@ Column Behaviors:
     }, 100);
     
     // Get column count based on mode
-    // Now both construction and non-construction have Notes column
+    // Construction has Committed Qty|Rate|Amount (3 cols), non-construction has single Committed col
     function getColCount() {
         if (isTender) {
-            return isConstruction ? 8 : 6;  // +1 for Notes in non-construction
+            return isConstruction ? 10 : 6;  // Construction: +2 for committed qty/rate
         } else {
-            return isConstruction ? 12 : 10;  // +1 for Notes in non-construction
+            return isConstruction ? 14 : 10;  // Construction: +2 for committed qty/rate
         }
     }
     
@@ -240,6 +246,8 @@ Column Behaviors:
             working_budget: 0,
             uncommitted: 0,
             committed: 0,
+            committed_qty: 0,
+            committed_rate: 0,
             cost_to_complete: 0,
             billed: 0,
             fixed_on_site: 0
@@ -261,8 +269,12 @@ Column Behaviors:
             
             // Render item rows
             categoryItems.forEach(function(item) {
-                var committedAmount = committedAmounts[item.costing_pk] || 0;
-                var row = renderItemRow(item, committedAmount, isInternal, category.category);
+                var committedData = committedAmounts[item.costing_pk];
+                // For construction types, committedData is {qty, rate, amount}; for others, it's a number
+                var committedAmount = isConstruction ? 
+                    (committedData ? committedData.amount : 0) : 
+                    (committedData || 0);
+                var row = renderItemRow(item, committedData, isInternal, category.category);
                 tbody.append(row);
                 
                 // Update totals (only for non-internal items or all items depending on logic)
@@ -273,6 +285,9 @@ Column Behaviors:
                     
                     totals.uncommitted += uncommittedAmount;
                     totals.committed += committedAmount;
+                    if (isConstruction && committedData) {
+                        totals.committed_qty += committedData.qty || 0;
+                    }
                     totals.working_budget += uncommittedAmount + committedAmount;
                 }
                 
@@ -310,17 +325,20 @@ Column Behaviors:
         row.append('<td class="subtotal-cell" data-subtotal="working_budget"></td>');
         
         if (isConstruction) {
-            row.append('<td class="subtotal-cell"></td>');  // Qty (empty)
-            row.append('<td class="subtotal-cell"></td>');  // Rate (empty)
+            row.append('<td class="subtotal-cell"></td>');  // Uncommitted Qty (empty)
+            row.append('<td class="subtotal-cell"></td>');  // Uncommitted Rate (empty)
             row.append('<td class="subtotal-cell" data-subtotal="uncommitted"></td>');  // Uncommitted Amount
             row.append('<td class="subtotal-cell"></td>');  // Notes (empty)
+            // Committed columns for construction
+            row.append('<td class="subtotal-cell"></td>');  // Committed Qty (empty)
+            row.append('<td class="subtotal-cell"></td>');  // Committed Rate (empty)
+            row.append('<td class="subtotal-cell" data-subtotal="committed"></td>');  // Committed Amount
         } else {
             row.append('<td class="subtotal-cell" data-subtotal="uncommitted"></td>');  // Uncommitted
             row.append('<td class="subtotal-cell"></td>');  // Notes (empty)
+            // Committed subtotal (non-construction)
+            row.append('<td class="subtotal-cell" data-subtotal="committed"></td>');
         }
-        
-        // Committed subtotal
-        row.append('<td class="subtotal-cell" data-subtotal="committed"></td>');
         
         if (!isTender) {
             row.append('<td class="subtotal-cell" data-subtotal="cost_to_complete"></td>');
@@ -339,7 +357,14 @@ Column Behaviors:
     }
     
     // Render an item row
-    function renderItemRow(item, committedAmount, isInternal, categoryName) {
+    function renderItemRow(item, committedData, isInternal, categoryName) {
+        // For construction types, committedData is {qty, rate, amount}; for others, it's a number
+        var committedAmount = isConstruction ? 
+            (committedData ? committedData.amount : 0) : 
+            (committedData || 0);
+        var committedQty = isConstruction && committedData ? (committedData.qty || 0) : 0;
+        var committedRate = isConstruction && committedData ? (committedData.rate || 0) : 0;
+        
         var row = $('<tr class="item-row"></tr>');
         if (isInternal) {
             row.addClass('internal-item');
@@ -441,8 +466,22 @@ Column Behaviors:
             }
         }
         
-        // Committed column (display only - calculated from quote allocations)
-        row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+        // Committed column(s) (display only - calculated from quote allocations)
+        if (isConstruction) {
+            // Construction: Committed Qty | Rate | Amount
+            if (isInternal) {
+                row.append('<td>-</td>');  // Qty
+                row.append('<td>-</td>');  // Rate
+                row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+            } else {
+                row.append('<td class="committed-qty-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(committedQty, 2) + '</td>');
+                row.append('<td class="committed-rate-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(committedRate, 2) + '</td>');
+                row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+            }
+        } else {
+            // Non-construction: single Committed amount column
+            row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+        }
         
         if (!isTender) {
             // Execution mode extra columns
@@ -856,16 +895,19 @@ Column Behaviors:
         row.append('<td id="totalWorkingBudget">' + Utils.formatCurrency(totals.working_budget) + '</td>');
         
         if (isConstruction) {
-            row.append('<td></td>');  // Qty
-            row.append('<td></td>');  // Rate
+            row.append('<td></td>');  // Uncommitted Qty
+            row.append('<td></td>');  // Uncommitted Rate
             row.append('<td id="totalUncommitted">' + Utils.formatCurrency(totals.uncommitted) + '</td>');
             row.append('<td></td>');  // Notes
+            // Committed columns for construction
+            row.append('<td></td>');  // Committed Qty
+            row.append('<td></td>');  // Committed Rate
+            row.append('<td id="totalCommitted">' + Utils.formatCurrency(totals.committed) + '</td>');
         } else {
             row.append('<td id="totalUncommitted">' + Utils.formatCurrency(totals.uncommitted) + '</td>');
             row.append('<td></td>');  // Notes
+            row.append('<td id="totalCommitted">' + Utils.formatCurrency(totals.committed) + '</td>');
         }
-        
-        row.append('<td id="totalCommitted">' + Utils.formatCurrency(totals.committed) + '</td>');
         
         if (!isTender) {
             row.append('<td id="totalCostToComplete">' + Utils.formatCurrency(totals.cost_to_complete) + '</td>');

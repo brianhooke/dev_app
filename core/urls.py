@@ -33,7 +33,7 @@ from .views.contacts import (
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
@@ -238,6 +238,8 @@ urlpatterns = [
     path('update_category_name/', update_category_name, name='update_category_name'),
     path('update_item_name/', update_item_name, name='update_item_name'),
     path('delete_category_or_item/', delete_category_or_item, name='delete_category_or_item'),
+    path('update_unit_qty/', update_unit_qty, name='update_unit_qty'),
+    path('copy_to_contract_budget/', copy_to_contract_budget, name='copy_to_contract_budget'),
     path('add_unit/', add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', reorder_unit, name='reorder_unit'),
     path('delete_unit/', delete_unit, name='delete_unit'),

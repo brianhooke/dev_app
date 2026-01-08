@@ -267,6 +267,7 @@ $(document).ready(function() {
                         items: window.itemsItems || [],
                         units: window.itemsUnits || [],
                         showListColumn: false,
+                        showUnitQtyColumn: true,
                         onReload: function() {
                             loadProjectItems(projectPk);
                         }
@@ -283,6 +284,8 @@ $(document).ready(function() {
                         projectPk: window.currentTenderProject ? window.currentTenderProject.pk : null,
                         units: window.itemsUnits || [],
                         showQuantityColumn: true,
+                        defaultExpanded: true,
+                        showCopyToContractButton: true,
                         onReload: function() {
                             loadProjectItems(window.currentTenderProject.pk);
                         }

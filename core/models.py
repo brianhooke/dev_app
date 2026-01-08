@@ -365,6 +365,7 @@ class Units(models.Model):
     unit_pk = models.AutoField(primary_key=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     unit_name = models.CharField(max_length=50)
+    unit_qty = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
     order_in_list = models.IntegerField()
     project_type = models.CharField(
         max_length=20,

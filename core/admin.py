@@ -89,7 +89,7 @@ class CategoriesAdmin(admin.ModelAdmin):
     list_filter = ('project', 'project_type')
 
 class UnitsAdmin(admin.ModelAdmin):
-    list_display = ("unit_pk", "project", "project_type", "unit_name", "order_in_list")
+    list_display = ("unit_pk", "project", "project_type", "unit_name", "unit_qty", "order_in_list")
     list_filter = ('project', 'project_type')
 
 class XeroInstancesAdmin(admin.ModelAdmin):

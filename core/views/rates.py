@@ -78,7 +78,7 @@ def get_rates_data(request):
             project__isnull=True,
             project_type=project_type
         ).order_by('order_in_list').values(
-            'unit_pk', 'unit_name', 'order_in_list'
+            'unit_pk', 'unit_name', 'order_in_list', 'unit_qty'
         )
         units_count = units.count()
         logger.info(f"[get_rates_data] Found {units_count} units")
@@ -250,6 +250,15 @@ def create_new_category_costing_unit_quantity(request):
                 except Categories.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': 'Category not found'}, status=404)
                 
+                # Get the unit if specified
+                unit_pk = data.get('unit_pk')
+                unit = None
+                if unit_pk:
+                    try:
+                        unit = Units.objects.get(unit_pk=unit_pk)
+                    except Units.DoesNotExist:
+                        return JsonResponse({'status': 'error', 'message': 'Unit not found'}, status=404)
+                
                 # Build filter for reordering
                 if project:
                     reorder_filter = {'project': project, 'category': category, 'order_in_list__gte': order_in_list}
@@ -265,6 +274,7 @@ def create_new_category_costing_unit_quantity(request):
                     project_type=project_type,
                     category=category,
                     order_in_list=order_in_list,
+                    unit=unit,
                     xero_account_code='',
                     contract_budget=0,
                     uncommitted_amount=0,
@@ -878,4 +888,114 @@ def delete_category_or_item(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[delete_category_or_item] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_unit_qty(request):
+    """
+    Update the unit_qty field for a Unit.
+    Expects JSON body with: unit_pk, unit_qty
+    """
+    try:
+        data = json.loads(request.body)
+        unit_pk = data.get('unit_pk')
+        unit_qty = data.get('unit_qty')
+        
+        if not unit_pk:
+            return JsonResponse({'status': 'error', 'message': 'unit_pk is required'}, status=400)
+        
+        try:
+            unit = Units.objects.get(unit_pk=unit_pk)
+        except Units.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Unit not found'}, status=404)
+        
+        # Handle null/empty values
+        if unit_qty is None or unit_qty == '':
+            unit.unit_qty = None
+        else:
+            try:
+                unit.unit_qty = round(float(unit_qty), 5)
+            except (ValueError, TypeError):
+                return JsonResponse({'status': 'error', 'message': 'Invalid unit_qty value'}, status=400)
+        
+        unit.save()
+        
+        logger.info(f"[update_unit_qty] Updated unit {unit_pk} with unit_qty={unit.unit_qty}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'unit_pk': unit_pk,
+            'unit_qty': float(unit.unit_qty) if unit.unit_qty is not None else None
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_unit_qty] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def copy_to_contract_budget(request):
+    """
+    Copy Rate and Qty values to Contract Budget (Costing.uncommitted_rate and uncommitted_qty).
+    Expects JSON body with: updates (array of {costing_pk, uncommitted_rate, uncommitted_qty})
+    """
+    try:
+        data = json.loads(request.body)
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return JsonResponse({'status': 'error', 'message': 'No updates provided'}, status=400)
+        
+        updated_count = 0
+        for update in updates:
+            costing_pk = update.get('costing_pk')
+            uncommitted_rate = update.get('uncommitted_rate')
+            uncommitted_qty = update.get('uncommitted_qty')
+            
+            if not costing_pk:
+                continue
+            
+            try:
+                costing = Costing.objects.get(costing_pk=costing_pk)
+                
+                # Update uncommitted_rate
+                if uncommitted_rate is not None:
+                    costing.uncommitted_rate = round(float(uncommitted_rate), 2)
+                else:
+                    costing.uncommitted_rate = None
+                
+                # Update uncommitted_qty
+                if uncommitted_qty is not None:
+                    costing.uncommitted_qty = round(float(uncommitted_qty), 2)
+                else:
+                    costing.uncommitted_qty = None
+                
+                costing.save()
+                updated_count += 1
+                
+            except Costing.DoesNotExist:
+                logger.warning(f"[copy_to_contract_budget] Costing {costing_pk} not found")
+                continue
+            except (ValueError, TypeError) as e:
+                logger.warning(f"[copy_to_contract_budget] Invalid value for costing {costing_pk}: {str(e)}")
+                continue
+        
+        logger.info(f"[copy_to_contract_budget] Updated {updated_count} items")
+        
+        return JsonResponse({
+            'status': 'success',
+            'updated_count': updated_count
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[copy_to_contract_budget] Error: {str(e)}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

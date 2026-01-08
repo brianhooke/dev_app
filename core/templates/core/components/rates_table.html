@@ -14,6 +14,22 @@
        FLEXBOX TABLE - Rates Table Component
        ======================================== */
     
+    .rates-heading-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .rates-heading-row h5 {
+        margin: 0;
+    }
+    
+    .rates-heading-row #copyToContractBudgetBtn {
+        font-size: 12px;
+        padding: 4px 12px;
+    }
+    
     .rates-table-container {
         height: 100%;
         overflow-y: auto;
@@ -231,8 +247,8 @@
     
     /* Quantity column styling */
     .col-quantity {
-        width: 100px;
-        min-width: 100px;
+        width: 80px;
+        min-width: 80px;
         border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
@@ -241,6 +257,60 @@
     
     .rates-flex-item .col-quantity {
         color: var(--color-text-muted);
+    }
+    
+    /* Total column styling */
+    .col-total {
+        width: 100px;
+        min-width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-item .col-total {
+        color: var(--color-text);
+        font-weight: 500;
+    }
+    
+    /* Footer row styling */
+    .rates-flex-footer {
+        display: flex;
+        align-items: center;
+        border-top: 2px solid var(--color-border);
+        padding: 8px 6px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        background: var(--color-bg-muted);
+        color: var(--color-text);
+    }
+    
+    .rates-flex-footer .col-name {
+        width: 200px;
+        min-width: 200px;
+        padding: 0 6px;
+    }
+    
+    .rates-flex-footer .col-rate {
+        width: 100px;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+    }
+    
+    .rates-flex-footer .col-unit,
+    .rates-flex-footer .col-operator,
+    .rates-flex-footer .col-value {
+        flex: 1;
+        border-left: 1px solid var(--color-border);
+        padding: 0 6px;
+        box-sizing: border-box;
+    }
+    
+    .rates-flex-footer .col-total {
+        font-weight: 700;
     }
     
     /* Delete column styling */
@@ -440,12 +510,106 @@
         color: var(--color-text-muted);
         font-size: 13px;
     }
+    
+    /* Input form tables - Add column styling */
+    .rates-section table th.col-add,
+    .rates-section table td.col-add {
+        width: 12%;
+        text-align: center;
+    }
+    
+    .rates-section table th,
+    .rates-section table td {
+        text-align: left;
+    }
+    
+    .rates-section table .rates-add-btn {
+        display: block;
+        margin: 0 auto;
+    }
+    
+    /* Unit list rows - compact styling */
+    .unit-list-row td {
+        font-size: 12px;
+        padding: 2px 8px;
+    }
+    
+    /* Scrollable unit table only */
+    .rates-section.unit-section table tbody {
+        display: block;
+        max-height: calc(8 * 24px + 36px); /* 8 unit rows + input row */
+        overflow-y: auto;
+    }
+    
+    .rates-section.unit-section table thead,
+    .rates-section.unit-section table tbody tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+    }
+    
+    /* Unit section column widths when Unit Qty is shown */
+    .rates-section.unit-section.show-unit-qty th.col-add,
+    .rates-section.unit-section.show-unit-qty td.col-add {
+        width: 12.5%;
+    }
+    
+    .rates-section.unit-section.show-unit-qty th.col-unit-qty,
+    .rates-section.unit-section.show-unit-qty td.col-unit-qty {
+        width: 25%;
+        text-align: center;
+    }
+    
+    .rates-section.unit-section.show-unit-qty th:first-child,
+    .rates-section.unit-section.show-unit-qty td:first-child {
+        width: 62.5%;
+    }
+    
+    /* Unit qty input styling */
+    .unit-qty-input {
+        width: 80%;
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid var(--color-border);
+        border-radius: 3px;
+        text-align: center;
+    }
+    
+    .unit-qty-input:focus {
+        outline: none;
+        border-color: var(--onyx-blue);
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
 </style>
 
 <script>
 // Rates Table Component - Reusable table rendering for categories/items
 (function() {
     'use strict';
+    
+    // Local CSRF token getter for this component
+    function getCSRFToken() {
+        // First try to get from cookie
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, 10) === 'csrftoken=') {
+                    cookieValue = decodeURIComponent(cookie.substring(10));
+                    break;
+                }
+            }
+        }
+        // Fallback to hidden input
+        if (!cookieValue) {
+            var $input = $('input[name=csrfmiddlewaretoken]');
+            if ($input.length) {
+                cookieValue = $input.val();
+            }
+        }
+        return cookieValue;
+    }
     
     // Track collapsed state for categories (shared across instances)
     var ratesCollapsedCategories = {};
@@ -458,6 +622,8 @@
         var projectPk = options.projectPk || (window.currentTenderProject ? window.currentTenderProject.pk : null);
         var units = options.units || []; // Units list for dropdown
         var showQuantityColumn = options.showQuantityColumn === true; // default false
+        var defaultExpanded = options.defaultExpanded === true; // default false (collapsed)
+        var showCopyToContractButton = options.showCopyToContractButton === true; // default false
         
         var container = $(containerSelector);
         if (container.length === 0) {
@@ -467,16 +633,25 @@
         
         container.empty();
         
+        // Add heading row with optional button
+        var headingRow = $('<div class="rates-heading-row"></div>');
+        headingRow.append('<h5>Rates and Quantities</h5>');
+        if (showCopyToContractButton) {
+            headingRow.append('<button id="copyToContractBudgetBtn" class="btn btn-sm btn-outline-primary">Copy to Contract Budget</button>');
+        }
+        container.append(headingRow);
+        
         // Create the table wrapper
         var tableWrapper = $('<div class="rates-flex-table"></div>');
         
         // Create header row 1 - main headings
         var headerRow1 = $('<div class="rates-flex-header-row1"></div>');
         headerRow1.append('<div class="col-name">Category / Item</div>');
-        headerRow1.append('<div class="col-rate">Rate ($)</div>');
+        headerRow1.append('<div class="col-rate">' + (showQuantityColumn ? 'Rate ($/Qty)' : 'Rate ($)') + '</div>');
         headerRow1.append('<div class="col-bom-group">BOM Calculation Inputs</div>');
         if (showQuantityColumn) {
-            headerRow1.append('<div class="col-quantity">Quantity</div>');
+            headerRow1.append('<div class="col-quantity">Qty</div>');
+            headerRow1.append('<div class="col-total">Total ($)</div>');
         }
         headerRow1.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow1);
@@ -490,6 +665,7 @@
         headerRow2.append('<div class="col-value">Value</div>');
         if (showQuantityColumn) {
             headerRow2.append('<div class="col-quantity"></div>');
+            headerRow2.append('<div class="col-total"></div>');
         }
         headerRow2.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow2);
@@ -529,8 +705,10 @@
                 return (a.order_in_list || 0) - (b.order_in_list || 0);
             });
             
-            // Check collapsed state (default to collapsed)
-            var isCollapsed = ratesCollapsedCategories[category.categories_pk] !== false;
+            // Check collapsed state (respects defaultExpanded option)
+            var isCollapsed = ratesCollapsedCategories[category.categories_pk] !== undefined 
+                ? ratesCollapsedCategories[category.categories_pk] 
+                : !defaultExpanded;
             
             // Render category header row
             var isInternal = category.category === 'Internal';
@@ -574,6 +752,7 @@
             categoryRow.append('<div class="col-value"></div>');
             if (showQuantityColumn) {
                 categoryRow.append('<div class="col-quantity"></div>');
+                categoryRow.append('<div class="col-total"></div>');
             }
             
             // Delete cell for category (not for Internal category)
@@ -678,16 +857,57 @@
                 
                 // Quantity cell (optional, only shown when showQuantityColumn is true)
                 if (showQuantityColumn) {
+                    // Calculate quantity: Units.unit_qty * operator_value (multiply) or Units.unit_qty / operator_value (divide)
+                    // Find the matching unit to get its unit_qty
+                    var matchingUnit = units.find(function(u) {
+                        return u.unit_name === item.unit;
+                    });
+                    var unitQty = matchingUnit && matchingUnit.unit_qty !== null && matchingUnit.unit_qty !== undefined 
+                        ? parseFloat(matchingUnit.unit_qty) : null;
+                    
+                    var calculatedQty = null;
+                    if (unitQty !== null && 
+                        item.operator_value !== null && item.operator_value !== undefined && 
+                        item.operator) {
+                        var opValue = parseFloat(item.operator_value);
+                        if (item.operator === 1) { // multiply
+                            calculatedQty = unitQty * opValue;
+                        } else if (item.operator === 2 && opValue !== 0) { // divide
+                            calculatedQty = unitQty / opValue;
+                        }
+                    }
+                    
                     var quantityCell = $('<div class="col-quantity"></div>');
+                    quantityCell.attr('data-item-pk', item.costing_pk);
+                    quantityCell.attr('data-unit-name', item.unit || '');
                     var quantityDisplayValue = '';
-                    if (item.quantity !== null && item.quantity !== undefined) {
-                        quantityDisplayValue = parseFloat(item.quantity).toLocaleString('en-US', {
+                    if (calculatedQty !== null) {
+                        quantityDisplayValue = calculatedQty.toLocaleString('en-US', {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 2
                         });
                     }
                     quantityCell.text(quantityDisplayValue);
+                    quantityCell.attr('data-qty-value', calculatedQty || 0);
                     itemRow.append(quantityCell);
+                    
+                    // Total cell: Rate * Qty
+                    var totalCell = $('<div class="col-total"></div>');
+                    totalCell.attr('data-item-pk', item.costing_pk);
+                    var totalValue = null;
+                    if (item.rate !== null && item.rate !== undefined && calculatedQty !== null) {
+                        totalValue = parseFloat(item.rate) * calculatedQty;
+                    }
+                    var totalDisplayValue = '';
+                    if (totalValue !== null) {
+                        totalDisplayValue = totalValue.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                    }
+                    totalCell.text(totalDisplayValue);
+                    totalCell.attr('data-total-value', totalValue || 0);
+                    itemRow.append(totalCell);
                 }
                 
                 // Delete cell for item (not for Internal items)
@@ -705,15 +925,193 @@
         
         // Finalize table structure
         tableWrapper.append(bodyContainer);
+        
+        // Add footer row (optional, only for showQuantityColumn)
+        if (showQuantityColumn) {
+            var footerRow = $('<div class="rates-flex-footer"></div>');
+            footerRow.append('<div class="col-name">Total</div>');
+            footerRow.append('<div class="col-rate"></div>');
+            footerRow.append('<div class="col-unit"></div>');
+            footerRow.append('<div class="col-operator"></div>');
+            footerRow.append('<div class="col-value"></div>');
+            footerRow.append('<div class="col-quantity"></div>');
+            
+            // Calculate total sum
+            var totalSum = 0;
+            tableWrapper.find('.col-total[data-total-value]').each(function() {
+                totalSum += parseFloat($(this).attr('data-total-value')) || 0;
+            });
+            var totalSumDisplay = totalSum.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            footerRow.append('<div class="col-total" id="ratesTableTotalSum">' + totalSumDisplay + '</div>');
+            footerRow.append('<div class="col-delete"></div>');
+            tableWrapper.append(footerRow);
+        }
+        
         container.append(tableWrapper);
         
+        // Store units globally for dynamic updates
+        window.ratesTableUnits = units;
+        
         // Attach event handlers
-        attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, options.onReload, options.useRatesEndpoint, options.projectType);
+        attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, options.onReload, options.useRatesEndpoint, options.projectType, showQuantityColumn, units, showCopyToContractButton);
     };
     
     // Attach event handlers for the rates table
-    function attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, onReload, useRatesEndpoint, projectType) {
+    function attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, onReload, useRatesEndpoint, projectType, showQuantityColumn, units, showCopyToContractButton) {
         var container = $(containerSelector);
+        
+        // Helper function to update Qty and Total cells dynamically
+        function updateQtyAndTotal(itemPk) {
+            if (!showQuantityColumn) return;
+            
+            var $itemRow = container.find('.rates-flex-item[data-item-pk="' + itemPk + '"]');
+            if ($itemRow.length === 0) return;
+            
+            // Get current values
+            var rate = parseFloat($itemRow.find('.rate-input').val()) || 0;
+            var operator = parseInt($itemRow.find('.operator-select').val()) || 0;
+            var opValue = parseFloat($itemRow.find('.value-input').val()) || 0;
+            
+            // Get the unit name for this item and look up unit_qty from global array (which gets updated)
+            var unitName = $itemRow.find('.unit-display').text() || $itemRow.find('.unit-select option:selected').text();
+            var unitsToSearch = window.ratesTableUnits || units;
+            var matchingUnit = unitsToSearch ? unitsToSearch.find(function(u) {
+                return u.unit_name === unitName;
+            }) : null;
+            var unitQty = matchingUnit && matchingUnit.unit_qty !== null && matchingUnit.unit_qty !== undefined 
+                ? parseFloat(matchingUnit.unit_qty) : null;
+            
+            // Calculate quantity using unit_qty instead of rate
+            var calculatedQty = null;
+            if (unitQty !== null && opValue && operator) {
+                if (operator === 1) { // multiply
+                    calculatedQty = unitQty * opValue;
+                } else if (operator === 2 && opValue !== 0) { // divide
+                    calculatedQty = unitQty / opValue;
+                }
+            }
+            
+            // Update Qty cell
+            var $qtyCell = $itemRow.find('.col-quantity');
+            $qtyCell.attr('data-unit-name', unitName);
+            if (calculatedQty !== null) {
+                $qtyCell.text(calculatedQty.toLocaleString('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                }));
+                $qtyCell.attr('data-qty-value', calculatedQty);
+            } else {
+                $qtyCell.text('');
+                $qtyCell.attr('data-qty-value', 0);
+            }
+            
+            // Calculate and update Total cell (Rate * Qty)
+            var totalValue = null;
+            if (rate && calculatedQty !== null) {
+                totalValue = rate * calculatedQty;
+            }
+            
+            var $totalCell = $itemRow.find('.col-total');
+            if (totalValue !== null) {
+                $totalCell.text(totalValue.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }));
+                $totalCell.attr('data-total-value', totalValue);
+            } else {
+                $totalCell.text('');
+                $totalCell.attr('data-total-value', 0);
+            }
+            
+            // Update footer total sum
+            updateFooterTotal();
+        }
+        
+        // Helper function to update all items using a specific unit
+        function updateAllItemsWithUnit(unitName) {
+            if (!showQuantityColumn) return;
+            
+            container.find('.col-quantity[data-unit-name="' + unitName + '"]').each(function() {
+                var itemPk = $(this).attr('data-item-pk');
+                if (itemPk) {
+                    updateQtyAndTotal(itemPk);
+                }
+            });
+        }
+        
+        // Expose updateAllItemsWithUnit globally for unit qty input handler
+        window.updateAllItemsWithUnit = updateAllItemsWithUnit;
+        
+        // Helper function to update footer total
+        function updateFooterTotal() {
+            if (!showQuantityColumn) return;
+            
+            var totalSum = 0;
+            container.find('.col-total[data-total-value]').not('#ratesTableTotalSum').each(function() {
+                totalSum += parseFloat($(this).attr('data-total-value')) || 0;
+            });
+            var totalSumDisplay = totalSum.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            container.find('#ratesTableTotalSum').text(totalSumDisplay);
+        }
+        
+        // Copy to Contract Budget button handler
+        if (showCopyToContractButton) {
+            $('#copyToContractBudgetBtn').off('click').on('click', function() {
+                if (!confirm('Are you sure you want to copy the Rate and Qty values to Contract Budget? This will overwrite existing uncommitted_rate and uncommitted_qty values.')) {
+                    return;
+                }
+                
+                // Gather all item rates and quantities
+                var updates = [];
+                container.find('.rates-flex-item').each(function() {
+                    var $row = $(this);
+                    var itemPk = $row.attr('data-item-pk');
+                    var rate = parseFloat($row.find('.rate-input').val()) || null;
+                    var qty = parseFloat($row.find('.col-quantity').attr('data-qty-value')) || null;
+                    
+                    if (itemPk) {
+                        updates.push({
+                            costing_pk: parseInt(itemPk),
+                            uncommitted_rate: rate,
+                            uncommitted_qty: qty
+                        });
+                    }
+                });
+                
+                if (updates.length === 0) {
+                    alert('No items to copy.');
+                    return;
+                }
+                
+                var csrfToken = getCSRFToken();
+                
+                $.ajax({
+                    url: '/core/copy_to_contract_budget/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    data: JSON.stringify({ updates: updates }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert('Successfully copied ' + response.updated_count + ' items to Contract Budget.');
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to copy to Contract Budget';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            });
+        }
         
         // Unit display click handler - show dropdown
         container.find('.unit-display').off('click').on('click', function(e) {
@@ -790,6 +1188,7 @@
                     success: function(response) {
                         if (response.status === 'success') {
                             $display.text(selectedText);
+                            updateQtyAndTotal(itemPk);
                         } else {
                             alert('Error: ' + response.message);
                         }
@@ -924,6 +1323,7 @@
                         }
                         $display.text(formattedValue);
                         $input.val(newValue || '');
+                        updateQtyAndTotal(itemPk);
                     } else {
                         console.error('[Value Update] Error from server:', response.message);
                         alert('Error: ' + response.message);
@@ -1013,6 +1413,7 @@
                         }
                         $display.text(formattedRate);
                         $input.val(newRate || '');
+                        updateQtyAndTotal(itemPk);
                     } else {
                         alert('Error: ' + response.message);
                     }
@@ -1474,6 +1875,7 @@
         var units = options.units || [];
         var onReload = options.onReload;
         var showListColumn = options.showListColumn !== false && mode === 'project_type';
+        var showUnitQtyColumn = options.showUnitQtyColumn === true;
         var isDisabled = options.disabled === true;
         
         // Generate unique prefix for IDs to avoid conflicts
@@ -1525,68 +1927,151 @@
             unitListOptions += '<option value="' + unitPk + '">' + unitName + '</option>';
         });
         
-        var listColHeader = showListColumn ? '<th class="col-list">List</th>' : '';
-        var listColAddClass = showListColumn ? 'col-add' : '';
         var disabledAttr = isDisabled ? ' disabled' : '';
         
-        // Add Category Section
-        var categoryListCell = showListColumn ? 
-            '<td class="col-list"><select id="' + prefix + 'CategoryListSelect"' + disabledAttr + '>' + categoryListOptions + '</select></td>' : '';
-        
+        // Add Category Section (no List column)
         var categoryHtml = '<div class="rates-section">' +
             '<h5>Add Category</h5>' +
             '<table class="reusable-table"><thead><tr>' +
-            '<th>Category</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '<th>Category</th><th>Order</th><th class="col-add">Add</th>' +
             '</tr></thead><tbody><tr>' +
             '<td><input type="text" id="' + prefix + 'CategoryNameInput" maxlength="100" placeholder="Enter category name"' + disabledAttr + '></td>' +
             '<td><select id="' + prefix + 'CategoryOrderSelect"' + disabledAttr + '>' + categoryOrderOptions + '</select></td>' +
-            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddCategoryBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
-            categoryListCell +
+            '<td class="col-add"><button id="' + prefix + 'AddCategoryBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
             '</tr></tbody></table></div>';
         
-        // Add Item Section
-        var itemListCell = showListColumn ?
-            '<td class="col-list"><select id="' + prefix + 'ItemListSelect"' + disabledAttr + '>' + itemListOptions + '</select></td>' : '';
-        
+        // Add Item Section (with Unit column, no List column)
         var itemHtml = '<div class="rates-section">' +
             '<h5>Add Item</h5>' +
             '<table class="reusable-table"><thead><tr>' +
-            '<th>Category</th><th>Item</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '<th>Category</th><th>Item</th><th>Order</th><th>Unit</th><th class="col-add">Add</th>' +
             '</tr></thead><tbody><tr>' +
             '<td><select id="' + prefix + 'ItemCategorySelect"' + disabledAttr + '>' + itemCategoryOptions + '</select></td>' +
             '<td><input type="text" id="' + prefix + 'ItemNameInput" maxlength="100" placeholder="Enter item name"' + disabledAttr + '></td>' +
             '<td><select id="' + prefix + 'ItemOrderSelect"' + disabledAttr + '><option value="1">1</option></select></td>' +
-            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddItemBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
-            itemListCell +
+            '<td><select id="' + prefix + 'ItemUnitSelect"' + disabledAttr + '>' + unitListOptions + '</select></td>' +
+            '<td class="col-add"><button id="' + prefix + 'AddItemBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
             '</tr></tbody></table></div>';
         
-        // Add Unit Section
-        var unitListCell = showListColumn ?
-            '<td class="col-list"><select id="' + prefix + 'UnitListSelect"' + disabledAttr + '>' + unitListOptions + '</select></td>' : '';
+        // Add Unit Section - input row + list of existing units
+        var unitRowsHtml = '';
+        // Sort units by order_in_list
+        var sortedUnits = units.slice().sort(function(a, b) {
+            return (a.order_in_list || 0) - (b.order_in_list || 0);
+        });
+        sortedUnits.forEach(function(unit) {
+            var unitPk = unit.unit_pk || unit.pk;
+            var unitName = unit.unit_name || unit.name || '';
+            var unitQty = unit.unit_qty;
+            var unitQtyValue = (unitQty !== null && unitQty !== undefined) ? unitQty : '';
+            if (showUnitQtyColumn) {
+                unitRowsHtml += '<tr class="unit-list-row"><td>' + unitName + '</td><td class="col-add"></td><td class="col-unit-qty"><input type="number" class="unit-qty-input" data-unit-pk="' + unitPk + '" step="0.00001" value="' + unitQtyValue + '"' + disabledAttr + '></td></tr>';
+            } else {
+                unitRowsHtml += '<tr class="unit-list-row"><td>' + unitName + '</td><td class="col-add"></td></tr>';
+            }
+        });
         
-        var unitHtml = '<div class="rates-section">' +
+        var unitSectionClass = 'rates-section unit-section' + (showUnitQtyColumn ? ' show-unit-qty' : '');
+        var unitQtyHeader = showUnitQtyColumn ? '<th class="col-unit-qty">Unit Qty</th>' : '';
+        var unitQtyInputCell = showUnitQtyColumn ? '<td class="col-unit-qty"></td>' : '';
+        
+        var unitHtml = '<div class="' + unitSectionClass + '">' +
             '<h5>Add BOM Calculation Unit</h5>' +
             '<table class="reusable-table"><thead><tr>' +
-            '<th>Unit</th><th>Order</th><th class="' + listColAddClass + '">Add</th>' + listColHeader +
+            '<th>Unit</th><th class="col-add">Add</th>' + unitQtyHeader +
             '</tr></thead><tbody><tr>' +
             '<td><input type="text" id="' + prefix + 'UnitNameInput" maxlength="50" placeholder="Enter unit name"' + disabledAttr + '></td>' +
-            '<td><select id="' + prefix + 'UnitOrderSelect"' + disabledAttr + '>' + unitOrderOptions + '</select></td>' +
-            '<td class="' + listColAddClass + '"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' +
-            unitListCell +
-            '</tr></tbody></table></div>';
+            '<td class="col-add"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' + unitQtyInputCell +
+            '</tr>' + unitRowsHtml + '</tbody></table></div>';
         
+        container.append(unitHtml);
         container.append(categoryHtml);
         container.append(itemHtml);
-        container.append(unitHtml);
         
         // Only attach event handlers if not disabled
         if (!isDisabled) {
-            attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload);
+            attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload, showUnitQtyColumn);
         }
     };
     
     // Attach event handlers for input forms
-    function attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload) {
+    function attachInputFormHandlers(prefix, mode, modeValue, categories, items, onReload, showUnitQtyColumn) {
+        // Unit Qty input handlers - constrain to 5dp and POST on change
+        if (showUnitQtyColumn) {
+            $('.unit-qty-input').off('input').on('input', function() {
+                var val = $(this).val();
+                // Constrain to 5 decimal places while typing
+                if (val.indexOf('.') !== -1) {
+                    var parts = val.split('.');
+                    if (parts[1] && parts[1].length > 5) {
+                        $(this).val(parts[0] + '.' + parts[1].substring(0, 5));
+                    }
+                }
+            });
+            
+            $('.unit-qty-input').off('blur keydown').on('blur keydown', function(e) {
+                if (e.type === 'keydown' && e.key !== 'Enter') return;
+                if (e.type === 'keydown') e.preventDefault();
+                
+                var $input = $(this);
+                var unitPk = $input.attr('data-unit-pk');
+                var newValue = $input.val();
+                
+                // Get the unit name from the same row
+                var unitName = $input.closest('tr').find('td:first').text().trim();
+                
+                // Round to 5dp if needed
+                if (newValue !== '') {
+                    newValue = parseFloat(newValue);
+                    if (!isNaN(newValue)) {
+                        newValue = Math.round(newValue * 100000) / 100000;
+                        $input.val(newValue);
+                    } else {
+                        newValue = null;
+                    }
+                } else {
+                    newValue = null;
+                }
+                
+                var csrfToken = getCSRFToken();
+                
+                $.ajax({
+                    url: '/core/update_unit_qty/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    data: JSON.stringify({
+                        unit_pk: unitPk,
+                        unit_qty: newValue
+                    }),
+                    success: function(response) {
+                        if (response.status !== 'success') {
+                            alert('Error: ' + response.message);
+                        } else {
+                            // Update the global units array with the new value
+                            if (window.ratesTableUnits) {
+                                var unit = window.ratesTableUnits.find(function(u) {
+                                    return u.unit_pk == unitPk || u.pk == unitPk;
+                                });
+                                if (unit) {
+                                    unit.unit_qty = newValue;
+                                }
+                            }
+                            // Trigger recalculation of all items using this unit
+                            if (typeof window.updateAllItemsWithUnit === 'function') {
+                                window.updateAllItemsWithUnit(unitName);
+                            }
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to update unit qty';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            });
+        }
+        
         // Category name input validation
         $('#' + prefix + 'CategoryNameInput').off('input').on('input', function() {
             var name = $(this).val().trim();
@@ -1673,6 +2158,7 @@
             var categoryPk = $('#' + prefix + 'ItemCategorySelect').val();
             var name = $('#' + prefix + 'ItemNameInput').val().trim();
             var order = parseInt($('#' + prefix + 'ItemOrderSelect').val()) || 1;
+            var unitPk = $('#' + prefix + 'ItemUnitSelect').val() || null;
             
             if (!categoryPk) {
                 alert('Please select a category.');
@@ -1683,19 +2169,22 @@
                 return;
             }
             
-            createRatesEntry('item', name, order, parseInt(categoryPk), mode, modeValue, onReload);
+            createRatesEntry('item', name, order, parseInt(categoryPk), mode, modeValue, onReload, unitPk);
             
-            // Clear input
+            // Clear inputs
             $('#' + prefix + 'ItemNameInput').val('');
+            $('#' + prefix + 'ItemUnitSelect').val('');
             $(this).removeClass('enabled').addClass('disabled').prop('disabled', true);
         });
         
-        // Add Unit button click
+        // Add Unit button click - uses last available order by default
         $('#' + prefix + 'AddUnitBtn').off('click').on('click', function() {
             if ($(this).hasClass('disabled')) return;
             
             var name = $('#' + prefix + 'UnitNameInput').val().trim();
-            var order = parseInt($('#' + prefix + 'UnitOrderSelect').val()) || 1;
+            // Get current unit count from displayed rows and add 1 for next order
+            var currentUnitCount = $(this).closest('table').find('.unit-list-row').length;
+            var order = currentUnitCount + 1;
             
             if (!name) {
                 alert('Please enter a unit name.');
@@ -1724,14 +2213,15 @@
     }
     
     // Create entry via AJAX - handles both project_type and project modes
-    function createRatesEntry(modelType, name, orderInList, categoryPk, mode, modeValue, onReload) {
+    function createRatesEntry(modelType, name, orderInList, categoryPk, mode, modeValue, onReload, unitPk) {
         console.log('[CreateEntry] Called with:', {
             modelType: modelType,
             name: name,
             orderInList: orderInList,
             categoryPk: categoryPk,
             mode: mode,
-            modeValue: modeValue
+            modeValue: modeValue,
+            unitPk: unitPk
         });
         
         if (!modeValue) {
@@ -1755,6 +2245,10 @@
         
         if (categoryPk) {
             payload.category_pk = categoryPk;
+        }
+        
+        if (unitPk) {
+            payload.unit_pk = parseInt(unitPk);
         }
         
         var csrfToken = typeof getCSRFToken === 'function' ? getCSRFToken() : $('input[name=csrfmiddlewaretoken]').val();

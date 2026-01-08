@@ -53,16 +53,18 @@ def contract_budget_view(request):
     
     if is_tender:
         if is_construction:
-            # Tender + Construction: 8 columns with Uncommitted subheadings (Qty|Rate|Amount|Notes)
+            # Tender + Construction: 10 columns with Uncommitted and Committed subheadings
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '28%', 'field': 'item'},
-                {'header': 'Unit', 'width': '6%', 'field': 'unit'},
-                {'header': 'Working Budget', 'width': '12%', 'field': 'working_budget'},
-                {'header': 'Qty', 'width': '8%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
-                {'header': 'Rate', 'width': '8%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
-                {'header': 'Amount', 'width': '12%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
-                {'header': 'Notes', 'width': '6%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
-                {'header': 'Committed', 'width': '12%', 'field': 'committed'},
+                {'header': 'Category / Item', 'width': '22%', 'field': 'item'},
+                {'header': 'Unit', 'width': '5%', 'field': 'unit'},
+                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
+                {'header': 'Qty', 'width': '7%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
+                {'header': 'Rate', 'width': '7%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
+                {'header': 'Amount', 'width': '9%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
+                {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
+                {'header': 'Qty', 'width': '7%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
+                {'header': 'Rate', 'width': '7%', 'field': 'committed_rate', 'parent_header': 'Committed'},
+                {'header': 'Amount', 'width': '9%', 'field': 'committed_amount', 'parent_header': 'Committed'},
             ]
         else:
             # Tender + Non-construction: 6 columns (added Notes)
@@ -76,20 +78,22 @@ def contract_budget_view(request):
             ]
     else:
         if is_construction:
-            # Execution + Construction: 12 columns with Uncommitted subheadings (Qty|Rate|Amount|Notes)
+            # Execution + Construction: 14 columns with Uncommitted and Committed subheadings
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '16%', 'field': 'item'},
-                {'header': 'Unit', 'width': '6%', 'field': 'unit'},
-                {'header': 'Contract Budget', 'width': '9%', 'field': 'contract_budget'},
-                {'header': 'Working Budget', 'width': '9%', 'field': 'working_budget'},
-                {'header': 'Qty', 'width': '10%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
-                {'header': 'Rate', 'width': '10%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
-                {'header': 'Amount', 'width': '10%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
+                {'header': 'Category / Item', 'width': '14%', 'field': 'item'},
+                {'header': 'Unit', 'width': '4%', 'field': 'unit'},
+                {'header': 'Contract Budget', 'width': '7%', 'field': 'contract_budget'},
+                {'header': 'Working Budget', 'width': '7%', 'field': 'working_budget'},
+                {'header': 'Qty', 'width': '6%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
+                {'header': 'Rate', 'width': '6%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
+                {'header': 'Amount', 'width': '7%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
                 {'header': 'Notes', 'width': '3%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
-                {'header': 'Committed', 'width': '9%', 'field': 'committed'},
-                {'header': 'Cost to Complete', 'width': '8%', 'field': 'cost_to_complete'},
-                {'header': 'Billed', 'width': '6%', 'field': 'billed'},
-                {'header': 'Fixed on Site', 'width': '6%', 'field': 'fixed_on_site'},
+                {'header': 'Qty', 'width': '6%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
+                {'header': 'Rate', 'width': '6%', 'field': 'committed_rate', 'parent_header': 'Committed'},
+                {'header': 'Amount', 'width': '7%', 'field': 'committed_amount', 'parent_header': 'Committed'},
+                {'header': 'Cost to Complete', 'width': '7%', 'field': 'cost_to_complete'},
+                {'header': 'Billed', 'width': '5%', 'field': 'billed'},
+                {'header': 'Fixed on Site', 'width': '5%', 'field': 'fixed_on_site'},
             ]
         else:
             # Execution + Non-construction: 10 columns (added Notes)
@@ -155,26 +159,55 @@ def get_project_committed_amounts(request, project_pk):
     """
     Get committed amounts (sum of quote allocations) per item for a project.
     For Internal category items, use contract_budget as committed amount.
-    Returns a dictionary of {costing_pk: total_committed_amount}
+    
+    For construction/precast/pods projects, returns detailed data:
+    {costing_pk: {qty: X, rate: Y, amount: Z}}
+    
+    For other project types, returns simple amounts:
+    {costing_pk: amount}
     """
     try:
         project = get_object_or_404(Projects, pk=project_pk)
+        is_construction = project.project_type in ['construction', 'pods', 'precast']
         
         # Get all quotes for this project
         project_quotes = Quotes.objects.filter(project=project)
         
-        # Get all quote allocations for these quotes and aggregate by item
-        committed_amounts = Quote_allocations.objects.filter(
-            quotes_pk__in=project_quotes
-        ).values('item__costing_pk').annotate(
-            total_committed=Sum('amount')
-        )
-        
-        # Convert to dictionary {costing_pk: amount}
-        committed_dict = {
-            item['item__costing_pk']: float(item['total_committed'])
-            for item in committed_amounts
-        }
+        if is_construction:
+            # For construction types, return qty, rate, amount per item
+            # Sum qty and amount, calculate weighted average rate
+            committed_amounts = Quote_allocations.objects.filter(
+                quotes_pk__in=project_quotes
+            ).values('item__costing_pk').annotate(
+                total_qty=Sum('qty'),
+                total_amount=Sum('amount')
+            )
+            
+            # Convert to dictionary with qty, rate, amount
+            committed_dict = {}
+            for item in committed_amounts:
+                costing_pk = item['item__costing_pk']
+                total_qty = float(item['total_qty'] or 0)
+                total_amount = float(item['total_amount'] or 0)
+                # Calculate rate as amount/qty if qty > 0
+                rate = total_amount / total_qty if total_qty > 0 else 0
+                committed_dict[costing_pk] = {
+                    'qty': total_qty,
+                    'rate': round(rate, 2),
+                    'amount': total_amount
+                }
+        else:
+            # For non-construction, return simple amounts
+            committed_amounts = Quote_allocations.objects.filter(
+                quotes_pk__in=project_quotes
+            ).values('item__costing_pk').annotate(
+                total_committed=Sum('amount')
+            )
+            
+            committed_dict = {
+                item['item__costing_pk']: float(item['total_committed'])
+                for item in committed_amounts
+            }
         
         # For Internal category items, use contract_budget as committed amount
         # (since they don't use uncommitted or quote allocations)
@@ -184,11 +217,19 @@ def get_project_committed_amounts(request, project_pk):
         )
         
         for item in internal_items:
-            committed_dict[item.costing_pk] = float(item.contract_budget or 0)
+            if is_construction:
+                committed_dict[item.costing_pk] = {
+                    'qty': 0,
+                    'rate': 0,
+                    'amount': float(item.contract_budget or 0)
+                }
+            else:
+                committed_dict[item.costing_pk] = float(item.contract_budget or 0)
         
         return JsonResponse({
             'status': 'success',
-            'committed_amounts': committed_dict
+            'committed_amounts': committed_dict,
+            'is_construction': is_construction
         })
         
     except Exception as e:

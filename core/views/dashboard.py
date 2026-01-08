@@ -1660,7 +1660,8 @@ def get_units(request):
         units_data = [{
             'unit_pk': unit.unit_pk,
             'unit_name': unit.unit_name,
-            'order_in_list': unit.order_in_list
+            'order_in_list': unit.order_in_list,
+            'unit_qty': float(unit.unit_qty) if unit.unit_qty is not None else None
         } for unit in units]
         
         return JsonResponse({
