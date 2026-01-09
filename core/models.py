@@ -224,6 +224,33 @@ class XeroAccounts(models.Model):
     def __str__(self):
         return f"{self.account_code} - {self.account_name}"
 
+# SERVICE: xero
+class XeroTrackingCategories(models.Model):
+    tracking_category_pk = models.AutoField(primary_key=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances,
+        on_delete=models.CASCADE,
+        related_name='xero_tracking_categories'
+    )
+    tracking_category_id = models.CharField(max_length=255)  # Xero's TrackingCategoryID
+    name = models.CharField(max_length=255)
+    status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED
+    option_id = models.CharField(max_length=255, null=True, blank=True)  # Xero's TrackingOptionID
+    option_name = models.CharField(max_length=255, null=True, blank=True)  # Option name within category
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'xero_tracking_categories'
+        verbose_name = 'Xero Tracking Category'
+        verbose_name_plural = 'Xero Tracking Categories'
+        unique_together = ['xero_instance', 'tracking_category_id', 'option_id']
+    
+    def __str__(self):
+        if self.option_name:
+            return f"{self.name} - {self.option_name}"
+        return self.name
+
 # SERVICE: projects
 class Projects(models.Model):
     PROJECT_TYPE_CHOICES = [
@@ -351,7 +378,6 @@ class Categories(models.Model):
         null=True,
         blank=True
     )
-    division = models.IntegerField()
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
@@ -398,6 +424,7 @@ class Costing(models.Model):
     item = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0, default=1)
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
+    xero_tracking_category = models.CharField(max_length=255, null=True, blank=True)  # Xero tracking category option name
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     unit = models.ForeignKey(Units, on_delete=models.SET_NULL, null=True, blank=True)
     rate = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)

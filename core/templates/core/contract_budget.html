@@ -38,6 +38,32 @@ Column Behaviors:
         overflow-y: auto;
     }
     
+    /* Vertical borders around Uncommitted and Committed column groups (construction types only) */
+    .contractBudget-container .reusable-table th.uncommitted-group,
+    .contractBudget-container .reusable-table th.committed-group {
+        border-left: 2px solid var(--color-border);
+        border-right: 2px solid var(--color-border);
+        border-top: 2px solid var(--color-border);
+    }
+    
+    .contractBudget-container .reusable-table th.uncommitted-subheading-first {
+        border-left: 2px solid var(--color-border);
+    }
+    .contractBudget-container .reusable-table th.uncommitted-subheading-last {
+        border-right: 2px solid var(--color-border);
+    }
+    .contractBudget-container .reusable-table th.committed-subheading-first {
+        border-left: 2px solid var(--color-border);
+    }
+    .contractBudget-container .reusable-table th.committed-subheading-last {
+        border-right: 2px solid var(--color-border);
+    }
+    
+    .contractBudget-container .reusable-table th.uncommitted-subheading,
+    .contractBudget-container .reusable-table th.committed-subheading {
+        border-bottom: 2px solid var(--color-border);
+    }
+    
     /* Internal category styling - purple */
     .contractBudget-container .reusable-table tr.category-row.internal-category {
         background-color: #e6d5f5;
@@ -277,19 +303,17 @@ Column Behaviors:
                 var row = renderItemRow(item, committedData, isInternal, category.category);
                 tbody.append(row);
                 
-                // Update totals (only for non-internal items or all items depending on logic)
-                if (!isInternal) {
-                    var uncommittedAmount = isConstruction ? 
-                        (parseFloat(item.uncommitted_qty) || 0) * (parseFloat(item.uncommitted_rate) || 0) :
-                        (parseFloat(item.uncommitted_amount) || 0);
-                    
-                    totals.uncommitted += uncommittedAmount;
-                    totals.committed += committedAmount;
-                    if (isConstruction && committedData) {
-                        totals.committed_qty += committedData.qty || 0;
-                    }
-                    totals.working_budget += uncommittedAmount + committedAmount;
+                // Update totals (include all items including internal category)
+                var uncommittedAmount = isConstruction ? 
+                    (parseFloat(item.uncommitted_qty) || 0) * (parseFloat(item.uncommitted_rate) || 0) :
+                    (parseFloat(item.uncommitted_amount) || 0);
+                
+                totals.uncommitted += uncommittedAmount;
+                totals.committed += committedAmount;
+                if (isConstruction && committedData) {
+                    totals.committed_qty += committedData.qty || 0;
                 }
+                totals.working_budget += uncommittedAmount + committedAmount;
                 
                 if (!isTender) {
                     totals.contract_budget += parseFloat(item.contract_budget) || 0;
@@ -946,6 +970,68 @@ Column Behaviors:
     
     // Make loadContractBudget available globally for refresh
     window.loadContractBudget = loadContractBudget;
+    
+    // Apply column group borders for construction types
+    if (isConstruction) {
+        $(document).ready(function() {
+            applyColumnGroupBorders();
+        });
+    }
+    
+    function applyColumnGroupBorders() {
+        var $thead = $('#contractBudgetMainTable thead');
+        
+        // Find parent headers (row 1) and add classes
+        $thead.find('tr:first th[colspan]').each(function() {
+            var headerText = $(this).text().trim();
+            if (headerText === 'Uncommitted') {
+                $(this).addClass('uncommitted-group');
+            } else if (headerText === 'Committed') {
+                $(this).addClass('committed-group');
+            }
+        });
+        
+        // Find subheadings (row 2) and add classes
+        var inUncommitted = false;
+        var inCommitted = false;
+        var uncommittedCount = 0;
+        var committedCount = 0;
+        
+        // Get the colspan values to know how many subheadings each group has
+        var uncommittedColspan = 0;
+        var committedColspan = 0;
+        $thead.find('tr:first th[colspan]').each(function() {
+            var headerText = $(this).text().trim();
+            if (headerText === 'Uncommitted') {
+                uncommittedColspan = parseInt($(this).attr('colspan')) || 0;
+            } else if (headerText === 'Committed') {
+                committedColspan = parseInt($(this).attr('colspan')) || 0;
+            }
+        });
+        
+        // Apply classes to subheading row
+        $thead.find('tr:eq(1) th').each(function(index) {
+            if (uncommittedCount < uncommittedColspan) {
+                $(this).addClass('uncommitted-subheading');
+                if (uncommittedCount === 0) {
+                    $(this).addClass('uncommitted-subheading-first');
+                }
+                if (uncommittedCount === uncommittedColspan - 1) {
+                    $(this).addClass('uncommitted-subheading-last');
+                }
+                uncommittedCount++;
+            } else if (committedCount < committedColspan) {
+                $(this).addClass('committed-subheading');
+                if (committedCount === 0) {
+                    $(this).addClass('committed-subheading-first');
+                }
+                if (committedCount === committedColspan - 1) {
+                    $(this).addClass('committed-subheading-last');
+                }
+                committedCount++;
+            }
+        });
+    }
     
 })();
 </script>

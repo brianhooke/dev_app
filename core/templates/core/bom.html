@@ -216,7 +216,47 @@ $(document).ready(function() {
             // Load categories and items for a project
             function loadProjectItems(projectPk) {
                 
-                // Load categories
+                // Load units first, then categories/items (chain to ensure units are available for rendering)
+                var url = '/core/get_units/';
+                if (projectPk) {
+                    url += '?project_pk=' + projectPk;
+                }
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Update units
+                            window.itemsUnits = response.units;
+                            
+                            // Update item unit dropdown
+                            var select = document.querySelector('#tenderContentArea #itemUnitSelect');
+                            if (select) {
+                                var optionsHTML = '<option value="">Select unit...</option>';
+                                response.units.forEach(function(unit) {
+                                    optionsHTML += '<option value="' + unit.unit_pk + '">' + unit.unit_name + '</option>';
+                                });
+                                select.innerHTML = optionsHTML;
+                            }
+                            
+                            // Now load categories
+                            loadCategories(projectPk);
+                        } else {
+                            console.error('Error loading units:', response.message);
+                            // Still try to load categories even if units fail
+                            loadCategories(projectPk);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading units:', error);
+                        // Still try to load categories even if units fail
+                        loadCategories(projectPk);
+                    }
+                });
+            }
+            
+            // Load categories (called after units are loaded)
+            function loadCategories(projectPk) {
                 $.ajax({
                     url: '/core/get_project_categories/' + projectPk + '/',
                     type: 'GET',

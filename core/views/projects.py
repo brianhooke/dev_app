@@ -140,30 +140,29 @@ def create_project(request):
             )
             logger.info(f"Copied unit '{template_unit.unit_name}' to project {project.projects_pk}")
         
-        # If no template categories were found, create default Internal/Margin
-        if not template_categories.exists():
-            internal_category = Categories.objects.create(
-                project=project,
-                category='Internal',
-                invoice_category='Internal',
-                order_in_list=0,
-                division=0
-            )
-            logger.info(f"Created default Internal category for project {project.projects_pk}")
-            
-            Costing.objects.create(
-                project=project,
-                category=internal_category,
-                item='Margin',
-                order_in_list=1,
-                xero_account_code='',
-                contract_budget=0,
-                uncommitted_amount=0,
-                fixed_on_site=0,
-                sc_invoiced=0,
-                sc_paid=0
-            )
-            logger.info(f"Created default Margin item for project {project.projects_pk}")
+        # Always create Internal/Margin category for all new projects
+        internal_category = Categories.objects.create(
+            project=project,
+            category='Internal',
+            invoice_category='Internal',
+            order_in_list=0,
+            division=0
+        )
+        logger.info(f"Created Internal category for project {project.projects_pk}")
+        
+        Costing.objects.create(
+            project=project,
+            category=internal_category,
+            item='Margin',
+            order_in_list=1,
+            xero_account_code='',
+            contract_budget=0,
+            uncommitted_amount=0,
+            fixed_on_site=0,
+            sc_invoiced=0,
+            sc_paid=0
+        )
+        logger.info(f"Created Margin item for project {project.projects_pk}")
         
         # Return project data
         return JsonResponse({

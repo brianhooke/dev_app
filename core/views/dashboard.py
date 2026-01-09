@@ -438,6 +438,7 @@ def get_project_items(request, project_pk):
                 'unit': item.unit.unit_name if item.unit else None,
                 'unit_pk': item.unit.unit_pk if item.unit else None,
                 'order_in_list': int(item.order_in_list),
+                'category_pk': item.category.categories_pk,
                 'category__category': item.category.category,
                 'category__order_in_list': int(item.category.order_in_list),
                 'rate': float(item.rate) if item.rate is not None else None,
@@ -1874,12 +1875,27 @@ def delete_unit(request):
         
         unit_name = unit.unit_name
         order = unit.order_in_list
+        project_type = unit.project_type
+        project = unit.project
         
         # Delete the unit
         unit.delete()
         
-        # Adjust order of remaining units
-        remaining_units = Units.objects.filter(order_in_list__gt=order).order_by('order_in_list')
+        # Adjust order of remaining units (filter by same project_type or project)
+        if project:
+            remaining_units = Units.objects.filter(
+                project=project,
+                order_in_list__gt=order
+            ).order_by('order_in_list')
+        elif project_type:
+            remaining_units = Units.objects.filter(
+                project_type=project_type,
+                project__isnull=True,
+                order_in_list__gt=order
+            ).order_by('order_in_list')
+        else:
+            remaining_units = Units.objects.none()
+        
         for remaining_unit in remaining_units:
             remaining_unit.order_in_list -= 1
             remaining_unit.save()

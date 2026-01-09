@@ -85,7 +85,7 @@ class HcVariationAllocationsForm(forms.ModelForm):
 
 # Custom admin classes
 class CategoriesAdmin(admin.ModelAdmin):
-    list_display = ("categories_pk", "project", "project_type", "division", "category", "invoice_category", "order_in_list")
+    list_display = ("categories_pk", "project", "project_type", "category", "invoice_category", "order_in_list")
     list_filter = ('project', 'project_type')
 
 class UnitsAdmin(admin.ModelAdmin):
@@ -106,7 +106,7 @@ class ProjectsAdmin(admin.ModelAdmin):
     list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived")
 
 class ContactsAdmin(admin.ModelAdmin):
-    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_details_verified", "division", "checked")
+    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_details_verified", "checked")
 
 class QuotesAdmin(admin.ModelAdmin):
     form = QuotesForm

@@ -34,9 +34,20 @@
         text-align: center;
     }
     
-    /* Table border */
+    /* Table border - match rates_table.html component styling */
     .rates-left-panel .reusable-table {
-        border: 1px solid #dee2e6;
+        border: 1px solid #000;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    /* Match th styling from component */
+    .rates-left-panel .reusable-table thead th {
+        box-shadow: none;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 14px;
     }
     
     .rates-section {

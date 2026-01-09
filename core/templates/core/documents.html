@@ -613,6 +613,15 @@ var DocumentsManager = (function() {
         // Actions
         var actionsDiv = $('<div></div>').addClass('folder-actions');
         
+        var downloadBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-primary')
+            .html('<i class="fa fa-download"></i>')
+            .attr('title', 'Download folder as ZIP')
+            .on('click', function(e) {
+                e.stopPropagation();
+                downloadFolder(folder.folder_pk);
+            });
+        
         var renameBtn = $('<button></button>')
             .addClass('btn btn-xs btn-warning')
             .html('<i class="fa fa-edit"></i>')
@@ -631,7 +640,7 @@ var DocumentsManager = (function() {
                 deleteFolderPrompt(folder.folder_pk);
             });
         
-        actionsDiv.append(renameBtn).append(deleteBtn);
+        actionsDiv.append(downloadBtn).append(renameBtn).append(deleteBtn);
         
         // Assemble folder row
         folderRow.append(toggleDiv).append(folderIcon).append(folderName).append(actionsDiv);
@@ -979,6 +988,15 @@ var DocumentsManager = (function() {
         
         var fileActions = $('<div></div>').addClass('file-actions');
         
+        var downloadBtn = $('<button></button>')
+            .addClass('btn btn-xs btn-primary')
+            .html('<i class="fa fa-download"></i>')
+            .attr('title', 'Download file')
+            .on('click', function(e) {
+                e.stopPropagation();
+                downloadFile(file.file_pk);
+            });
+        
         var editBtn = $('<button></button>')
             .addClass('btn btn-xs btn-warning')
             .html('<i class="fa fa-edit"></i>')
@@ -997,7 +1015,7 @@ var DocumentsManager = (function() {
                 deleteFile(file.file_pk);
             });
         
-        fileActions.append(editBtn).append(deleteBtn);
+        fileActions.append(downloadBtn).append(editBtn).append(deleteBtn);
         
         var fileSize = $('<span></span>')
             .addClass('file-size')
@@ -1635,6 +1653,13 @@ var DocumentsManager = (function() {
      */
     function downloadFile(fileId) {
         window.open('/core/download_file/' + fileId + '/', '_blank');
+    }
+    
+    /**
+     * Download a folder as ZIP
+     */
+    function downloadFolder(folderId) {
+        window.open('/core/download_folder/' + folderId + '/', '_blank');
     }
     
     /**

@@ -135,7 +135,7 @@ $(document).ready(function() {
                 tbody.empty();
                 
                 if (instances.length === 0) {
-                    tbody.html(`<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>`);
+                    tbody.html(`<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>`);
                 } else {
                     instances.forEach(instance => {
                         const row = $(`<tr data-instance-pk="${instance.xero_instance_pk}"></tr>`);
@@ -156,6 +156,9 @@ $(document).ready(function() {
                                 <button class="btn btn-sm btn-secondary pull-accounts-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Pull</button>
                             </td>
                             <td class="col-action">
+                                <button class="btn btn-sm btn-secondary pull-tracking-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}">Pull</button>
+                            </td>
+                            <td class="col-action">
                                 <button class="btn btn-sm btn-warning edit-xero-btn" data-instance-pk="${instance.xero_instance_pk}" data-instance-name="${Utils.escapeHtml(instance.xero_name)}" data-client-id="${Utils.escapeHtml(instance.xero_client_id)}">Edit</button>
                             </td>
                             <td class="col-action">
@@ -172,7 +175,7 @@ $(document).ready(function() {
             })
             .catch(error => {
                 console.error('Error loading Xero instances:', error);
-                tbody.html(`<tr><td colspan="7" style="text-align: center; color: red;">Error loading Xero instances</td></tr>`);
+                tbody.html(`<tr><td colspan="8" style="text-align: center; color: red;">Error loading Xero instances</td></tr>`);
             });
     };
     
@@ -312,6 +315,49 @@ $(document).ready(function() {
             button.prop('disabled', false).html('Pull');
             console.error('Error pulling accounts:', error);
             alert('✗ Failed to pull accounts\n\nConnection error');
+        });
+    });
+    
+    // ============================================
+    // PULL TRACKING CATEGORIES
+    // ============================================
+    $(document).on('click', '.pull-tracking-btn', function() {
+        const button = $(this);
+        const instancePk = button.data('instance-pk');
+        const instanceName = button.data('instance-name');
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        fetch(`/core/pull_xero_tracking_categories/${instancePk}/`, {
+            method: 'POST',
+            headers: Utils.getJSONHeaders()
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 401 && body.needs_auth) {
+                button.prop('disabled', false).html('Pull');
+                if (confirm('This Xero instance needs authorization. Would you like to authorize now?')) {
+                    window.location.href = `/core/xero_oauth_authorize/${instancePk}/`;
+                }
+                return;
+            }
+            
+            if (body.status === 'success') {
+                button.removeClass('btn-secondary').addClass('btn-success');
+                button.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                alert(`✓ Tracking categories synced for "${instanceName}"\n\nNew: ${body.details.new_added}\nUpdated: ${body.details.updated}\nUnchanged: ${body.details.unchanged}`);
+                setTimeout(() => {
+                    button.removeClass('btn-success').addClass('btn-secondary').html('Pull');
+                }, 3000);
+            } else {
+                button.prop('disabled', false).html('Pull');
+                alert(`✗ Failed to pull tracking categories\n\n${body.message}`);
+            }
+        })
+        .catch(error => {
+            button.prop('disabled', false).html('Pull');
+            console.error('Error pulling tracking categories:', error);
+            alert('✗ Failed to pull tracking categories\n\nConnection error');
         });
     });
     

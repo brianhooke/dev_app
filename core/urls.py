@@ -22,18 +22,18 @@ from .views.hc_variations import (
     delete_hc_variation_allocation
 )
 from .views.pos import get_quotes_by_supplier, po_view
-from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, delete_file, move_file, move_folder
+from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, download_folder, delete_file, move_file, move_folder
 from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection, migrate_xero_to_ssm
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
 from .views.contacts import (
-    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
+    verify_contact_details, pull_xero_contacts, pull_xero_tracking_categories, get_contacts_by_instance,
     create_contact, create_supplier, update_contact_details, update_contact_status
 )
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
@@ -199,6 +199,7 @@ urlpatterns = [
     path('delete_folder/', delete_folder, name='delete_folder'),
     path('upload_files/', upload_files, name='upload_files'),
     path('download_file/<int:file_pk>/', download_file, name='download_file'),
+    path('download_folder/<int:folder_pk>/', download_folder, name='download_folder'),
     path('delete_file/', delete_file, name='delete_file'),
     path('move_file/', move_file, name='move_file'),
     path('move_folder/', move_folder, name='move_folder'),
@@ -209,6 +210,7 @@ urlpatterns = [
     
     # Dashboard routes (moved from dashboard app)
     path('pull_xero_contacts/<int:instance_pk>/', pull_xero_contacts, name='pull_xero_contacts'),
+    path('pull_xero_tracking_categories/<int:instance_pk>/', pull_xero_tracking_categories, name='pull_xero_tracking_categories'),
     path('get_contacts_by_instance/<int:instance_pk>/', get_contacts_by_instance, name='get_contacts_by_instance'),
     path('create_contact/<int:instance_pk>/', create_contact, name='create_contact'),
     path('create_supplier/', create_supplier, name='create_supplier'),
@@ -240,6 +242,8 @@ urlpatterns = [
     path('delete_category_or_item/', delete_category_or_item, name='delete_category_or_item'),
     path('update_unit_qty/', update_unit_qty, name='update_unit_qty'),
     path('copy_to_contract_budget/', copy_to_contract_budget, name='copy_to_contract_budget'),
+    path('update_unit_name/', update_unit_name, name='update_unit_name'),
+    path('update_unit_order/', update_unit_order, name='update_unit_order'),
     path('add_unit/', add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', reorder_unit, name='reorder_unit'),
     path('delete_unit/', delete_unit, name='delete_unit'),

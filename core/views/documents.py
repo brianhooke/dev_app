@@ -3,6 +3,7 @@ Documents-related views.
 """
 
 import csv
+import zipfile
 from decimal import Decimal, InvalidOperation
 from django.template import loader
 from ..forms import CSVUploadForm
@@ -622,6 +623,65 @@ def download_file(request, file_pk):
             'status': 'error',
             'message': f'Error downloading file: {str(e)}'
         }, status=500)
+
+
+@require_http_methods(["GET"])
+def download_folder(request, folder_pk):
+    """
+    Download a folder and all its contents as a ZIP file
+    """
+    try:
+        # Get folder
+        try:
+            folder = Document_folders.objects.get(folder_pk=folder_pk)
+        except Document_folders.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder not found'
+            }, status=404)
+        
+        # Create ZIP file in memory
+        zip_buffer = BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Recursively add folder contents
+            _add_folder_to_zip(zip_file, folder, folder.folder_name)
+        
+        zip_buffer.seek(0)
+        
+        # Return ZIP file
+        response = HttpResponse(zip_buffer.read(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{folder.folder_name}.zip"'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error downloading folder: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error downloading folder: {str(e)}'
+        }, status=500)
+
+
+def _add_folder_to_zip(zip_file, folder, path_prefix):
+    """
+    Recursively add folder contents to a ZIP file
+    """
+    # Add files in this folder
+    files = Document_files.objects.filter(folder=folder)
+    for doc_file in files:
+        if doc_file.file:
+            try:
+                file_content = doc_file.file.read()
+                zip_path = f"{path_prefix}/{doc_file.file_name}"
+                zip_file.writestr(zip_path, file_content)
+            except Exception as e:
+                logger.warning(f"Could not add file {doc_file.file_name} to zip: {str(e)}")
+    
+    # Recursively add subfolders
+    subfolders = Document_folders.objects.filter(parent_folder=folder)
+    for subfolder in subfolders:
+        subfolder_path = f"{path_prefix}/{subfolder.folder_name}"
+        _add_folder_to_zip(zip_file, subfolder, subfolder_path)
 
 
 @csrf_exempt

@@ -23,6 +23,7 @@
     
     .rates-heading-row h5 {
         margin: 0;
+        font-size: 13px;
     }
     
     .rates-heading-row #copyToContractBudgetBtn {
@@ -36,7 +37,7 @@
     }
     
     .rates-flex-table {
-        border: 1px solid var(--color-border);
+        border: 1px solid #000;
         border-radius: 4px;
         overflow: hidden;
     }
@@ -61,7 +62,6 @@
     
     .rates-flex-header-row1 .col-rate {
         width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -70,7 +70,11 @@
     .rates-flex-header-row1 .col-bom-group {
         flex: 1;
         border-left: 1px solid var(--color-border);
+        border-right: 1px solid var(--color-border);
         padding: 0 6px;
+        margin: -6px 0;
+        padding-top: 6px;
+        padding-bottom: 6px;
         box-sizing: border-box;
         text-align: center;
     }
@@ -95,20 +99,35 @@
     
     .rates-flex-header-row2 .col-rate {
         width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
     }
     
-    .rates-flex-header-row2 .col-unit,
-    .rates-flex-header-row2 .col-operator,
-    .rates-flex-header-row2 .col-value {
+    .rates-flex-header-row2 .col-unit {
         flex: 1;
         border-left: 1px solid var(--color-border);
         padding: 0 6px;
+        margin: -4px 0;
+        padding-top: 4px;
+        padding-bottom: 4px;
         box-sizing: border-box;
         text-align: center;
+    }
+    
+    .rates-flex-header-row2 .col-operator,
+    .rates-flex-header-row2 .col-value {
+        flex: 1;
+        padding: 0 6px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .rates-flex-header-row2 .col-value {
+        border-right: 1px solid var(--color-border);
+        margin: -4px 0;
+        padding-top: 4px;
+        padding-bottom: 4px;
     }
     
     /* Body container */
@@ -154,7 +173,6 @@
     
     .rates-flex-category .col-rate {
         width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -164,7 +182,6 @@
     .rates-flex-category .col-operator,
     .rates-flex-category .col-value {
         flex: 1;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -198,13 +215,13 @@
         transition: max-height 0.2s ease-in;
     }
     
-    /* Item Row - ~21px height */
+    /* Item Row - compact height */
     .rates-flex-item {
         display: flex;
         align-items: center;
         border-bottom: 1px solid var(--color-border);
-        padding: 4px 6px;
-        font-size: 13px;
+        padding: 2px 6px;
+        font-size: 12px;
         font-weight: 400;
         line-height: 1;
         background: var(--color-bg-surface);
@@ -227,7 +244,6 @@
     
     .rates-flex-item .col-rate {
         width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -238,7 +254,6 @@
     .rates-flex-item .col-operator,
     .rates-flex-item .col-value {
         flex: 1;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -249,7 +264,6 @@
     .col-quantity {
         width: 80px;
         min-width: 80px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -263,7 +277,6 @@
     .col-total {
         width: 100px;
         min-width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -295,7 +308,6 @@
     
     .rates-flex-footer .col-rate {
         width: 100px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
     }
@@ -304,7 +316,6 @@
     .rates-flex-footer .col-operator,
     .rates-flex-footer .col-value {
         flex: 1;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
     }
@@ -317,7 +328,6 @@
     .col-delete {
         width: 40px;
         min-width: 40px;
-        border-left: 1px solid var(--color-border);
         padding: 0 6px;
         box-sizing: border-box;
         text-align: center;
@@ -388,10 +398,15 @@
     /* Click-to-edit display spans */
     .name-display,
     .unit-display,
-    .operator-display,
     .value-display,
     .rate-display {
         cursor: pointer;
+    }
+    
+    /* Operator display - larger font for visibility */
+    .operator-display {
+        cursor: pointer;
+        font-size: 16px;
         display: inline-block;
         padding: 2px 4px;
         border: 1px solid transparent;
@@ -511,11 +526,41 @@
         font-size: 13px;
     }
     
+    /* Input form tables - Add border around tables */
+    .rates-section table,
+    .reusable-table {
+        border: 1px solid #000;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    /* Section headings - slightly smaller with reduced spacing */
+    .rates-section h5 {
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+    
+    /* Reduce spacing between sections */
+    .rates-section {
+        margin-bottom: 12px;
+    }
+    
+    /* Replace black box-shadow with grey border below thead row, match font size to rates-flex-header-row1 */
+    .rates-section table thead th {
+        box-shadow: none;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 14px;
+    }
+    
     /* Input form tables - Add column styling */
     .rates-section table th.col-add,
     .rates-section table td.col-add {
-        width: 12%;
+        width: 60px;
+        min-width: 60px;
         text-align: center;
+        padding: 4px 8px;
     }
     
     .rates-section table th,
@@ -524,14 +569,80 @@
     }
     
     .rates-section table .rates-add-btn {
-        display: block;
-        margin: 0 auto;
+        display: inline-block;
+        margin: 0;
+        white-space: nowrap;
     }
     
-    /* Unit list rows - compact styling */
+    /* Unit list rows - compact styling to match rates table */
     .unit-list-row td {
-        font-size: 12px;
+        font-size: 11px;
         padding: 2px 8px;
+        line-height: 1.2;
+    }
+    
+    /* Unit table delete column */
+    .unit-section table th.col-delete,
+    .unit-section table td.col-delete {
+        width: 30px;
+        text-align: center;
+        padding: 2px;
+    }
+    
+    /* Unit name cell - click to edit */
+    .unit-name-cell {
+        cursor: pointer;
+    }
+    
+    .unit-name-display {
+        display: inline-block;
+        padding: 2px 4px;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        min-width: 40px;
+    }
+    
+    .unit-name-display:hover {
+        background: var(--color-bg-muted);
+        border-color: var(--color-border);
+    }
+    
+    .unit-name-input {
+        width: 100%;
+        padding: 2px 4px;
+        font-size: 11px;
+        border: 1px solid var(--onyx-blue);
+        border-radius: 3px;
+        box-sizing: border-box;
+    }
+    
+    .unit-name-input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    }
+    
+    /* Draggable unit rows */
+    .unit-list-row.draggable-unit {
+        cursor: grab;
+    }
+    
+    .unit-list-row.draggable-unit:active {
+        cursor: grabbing;
+    }
+    
+    .unit-list-row.draggable-unit.dragging {
+        opacity: 0.5;
+        background: var(--color-bg-muted);
+    }
+    
+    .unit-list-row.draggable-unit.drag-over {
+        border-top: 2px solid var(--onyx-blue);
+    }
+    
+    /* Unit section table - tighter row spacing */
+    .rates-section.unit-section table td,
+    .rates-section.unit-section table th {
+        padding: 4px 8px;
     }
     
     /* Scrollable unit table only */
@@ -548,7 +659,18 @@
         table-layout: fixed;
     }
     
-    /* Unit section column widths when Unit Qty is shown */
+    /* Unit section column widths when Unit Qty is NOT shown (default - rates.html) */
+    .rates-section.unit-section:not(.show-unit-qty) th:first-child,
+    .rates-section.unit-section:not(.show-unit-qty) td:first-child {
+        width: 80%;
+    }
+    
+    .rates-section.unit-section:not(.show-unit-qty) th.col-add,
+    .rates-section.unit-section:not(.show-unit-qty) td.col-add {
+        width: 20%;
+    }
+    
+    /* Unit section column widths when Unit Qty IS shown (bom.html) */
     .rates-section.unit-section.show-unit-qty th.col-add,
     .rates-section.unit-section.show-unit-qty td.col-add {
         width: 12.5%;
@@ -910,11 +1032,9 @@
                     itemRow.append(totalCell);
                 }
                 
-                // Delete cell for item (not for Internal items)
+                // Delete cell for item (items in Internal category CAN be deleted)
                 var itemDeleteCell = $('<div class="col-delete"></div>');
-                if (!isInternal) {
-                    itemDeleteCell.append('<i class="fas fa-trash delete-icon delete-item" data-item-pk="' + item.costing_pk + '" data-item-name="' + item.item.replace(/"/g, '&quot;') + '"></i>');
-                }
+                itemDeleteCell.append('<i class="fas fa-trash delete-icon delete-item" data-item-pk="' + item.costing_pk + '" data-item-name="' + item.item.replace(/"/g, '&quot;') + '"></i>');
                 itemRow.append(itemDeleteCell);
                 
                 itemsContainer.append(itemRow);
@@ -1964,10 +2084,12 @@
             var unitName = unit.unit_name || unit.name || '';
             var unitQty = unit.unit_qty;
             var unitQtyValue = (unitQty !== null && unitQty !== undefined) ? unitQty : '';
+            var deleteCell = '<td class="col-delete"><i class="fas fa-trash delete-icon delete-unit" data-unit-pk="' + unitPk + '" data-unit-name="' + unitName.replace(/"/g, '&quot;') + '"></i></td>';
+            var nameCell = '<td class="unit-name-cell"><span class="unit-name-display" data-unit-pk="' + unitPk + '">' + unitName + '</span><input type="text" class="unit-name-input" data-unit-pk="' + unitPk + '" value="' + unitName.replace(/"/g, '&quot;') + '" style="display:none;"' + disabledAttr + '></td>';
             if (showUnitQtyColumn) {
-                unitRowsHtml += '<tr class="unit-list-row"><td>' + unitName + '</td><td class="col-add"></td><td class="col-unit-qty"><input type="number" class="unit-qty-input" data-unit-pk="' + unitPk + '" step="0.00001" value="' + unitQtyValue + '"' + disabledAttr + '></td></tr>';
+                unitRowsHtml += '<tr class="unit-list-row draggable-unit" data-unit-pk="' + unitPk + '" draggable="true">' + nameCell + '<td class="col-add"></td><td class="col-unit-qty"><input type="number" class="unit-qty-input" data-unit-pk="' + unitPk + '" step="0.00001" value="' + unitQtyValue + '"' + disabledAttr + '></td>' + deleteCell + '</tr>';
             } else {
-                unitRowsHtml += '<tr class="unit-list-row"><td>' + unitName + '</td><td class="col-add"></td></tr>';
+                unitRowsHtml += '<tr class="unit-list-row draggable-unit" data-unit-pk="' + unitPk + '" draggable="true">' + nameCell + '<td class="col-add"></td>' + deleteCell + '</tr>';
             }
         });
         
@@ -1978,10 +2100,10 @@
         var unitHtml = '<div class="' + unitSectionClass + '">' +
             '<h5>Add BOM Calculation Unit</h5>' +
             '<table class="reusable-table"><thead><tr>' +
-            '<th>Unit</th><th class="col-add">Add</th>' + unitQtyHeader +
+            '<th>Unit</th><th class="col-add">Add</th>' + unitQtyHeader + '<th class="col-delete"></th>' +
             '</tr></thead><tbody><tr>' +
             '<td><input type="text" id="' + prefix + 'UnitNameInput" maxlength="50" placeholder="Enter unit name"' + disabledAttr + '></td>' +
-            '<td class="col-add"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' + unitQtyInputCell +
+            '<td class="col-add"><button id="' + prefix + 'AddUnitBtn" class="rates-add-btn disabled" disabled>Add</button></td>' + unitQtyInputCell + '<td class="col-delete"></td>' +
             '</tr>' + unitRowsHtml + '</tbody></table></div>';
         
         container.append(unitHtml);
@@ -2071,6 +2193,197 @@
                 });
             });
         }
+        
+        // Unit row drag-drop handlers
+        var draggedUnitRow = null;
+        
+        $('.unit-list-row.draggable-unit').off('dragstart').on('dragstart', function(e) {
+            draggedUnitRow = this;
+            $(this).addClass('dragging');
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+            e.originalEvent.dataTransfer.setData('text/plain', $(this).attr('data-unit-pk'));
+        });
+        
+        $('.unit-list-row.draggable-unit').off('dragend').on('dragend', function(e) {
+            $(this).removeClass('dragging');
+            $('.unit-list-row').removeClass('drag-over');
+            draggedUnitRow = null;
+        });
+        
+        $('.unit-list-row.draggable-unit').off('dragover').on('dragover', function(e) {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = 'move';
+            if (this !== draggedUnitRow) {
+                $(this).addClass('drag-over');
+            }
+        });
+        
+        $('.unit-list-row.draggable-unit').off('dragleave').on('dragleave', function(e) {
+            $(this).removeClass('drag-over');
+        });
+        
+        $('.unit-list-row.draggable-unit').off('drop').on('drop', function(e) {
+            e.preventDefault();
+            $(this).removeClass('drag-over');
+            
+            if (draggedUnitRow && this !== draggedUnitRow) {
+                var $draggedRow = $(draggedUnitRow);
+                var $targetRow = $(this);
+                
+                // Insert the dragged row before the target row
+                $draggedRow.insertBefore($targetRow);
+                
+                // Collect new order of unit PKs
+                var unitOrder = [];
+                $draggedRow.closest('tbody').find('.unit-list-row.draggable-unit').each(function() {
+                    unitOrder.push(parseInt($(this).attr('data-unit-pk')));
+                });
+                
+                // Post new order to backend
+                var csrfToken = getCSRFToken();
+                var payload = { unit_order: unitOrder };
+                
+                // Add mode context
+                if (mode === 'project_type') {
+                    payload.project_type = modeValue;
+                } else {
+                    payload.project_pk = modeValue;
+                }
+                
+                $.ajax({
+                    url: '/core/update_unit_order/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    data: JSON.stringify(payload),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Trigger reload to update dropdowns with new order
+                            if (onReload) onReload();
+                        } else {
+                            alert('Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Failed to update unit order';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        alert(msg);
+                    }
+                });
+            }
+        });
+        
+        // Delete unit handler
+        $('.delete-unit').off('click').on('click', function(e) {
+            e.stopPropagation();
+            var unitPk = $(this).attr('data-unit-pk');
+            var unitName = $(this).attr('data-unit-name');
+            
+            if (!confirm('Are you sure you want to delete the unit "' + unitName + '"?')) return;
+            
+            var csrfToken = getCSRFToken();
+            var payload = { unit_pk: unitPk };
+            
+            // Add mode context
+            if (mode === 'project_type') {
+                payload.project_type = modeValue;
+            } else {
+                payload.project_pk = modeValue;
+            }
+            
+            $.ajax({
+                url: '/core/delete_unit/',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': csrfToken },
+                data: JSON.stringify(payload),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        if (onReload) onReload();
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to delete unit';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                }
+            });
+        });
+        
+        // Unit name click to edit handler
+        $('.unit-name-display').off('click').on('click', function() {
+            var $display = $(this);
+            var $input = $display.siblings('.unit-name-input');
+            
+            $display.hide();
+            $input.show().focus().select();
+        });
+        
+        // Unit name input blur/enter handler
+        $('.unit-name-input').off('blur keydown').on('blur keydown', function(e) {
+            if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== 'Escape') return;
+            
+            var $input = $(this);
+            var $display = $input.siblings('.unit-name-display');
+            var unitPk = $input.attr('data-unit-pk');
+            var newName = $input.val().trim();
+            var oldName = $display.text();
+            
+            // If Escape, revert
+            if (e.type === 'keydown' && e.key === 'Escape') {
+                $input.val(oldName);
+                $input.hide();
+                $display.show();
+                return;
+            }
+            
+            // If empty or unchanged, revert
+            if (!newName || newName === oldName) {
+                $input.val(oldName);
+                $input.hide();
+                $display.show();
+                return;
+            }
+            
+            // Update via AJAX
+            var csrfToken = getCSRFToken();
+            
+            $.ajax({
+                url: '/core/update_unit_name/',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': csrfToken },
+                data: JSON.stringify({
+                    unit_pk: unitPk,
+                    unit_name: newName
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $display.text(newName);
+                        $input.val(newName);
+                        // Update delete icon data attribute
+                        $input.closest('tr').find('.delete-unit').attr('data-unit-name', newName);
+                        // Reload to update dropdowns
+                        if (onReload) onReload();
+                    } else {
+                        alert('Error: ' + response.message);
+                        $input.val(oldName);
+                    }
+                    $input.hide();
+                    $display.show();
+                },
+                error: function(xhr) {
+                    var msg = 'Failed to update unit name';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                    $input.val(oldName);
+                    $input.hide();
+                    $display.show();
+                }
+            });
+        });
         
         // Category name input validation
         $('#' + prefix + 'CategoryNameInput').off('input').on('input', function() {
@@ -2188,6 +2501,20 @@
             
             if (!name) {
                 alert('Please enter a unit name.');
+                return;
+            }
+            
+            // Check for duplicate unit name (case-insensitive)
+            var duplicate = false;
+            units.forEach(function(unit) {
+                var existingName = unit.unit_name || unit.name || '';
+                if (existingName.toLowerCase() === name.toLowerCase()) {
+                    duplicate = true;
+                }
+            });
+            
+            if (duplicate) {
+                alert('Unit name "' + name + '" already exists. Please choose a different name.');
                 return;
             }
             

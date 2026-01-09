@@ -999,3 +999,112 @@ def copy_to_contract_budget(request):
     except Exception as e:
         logger.error(f"[copy_to_contract_budget] Error: {str(e)}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_unit_name(request):
+    """
+    Update the unit_name for a unit.
+    Validates uniqueness within project_type or project.
+    """
+    try:
+        data = json.loads(request.body)
+        unit_pk = data.get('unit_pk')
+        new_name = data.get('unit_name', '').strip()
+        
+        if not unit_pk:
+            return JsonResponse({'status': 'error', 'message': 'Unit PK is required'}, status=400)
+        
+        if not new_name:
+            return JsonResponse({'status': 'error', 'message': 'Unit name cannot be empty'}, status=400)
+        
+        if len(new_name) > 50:
+            return JsonResponse({'status': 'error', 'message': 'Unit name must be 50 characters or less'}, status=400)
+        
+        try:
+            unit = Units.objects.get(unit_pk=unit_pk)
+        except Units.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Unit not found'}, status=404)
+        
+        # Check uniqueness within project_type or project
+        if unit.project:
+            # Project-specific unit
+            exists = Units.objects.filter(
+                project=unit.project,
+                unit_name__iexact=new_name
+            ).exclude(unit_pk=unit_pk).exists()
+        elif unit.project_type:
+            # Template unit
+            exists = Units.objects.filter(
+                project_type=unit.project_type,
+                project__isnull=True,
+                unit_name__iexact=new_name
+            ).exclude(unit_pk=unit_pk).exists()
+        else:
+            exists = False
+        
+        if exists:
+            return JsonResponse({'status': 'error', 'message': f'Unit name "{new_name}" already exists'}, status=400)
+        
+        old_name = unit.unit_name
+        unit.unit_name = new_name
+        unit.save()
+        
+        logger.info(f"[update_unit_name] Updated unit {unit_pk} name from '{old_name}' to '{new_name}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'unit_pk': unit_pk,
+            'unit_name': new_name
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_unit_name] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_unit_order(request):
+    """
+    Update the order_in_list for units after drag-drop reordering.
+    Expects JSON body with 'unit_order': list of unit_pk in new order.
+    Can operate on project-specific units (project_pk) or template units (project_type).
+    """
+    try:
+        data = json.loads(request.body)
+        unit_order = data.get('unit_order', [])
+        project_pk = data.get('project_pk')
+        project_type = data.get('project_type')
+        
+        if not unit_order:
+            return JsonResponse({'status': 'error', 'message': 'No unit order provided'}, status=400)
+        
+        if not project_pk and not project_type:
+            return JsonResponse({'status': 'error', 'message': 'Either project_pk or project_type is required'}, status=400)
+        
+        with transaction.atomic():
+            for index, unit_pk in enumerate(unit_order):
+                new_order = index + 1
+                if project_pk:
+                    Units.objects.filter(unit_pk=unit_pk, project_id=project_pk).update(order_in_list=new_order)
+                else:
+                    Units.objects.filter(unit_pk=unit_pk, project_type=project_type, project__isnull=True).update(order_in_list=new_order)
+        
+        logger.info(f"[update_unit_order] Updated order for {len(unit_order)} units")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Updated order for {len(unit_order)} units'
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_unit_order] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
