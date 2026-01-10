@@ -76,9 +76,10 @@ from .bills import (
 from .database_wipe import wipe_database
 
 # Contact views
-from .contacts import (
-    verify_contact_details, pull_xero_contacts, get_contacts_by_instance,
-    create_contact, update_contact_details, update_contact_status
+from .contacts import verify_contact_details, get_contacts_by_instance
+from .xero import (
+    pull_xero_contacts, pull_xero_tracking_categories, create_contact,
+    create_supplier, update_contact_details, update_contact_status
 )
 
 # Dashboard views (moved from dashboard app)

@@ -23,13 +23,15 @@ from .views.hc_variations import (
 )
 from .views.pos import get_quotes_by_supplier, po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, download_folder, delete_file, move_file, move_folder
-from .views.xero import get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, test_xero_connection, migrate_xero_to_ssm
+from .views.xero import (
+    get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, 
+    test_xero_connection, migrate_xero_to_ssm,
+    pull_xero_contacts, pull_xero_tracking_categories, create_contact, create_supplier,
+    update_contact_details, update_contact_status
+)
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
 from .views.xero_diagnostics import xero_oauth_diagnostics
-from .views.contacts import (
-    verify_contact_details, pull_xero_contacts, pull_xero_tracking_categories, get_contacts_by_instance,
-    create_contact, create_supplier, update_contact_details, update_contact_status
-)
+from .views.contacts import verify_contact_details, get_contacts_by_instance
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
