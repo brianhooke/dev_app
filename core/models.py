@@ -252,7 +252,12 @@ class XeroTrackingCategories(models.Model):
         return self.name
 
 # SERVICE: projects
-class Projects(models.Model):
+class ProjectTypes(models.Model):
+    """
+    Project types table - replaces the hardcoded PROJECT_TYPE_CHOICES.
+    Each project type can be associated with a Xero instance.
+    """
+    # Keep choices list for backward compatibility with other models
     PROJECT_TYPE_CHOICES = [
         ('general', 'General'),
         ('development', 'Development'),
@@ -260,18 +265,38 @@ class Projects(models.Model):
         ('precast', 'Precast'),
         ('pods', 'Pods'),
     ]
+    
+    project_type_pk = models.AutoField(primary_key=True)
+    project_type = models.CharField(max_length=50, unique=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='project_types'
+    )
+    rates_based = models.IntegerField(default=0)  # 0 = not rates-based, 1 = rates-based
+    archived = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'project_types'
+        verbose_name = 'Project Type'
+        verbose_name_plural = 'Project Types'
+    
+    def __str__(self):
+        return self.project_type
+
+
+class Projects(models.Model):
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
-    project_type = models.CharField(
-        max_length=20,
-        choices=PROJECT_TYPE_CHOICES,
-        default='general',
+    project_type = models.ForeignKey(
+        ProjectTypes, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects_by_type',
         help_text='Type of project determines which app features are available'
     )
     xero_instance = models.ForeignKey(
         XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects'
     )
     xero_sales_account = models.CharField(max_length=255, null=True, blank=True)
+    xero_tracking_category = models.CharField(max_length=255, null=True, blank=True)
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
     project_status = models.IntegerField(default=0)  # 0=tender, 1=won_not_started, 2=started, 3=finished
@@ -374,10 +399,11 @@ class Categories(models.Model):
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     project_type = models.CharField(
         max_length=20,
-        choices=Projects.PROJECT_TYPE_CHOICES,
+        choices=ProjectTypes.PROJECT_TYPE_CHOICES,
         null=True,
         blank=True
     )
+    division = models.IntegerField(default=0)  # Legacy field required by database
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
@@ -395,7 +421,7 @@ class Units(models.Model):
     order_in_list = models.IntegerField()
     project_type = models.CharField(
         max_length=20,
-        choices=Projects.PROJECT_TYPE_CHOICES,
+        choices=ProjectTypes.PROJECT_TYPE_CHOICES,
         null=True,
         blank=True
     )
@@ -416,7 +442,7 @@ class Costing(models.Model):
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     project_type = models.CharField(
         max_length=20,
-        choices=Projects.PROJECT_TYPE_CHOICES,
+        choices=ProjectTypes.PROJECT_TYPE_CHOICES,
         null=True,
         blank=True
     )

@@ -632,7 +632,8 @@ def bills_view(request):
         try:
             project = Projects.objects.get(pk=project_pk)
             xero_instance_pk = project.xero_instance_id if project.xero_instance else None
-            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
+            # Use rates_based flag from ProjectTypes instead of hardcoded project type names
+            is_construction = (project.project_type and project.project_type.rates_based == 1)
         except Projects.DoesNotExist:
             pass
     

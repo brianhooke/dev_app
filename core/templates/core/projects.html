@@ -559,14 +559,11 @@
                     </div>
                     <div class="col-md-4">
                         <div class="form-group">
-                            <label>Project Type</label>
+                            <label class="required">Project Type</label>
                             <select class="form-control" id="modalProjectType" disabled>
-                                <option value="general">General</option>
-                                <option value="development">Development</option>
-                                <option value="construction">Construction</option>
-                                <option value="precast">Precast</option>
-                                <option value="pods">Pods</option>
+                                <option value="">Select Project Type...</option>
                             </select>
+                            <div class="validation-error">Project Type is required</div>
                         </div>
                     </div>
                 </div>
@@ -591,24 +588,24 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label class="required">Xero Instance</label>
-                            <select class="form-control" id="modalXeroInstance" disabled>
-                                <option value="">Select Xero Instance...</option>
+                            <label class="required">Sales Account</label>
+                            <select class="form-control" id="modalSalesAccount" disabled>
+                                <option value="">Select Project Type first...</option>
                             </select>
-                            <div class="validation-error">Xero Instance is required</div>
+                            <div class="validation-error">Sales Account is required</div>
+                            <small class="text-danger project-type-alert" style="display: none;"><i class="fas fa-exclamation-triangle"></i> Select a Project Type</small>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label class="required">Sales Account</label>
-                            <select class="form-control" id="modalSalesAccount" disabled>
-                                <option value="">Select Sales Account...</option>
+                            <label>Tracking Category</label>
+                            <select class="form-control" id="modalTrackingCategory" disabled>
+                                <option value="">Select Project Type first...</option>
                             </select>
-                            <div class="validation-error">Sales Account is required</div>
                         </div>
                     </div>
                 </div>
-            </div>
+                            </div>
             <div class="project-modal-footer">
                 <div class="nav-buttons">
                     <a href="#" class="btn btn-outline-primary btn-sm" id="modalTenderBtn">
@@ -831,131 +828,170 @@ $(document).ready(function() {
         // Reset modal state
         clearValidationErrors();
         
-        // Load Xero instances for dropdown
-        loadXeroInstances().then(function() {
+        // Load project types first
+        loadProjectTypes().then(function() {
             if (createMode) {
                 // Create mode
                 $('#projectModalTitle').text('New Project');
                 
                 // Clear all fields
                 $('#modalProjectName').val('');
-                $('#modalProjectType').val('general');
+                $('#modalProjectType').val('');
                 $('#modalManager').val('');
                 $('#modalManagerEmail').val('');
                 $('#modalContractsAdminEmails').val('');
-                $('#modalXeroInstance').val('');
-                $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+                $('#modalSalesAccount').html('<option value="">Select Project Type first...</option>');
+                $('#modalTrackingCategory').html('<option value="">Select Project Type first...</option>');
+                
+                // Show project type alert
+                $('.project-type-alert').show();
                 
                 // Enable all inputs for create mode
                 enableFormInputs(true);
-                
-                // Show create button, hide others
-                $('#modalUpdateBtn').hide();
-                $('#modalSaveBtn').hide();
-                $('#modalCreateBtn').show();
-                $('.nav-buttons').hide();
-            } else {
-                // View mode
-                $('#projectModalTitle').text(project.project);
-                
-                // Populate fields
-                $('#modalProjectName').val(project.project);
-                $('#modalProjectType').val(project.project_type);
-                $('#modalManager').val(project.manager || '');
-                $('#modalManagerEmail').val(project.manager_email || '');
-                $('#modalContractsAdminEmails').val(project.contracts_admin_emails || '');
-                $('#modalXeroInstance').val(project.xero_instance_pk || '');
-                
-                // Load sales accounts for the selected Xero instance
-                if (project.xero_instance_pk) {
-                    loadXeroAccounts(project.xero_instance_pk).then(function() {
-                        $('#modalSalesAccount').val(project.xero_sales_account || '');
-                    });
-                }
-                
-                // Disable all inputs (view mode)
-                enableFormInputs(false);
-                
-                // Show update button, hide save/create
-                $('#modalUpdateBtn').show();
-                $('#modalSaveBtn').hide();
-                $('#modalCreateBtn').hide();
-                $('.nav-buttons').show();
+            
+            // Show create-mode-only elements
+            $('.create-mode-only').show();
+            
+            // Show create button, hide others
+            $('#modalUpdateBtn').hide();
+            $('#modalSaveBtn').hide();
+            $('#modalCreateBtn').show();
+            $('.nav-buttons').hide();
+        } else {
+            // View mode
+            $('#projectModalTitle').text(project.project);
+            
+            // Populate fields
+            $('#modalProjectName').val(project.project);
+            $('#modalProjectType').val(project.project_type);
+            $('#modalManager').val(project.manager || '');
+            $('#modalManagerEmail').val(project.manager_email || '');
+            $('#modalContractsAdminEmails').val(project.contracts_admin_emails || '');
+            
+            // Load sales accounts and tracking categories for the project's xero instance
+            if (project.xero_instance_pk) {
+                loadXeroDropdownData(project.xero_instance_pk).then(function() {
+                    $('#modalSalesAccount').val(project.xero_sales_account || '');
+                    $('#modalTrackingCategory').val(project.xero_tracking_category || '');
+                });
             }
             
+            // Hide project type alert in view mode
+            $('.project-type-alert').hide();
+            
+            // Disable all inputs (view mode)
+            enableFormInputs(false);
+            
+            // Hide create-mode-only elements
+            $('.create-mode-only').hide();
+            
+            // Show update button, hide save/create
+            $('#modalUpdateBtn').show();
+            $('#modalSaveBtn').hide();
+            $('#modalCreateBtn').hide();
+            $('.nav-buttons').show();
+        }
+        
             $('#projectModal').addClass('show');
         });
     }
     
-    // Load Xero instances for Project modal dropdown
-    function loadXeroInstances() {
-        if (xeroInstancesCache) {
-            populateXeroInstances(xeroInstancesCache);
-            return Promise.resolve();
+    // Project types cache
+    var projectTypesCache = null;
+    
+    // Load project types from database
+    function loadProjectTypes() {
+        if (projectTypesCache) {
+            populateProjectTypes(projectTypesCache);
+            return Promise.resolve(projectTypesCache);
         }
         
         return $.ajax({
-            url: '/core/get_xero_instances/',
-            type: 'GET'
+            url: '/core/get_project_types/',
+            type: 'GET',
+            data: { archived: '0' }
         }).then(function(response) {
-            // API returns array directly
-            xeroInstancesCache = Array.isArray(response) ? response : [];
-            populateXeroInstances(xeroInstancesCache);
-        });
-    }
-
-    // Populate Xero instances dropdown for Project modal
-    function populateXeroInstances(instances) {
-        const select = $('#modalXeroInstance');
-        select.html('<option value="">Select Xero Instance...</option>');
-        instances.forEach(function(inst) {
-            select.append(`<option value="${inst.xero_instance_pk}">${inst.xero_name}</option>`);
+            if (response.status === 'success') {
+                projectTypesCache = response.project_types;
+                populateProjectTypes(projectTypesCache);
+                return projectTypesCache;
+            }
+            return [];
         });
     }
     
-    // Load Xero accounts for an instance (with optional target select)
-    function loadXeroAccounts(instancePk, targetSelect) {
-        const select = targetSelect || $('#modalSalesAccount');
-        
-        if (xeroAccountsCache[instancePk]) {
-            populateXeroAccounts(xeroAccountsCache[instancePk], select);
+    function populateProjectTypes(projectTypes) {
+        const select = $('#modalProjectType');
+        select.html('<option value="">Select Project Type...</option>');
+        projectTypes.forEach(function(pt) {
+            select.append(`<option value="${pt.project_type}">${pt.project_type}</option>`);
+        });
+    }
+    
+    // Load Xero dropdown data (sales accounts and tracking categories) for a xero instance
+    var xeroDropdownCache = {};
+    
+    function loadXeroDropdownData(xeroInstancePk) {
+        if (xeroDropdownCache[xeroInstancePk]) {
+            populateXeroDropdowns(xeroDropdownCache[xeroInstancePk]);
             return Promise.resolve();
         }
         
         return $.ajax({
-            url: `/core/get_xero_accounts/${instancePk}/`,
+            url: `/core/get_xero_dropdown_data/?xero_instance_pk=${xeroInstancePk}`,
             type: 'GET'
         }).then(function(response) {
-            const accounts = response.accounts || [];
-            // Filter for revenue/sales accounts
-            const filtered = accounts.filter(acc => 
-                acc.account_type === 'REVENUE' || 
-                acc.account_type === 'SALES' || 
-                acc.account_type === 'OTHERINCOME'
-            );
-            xeroAccountsCache[instancePk] = filtered;
-            populateXeroAccounts(filtered, select);
+            if (response.status === 'success') {
+                xeroDropdownCache[xeroInstancePk] = response;
+                populateXeroDropdowns(response);
+            }
         }).catch(function() {
-            select.prop('disabled', true).html('<option value="">Error loading accounts</option>');
+            $('#modalSalesAccount').html('<option value="">Error loading accounts</option>');
+            $('#modalTrackingCategory').html('<option value="">Error loading categories</option>');
         });
     }
     
-    function populateXeroAccounts(accounts, targetSelect) {
-        const select = targetSelect || $('#modalSalesAccount');
-        select.prop('disabled', false);
-        select.html('<option value="">Select Sales Account...</option>');
-        accounts.forEach(function(acc) {
-            select.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
+    function populateXeroDropdowns(data) {
+        // Populate sales accounts (REVENUE type only)
+        const salesSelect = $('#modalSalesAccount');
+        salesSelect.prop('disabled', false);
+        salesSelect.html('<option value="">Select Sales Account...</option>');
+        (data.xero_accounts || []).forEach(function(acc) {
+            if (acc.account_type === 'REVENUE' || acc.account_type === 'SALES' || acc.account_type === 'OTHERINCOME') {
+                salesSelect.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
+            }
+        });
+        
+        // Populate tracking categories (name - option_name format)
+        const trackingSelect = $('#modalTrackingCategory');
+        trackingSelect.prop('disabled', false);
+        trackingSelect.html('<option value="">Select Tracking Category...</option>');
+        (data.tracking_categories || []).forEach(function(cat) {
+            const displayText = `${cat.name} - ${cat.option_name}`;
+            trackingSelect.append(`<option value="${cat.option_name}">${displayText}</option>`);
         });
     }
     
-    // Xero instance change handler
-    $('#modalXeroInstance').on('change', function() {
-        const instancePk = $(this).val();
-        if (instancePk) {
-            loadXeroAccounts(instancePk);
+    // Project type change handler - load sales accounts and tracking categories
+    $('#modalProjectType').on('change', function() {
+        const projectType = $(this).val();
+        if (projectType && projectTypesCache) {
+            // Hide alert
+            $('.project-type-alert').hide();
+            
+            // Find the project type in cache and load xero dropdown data
+            const pt = projectTypesCache.find(p => p.project_type === projectType);
+            if (pt && pt.xero_instance_pk) {
+                loadXeroDropdownData(pt.xero_instance_pk);
+            } else {
+                $('#modalSalesAccount').html('<option value="">No Xero Instance for this Project Type</option>');
+                $('#modalTrackingCategory').html('<option value="">No Xero Instance for this Project Type</option>');
+            }
         } else {
-            $('#modalSalesAccount').html('<option value="">Select Xero Instance first...</option>');
+            // Show alert
+            $('.project-type-alert').show();
+            $('#modalSalesAccount').html('<option value="">Select Project Type first...</option>');
+            $('#modalTrackingCategory').html('<option value="">Select Project Type first...</option>');
         }
     });
     
@@ -966,8 +1002,8 @@ $(document).ready(function() {
         $('#modalManager').prop('disabled', !enable);
         $('#modalManagerEmail').prop('disabled', !enable);
         $('#modalContractsAdminEmails').prop('disabled', !enable);
-        $('#modalXeroInstance').prop('disabled', !enable);
         $('#modalSalesAccount').prop('disabled', !enable);
+        $('#modalTrackingCategory').prop('disabled', !enable);
     }
     
     // Form Validation
@@ -981,9 +1017,9 @@ $(document).ready(function() {
             isValid = false;
         }
         
-        // Xero instance required
-        if (!$('#modalXeroInstance').val()) {
-            $('#modalXeroInstance').addClass('is-invalid');
+        // Project type required
+        if (!$('#modalProjectType').val()) {
+            $('#modalProjectType').addClass('is-invalid');
             isValid = false;
         }
         
@@ -1022,8 +1058,8 @@ $(document).ready(function() {
         formData.append('manager', $('#modalManager').val().trim());
         formData.append('manager_email', $('#modalManagerEmail').val().trim());
         formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
-        formData.append('xero_instance_pk', $('#modalXeroInstance').val());
         formData.append('xero_sales_account', $('#modalSalesAccount').val());
+        formData.append('xero_tracking_category', $('#modalTrackingCategory').val());
         
         $.ajax({
             url: `/core/update_project/${currentModalProject.projects_pk}/`,
@@ -1061,8 +1097,8 @@ $(document).ready(function() {
         formData.append('manager', $('#modalManager').val().trim());
         formData.append('manager_email', $('#modalManagerEmail').val().trim());
         formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
-        formData.append('xero_instance_pk', $('#modalXeroInstance').val());
         formData.append('xero_sales_account', $('#modalSalesAccount').val());
+        formData.append('xero_tracking_category', $('#modalTrackingCategory').val());
         
         $.ajax({
             url: '/core/create_project/',

@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v159 (displayed in navbar bottom-left)
+Version: v160 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -1026,6 +1026,11 @@ Version: v159 (displayed in navbar bottom-left)
             // Show settings section and add has-content class to hide background
             $('#settingsSection').css('display', 'flex').show();
             $('#dynamicContentArea').addClass('has-content');
+            
+            // Load settings table data
+            if (typeof window.loadSettingsTable === 'function') {
+                window.loadSettingsTable();
+            }
             
             // Scroll to top
             $('html, body').animate({ scrollTop: 0 }, 300);

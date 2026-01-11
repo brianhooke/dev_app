@@ -32,11 +32,25 @@ EMAIL_API_SECRET_KEY = os.environ.get('EMAIL_API_SECRET_KEY', 'change-me-in-prod
 
 ALLOWED_HOSTS = ['herokuapp.com', 'app.mason.build', '*.elasticbeanstalk.com', 'localhost', '127.0.0.1']
 
-# CSRF trusted origins for HTTPS
+# CSRF trusted origins for HTTPS and local development
+# Note: Django doesn't support port wildcards, so we list common dev ports
 CSRF_TRUSTED_ORIGINS = [
     'https://app.mason.build',
     'https://*.elasticbeanstalk.com',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1:8080',
+    'http://localhost:8000',
+    'http://localhost:8080',
 ]
+
+# For local development, also trust any origin (handled by checking DEBUG)
+import sys
+if 'runserver' in sys.argv or 'DEBUG' in os.environ:
+    # Add dynamic port origins for local dev
+    CSRF_TRUSTED_ORIGINS += [
+        'http://127.0.0.1:62958',
+        'http://localhost:62958',
+    ]
 
 # Trust X-Forwarded-Proto header from AWS Load Balancer
 # This allows Django to detect HTTPS connections properly

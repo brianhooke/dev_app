@@ -1,19 +1,25 @@
 /**
  * Project Type Specific Logic
  * ===========================
- * Centralized configuration and helper functions for construction vs non-construction projects.
+ * Centralized configuration and helper functions for rates-based vs non-rates-based projects.
+ * 
+ * Rates-based projects use Qty | Rate | Amount columns (determined by ProjectTypes.rates_based=1).
+ * Non-rates-based projects use simpler Amount-only columns.
  * 
  * Load this script before any scripts that need project-type-aware behavior:
  * <script src="{% static 'core/js/project_type_config.js' %}"></script>
  * 
  * Usage:
- * - ProjectTypeConfig.isConstruction(projectType) - returns true if construction
- * - ProjectTypeConfig.quotes.getColumns(isConstruction) - get column config for quotes
- * - ProjectTypeConfig.bills.getColumns(isConstruction) - get column config for bills
- * - ProjectTypeConfig.pos.getColumns(isConstruction) - get column config for POs
- * - ProjectTypeConfig.contractBudget.getColumns(isTender, isConstruction) - get column config for contract budget
+ * - ProjectTypeConfig.isConstruction(projectType) - DEPRECATED: use is_rates_based from backend instead
+ * - ProjectTypeConfig.quotes.getColumns(isRatesBased) - get column config for quotes
+ * - ProjectTypeConfig.bills.getColumns(isRatesBased) - get column config for bills
+ * - ProjectTypeConfig.pos.getColumns(isRatesBased) - get column config for POs
+ * - ProjectTypeConfig.contractBudget.getColumns(isTender, isRatesBased) - get column config for contract budget
  * - ProjectTypeConfig.formatCurrency(value) - format as $X,XXX.XX
  * - ProjectTypeConfig.formatNumber(value, decimals) - format number with locale
+ * 
+ * NOTE: The backend now determines rates-based status via ProjectTypes.rates_based field
+ * and passes it to templates as 'is_construction' for backward compatibility.
  */
 
 (function() {
@@ -25,8 +31,12 @@
     
     window.ProjectTypeConfig = {
         
-        // Check if project type uses Qty | Rate | Amount columns (construction, pods, precast)
+        // DEPRECATED: Check if project type uses Qty | Rate | Amount columns
+        // Now determined by ProjectTypes.rates_based=1 in the database
+        // The backend passes the correct boolean value as 'is_construction' to templates
+        // This function is kept for backward compatibility but should not be used for new code
         isConstruction: function(projectType) {
+            // Legacy fallback - prefer using is_rates_based from backend
             return projectType === 'construction' || projectType === 'pods' || projectType === 'precast';
         },
         

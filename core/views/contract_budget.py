@@ -7,6 +7,7 @@ Template Rendering:
 Data Updates:
 2. update_uncommitted - Update uncommitted amount for a costing item
 3. get_project_committed_amounts - Get committed amounts per item for a project
+4. get_item_quote_allocations - Get individual quote allocations for an item with quote/contact details
 """
 
 import json
@@ -41,7 +42,8 @@ def contract_budget_view(request):
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
-            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
+            # Use rates_based flag from ProjectTypes instead of hardcoded project type names
+            is_construction = (project.project_type and project.project_type.rates_based == 1)
         except Projects.DoesNotExist:
             pass
     
@@ -168,34 +170,52 @@ def get_project_committed_amounts(request, project_pk):
     """
     try:
         project = get_object_or_404(Projects, pk=project_pk)
-        is_construction = project.project_type in ['construction', 'pods', 'precast']
+        # Use rates_based flag from ProjectTypes instead of hardcoded project type names
+        is_construction = (project.project_type and project.project_type.rates_based == 1)
         
         # Get all quotes for this project
         project_quotes = Quotes.objects.filter(project=project)
         
         if is_construction:
             # For construction types, return qty, rate, amount per item
-            # Sum qty and amount, calculate weighted average rate
-            committed_amounts = Quote_allocations.objects.filter(
+            # Check for multiple unique rates per costing item
+            allocations = Quote_allocations.objects.filter(
                 quotes_pk__in=project_quotes
-            ).values('item__costing_pk').annotate(
-                total_qty=Sum('qty'),
-                total_amount=Sum('amount')
-            )
+            ).values('item__costing_pk', 'qty', 'rate', 'amount')
+            
+            # Group allocations by costing_pk
+            from collections import defaultdict
+            allocations_by_item = defaultdict(list)
+            for alloc in allocations:
+                allocations_by_item[alloc['item__costing_pk']].append(alloc)
             
             # Convert to dictionary with qty, rate, amount
+            # If multiple unique rates exist for an item, mark has_multiple_rates
             committed_dict = {}
-            for item in committed_amounts:
-                costing_pk = item['item__costing_pk']
-                total_qty = float(item['total_qty'] or 0)
-                total_amount = float(item['total_amount'] or 0)
-                # Calculate rate as amount/qty if qty > 0
-                rate = total_amount / total_qty if total_qty > 0 else 0
-                committed_dict[costing_pk] = {
-                    'qty': total_qty,
-                    'rate': round(rate, 2),
-                    'amount': total_amount
-                }
+            for costing_pk, allocs in allocations_by_item.items():
+                total_qty = sum(float(a['qty'] or 0) for a in allocs)
+                total_amount = sum(float(a['amount'] or 0) for a in allocs)
+                
+                # Get unique non-null rates
+                unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
+                
+                if len(unique_rates) > 1:
+                    # Multiple different rates - show "multiple" for qty and rate
+                    committed_dict[costing_pk] = {
+                        'qty': total_qty,
+                        'rate': None,
+                        'amount': total_amount,
+                        'has_multiple_rates': True
+                    }
+                else:
+                    # Single rate (or no rates) - show actual values
+                    rate = list(unique_rates)[0] if unique_rates else 0
+                    committed_dict[costing_pk] = {
+                        'qty': total_qty,
+                        'rate': round(rate, 2),
+                        'amount': total_amount,
+                        'has_multiple_rates': False
+                    }
         else:
             # For non-construction, return simple amounts
             committed_amounts = Quote_allocations.objects.filter(
@@ -237,4 +257,49 @@ def get_project_committed_amounts(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting committed amounts: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_item_quote_allocations(request, item_pk):
+    """
+    Get individual quote allocations for a specific item with quote/contact details.
+    Returns list of allocations with associated quote and contact information.
+    """
+    try:
+        costing = get_object_or_404(Costing, pk=item_pk)
+        
+        # Get all quote allocations for this item
+        allocations = Quote_allocations.objects.filter(
+            item=costing
+        ).select_related('quotes_pk', 'quotes_pk__contact_pk')
+        
+        allocations_list = []
+        for alloc in allocations:
+            quote = alloc.quotes_pk
+            contact = quote.contact_pk if quote else None
+            
+            allocations_list.append({
+                'allocation_pk': alloc.quote_allocations_pk,
+                'qty': float(alloc.qty) if alloc.qty else 0,
+                'rate': float(alloc.rate) if alloc.rate else 0,
+                'amount': float(alloc.amount) if alloc.amount else 0,
+                'unit': alloc.unit or '',
+                'notes': alloc.notes or '',
+                'quote_pk': quote.quotes_pk if quote else None,
+                'supplier_quote_number': quote.supplier_quote_number if quote else '',
+                'contact_name': contact.name if contact else 'Unknown',
+                'contact_pk': contact.contact_pk if contact else None,
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocations': allocations_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting item quote allocations: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting quote allocations: {str(e)}'
         }, status=500)

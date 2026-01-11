@@ -4,7 +4,7 @@ Middleware for PROJECT_TYPE resolution.
 Determines the active PROJECT_TYPE for each request and attaches it to the request object.
 """
 
-from .models import Projects
+from .models import Projects, ProjectTypes
 
 
 class ProjectTypeMiddleware:
@@ -130,5 +130,5 @@ def project_type_context(request):
     return {
         'project_type': getattr(request, 'project_type', 'general'),
         'project': getattr(request, 'project', None),
-        'PROJECT_TYPE_CHOICES': Projects.PROJECT_TYPE_CHOICES,
+        'PROJECT_TYPE_CHOICES': ProjectTypes.PROJECT_TYPE_CHOICES,
     }

@@ -1020,12 +1020,14 @@ var AllocationsManager = (function() {
                     allocation_pk: row.attr('data-allocation-pk') || null
                 };
                 
-                // Include qty and rate for construction mode
+                // Include qty and rate for construction mode (rates-based projects)
                 if (isConstruction) {
                     var qtyInput = row.find('.' + sectionId + '-allocation-qty-input');
                     var rateInput = row.find('.' + sectionId + '-allocation-rate-input');
-                    alloc.qty = parseFloat(qtyInput.val()) || null;
-                    alloc.rate = parseFloat(rateInput.val()) || null;
+                    var qtyVal = parseFloat(qtyInput.val());
+                    var rateVal = parseFloat(rateInput.val());
+                    alloc.qty = isNaN(qtyVal) ? null : qtyVal;
+                    alloc.rate = isNaN(rateVal) ? null : rateVal;
                     
                     // Get unit from selected item
                     var selectedOption = itemSelect.find('option:selected');
@@ -1275,6 +1277,26 @@ var AllocationsManager = (function() {
             url = url(itemPk);
         }
         
+        // DEBUG: Log what we're sending
+        console.log('=== SAVE ALLOCATIONS DEBUG ===');
+        console.log('Section:', sectionId);
+        console.log('Item PK:', itemPk);
+        console.log('URL:', url);
+        console.log('constructionMode:', cfg.features && cfg.features.constructionMode);
+        console.log('Payload:', JSON.stringify(payload, null, 2));
+        console.log('Allocations detail:');
+        allocations.forEach(function(alloc, i) {
+            console.log('  Allocation ' + i + ':', {
+                item_pk: alloc.item_pk,
+                qty: alloc.qty,
+                rate: alloc.rate,
+                amount: alloc.amount,
+                unit: alloc.unit,
+                notes: alloc.notes
+            });
+        });
+        console.log('==============================');
+        
         $.ajax({
             url: url,
             method: 'POST',
@@ -1284,6 +1306,10 @@ var AllocationsManager = (function() {
             },
             data: JSON.stringify(payload),
             success: function(response) {
+                console.log('=== SAVE RESPONSE ===');
+                console.log('Response:', response);
+                console.log('=====================');
+                
                 if (response.status === 'success') {
                     // Success callback
                     if (cfg.callbacks.onSaveSuccess) {
@@ -1301,6 +1327,11 @@ var AllocationsManager = (function() {
                 }
             },
             error: function(xhr, status, error) {
+                console.error('=== SAVE ERROR ===');
+                console.error('Status:', status);
+                console.error('Error:', error);
+                console.error('Response:', xhr.responseText);
+                console.error('==================');
                 alert('Failed to save: ' + error);
             }
         });

@@ -449,6 +449,8 @@ def get_project_items(request, project_pk):
                 'uncommitted_qty': float(item.uncommitted_qty) if item.uncommitted_qty else None,
                 'uncommitted_rate': float(item.uncommitted_rate) if item.uncommitted_rate else None,
                 'uncommitted_notes': item.uncommitted_notes or '',
+                'xero_account_code': item.xero_account_code or '',
+                'xero_tracking_category': item.xero_tracking_category or '',
             })
         
         logger.info(f"Retrieved {len(items_list)} items for project {project_pk}")
@@ -1200,8 +1202,8 @@ def preview_po(request, project_pk, supplier_pk):
         if not quotes.exists():
             return HttpResponse('<html><body style="font-family: Arial; padding: 20px; color: #666; text-align: center;"><p>No quotes found for this supplier</p></body></html>')
         
-        # Check if construction project - needs different formatting
-        is_construction = project.project_type in ['construction', 'pods', 'precast']
+        # Check if construction project - use rates_based flag
+        is_construction = (project.project_type and project.project_type.rates_based == 1)
         
         if is_construction:
             # Construction: Keep individual allocations with qty/unit/rate
@@ -1297,8 +1299,8 @@ def send_po_email(request, project_pk, supplier_pk):
                 'message': 'No quotes found for this supplier'
             }, status=404)
         
-        # Check if construction project - needs different formatting
-        is_construction = project.project_type in ['construction', 'pods', 'precast']
+        # Check if construction project - use rates_based flag
+        is_construction = (project.project_type and project.project_type.rates_based == 1)
         
         if is_construction:
             # Construction: Keep individual allocations with qty/unit/rate

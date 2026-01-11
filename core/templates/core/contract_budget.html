@@ -38,30 +38,34 @@ Column Behaviors:
         overflow-y: auto;
     }
     
-    /* Vertical borders around Uncommitted and Committed column groups (construction types only) */
+    /* Move the border to the scrollable container so it includes the scrollbar */
+    .contractBudget-container .reusable-table-container {
+        border: none;
+        border-radius: 0;
+        overflow: visible;
+    }
+    
+    .contractBudget-container #contractBudgetTableContainer {
+        border: 1px solid black;
+        border-radius: 6px;
+    }
+    
+    /* Add visual separation between Uncommitted and Committed column groups */
     .contractBudget-container .reusable-table th.uncommitted-group,
     .contractBudget-container .reusable-table th.committed-group {
-        border-left: 2px solid var(--color-border);
-        border-right: 2px solid var(--color-border);
-        border-top: 2px solid var(--color-border);
+        position: relative;
+        box-shadow: none; /* Remove default box-shadow border */
     }
     
-    .contractBudget-container .reusable-table th.uncommitted-subheading-first {
-        border-left: 2px solid var(--color-border);
-    }
-    .contractBudget-container .reusable-table th.uncommitted-subheading-last {
-        border-right: 2px solid var(--color-border);
-    }
-    .contractBudget-container .reusable-table th.committed-subheading-first {
-        border-left: 2px solid var(--color-border);
-    }
-    .contractBudget-container .reusable-table th.committed-subheading-last {
-        border-right: 2px solid var(--color-border);
-    }
-    
-    .contractBudget-container .reusable-table th.uncommitted-subheading,
-    .contractBudget-container .reusable-table th.committed-subheading {
-        border-bottom: 2px solid var(--color-border);
+    .contractBudget-container .reusable-table th.uncommitted-group::after,
+    .contractBudget-container .reusable-table th.committed-group::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 8px;
+        right: 8px;
+        height: 1px;
+        background-color: black;
     }
     
     /* Internal category styling - purple */
@@ -143,19 +147,23 @@ Column Behaviors:
         text-decoration: underline;
     }
     
-    /* Notepad icon */
+    /* Notepad icon - blue border when empty, blue fill when has notes */
     .contractBudget-container .notes-icon {
-        color: var(--color-text-muted, #6c757d);
         cursor: pointer;
         font-size: 14px;
+        color: transparent;
+        -webkit-text-stroke: 1.5px var(--onyx-blue, #007bff);
+        transition: all 0.15s ease;
     }
     
     .contractBudget-container .notes-icon:hover {
-        color: var(--color-primary, #007bff);
+        color: var(--onyx-blue, #007bff);
+        -webkit-text-stroke: 0;
     }
     
     .contractBudget-container .notes-icon.has-notes {
-        color: var(--color-success, #28a745);
+        color: var(--onyx-blue, #007bff);
+        -webkit-text-stroke: 0;
     }
     
     /* Notes row styles - inline expansion */
@@ -185,7 +193,56 @@ Column Behaviors:
     
     /* Active notes icon when row is expanded */
     .contractBudget-container .notes-icon.active {
-        color: var(--color-primary, #007bff);
+        color: var(--onyx-blue, #007bff);
+        -webkit-text-stroke: 0;
+    }
+    
+    /* Green clickable committed cells with values */
+    .contractBudget-container .committed-clickable {
+        color: var(--color-success, #28a745);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    
+    .contractBudget-container .committed-clickable:hover {
+        text-decoration: underline;
+    }
+    
+    /* Committed details row - green styling (similar to notes row) */
+    .contractBudget-container .committed-details-row {
+        background-color: rgba(40, 167, 69, 0.08);
+    }
+    
+    .contractBudget-container .committed-details-row > td {
+        padding: 8px 12px !important;
+    }
+    
+    .contractBudget-container .committed-details-box {
+        border: 1px solid var(--color-success, #28a745);
+        border-radius: 4px;
+        padding: 8px 12px;
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    .contractBudget-container .committed-details-table {
+        width: 100%;
+        font-size: 12px;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    
+    .contractBudget-container .committed-details-table th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--color-text, #212529);
+        padding: 4px 8px;
+        border-bottom: 1px solid rgba(40, 167, 69, 0.2);
+    }
+    
+    .contractBudget-container .committed-details-table td {
+        padding: 4px 8px !important;
+        text-align: left;
+        color: var(--color-text);
     }
 </style>
 
@@ -242,6 +299,9 @@ Column Behaviors:
             var categories = results[0].categories || [];
             var items = results[1].items || [];
             var committedAmounts = results[2].committed_amounts || {};
+            
+            console.log('Contract Budget - Committed Amounts from backend:', committedAmounts);
+            console.log('Contract Budget - Full results[2]:', results[2]);
             
             renderTable(categories, items, committedAmounts);
         }).catch(function(error) {
@@ -382,12 +442,13 @@ Column Behaviors:
     
     // Render an item row
     function renderItemRow(item, committedData, isInternal, categoryName) {
-        // For construction types, committedData is {qty, rate, amount}; for others, it's a number
+        // For construction types, committedData is {qty, rate, amount, has_multiple_rates}; for others, it's a number
         var committedAmount = isConstruction ? 
             (committedData ? committedData.amount : 0) : 
             (committedData || 0);
         var committedQty = isConstruction && committedData ? (committedData.qty || 0) : 0;
         var committedRate = isConstruction && committedData ? (committedData.rate || 0) : 0;
+        var hasMultipleRates = isConstruction && committedData ? (committedData.has_multiple_rates || false) : false;
         
         var row = $('<tr class="item-row"></tr>');
         if (isInternal) {
@@ -491,6 +552,10 @@ Column Behaviors:
         }
         
         // Committed column(s) (display only - calculated from quote allocations)
+        // Make cells green and clickable if they have values
+        var hasCommittedValue = committedAmount > 0;
+        var clickableClass = hasCommittedValue ? ' committed-clickable' : '';
+        
         if (isConstruction) {
             // Construction: Committed Qty | Rate | Amount
             if (isInternal) {
@@ -498,13 +563,31 @@ Column Behaviors:
                 row.append('<td>-</td>');  // Rate
                 row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
             } else {
-                row.append('<td class="committed-qty-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(committedQty, 2) + '</td>');
-                row.append('<td class="committed-rate-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(committedRate, 2) + '</td>');
-                row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+                // If multiple rates exist, show "multiple" for qty and rate
+                var qtyDisplay = hasMultipleRates ? 'multiple' : Utils.formatNumber(committedQty, 2);
+                var rateDisplay = hasMultipleRates ? 'multiple' : Utils.formatNumber(committedRate, 2);
+                
+                var qtyTd = $('<td class="committed-qty-cell' + clickableClass + '" data-item-pk="' + item.costing_pk + '">' + qtyDisplay + '</td>');
+                var rateTd = $('<td class="committed-rate-cell' + clickableClass + '" data-item-pk="' + item.costing_pk + '">' + rateDisplay + '</td>');
+                var amountTd = $('<td class="committed-cell' + clickableClass + '" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+                
+                if (hasCommittedValue) {
+                    qtyTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                    rateTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                    amountTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                }
+                
+                row.append(qtyTd);
+                row.append(rateTd);
+                row.append(amountTd);
             }
         } else {
             // Non-construction: single Committed amount column
-            row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+            var amountTd = $('<td class="committed-cell' + clickableClass + '" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+            if (hasCommittedValue) {
+                amountTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+            }
+            row.append(amountTd);
         }
         
         if (!isTender) {
@@ -772,25 +855,137 @@ Column Behaviors:
         // Close any other open notes row first
         closeOpenNotesRow();
         
-        // Create notes row
+        // Create notes row - position textarea under Uncommitted columns only
         var itemRow = $('tr.item-row[data-item-pk="' + itemPk + '"]');
-        var colCount = getColCount();
+        
+        // Calculate column spans based on mode
+        // Columns before Uncommitted: Category/Item, Unit, [Contract Budget if execution], Working Budget
+        var colsBeforeUncommitted = isTender ? 3 : 4;
+        // Uncommitted columns: (Qty, Rate, Amount, Notes) for construction, (Amount, Notes) for non-construction
+        var uncommittedCols = isConstruction ? 4 : 2;
+        // Remaining columns after Uncommitted
+        var colsAfterUncommitted = getColCount() - colsBeforeUncommitted - uncommittedCols;
         
         var notesRow = $('<tr id="notes-row-' + itemPk + '" class="notes-row" data-item-pk="' + itemPk + '"></tr>');
-        var td = $('<td colspan="' + colCount + '"></td>');
         
+        // Empty cells before Uncommitted
+        notesRow.append('<td colspan="' + colsBeforeUncommitted + '"></td>');
+        
+        // Textarea cell spanning Uncommitted columns
+        var td = $('<td colspan="' + uncommittedCols + '"></td>');
         var textarea = $('<textarea class="notes-textarea" data-item-pk="' + itemPk + '" placeholder="Enter notes..." maxlength="1000"></textarea>');
         textarea.val(currentNotes);
-        
         td.append(textarea);
         notesRow.append(td);
+        
+        // Empty cells after Uncommitted (Committed columns)
+        if (colsAfterUncommitted > 0) {
+            notesRow.append('<td colspan="' + colsAfterUncommitted + '"></td>');
+        }
+        
         itemRow.after(notesRow);
         textarea.focus();
         
         icon.addClass('active');
     }
     
-    // Close notes row when clicking outside
+    // Toggle committed details row - shows quote allocations for this item
+    function toggleCommittedDetailsRow(itemPk) {
+        var existingRow = $('#committed-details-row-' + itemPk);
+        
+        // If clicking the same row, just close it
+        if (existingRow.length) {
+            existingRow.remove();
+            $('.committed-clickable[data-item-pk="' + itemPk + '"]').removeClass('active');
+            return;
+        }
+        
+        // Close any other open committed details row
+        $('.committed-details-row').remove();
+        $('.committed-clickable').removeClass('active');
+        
+        // Also close any open notes row
+        closeOpenNotesRow();
+        
+        // Fetch quote allocations for this item
+        $.ajax({
+            url: '/core/get_item_quote_allocations/' + itemPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' && response.allocations.length > 0) {
+                    renderCommittedDetailsRow(itemPk, response.allocations);
+                }
+            },
+            error: function(xhr) {
+                console.error('Failed to fetch quote allocations:', xhr);
+            }
+        });
+        
+        // Mark cells as active
+        $('.committed-clickable[data-item-pk="' + itemPk + '"]').addClass('active');
+    }
+    
+    // Render the committed details row with quote allocations
+    // Columns: Supplier (under Rate+Amount), Quote # (under Notes), then Qty, Rate, Amount align with Committed cols
+    function renderCommittedDetailsRow(itemPk, allocations) {
+        var itemRow = $('tr.item-row[data-item-pk="' + itemPk + '"]');
+        
+        // For construction tender mode columns are:
+        // Cat/Item, Unit, Working, UncommQty, UncommRate, UncommAmt, UncommNotes, CommQty, CommRate, CommAmt
+        // Green box starts at UncommRate, spans: Rate+Amt+Notes+CommQty+CommRate+CommAmt = 6 cols
+        
+        // Columns before Uncommitted Rate: Cat/Item, Unit, Working, UncommQty = 4 cols in tender
+        var colsBeforeBox = isTender ? 4 : 5;
+        var boxCols = isConstruction ? 6 : 4;  // UncommRate + UncommAmt + Notes + Committed cols
+        
+        var detailsRow = $('<tr id="committed-details-row-' + itemPk + '" class="committed-details-row" data-item-pk="' + itemPk + '"></tr>');
+        
+        // Empty cells before the box
+        detailsRow.append('<td colspan="' + colsBeforeBox + '"></td>');
+        
+        // Green box cell spanning the right columns
+        var boxTd = $('<td colspan="' + boxCols + '"></td>');
+        var box = $('<div class="committed-details-box"></div>');
+        
+        // Build internal table with column widths matching parent alignment
+        // Supplier (Rate+Amount = 2 cols), Quote # (Notes = 1 col), Qty, Rate, Amount (1 col each)
+        var table = $('<table class="committed-details-table"></table>');
+        
+        if (isConstruction) {
+            // 6 columns total: Supplier spans 2, Quote# 1, Qty 1, Rate 1, Amount 1
+            var colgroup = $('<colgroup><col style="width:33.3%"><col style="width:16.7%"><col style="width:16.7%"><col style="width:16.7%"><col style="width:16.6%"></colgroup>');
+            table.append(colgroup);
+            var thead = $('<thead><tr><th>Supplier</th><th>Quote #</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>');
+            table.append(thead);
+        } else {
+            var colgroup = $('<colgroup><col style="width:50%"><col style="width:25%"><col style="width:25%"></colgroup>');
+            table.append(colgroup);
+            var thead = $('<thead><tr><th>Supplier</th><th>Quote #</th><th>Amount</th></tr></thead>');
+            table.append(thead);
+        }
+        
+        var tbody = $('<tbody></tbody>');
+        allocations.forEach(function(alloc) {
+            var tr = $('<tr></tr>');
+            tr.append('<td>' + Utils.escapeHtml(alloc.contact_name) + '</td>');
+            tr.append('<td>#' + Utils.escapeHtml(alloc.supplier_quote_number) + '</td>');
+            if (isConstruction) {
+                tr.append('<td>' + Utils.formatNumber(alloc.qty, 2) + '</td>');
+                tr.append('<td>' + Utils.formatNumber(alloc.rate, 2) + '</td>');
+            }
+            tr.append('<td>' + Utils.formatCurrency(alloc.amount) + '</td>');
+            tbody.append(tr);
+        });
+        table.append(tbody);
+        
+        box.append(table);
+        boxTd.append(box);
+        detailsRow.append(boxTd);
+        
+        itemRow.after(detailsRow);
+    }
+    
+    // Close notes/committed details rows when clicking outside
     $(document).on('click', function(e) {
         var target = $(e.target);
         
@@ -801,8 +996,18 @@ Column Behaviors:
             return;
         }
         
+        // Don't close if clicking on committed details row or committed cells
+        if (target.closest('.committed-details-row').length || 
+            target.closest('.committed-clickable').length) {
+            return;
+        }
+        
         // Close any open notes row
         closeOpenNotesRow();
+        
+        // Close any open committed details row
+        $('.committed-details-row').remove();
+        $('.committed-clickable').removeClass('active');
     });
     
     // Save notes to server

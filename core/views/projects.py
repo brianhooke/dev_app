@@ -6,7 +6,7 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from core.models import Projects, XeroInstances, XeroAccounts, Categories, Costing, Units
+from core.models import Projects, ProjectTypes, XeroInstances, XeroAccounts, Categories, Costing, Units
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +19,19 @@ def create_project(request):
     
     Expected POST data:
     - project_name: str (required)
-    - project_type: str (optional, default='general')
-    - xero_instance_pk: int (optional)
+    - project_type: str (required)
     - xero_sales_account: str (optional)
+    - xero_tracking_category: str (optional)
+    
+    xero_instance is set from ProjectTypes.xero_instance for the selected project_type.
+    Xero account/tracking category for BOM lines are copied from template Costings.
     """
     try:
         # Get form data
         project_name = request.POST.get('project_name', '').strip()
-        project_type = request.POST.get('project_type', 'general')
-        xero_instance_pk = request.POST.get('xero_instance_pk')
+        project_type = request.POST.get('project_type', '')
         xero_sales_account = request.POST.get('xero_sales_account')
+        xero_tracking_category = request.POST.get('xero_tracking_category', '').strip() or None
         manager = request.POST.get('manager', '').strip() or None
         manager_email = request.POST.get('manager_email', '').strip() or None
         contracts_admin_emails = request.POST.get('contracts_admin_emails', '').strip() or None
@@ -40,31 +43,31 @@ def create_project(request):
                 'message': 'Project name is required'
             }, status=400)
         
-        # Validate project type
-        valid_types = [choice[0] for choice in Projects.PROJECT_TYPE_CHOICES]
-        if project_type not in valid_types:
+        if not project_type:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project type is required'
+            }, status=400)
+        
+        # Validate project type and get ProjectTypes object
+        project_type_obj = ProjectTypes.objects.filter(project_type=project_type).first()
+        if not project_type_obj:
+            valid_types = list(ProjectTypes.objects.values_list('project_type', flat=True))
             return JsonResponse({
                 'status': 'error',
                 'message': f'Invalid project type. Must be one of: {", ".join(valid_types)}'
             }, status=400)
         
-        # Get xero instance if provided
-        xero_instance = None
-        if xero_instance_pk:
-            try:
-                xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
-            except XeroInstances.DoesNotExist:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid Xero instance'
-                }, status=400)
+        # Get xero_instance from the project type
+        xero_instance = project_type_obj.xero_instance
         
         # Create project
         project = Projects(
             project=project_name,
-            project_type=project_type,
+            project_type=project_type_obj,
             xero_instance=xero_instance,
             xero_sales_account=xero_sales_account,
+            xero_tracking_category=xero_tracking_category,
             manager=manager,
             manager_email=manager_email,
             contracts_admin_emails=contracts_admin_emails
@@ -76,10 +79,13 @@ def create_project(request):
         
         # Copy template data from rates tables based on project_type
         # Find template categories (where project is null and project_type matches)
+        # Use case-insensitive match since CharField may have different casing
         template_categories = Categories.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).order_by('order_in_list')
+        
+        logger.info(f"Found {template_categories.count()} template categories for project_type '{project_type}'")
         
         # Map old category pks to new category objects for item duplication
         category_pk_map = {}
@@ -88,7 +94,7 @@ def create_project(request):
             new_category = Categories.objects.create(
                 project=project,
                 project_type=None,  # Clear project_type for project-specific data
-                division=template_cat.division,
+                division=getattr(template_cat, 'division', 0),
                 category=template_cat.category,
                 invoice_category=template_cat.invoice_category,
                 order_in_list=template_cat.order_in_list
@@ -97,10 +103,13 @@ def create_project(request):
             logger.info(f"Copied category '{template_cat.category}' to project {project.projects_pk}")
         
         # Find template items (where project is null and project_type matches)
+        # Use case-insensitive match since CharField may have different casing
         template_items = Costing.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).order_by('category__order_in_list', 'order_in_list')
+        
+        logger.info(f"Found {template_items.count()} template items for project_type '{project_type}'")
         
         for template_item in template_items:
             # Get the new category for this item
@@ -116,7 +125,8 @@ def create_project(request):
                     rate=template_item.rate,
                     operator=template_item.operator,
                     operator_value=template_item.operator_value,
-                    xero_account_code='',
+                    xero_account_code=template_item.xero_account_code or '',
+                    xero_tracking_category=template_item.xero_tracking_category,
                     contract_budget=0,
                     uncommitted_amount=0,
                     fixed_on_site=0,
@@ -126,10 +136,13 @@ def create_project(request):
                 logger.info(f"Copied item '{template_item.item}' to project {project.projects_pk}")
         
         # Find template units (where project is null and project_type matches)
+        # Use case-insensitive match since CharField may have different casing
         template_units = Units.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).order_by('order_in_list')
+        
+        logger.info(f"Found {template_units.count()} template units for project_type '{project_type}'")
         
         for template_unit in template_units:
             Units.objects.create(
@@ -143,10 +156,10 @@ def create_project(request):
         # Always create Internal/Margin category for all new projects
         internal_category = Categories.objects.create(
             project=project,
+            division=0,
             category='Internal',
             invoice_category='Internal',
-            order_in_list=0,
-            division=0
+            order_in_list=0
         )
         logger.info(f"Created Internal category for project {project.projects_pk}")
         
@@ -156,6 +169,7 @@ def create_project(request):
             item='Margin',
             order_in_list=1,
             xero_account_code='',
+            xero_tracking_category=None,
             contract_budget=0,
             uncommitted_amount=0,
             fixed_on_site=0,
@@ -171,11 +185,12 @@ def create_project(request):
             'project': {
                 'projects_pk': project.projects_pk,
                 'project': project.project,
-                'project_type': project.project_type,
-                'project_type_display': project.get_project_type_display(),
+                'project_type': project.project_type.project_type if project.project_type else None,
+                'project_type_display': project.project_type.project_type if project.project_type else '',
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
+                'xero_tracking_category': project.xero_tracking_category or '',
                 'project_status': project.project_status
             }
         })
@@ -221,12 +236,13 @@ def get_projects(request):
             projects_data.append({
                 'projects_pk': project.projects_pk,
                 'project': project.project,
-                'project_type': project.project_type,
-                'project_type_display': project.get_project_type_display(),
+                'project_type': project.project_type.project_type if project.project_type else None,
+                'project_type_display': project.project_type.project_type if project.project_type else '',
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
+                'xero_tracking_category': project.xero_tracking_category or '',
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
@@ -254,7 +270,9 @@ def update_project(request, project_pk):
     
     Expected POST data:
     - project_name: str (optional)
+    - project_type: str (optional) - if changed, xero_instance is updated from ProjectTypes
     - xero_sales_account: str (optional)
+    - xero_tracking_category: str (optional)
     - manager: str (optional)
     - manager_email: str (optional)
     - contracts_admin_emails: str (optional)
@@ -274,17 +292,13 @@ def update_project(request, project_pk):
         if project_name:
             project.project = project_name
         
-        # Update Xero instance if provided
-        xero_instance_pk = request.POST.get('xero_instance_pk', '').strip()
-        if xero_instance_pk:
-            try:
-                xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
-                project.xero_instance = xero_instance
-            except XeroInstances.DoesNotExist:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Invalid Xero instance'
-                }, status=400)
+        # Update project type if provided - also updates xero_instance
+        project_type = request.POST.get('project_type', '').strip()
+        if project_type:
+            project_type_obj = ProjectTypes.objects.filter(project_type=project_type).first()
+            if project_type_obj:
+                project.project_type = project_type_obj
+                project.xero_instance = project_type_obj.xero_instance
         
         # Update sales account if provided
         xero_sales_account = request.POST.get('xero_sales_account', '').strip()
@@ -293,6 +307,13 @@ def update_project(request, project_pk):
         elif 'xero_sales_account' in request.POST:
             # Empty string provided, clear the field
             project.xero_sales_account = None
+        
+        # Update tracking category if provided
+        xero_tracking_category = request.POST.get('xero_tracking_category', '').strip()
+        if xero_tracking_category:
+            project.xero_tracking_category = xero_tracking_category
+        elif 'xero_tracking_category' in request.POST:
+            project.xero_tracking_category = None
         
         # Update manager fields if provided
         manager = request.POST.get('manager', '').strip()
@@ -337,12 +358,13 @@ def update_project(request, project_pk):
             'project': {
                 'projects_pk': project.projects_pk,
                 'project': project.project,
-                'project_type': project.project_type,
-                'project_type_display': project.get_project_type_display(),
+                'project_type': project.project_type.project_type if project.project_type else None,
+                'project_type_display': project.project_type.project_type if project.project_type else '',
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
+                'xero_tracking_category': project.xero_tracking_category or '',
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',

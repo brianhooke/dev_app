@@ -5,7 +5,7 @@ Provides helper functions for views and templates to work with PROJECT_TYPE.
 """
 
 from django.shortcuts import get_object_or_404
-from ..models import Projects
+from ..models import Projects, ProjectTypes
 
 
 def get_project_type(request):
@@ -42,7 +42,7 @@ def set_project_type(request, project_type):
         request: Django request object
         project_type: Project type to set
     """
-    if project_type in dict(Projects.PROJECT_TYPE_CHOICES):
+    if project_type in dict(ProjectTypes.PROJECT_TYPE_CHOICES):
         request.session['project_type'] = project_type
 
 
@@ -112,4 +112,4 @@ def get_available_project_types():
     Returns:
         list: List of (value, label) tuples for project types
     """
-    return Projects.PROJECT_TYPE_CHOICES
+    return ProjectTypes.PROJECT_TYPE_CHOICES

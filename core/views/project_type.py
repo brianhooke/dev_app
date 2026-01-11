@@ -7,7 +7,7 @@ Handles switching between project types and project selection.
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from ..models import Projects
+from ..models import Projects, ProjectTypes
 from ..utils.project_type import set_project_type, set_active_project, get_project_type
 import json
 
@@ -27,7 +27,7 @@ def switch_project_type(request):
         data = json.loads(request.body)
         project_type = data.get('project_type')
         
-        if project_type in dict(Projects.PROJECT_TYPE_CHOICES):
+        if project_type in dict(ProjectTypes.PROJECT_TYPE_CHOICES):
             set_project_type(request, project_type)
             return JsonResponse({
                 'status': 'success',
@@ -69,7 +69,7 @@ def switch_project(request):
                 'status': 'success',
                 'project_pk': project_pk,
                 'project_name': project.project,
-                'project_type': project.project_type,
+                'project_type': project.project_type.project_type if project.project_type else None,
                 'message': f'Switched to project: {project.project}'
             })
         except Projects.DoesNotExist:
@@ -96,14 +96,14 @@ def get_current_project_info(request):
     
     response_data = {
         'project_type': project_type,
-        'available_types': Projects.PROJECT_TYPE_CHOICES,
+        'available_types': ProjectTypes.PROJECT_TYPE_CHOICES,
     }
     
     if project:
         response_data['project'] = {
             'pk': project.projects_pk,
             'name': project.project,
-            'type': project.project_type,
+            'type': project.project_type.project_type if project.project_type else None,
         }
     
     return JsonResponse(response_data)
@@ -123,7 +123,7 @@ def project_selector_view(request):
         'projects': projects,
         'current_project': current_project,
         'current_project_type': current_project_type,
-        'project_type_choices': Projects.PROJECT_TYPE_CHOICES,
+        'project_type_choices': ProjectTypes.PROJECT_TYPE_CHOICES,
     }
     
     return render(request, 'core/project_selector.html', context)

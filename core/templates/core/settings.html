@@ -1,34 +1,83 @@
 <!-- Settings Section -->
 <div id="settingsSection" style="display: none; flex-direction: column; height: 100%;">
+
 <style>
-    .settings-container {
-        padding: 20px;
-        height: 100%;
-        overflow-y: auto;
+    /* Settings table styling */
+    .settings-container .project-type-cell,
+    .settings-container .xero-instance-cell,
+    .settings-container .rates-based-cell {
+        cursor: pointer;
     }
     
-    .settings-section {
-        margin-bottom: 30px;
+    .settings-container .project-type-cell:hover,
+    .settings-container .xero-instance-cell:hover,
+    .settings-container .rates-based-cell:hover {
+        background-color: var(--color-bg-muted);
     }
     
-    .settings-section h5 {
-        margin-bottom: 15px;
-        font-weight: bold;
-        color: #333;
+    .settings-container .project-type-display {
+        display: inline-block;
+        padding: 2px 8px;
+        min-height: 1.5em;
     }
     
-    /* Compact form inputs for settings tables */
-    .settings-container .reusable-table input[type="text"],
-    .settings-container .reusable-table select {
+    .settings-container .project-type-input {
         width: 100%;
-        padding: 3px 5px;
-        font-size: 11px;
-        border: 1px solid #ced4da;
+        padding: 4px 8px;
+        border: 1px solid var(--color-border);
         border-radius: 4px;
+        font-size: inherit;
+        box-sizing: border-box;
     }
     
-    .settings-add-btn {
-        padding: 5px 15px;
+    .settings-container .xero-instance-display {
+        display: inline-block;
+        padding: 2px 8px;
+        min-height: 1.5em;
+        min-width: 100px;
+    }
+    
+    .settings-container .xero-instance-display.not-set {
+        color: var(--color-text-muted);
+        font-style: italic;
+    }
+    
+    .settings-container .xero-instance-select {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        font-size: inherit;
+    }
+    
+    .settings-container .rates-based-display {
+        display: inline-block;
+        padding: 2px 8px;
+        min-height: 1.5em;
+        min-width: 50px;
+    }
+    
+    .settings-container .rates-based-select {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        font-size: inherit;
+    }
+    
+    /* Input row styling */
+    .settings-container .input-row input[type="text"],
+    .settings-container .input-row select {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        font-size: inherit;
+        box-sizing: border-box;
+    }
+    
+    .settings-container .add-btn {
+        padding: 4px 12px;
         border: none;
         border-radius: 4px;
         cursor: pointer;
@@ -36,373 +85,579 @@
         transition: background-color 0.2s;
     }
     
-    .settings-add-btn.disabled {
+    .settings-container .add-btn.disabled {
         background-color: #6c757d;
         color: white;
         cursor: not-allowed;
     }
     
-    .settings-add-btn.enabled {
+    .settings-container .add-btn.enabled {
         background-color: #28a745;
         color: white;
     }
     
-    .settings-add-btn.enabled:hover {
+    .settings-container .add-btn.enabled:hover {
         background-color: #218838;
     }
     
-    /* Units display table styling */
-    .settings-container .reusable-table tr.unit-row {
-        cursor: move;
-    }
-    
-    .settings-container .reusable-table tr.unit-row:hover {
-        background-color: #f5f5f5;
-    }
-    
-    /* Drag-and-drop styles */
-    .drag-over {
-        border-top: 3px solid #007bff !important;
-        background-color: #e3f2fd !important;
-    }
-    
-    /* Delete button styling */
-    .delete-unit-btn {
+    .settings-container .archive-btn {
         background: none;
         border: none;
-        color: #dc3545;
         cursor: pointer;
-        font-size: 16px;
-        padding: 0 5px;
-        opacity: 0.6;
-        transition: opacity 0.2s;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #dc3545;
     }
     
-    .delete-unit-btn:hover {
-        opacity: 1;
+    .settings-container .archive-btn:hover {
+        background-color: rgba(220, 53, 69, 0.1);
     }
     
-    .delete-unit-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
+    .settings-container .archive-btn.restore {
+        color: #28a745;
     }
-</style>
+    
+    .settings-container .archive-btn.restore:hover {
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+    
+    </style>
 
-<div class="settings-container">
-    <!-- Add Unit Section -->
-    <div class="settings-section">
-        <h5>Add Unit</h5>
-        <table class="reusable-table">
-            <thead>
-                <tr>
-                    <th>Unit</th>
-                    <th>Order in List</th>
-                    <th>Add</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <input type="text" id="unitNameInput" maxlength="50" placeholder="Enter unit name">
-                    </td>
-                    <td>
-                        <select id="unitOrderSelect"></select>
-                    </td>
-                    <td>
-                        <button id="addUnitBtn" class="settings-add-btn disabled" disabled>Add</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+<div class="settings-container" style="height: 100%; display: flex; flex-direction: column;">
+    <div style="display: flex; flex: 1; overflow: hidden;">
+        <!-- Left side: Main Table -->
+        <div class="settings-left-panel" style="width: 100%; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 0 6px 0;">
+            <!-- Main Table Container -->
+            <div class="settings-table-container reusable-table-container" style="flex: 0 0 auto; display: flex; flex-direction: column; overflow: hidden;">
+                <div id="settingsTableContainer" style="overflow-y: auto;">
+                    <table id="settingsMainTable" class="reusable-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 30%; text-align: left;">Project Type</th>
+                                <th style="width: 30%; text-align: left;">Xero Instance</th>
+                                <th style="width: 15%; text-align: left;">Rates Based</th>
+                                <th style="width: 10%; text-align: center;">Add</th>
+                                <th style="width: 15%; text-align: center;">Archive</th>
+                            </tr>
+                            <tr class="input-row">
+                                <td>
+                                    <input type="text" id="newProjectTypeInput" maxlength="50" placeholder="Enter project type name">
+                                </td>
+                                <td>
+                                    <select id="newXeroInstanceSelect">
+                                        <option value="">-- Select Xero Instance --</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select id="newRatesBasedSelect">
+                                        <option value="">-- Select --</option>
+                                        <option value="1">Yes</option>
+                                        <option value="0">No</option>
+                                    </select>
+                                </td>
+                                <td style="text-align: center;">
+                                    <button id="addProjectTypeBtn" class="add-btn disabled" disabled>Add</button>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsMainTableBody">
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                    Loading...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <!-- Units Display Table -->
-    <div class="settings-section">
-        <h5>Existing Units</h5>
-        <table class="reusable-table" id="unitsDisplayTable">
-            <thead>
-                <tr>
-                    <th style="width: 70%;">Unit</th>
-                    <th style="width: 15%;">Order</th>
-                    <th style="width: 15%; text-align: center;">Delete</th>
-                </tr>
-            </thead>
-            <tbody id="unitsDisplayTableBody">
-                <tr>
-                    <td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">
-                        Loading units...
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <!-- Settings Footer with toggle button - fixed at bottom -->
+    <div id="settingsFooter" style="display: flex; justify-content: flex-start; align-items: center; margin-top: 15px; flex-shrink: 0; padding-top: 15px; border-top: 1px solid #e9ecef;">
+        <button id="toggleArchivedBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
+            <i class="fas fa-archive"></i> Show Archived
+        </button>
     </div>
 </div>
 
 <script>
-(function() {
-    'use strict';
+$(document).ready(function() {
+    var xeroInstances = [];
     
-    
-    var units = [];
-    
-    // Load units on page load
-    $(document).ready(function() {
-        loadUnits();
-    });
-    
-    // Enable/disable add button based on input
-    $('#unitNameInput').on('input', function() {
-        toggleAddButton();
-    });
-    
-    $('#unitOrderSelect').on('change', function() {
-        toggleAddButton();
-    });
-    
-    function toggleAddButton() {
-        var unitName = $('#unitNameInput').val().trim();
-        var orderSelected = $('#unitOrderSelect').val();
+    // ============================================
+    // LOAD SETTINGS TABLE
+    // ============================================
+    window.loadSettingsTable = function(showArchived) {
+        const tbody = $('#settingsMainTableBody');
+        const archived = showArchived ? '1' : '0';
         
-        if (unitName && orderSelected) {
-            $('#addUnitBtn').removeClass('disabled').addClass('enabled').prop('disabled', false);
+        // Load Xero instances first, then project types
+        Promise.all([
+            $.ajax({ url: '/core/get_xero_instances_list/', type: 'GET' }),
+            $.ajax({ url: '/core/get_project_types/', type: 'GET', data: { archived: archived } })
+        ]).then(function(results) {
+            xeroInstances = results[0].xero_instances || [];
+            var projectTypes = results[1].project_types || [];
+            
+            // Populate the input row's Xero Instance dropdown
+            var $inputSelect = $('#newXeroInstanceSelect');
+            $inputSelect.empty().append('<option value="">-- Select Xero Instance --</option>');
+            xeroInstances.forEach(function(instance) {
+                $inputSelect.append('<option value="' + instance.xero_instance_pk + '">' + Utils.escapeHtml(instance.xero_name) + '</option>');
+            });
+            
+            tbody.empty();
+            
+            if (projectTypes.length === 0) {
+                var message = showArchived ? 'No archived project types found.' : 'No project types found.';
+                tbody.html('<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--color-text-muted);">' + message + '</td></tr>');
+                return;
+            }
+            
+            projectTypes.forEach(function(pt) {
+                var row = $('<tr></tr>');
+                row.attr('data-project-type-pk', pt.project_type_pk);
+                
+                // Project Type column - clickable
+                var ptCell = $('<td class="project-type-cell"></td>');
+                var ptDisplay = $('<span class="project-type-display"></span>')
+                    .text(pt.project_type)
+                    .attr('data-project-type-pk', pt.project_type_pk);
+                ptCell.append(ptDisplay);
+                row.append(ptCell);
+                
+                // Xero Instance column - clickable
+                var xeroCell = $('<td class="xero-instance-cell"></td>');
+                var displayText = pt.xero_instance_name || 'Not set';
+                var displayClass = pt.xero_instance_name ? '' : 'not-set';
+                var display = $('<span class="xero-instance-display ' + displayClass + '"></span>')
+                    .text(displayText)
+                    .attr('data-project-type-pk', pt.project_type_pk)
+                    .attr('data-xero-instance-pk', pt.xero_instance_pk || '');
+                
+                xeroCell.append(display);
+                row.append(xeroCell);
+                
+                // Rates Based column - clickable
+                var ratesCell = $('<td class="rates-based-cell"></td>');
+                var ratesDisplayText = pt.rates_based === 1 ? 'Yes' : 'No';
+                var ratesDisplay = $('<span class="rates-based-display"></span>')
+                    .text(ratesDisplayText)
+                    .attr('data-project-type-pk', pt.project_type_pk)
+                    .attr('data-rates-based', pt.rates_based || 0);
+                ratesCell.append(ratesDisplay);
+                row.append(ratesCell);
+                
+                // Empty cell for Add column
+                row.append('<td></td>');
+                
+                // Archive button column
+                var archiveCell = $('<td style="text-align: center;"></td>');
+                var isArchived = pt.archived === 1;
+                var btnClass = isArchived ? 'archive-btn restore' : 'archive-btn';
+                var iconClass = isArchived ? 'fa-box-open' : 'fa-archive';
+                var btnTitle = isArchived ? 'Restore' : 'Archive';
+                var archiveBtn = $('<button class="' + btnClass + '" title="' + btnTitle + '"><i class="fas ' + iconClass + '"></i></button>')
+                    .attr('data-project-type-pk', pt.project_type_pk)
+                    .attr('data-archived', pt.archived);
+                archiveCell.append(archiveBtn);
+                row.append(archiveCell);
+                
+                tbody.append(row);
+            });
+        }).catch(function(error) {
+            console.error('Error loading settings:', error);
+            tbody.html('<tr><td colspan="3" style="text-align: center; color: #dc3545; padding: 20px;">Error loading data</td></tr>');
+        });
+    };
+    
+    // ============================================
+    // INPUT VALIDATION FOR ADD BUTTON
+    // ============================================
+    function validateAddButton() {
+        var projectType = $('#newProjectTypeInput').val().trim();
+        var xeroInstance = $('#newXeroInstanceSelect').val();
+        var ratesBased = $('#newRatesBasedSelect').val();
+        
+        if (projectType && xeroInstance && ratesBased !== '') {
+            $('#addProjectTypeBtn').removeClass('disabled').addClass('enabled').prop('disabled', false);
         } else {
-            $('#addUnitBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
+            $('#addProjectTypeBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
         }
     }
     
-    // Add unit button click
-    $('#addUnitBtn').on('click', function() {
+    $('#newProjectTypeInput').on('input', validateAddButton);
+    $('#newXeroInstanceSelect').on('change', validateAddButton);
+    $('#newRatesBasedSelect').on('change', validateAddButton);
+    
+    // ============================================
+    // ADD PROJECT TYPE
+    // ============================================
+    $('#addProjectTypeBtn').on('click', function() {
         if ($(this).hasClass('disabled')) return;
         
-        var unitName = $('#unitNameInput').val().trim();
-        var orderInList = parseInt($('#unitOrderSelect').val());
+        var projectType = $('#newProjectTypeInput').val().trim();
+        var xeroInstancePk = $('#newXeroInstanceSelect').val();
+        var ratesBased = $('#newRatesBasedSelect').val();
         
-        if (!unitName || !orderInList) {
-            alert('Please enter a unit name and select an order.');
+        if (!projectType || !xeroInstancePk || ratesBased === '') {
+            alert('Please enter a project type, select a Xero instance, and select Rates Based.');
             return;
         }
         
-        // Send AJAX request to add unit
+        // Check max length
+        if (projectType.length > 50) {
+            alert('Project type name must be 50 characters or less.');
+            return;
+        }
+        
         $.ajax({
-            url: '/core/add_unit/',
+            url: '/core/create_project_type/',
             type: 'POST',
             contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             data: JSON.stringify({
-                unit_name: unitName,
-                order_in_list: orderInList
+                project_type: projectType,
+                xero_instance_pk: xeroInstancePk,
+                rates_based: parseInt(ratesBased)
             }),
             success: function(response) {
                 if (response.status === 'success') {
                     // Clear inputs
-                    $('#unitNameInput').val('');
-                    $('#addUnitBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
+                    $('#newProjectTypeInput').val('');
+                    $('#newXeroInstanceSelect').val('');
+                    $('#newRatesBasedSelect').val('');
+                    $('#addProjectTypeBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
                     
-                    // Reload units
-                    loadUnits();
+                    // Reload table
+                    loadSettingsTable();
                 } else {
                     alert('Error: ' + response.message);
                 }
             },
             error: function(xhr, status, error) {
-                console.error('Error adding unit:', error);
-                alert('Error adding unit. Please try again.');
-            }
-        });
-    });
-    
-    // Load units from backend
-    function loadUnits() {
-        $.ajax({
-            url: '/core/get_units/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success') {
-                    units = response.units;
-                    renderUnitsTable();
-                    populateOrderDropdown();
-                } else {
-                    console.error('Error loading units:', response.message);
-                    // Still populate dropdown even on error
-                    units = [];
-                    renderUnitsTable();
-                    populateOrderDropdown();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Error loading units:', error);
-                // Still populate dropdown even on error
-                units = [];
-                renderUnitsTable();
-                populateOrderDropdown();
-            }
-        });
-    }
-    
-    // Render units display table
-    function renderUnitsTable() {
-        var tbody = $('#unitsDisplayTableBody');
-        tbody.empty();
-        
-        if (units.length === 0) {
-            tbody.append('<tr><td colspan="3" style="text-align: center; color: #6c757d; padding: 20px;">No units yet. Add a unit to get started.</td></tr>');
-            return;
-        }
-        
-        // Sort by order_in_list
-        units.sort(function(a, b) {
-            return a.order_in_list - b.order_in_list;
-        });
-        
-        units.forEach(function(unit) {
-            var row = $('<tr class="unit-row"></tr>');
-            row.attr('data-unit-pk', unit.unit_pk);
-            row.attr('data-unit-order', unit.order_in_list);
-            row.attr('draggable', 'true');
-            
-            // Unit name
-            row.append('<td>' + Utils.escapeHtml(unit.unit_name) + '</td>');
-            
-            // Order
-            row.append('<td>' + unit.order_in_list + '</td>');
-            
-            // Delete button
-            var deleteCell = $('<td style="text-align: center;"></td>');
-            var deleteBtn = $('<button class="delete-unit-btn" title="Delete unit"></button>')
-                .attr('data-unit-pk', unit.unit_pk)
-                .attr('data-unit-name', unit.unit_name)
-                .text('✕');
-            deleteCell.append(deleteBtn);
-            row.append(deleteCell);
-            
-            tbody.append(row);
-        });
-        
-        // Attach drag-and-drop handlers
-        attachDragHandlers();
-    }
-    
-    // Populate order dropdown (1 to max+1)
-    function populateOrderDropdown() {
-        var select = $('#unitOrderSelect');
-        select.empty();
-        
-        var maxOrder = units.length;
-        
-        for (var i = 1; i <= maxOrder + 1; i++) {
-            select.append('<option value="' + i + '">' + i + '</option>');
-        }
-        
-        // Select last position by default
-        select.val(maxOrder + 1);
-    }
-    
-    // Drag-and-drop event handlers
-    var draggedElement = null;
-    
-    function attachDragHandlers() {
-        // Unit rows - draggable
-        $('.unit-row').on('dragstart', function(e) {
-            draggedElement = this;
-            $(this).css('opacity', '0.4');
-            e.originalEvent.dataTransfer.effectAllowed = 'move';
-        });
-        
-        $('.unit-row').on('dragend', function(e) {
-            $(this).css('opacity', '1');
-            $('.drag-over').removeClass('drag-over');
-        });
-        
-        $('.unit-row').on('dragover', function(e) {
-            if (e.preventDefault) {
-                e.preventDefault();
-            }
-            e.originalEvent.dataTransfer.dropEffect = 'move';
-            
-            if ($(this)[0] !== draggedElement) {
-                $(this).addClass('drag-over');
-            }
-            return false;
-        });
-        
-        $('.unit-row').on('dragleave', function(e) {
-            $(this).removeClass('drag-over');
-        });
-        
-        $('.unit-row').on('drop', function(e) {
-            if (e.stopPropagation) {
-                e.stopPropagation();
-            }
-            
-            $(this).removeClass('drag-over');
-            
-            if (draggedElement !== this) {
-                var draggedUnitPk = $(draggedElement).attr('data-unit-pk');
-                var targetUnitOrder = parseInt($(this).attr('data-unit-order'));
-                
-                reorderUnit(draggedUnitPk, targetUnitOrder);
-            }
-            
-            return false;
-        });
-    }
-    
-    // Reorder unit via AJAX
-    function reorderUnit(unitPk, newOrder) {
-        $.ajax({
-            url: '/core/reorder_unit/' + unitPk + '/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                new_order: newOrder
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Reload units to reflect new order
-                    loadUnits();
-                } else {
-                    alert('Error: ' + response.message);
-                }
-            },
-            error: function(xhr, status, error) {
-                var errorMessage = 'Failed to reorder unit';
+                var message = 'Error creating project type';
                 if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMessage = xhr.responseJSON.message;
+                    message = xhr.responseJSON.message;
                 }
-                alert(errorMessage);
+                alert(message);
+            }
+        });
+    });
+    
+    // ============================================
+    // CLICK TO EDIT PROJECT TYPE NAME
+    // ============================================
+    $(document).on('click', '.project-type-display', function(e) {
+        var $display = $(this);
+        var $cell = $display.parent();
+        var projectTypePk = $display.attr('data-project-type-pk');
+        var currentName = $display.text();
+        
+        // Don't convert if already an input
+        if ($cell.find('input').length > 0) return;
+        
+        // Create input field
+        var $input = $('<input type="text" class="project-type-input" maxlength="50">')
+            .val(currentName)
+            .attr('data-project-type-pk', projectTypePk)
+            .attr('data-original-value', currentName);
+        
+        // Replace display with input
+        $cell.empty().append($input);
+        $input.focus().select();
+    });
+    
+    // ============================================
+    // SAVE PROJECT TYPE NAME ON BLUR/ENTER
+    // ============================================
+    $(document).on('blur', '.project-type-input', function(e) {
+        saveProjectTypeName($(this));
+    });
+    
+    $(document).on('keydown', '.project-type-input', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            $(this).blur();
+        } else if (e.key === 'Escape') {
+            // Revert to original value
+            var $input = $(this);
+            var originalValue = $input.attr('data-original-value');
+            var projectTypePk = $input.attr('data-project-type-pk');
+            var $cell = $input.parent();
+            
+            var $display = $('<span class="project-type-display"></span>')
+                .text(originalValue)
+                .attr('data-project-type-pk', projectTypePk);
+            $cell.empty().append($display);
+        }
+    });
+    
+    function saveProjectTypeName($input) {
+        var $cell = $input.parent();
+        var projectTypePk = $input.attr('data-project-type-pk');
+        var newName = $input.val().trim();
+        var originalValue = $input.attr('data-original-value');
+        
+        // Prevent double-firing
+        if ($input.data('saving')) return;
+        
+        // Validate - cannot be empty
+        if (!newName) {
+            alert('Project type name cannot be empty.');
+            $input.val(originalValue).focus();
+            return;
+        }
+        
+        // If unchanged, just revert to display
+        if (newName === originalValue) {
+            var $display = $('<span class="project-type-display"></span>')
+                .text(originalValue)
+                .attr('data-project-type-pk', projectTypePk);
+            $cell.empty().append($display);
+            return;
+        }
+        
+        $input.data('saving', true);
+        
+        // Save to backend
+        $.ajax({
+            url: '/core/update_project_type_name/' + projectTypePk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ project_type: newName }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    var $display = $('<span class="project-type-display"></span>')
+                        .text(response.project_type)
+                        .attr('data-project-type-pk', projectTypePk);
+                    $cell.empty().append($display);
+                } else {
+                    alert('Error: ' + response.message);
+                    $input.data('saving', false);
+                    $input.val(originalValue).focus();
+                }
+            },
+            error: function(xhr, status, error) {
+                var message = 'Error updating project type name';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                alert(message);
+                $input.data('saving', false);
+                $input.val(originalValue).focus();
             }
         });
     }
     
-    // Delete unit button click (using event delegation)
-    $(document).on('click', '.delete-unit-btn', function() {
-        var unitPk = $(this).data('unit-pk');
-        var unitName = $(this).data('unit-name');
+    // ============================================
+    // CLICK TO EDIT XERO INSTANCE
+    // ============================================
+    $(document).on('click', '.xero-instance-display', function(e) {
+        var $display = $(this);
+        var $cell = $display.parent();
+        var projectTypePk = $display.attr('data-project-type-pk');
+        var currentXeroInstancePk = $display.attr('data-xero-instance-pk');
         
-        if (!confirm('Are you sure you want to delete the unit "' + unitName + '"?')) {
+        // Don't convert if already a select
+        if ($cell.find('select').length > 0) return;
+        
+        // Create select dropdown
+        var $select = $('<select class="xero-instance-select"></select>')
+            .attr('data-project-type-pk', projectTypePk);
+        
+        // Add empty option
+        $select.append('<option value="">-- None --</option>');
+        
+        // Add Xero instance options
+        xeroInstances.forEach(function(instance) {
+            var selected = (instance.xero_instance_pk == currentXeroInstancePk) ? ' selected' : '';
+            $select.append('<option value="' + instance.xero_instance_pk + '"' + selected + '>' + Utils.escapeHtml(instance.xero_name) + '</option>');
+        });
+        
+        // Replace display with select
+        $cell.empty().append($select);
+        $select.focus();
+    });
+    
+    // ============================================
+    // SAVE XERO INSTANCE ON CHANGE/BLUR
+    // ============================================
+    $(document).on('change blur', '.xero-instance-select', function(e) {
+        var $select = $(this);
+        var $cell = $select.parent();
+        var projectTypePk = $select.attr('data-project-type-pk');
+        var xeroInstancePk = $select.val();
+        
+        // Prevent double-firing
+        if ($select.data('saving')) return;
+        $select.data('saving', true);
+        
+        // Save to backend
+        $.ajax({
+            url: '/core/update_project_type_xero_instance/' + projectTypePk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ xero_instance_pk: xeroInstancePk || null }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Replace select with display
+                    var displayText = response.xero_instance_name || 'Not set';
+                    var displayClass = response.xero_instance_name ? '' : 'not-set';
+                    var $display = $('<span class="xero-instance-display ' + displayClass + '"></span>')
+                        .text(displayText)
+                        .attr('data-project-type-pk', projectTypePk)
+                        .attr('data-xero-instance-pk', response.xero_instance_pk || '');
+                    
+                    $cell.empty().append($display);
+                } else {
+                    alert('Error: ' + response.message);
+                    $select.data('saving', false);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error updating Xero instance:', error);
+                alert('Error updating Xero instance');
+                $select.data('saving', false);
+            }
+        });
+    });
+    
+    // ============================================
+    // CLICK TO EDIT RATES BASED
+    // ============================================
+    $(document).on('click', '.rates-based-display', function(e) {
+        var $display = $(this);
+        var $cell = $display.parent();
+        var projectTypePk = $display.attr('data-project-type-pk');
+        var currentRatesBased = $display.attr('data-rates-based');
+        
+        // Don't convert if already a select
+        if ($cell.find('select').length > 0) return;
+        
+        // Create select dropdown
+        var $select = $('<select class="rates-based-select"></select>')
+            .attr('data-project-type-pk', projectTypePk);
+        
+        // Add options
+        $select.append('<option value="1"' + (currentRatesBased == '1' ? ' selected' : '') + '>Yes</option>');
+        $select.append('<option value="0"' + (currentRatesBased == '0' ? ' selected' : '') + '>No</option>');
+        
+        $cell.empty().append($select);
+        $select.focus();
+    });
+    
+    // ============================================
+    // SAVE RATES BASED ON CHANGE/BLUR
+    // ============================================
+    $(document).on('change blur', '.rates-based-select', function(e) {
+        var $select = $(this);
+        var $cell = $select.parent();
+        var projectTypePk = $select.attr('data-project-type-pk');
+        var ratesBased = parseInt($select.val());
+        
+        // Prevent double-firing
+        if ($select.data('saving')) return;
+        $select.data('saving', true);
+        
+        // Save to backend
+        $.ajax({
+            url: '/core/update_project_type_rates_based/' + projectTypePk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ rates_based: ratesBased }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Replace select with display
+                    var displayText = response.rates_based === 1 ? 'Yes' : 'No';
+                    var $display = $('<span class="rates-based-display"></span>')
+                        .text(displayText)
+                        .attr('data-project-type-pk', projectTypePk)
+                        .attr('data-rates-based', response.rates_based);
+                    
+                    $cell.empty().append($display);
+                } else {
+                    alert('Error: ' + response.message);
+                    $select.data('saving', false);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error updating rates based:', error);
+                alert('Error updating rates based');
+                $select.data('saving', false);
+            }
+        });
+    });
+    
+    // ============================================
+    // TOGGLE ARCHIVED BUTTON
+    // ============================================
+    $('#toggleArchivedBtn').click(function() {
+        const currentlyShowingArchived = $(this).data('showing-archived') === 1;
+        const newShowingArchived = !currentlyShowingArchived;
+        
+        // Update button state
+        $(this).data('showing-archived', newShowingArchived ? 1 : 0);
+        
+        if (newShowingArchived) {
+            $(this).html('<i class="fas fa-list"></i> Show Active');
+        } else {
+            $(this).html('<i class="fas fa-archive"></i> Show Archived');
+        }
+        
+        // Load project types with new filter
+        loadSettingsTable(newShowingArchived);
+    });
+    
+    // ============================================
+    // ARCHIVE PROJECT TYPE BUTTON
+    // ============================================
+    $(document).on('click', '.archive-btn', function(e) {
+        e.stopPropagation();
+        
+        var $btn = $(this);
+        var projectTypePk = $btn.attr('data-project-type-pk');
+        var isCurrentlyArchived = parseInt($btn.attr('data-archived')) === 1;
+        var action = isCurrentlyArchived ? 'restore' : 'archive';
+        var row = $btn.closest('tr');
+        var projectTypeName = row.find('.project-type-display').text() || row.find('.project-type-input').val();
+        
+        if (!confirm('Are you sure you want to ' + action + ' "' + projectTypeName + '"?')) {
             return;
         }
         
         $.ajax({
-            url: '/core/delete_unit/',
+            url: '/core/toggle_project_type_archive/' + projectTypePk + '/',
             type: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({
-                unit_pk: unitPk
-            }),
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ archived: isCurrentlyArchived ? 0 : 1 }),
             success: function(response) {
                 if (response.status === 'success') {
-                    loadUnits();
+                    // Reload the current view
+                    var showingArchived = $('#toggleArchivedBtn').data('showing-archived') === 1;
+                    loadSettingsTable(showingArchived);
                 } else {
                     alert('Error: ' + response.message);
                 }
             },
             error: function(xhr, status, error) {
-                console.error('Error deleting unit:', error);
-                alert('Error deleting unit. Please try again.');
+                var message = 'Error ' + action + 'ing project type';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                alert(message);
             }
         });
     });
     
-})();
+    // Initialize sortable table
+    Utils.initSortableTable('settingsMainTable', { tbodyId: 'settingsMainTableBody' });
+});
 </script>
 </div> <!-- End Settings Section -->

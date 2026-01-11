@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    Categories, Projects, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
+    Categories, Projects, ProjectTypes, XeroInstances, XeroAccounts, XeroTrackingCategories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
-    Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units
+    Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
+    Document_folders, Document_files
 )
 
 # Helper function to set nullable fields as not required
@@ -92,6 +93,11 @@ class UnitsAdmin(admin.ModelAdmin):
     list_display = ("unit_pk", "project", "project_type", "unit_name", "unit_qty", "order_in_list")
     list_filter = ('project', 'project_type')
 
+class ProjectTypesAdmin(admin.ModelAdmin):
+    list_display = ("project_type_pk", "project_type", "xero_instance", "archived", "created_at", "updated_at")
+    list_filter = ('xero_instance', 'archived')
+    search_fields = ('project_type',)
+
 class XeroInstancesAdmin(admin.ModelAdmin):
     list_display = ("xero_instance_pk", "xero_name", "xero_client_id")
 
@@ -99,6 +105,11 @@ class XeroAccountsAdmin(admin.ModelAdmin):
     list_display = ("xero_account_pk", "xero_instance", "account_code", "account_name", "account_type", "account_status")
     list_filter = ('xero_instance', 'account_type', 'account_status')
     search_fields = ('account_code', 'account_name', 'account_id')
+
+class XeroTrackingCategoriesAdmin(admin.ModelAdmin):
+    list_display = ("tracking_category_pk", "xero_instance", "tracking_category_id", "name", "status", "option_id", "option_name")
+    list_filter = ('xero_instance', 'status', 'name')
+    search_fields = ('name', 'option_name', 'tracking_category_id')
 
 
 class ProjectsAdmin(admin.ModelAdmin):
@@ -114,7 +125,7 @@ class QuotesAdmin(admin.ModelAdmin):
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
+    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
     list_filter = ('project', 'project_type', 'category')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
@@ -193,8 +204,10 @@ class HcVariationAllocationsAdmin(admin.ModelAdmin):
 # Register models with custom admin classes
 admin.site.register(Categories, CategoriesAdmin)
 admin.site.register(Units, UnitsAdmin)
+admin.site.register(ProjectTypes, ProjectTypesAdmin)
 admin.site.register(XeroInstances, XeroInstancesAdmin)
 admin.site.register(XeroAccounts, XeroAccountsAdmin)
+admin.site.register(XeroTrackingCategories, XeroTrackingCategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
 admin.site.register(Contacts, ContactsAdmin)
 admin.site.register(Quotes, QuotesAdmin)
@@ -216,6 +229,20 @@ admin.site.register(HC_claims, HC_claimsAdmin)
 admin.site.register(HC_claim_allocations, HC_claim_allocationsAdmin)
 admin.site.register(Hc_variation, HcVariationAdmin)
 admin.site.register(Hc_variation_allocations, HcVariationAllocationsAdmin)
+
+# Document management models
+class DocumentFoldersAdmin(admin.ModelAdmin):
+    list_display = ("folder_pk", "project", "folder_name", "parent_folder", "order_index", "created_at")
+    list_filter = ('project',)
+    search_fields = ('folder_name',)
+
+class DocumentFilesAdmin(admin.ModelAdmin):
+    list_display = ("file_pk", "folder", "file_name", "file_type", "file_size", "uploaded_by", "uploaded_at")
+    list_filter = ('file_type', 'folder__project')
+    search_fields = ('file_name', 'description')
+
+admin.site.register(Document_folders, DocumentFoldersAdmin)
+admin.site.register(Document_files, DocumentFilesAdmin)
 
 # Email receiving models
 class EmailAttachmentInline(admin.TabularInline):

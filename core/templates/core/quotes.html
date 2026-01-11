@@ -41,8 +41,9 @@ $(document).ready(function() {
                     (window.currentProject && window.currentProject.pk) ||
                     Utils.getProjectPkFromUrl();
     
+    // Use rates_based flag from backend (passed as quoteIsConstruction) or project's is_rates_based property
     var isConstruction = window.quoteIsConstruction || 
-                         (window.currentQuotesProject && ['construction', 'pods', 'precast'].indexOf(window.currentQuotesProject.project_type) !== -1) ||
+                         (window.currentQuotesProject && window.currentQuotesProject.is_rates_based) ||
                          false;
     
     // State

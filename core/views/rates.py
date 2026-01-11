@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import F
 from django.views.decorators.csrf import csrf_exempt
 
-from core.models import Categories, Costing, Units, Projects
+from core.models import Categories, Costing, Units, Projects, ProjectTypes, XeroAccounts, XeroTrackingCategories
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +35,21 @@ def get_rates_data(request):
             'message': 'project_type is required'
         }, status=400)
     
-    # Validate project_type
-    valid_types = [choice[0] for choice in Projects.PROJECT_TYPE_CHOICES]
-    logger.info(f"[get_rates_data] Valid project types: {valid_types}")
-    if project_type not in valid_types:
+    # Validate project_type exists in database
+    if not ProjectTypes.objects.filter(project_type=project_type).exists():
         logger.warning(f"[get_rates_data] Invalid project_type: {project_type}")
         return JsonResponse({
             'status': 'error',
-            'message': f'Invalid project_type. Must be one of: {", ".join(valid_types)}'
+            'message': f'Invalid project_type: {project_type}'
         }, status=400)
     
     try:
         logger.info(f"[get_rates_data] Querying categories for project_type={project_type}, project__isnull=True")
         # Get template categories for this project type (project=null means template data)
+        # project_type is a CharField, use case-insensitive match
         categories = Categories.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).order_by('order_in_list').values(
             'categories_pk', 'category', 'order_in_list'
         )
@@ -59,24 +58,27 @@ def get_rates_data(request):
         
         logger.info(f"[get_rates_data] Querying items for project_type={project_type}, project__isnull=True")
         # Get template items (costings) for this project type (project=null means template data)
+        # project_type is a CharField, use case-insensitive match
         items = Costing.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).select_related('category', 'unit').order_by(
             'category__order_in_list', 'order_in_list'
         ).values(
             'costing_pk', 'item', 'order_in_list', 'rate',
             'category__categories_pk', 'category__category',
-            'unit__unit_name', 'operator', 'operator_value'
+            'unit__unit_name', 'operator', 'operator_value',
+            'xero_account_code', 'xero_tracking_category'
         )
         items_count = items.count()
         logger.info(f"[get_rates_data] Found {items_count} items")
         
         logger.info(f"[get_rates_data] Querying units for project_type={project_type}, project__isnull=True")
         # Get template units for this project type (project=null means template data)
+        # project_type is a CharField, use case-insensitive match
         units = Units.objects.filter(
             project__isnull=True,
-            project_type=project_type
+            project_type__iexact=project_type
         ).order_by('order_in_list').values(
             'unit_pk', 'unit_name', 'order_in_list', 'unit_qty'
         )
@@ -107,7 +109,9 @@ def get_rates_data(request):
                 'unit': i['unit__unit_name'] or '',
                 'rate': float(i['rate']) if i['rate'] is not None else None,
                 'operator': i['operator'],
-                'operator_value': float(i['operator_value']) if i['operator_value'] is not None else None
+                'operator_value': float(i['operator_value']) if i['operator_value'] is not None else None,
+                'xero_account_code': i['xero_account_code'] or '',
+                'xero_tracking_category': i['xero_tracking_category'] or ''
             }
             for i in items
         ]
@@ -204,12 +208,11 @@ def create_new_category_costing_unit_quantity(request):
                 return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
             project_type = None  # Clear project_type for project-specific data
         else:
-            # Template mode - validate project_type
-            valid_project_types = [choice[0] for choice in Projects.PROJECT_TYPE_CHOICES]
-            if project_type not in valid_project_types:
+            # Template mode - validate project_type exists in database
+            if not ProjectTypes.objects.filter(project_type=project_type).exists():
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Invalid project_type. Must be one of: {", ".join(valid_project_types)}'
+                    'message': f'Invalid project_type: {project_type}'
                 }, status=400)
         
         # Item requires category_pk
@@ -1107,4 +1110,212 @@ def update_unit_order(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_unit_order] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_xero_dropdown_data(request):
+    """
+    Get Xero accounts and tracking categories for dropdown population.
+    Filters accounts by xero_instance (from project, project_type, or passed as parameter).
+    
+    Query parameters:
+    - project_pk: int (optional) - Get xero_instance from project
+    - project_type: str (optional) - Get xero_instance from ProjectTypes table
+    - xero_instance_pk: int (optional) - Direct xero_instance pk
+    
+    Returns accounts filtered to: expense, COGS, asset, liability (excludes revenue, bank)
+    """
+    try:
+        project_pk = request.GET.get('project_pk')
+        project_type = request.GET.get('project_type')
+        xero_instance_pk = request.GET.get('xero_instance_pk')
+        
+        xero_instance = None
+        
+        if project_pk:
+            try:
+                project = Projects.objects.get(projects_pk=project_pk)
+                xero_instance = project.xero_instance
+            except Projects.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+        elif project_type:
+            # Look up xero_instance from ProjectTypes table (case-insensitive)
+            try:
+                pt = ProjectTypes.objects.get(project_type__iexact=project_type)
+                xero_instance = pt.xero_instance
+            except ProjectTypes.DoesNotExist:
+                # Project type not found in table, return empty data
+                logger.warning(f"[get_xero_dropdown_data] ProjectType '{project_type}' not found in database")
+                pass
+        elif xero_instance_pk:
+            from core.models import XeroInstances
+            try:
+                xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+            except:
+                return JsonResponse({'status': 'error', 'message': 'Xero instance not found'}, status=404)
+        
+        # Get Xero accounts filtered by type (exclude REVENUE and BANK) and only ACTIVE status
+        # Group by account_type, sorted alphabetically by type, then numerically by account_code
+        accounts_list = []
+        if xero_instance:
+            excluded_types = ['REVENUE', 'BANK']
+            accounts = XeroAccounts.objects.filter(
+                xero_instance=xero_instance,
+                account_status='ACTIVE'
+            ).exclude(
+                account_type__in=excluded_types
+            ).order_by('account_type', 'account_code')
+            
+            # Group accounts by type
+            accounts_by_type = {}
+            for acc in accounts:
+                acc_type = acc.account_type or 'OTHER'
+                if acc_type not in accounts_by_type:
+                    accounts_by_type[acc_type] = []
+                accounts_by_type[acc_type].append({
+                    'xero_account_pk': acc.xero_account_pk,
+                    'account_code': acc.account_code,
+                    'account_name': acc.account_name,
+                    'account_type': acc_type,
+                    'display_name': f"{acc.account_code} - {acc.account_name}",
+                })
+            
+            # Sort each group by account_code numerically
+            for acc_type in accounts_by_type:
+                accounts_by_type[acc_type].sort(key=lambda x: (
+                    float(x['account_code']) if x['account_code'].replace('.', '').isdigit() else float('inf'),
+                    x['account_code']
+                ))
+            
+            # Build final list with account_type groups sorted alphabetically
+            for acc_type in sorted(accounts_by_type.keys()):
+                for acc in accounts_by_type[acc_type]:
+                    accounts_list.append(acc)
+        
+        # Get tracking categories - unique "name - option_name" combinations, sorted alphabetically
+        # Only include ACTIVE status
+        tracking_categories_list = []
+        if xero_instance:
+            categories = XeroTrackingCategories.objects.filter(
+                xero_instance=xero_instance,
+                status='ACTIVE'
+            ).order_by('name', 'option_name')
+            
+            # Get unique "name - option_name" combinations
+            seen_combos = set()
+            for cat in categories:
+                if cat.name and cat.option_name:
+                    combo = f"{cat.name} - {cat.option_name}"
+                    if combo not in seen_combos:
+                        tracking_categories_list.append({
+                            'tracking_category_pk': cat.tracking_category_pk,
+                            'name': combo,  # "name - option_name" format
+                            'category_name': cat.name,
+                            'option_name': cat.option_name,
+                        })
+                        seen_combos.add(combo)
+            
+            # Sort alphabetically by the combo name
+            tracking_categories_list.sort(key=lambda x: x['name'].lower())
+        
+        return JsonResponse({
+            'status': 'success',
+            'xero_accounts': accounts_list,
+            'tracking_categories': tracking_categories_list,
+            'xero_instance_pk': xero_instance.xero_instance_pk if xero_instance else None
+        })
+        
+    except Exception as e:
+        logger.error(f"[get_xero_dropdown_data] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_item_xero_account(request):
+    """
+    Update the xero_account_code for a Costing (Item).
+    
+    Expected JSON payload:
+    {
+        "item_pk": 123,
+        "xero_account_code": "400" (or empty string to clear)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        item_pk = data.get('item_pk')
+        xero_account_code = data.get('xero_account_code', '')
+        
+        if not item_pk:
+            return JsonResponse({'status': 'error', 'message': 'item_pk is required'}, status=400)
+        
+        try:
+            item = Costing.objects.get(costing_pk=item_pk)
+        except Costing.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+        
+        item.xero_account_code = xero_account_code
+        item.save()
+        
+        logger.info(f"[update_item_xero_account] Updated item {item_pk} xero_account_code to '{xero_account_code}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Xero account updated successfully'
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_item_xero_account] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def update_item_tracking_category(request):
+    """
+    Update the xero_tracking_category for a Costing (Item).
+    
+    Expected JSON payload:
+    {
+        "item_pk": 123,
+        "xero_tracking_category": "Region A" (or empty string/null to clear)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        item_pk = data.get('item_pk')
+        xero_tracking_category = data.get('xero_tracking_category', '')
+        
+        if not item_pk:
+            return JsonResponse({'status': 'error', 'message': 'item_pk is required'}, status=400)
+        
+        try:
+            item = Costing.objects.get(costing_pk=item_pk)
+        except Costing.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
+        
+        # Allow null/empty to clear the value
+        item.xero_tracking_category = xero_tracking_category if xero_tracking_category else None
+        item.save()
+        
+        logger.info(f"[update_item_tracking_category] Updated item {item_pk} xero_tracking_category to '{xero_tracking_category}'")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Tracking category updated successfully'
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"[update_item_tracking_category] Error: {str(e)}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

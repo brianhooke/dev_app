@@ -599,10 +599,10 @@ $(document).ready(function() {
             AllocationsManager.setNewMode('quote', true);
         }
         
-        // Create editable row in main table
+        // Create editable row in main table - use rates_based flag from backend
         var isConstruction = window.quoteIsConstruction || 
-                            (window.currentConstructionProject && ['construction', 'pods', 'precast'].indexOf(window.currentConstructionProject.project_type) !== -1) ||
-                            (window.currentTenderProject && ['construction', 'pods', 'precast'].indexOf(window.currentTenderProject.project_type) !== -1);
+                            (window.currentConstructionProject && window.currentConstructionProject.is_rates_based) ||
+                            (window.currentTenderProject && window.currentTenderProject.is_rates_based);
         
         var mainTbody = $('#quoteMainTableBody');
         mainTbody.empty();
@@ -796,14 +796,32 @@ $(document).ready(function() {
             allocations = AllocationsManager.getAllocations('quote');
         }
         
-        // Convert to backend expected format
+        // DEBUG: Log allocations before mapping
+        console.log('=== SAVE NEW QUOTE DEBUG ===');
+        console.log('Raw allocations from AllocationsManager:', allocations);
+        
+        // Convert to backend expected format - include qty/rate/unit for rates-based projects
         var lineItems = allocations.map(function(alloc) {
-            return {
+            var lineItem = {
                 item: alloc.item_pk || alloc.costing_pk,
                 amount: parseFloat(alloc.amount || alloc.net || 0),
                 notes: alloc.notes || ''
             };
+            // Include qty, rate, unit if present (for rates-based projects)
+            if (alloc.qty !== undefined && alloc.qty !== null) {
+                lineItem.qty = alloc.qty;
+            }
+            if (alloc.rate !== undefined && alloc.rate !== null) {
+                lineItem.rate = alloc.rate;
+            }
+            if (alloc.unit !== undefined) {
+                lineItem.unit = alloc.unit;
+            }
+            return lineItem;
         });
+        
+        console.log('Mapped lineItems to send:', lineItems);
+        console.log('============================');
         
         // Convert PDF file to base64 data URL
         if (!window.newQuotePdfData) {

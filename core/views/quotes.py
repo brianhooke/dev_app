@@ -63,7 +63,8 @@ def quotes_view(request):
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
-            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
+            # Use rates_based flag from ProjectTypes instead of hardcoded project type names
+            is_construction = (project.project_type and project.project_type.rates_based == 1)
         except Projects.DoesNotExist:
             pass
     
@@ -177,8 +178,8 @@ def update_quote(request):
             # Delete existing allocations and create new ones
             Quote_allocations.objects.filter(quotes_pk=quote).delete()
             
-            # Check if construction project
-            is_construction = (quote.project and quote.project.project_type in ['construction', 'pods', 'precast'])
+            # Check if construction project - use rates_based flag
+            is_construction = (quote.project and quote.project.project_type and quote.project.project_type.rates_based == 1)
             
             for line_item in line_items:
                 item_pk = line_item.get('item')
@@ -535,6 +536,13 @@ def save_project_quote(request):
         pdf_data_url = data.get('pdf_data_url')
         quote_pk = data.get('quote_pk')  # For updates
         
+        # DEBUG: Log line_items to see if qty/rate are being received
+        logger.info(f"=== SAVE PROJECT QUOTE - LINE ITEMS DEBUG ===")
+        logger.info(f"Number of line_items: {len(line_items)}")
+        for i, item in enumerate(line_items):
+            logger.info(f"  Line item {i}: item={item.get('item')}, qty={item.get('qty')}, rate={item.get('rate')}, amount={item.get('amount')}, unit={item.get('unit')}")
+        logger.info(f"=============================================")
+        
         is_update = quote_pk is not None
         
         # Validate required fields (pdf_data_url only required for new quotes)
@@ -657,8 +665,8 @@ def save_project_quote(request):
                 else:
                     logger.error("Quote.pdf is None after save!")
             
-            # Create quote allocations
-            is_construction = (project.project_type in ['construction', 'pods', 'precast'])
+            # Create quote allocations - use rates_based flag
+            is_construction = (project.project_type and project.project_type.rates_based == 1)
             
             for item_data in line_items:
                 item_pk = item_data.get('item')
@@ -921,6 +929,14 @@ def save_quote_allocations(request):
         quote_pk = data.get('pk')
         allocations_data = data.get('allocations', [])
         
+        # DEBUG: Log what we received
+        logger.info(f"=== SAVE QUOTE ALLOCATIONS DEBUG ===")
+        logger.info(f"Quote PK: {quote_pk}")
+        logger.info(f"Number of allocations: {len(allocations_data)}")
+        for i, alloc in enumerate(allocations_data):
+            logger.info(f"  Allocation {i}: item_pk={alloc.get('item_pk')}, qty={alloc.get('qty')}, rate={alloc.get('rate')}, amount={alloc.get('amount')}, unit={alloc.get('unit')}")
+        logger.info(f"====================================")
+        
         if not quote_pk:
             return JsonResponse({
                 'status': 'error',
@@ -936,8 +952,8 @@ def save_quote_allocations(request):
                 'message': 'Quote not found'
             }, status=404)
         
-        # Check if construction project
-        is_construction = (quote.project and quote.project.project_type in ['construction', 'pods', 'precast'])
+        # Check if construction project - use rates_based flag
+        is_construction = (quote.project and quote.project.project_type and quote.project.project_type.rates_based == 1)
         
         with transaction.atomic():
             # Delete existing allocations and recreate
@@ -955,16 +971,25 @@ def save_quote_allocations(request):
                     # Handle construction mode (qty/rate) vs simple mode (amount)
                     qty = alloc_data.get('qty')
                     rate = alloc_data.get('rate')
+                    
+                    # DEBUG: Log the raw values and their types
+                    logger.info(f"  Processing allocation for item {item_pk}:")
+                    logger.info(f"    Raw qty: {qty} (type: {type(qty).__name__})")
+                    logger.info(f"    Raw rate: {rate} (type: {type(rate).__name__})")
+                    logger.info(f"    qty is not None: {qty is not None}, rate is not None: {rate is not None}")
+                    
                     if qty is not None and rate is not None:
                         amount = Decimal(str(qty)) * Decimal(str(rate))
                         qty_val = Decimal(str(qty))
                         rate_val = Decimal(str(rate))
+                        logger.info(f"    Using qty/rate mode: qty_val={qty_val}, rate_val={rate_val}, amount={amount}")
                     else:
                         amount = Decimal(str(alloc_data.get('amount', 0)))
                         qty_val = None
                         rate_val = None
+                        logger.info(f"    Using amount-only mode: amount={amount}")
                     
-                    Quote_allocations.objects.create(
+                    allocation = Quote_allocations.objects.create(
                         quotes_pk=quote,
                         item=costing,
                         amount=amount,
@@ -973,6 +998,7 @@ def save_quote_allocations(request):
                         rate=rate_val,
                         notes=alloc_data.get('notes', '')
                     )
+                    logger.info(f"    Saved allocation PK {allocation.quote_allocations_pk}: qty={allocation.qty}, rate={allocation.rate}, amount={allocation.amount}")
                 except Costing.DoesNotExist:
                     logger.warning(f"Costing {item_pk} not found for quote allocation")
             
