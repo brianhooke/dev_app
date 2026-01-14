@@ -10,3 +10,18 @@ services:
       - /var/app/db:/app/db
     env_file:
       - .env
+    environment:
+      # EB passes these directly - they override .env if present
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-dev_app.settings.production_aws}
+      - RDS_HOSTNAME=${RDS_HOSTNAME:-}
+      - RDS_PORT=${RDS_PORT:-5432}
+      - RDS_DB_NAME=${RDS_DB_NAME:-}
+      - RDS_USERNAME=${RDS_USERNAME:-}
+      - RDS_PASSWORD=${RDS_PASSWORD:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-}
+      - XERO_CLIENT_ID=${XERO_CLIENT_ID:-}
+      - XERO_CLIENT_SECRET=${XERO_CLIENT_SECRET:-}
+      - SUPERUSER_USERNAME=${SUPERUSER_USERNAME:-admin}
+      - SUPERUSER_PASSWORD=${SUPERUSER_PASSWORD:-admin123}
