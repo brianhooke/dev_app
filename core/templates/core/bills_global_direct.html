@@ -626,6 +626,14 @@
             var totalNet = parseFloat(row.attr('data-total-net')) || 0;
             var totalGst = parseFloat(row.attr('data-total-gst')) || 0;
             
+            console.log('[Send to Xero] === Starting send_bill_direct ===');
+            console.log('[Send to Xero] Bill PK:', billPk);
+            console.log('[Send to Xero] Xero Instance ID:', xeroInstanceId);
+            console.log('[Send to Xero] Supplier PK:', supplierPk);
+            console.log('[Send to Xero] Bill Number:', billNumber);
+            console.log('[Send to Xero] Total Net:', totalNet);
+            console.log('[Send to Xero] Total GST:', totalGst);
+            
             if (!xeroInstanceId || !supplierPk) {
                 alert('Missing required data (Xero Instance or Supplier)');
                 return;
@@ -635,16 +643,38 @@
             
             // Collect allocations data
             var allocations = [];
-            $('#billsDirectAllocationsTableBody tr').each(function() {
-                allocations.push({
+            console.log('[Send to Xero] Collecting allocations from UI...');
+            $('#billsDirectAllocationsTableBody tr').each(function(index) {
+                var alloc = {
                     allocation_pk: $(this).attr('data-allocation-pk'),
                     xero_account_pk: $(this).find('.xero-account-select').val(),
+                    xero_account_text: $(this).find('.xero-account-select option:selected').text(),
                     tracking_category_pk: $(this).find('.tracking-category-select').val(),
                     amount: parseFloat($(this).find('.allocation-net-input').val()) || 0,
                     gst_amount: parseFloat($(this).find('.allocation-gst-input').val()) || 0,
                     notes: $(this).find('.allocation-notes-input').val()
+                };
+                console.log('[Send to Xero] Allocation row ' + index + ':', alloc);
+                allocations.push({
+                    allocation_pk: alloc.allocation_pk,
+                    xero_account_pk: alloc.xero_account_pk,
+                    tracking_category_pk: alloc.tracking_category_pk,
+                    amount: alloc.amount,
+                    gst_amount: alloc.gst_amount,
+                    notes: alloc.notes
                 });
             });
+            
+            var requestPayload = {
+                bill_pk: billPk,
+                xero_instance_or_project: 'xero_' + xeroInstanceId,
+                supplier_pk: supplierPk,
+                bill_number: billNumber,
+                total_net: totalNet,
+                total_gst: totalGst,
+                allocations: allocations
+            };
+            console.log('[Send to Xero] Full request payload:', JSON.stringify(requestPayload, null, 2));
             
             // Send to Xero API endpoint
             $.ajax({
@@ -652,16 +682,9 @@
                 type: 'POST',
                 headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                 contentType: 'application/json',
-                data: JSON.stringify({
-                    bill_pk: billPk,
-                    xero_instance_or_project: 'xero_' + xeroInstanceId,
-                    supplier_pk: supplierPk,
-                    bill_number: billNumber,
-                    total_net: totalNet,
-                    total_gst: totalGst,
-                    allocations: allocations
-                }),
+                data: JSON.stringify(requestPayload),
                 success: function(response) {
+                    console.log('[Send to Xero] SUCCESS response:', response);
                     if (response.status === 'success') {
                         AllocationsManager.showSuccessAndFadeRow(button, row, function() {
                             if (window.currentSelectedBillPk == billPk) {
@@ -673,11 +696,13 @@
                             }
                         });
                     } else {
+                        console.error('[Send to Xero] ERROR in response:', response.message);
                         alert('Error: ' + response.message);
                         button.prop('disabled', false).text('Send to Xero');
                     }
                 },
                 error: function(xhr) {
+                    console.error('[Send to Xero] AJAX ERROR:', xhr.status, xhr.responseText);
                     var errorMsg = 'Failed to send to Xero. Please try again.';
                     try {
                         var resp = JSON.parse(xhr.responseText);

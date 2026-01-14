@@ -205,6 +205,22 @@ def send_bill_direct(request):
         # Get allocations for this invoice
         allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account', 'tracking_category')
         
+        # Log what we received from frontend vs what's in database
+        frontend_allocations = data.get('allocations', [])
+        logger.info(f"[send_bill_direct] Bill PK: {bill_pk}")
+        logger.info(f"[send_bill_direct] Frontend allocations received: {json.dumps(frontend_allocations, indent=2)}")
+        logger.info(f"[send_bill_direct] Database allocations count: {allocations.count()}")
+        
+        for db_alloc in allocations:
+            logger.info(f"[send_bill_direct] DB Allocation PK={db_alloc.bill_allocation_pk}:")
+            logger.info(f"  - amount: {db_alloc.amount}")
+            logger.info(f"  - gst_amount: {db_alloc.gst_amount}")
+            logger.info(f"  - xero_account_id: {db_alloc.xero_account_id}")
+            logger.info(f"  - xero_account: {db_alloc.xero_account}")
+            if db_alloc.xero_account:
+                logger.info(f"  - account_code: {db_alloc.xero_account.account_code}")
+            logger.info(f"  - notes: {db_alloc.notes}")
+        
         if not allocations.exists():
             return JsonResponse({
                 'status': 'error',
@@ -218,12 +234,35 @@ def send_bill_direct(request):
                 'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
             }, status=400)
         
-        # Check all allocations have Xero accounts
+        # Check all allocations have Xero accounts and valid amounts
         for allocation in allocations:
             if not allocation.xero_account:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'All allocations must have a Xero Account selected'
+                }, status=400)
+            if not allocation.amount or float(allocation.amount) <= 0:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Allocation has invalid amount (${allocation.amount}). Please ensure all amounts are saved.'
+                }, status=400)
+        
+        # Validate frontend amounts match database amounts (detect unsaved changes)
+        frontend_allocations = data.get('allocations', [])
+        if frontend_allocations:
+            db_total_net = sum(float(a.amount) for a in allocations)
+            db_total_gst = sum(float(a.gst_amount or 0) for a in allocations)
+            frontend_total_net = sum(float(a.get('amount', 0)) for a in frontend_allocations)
+            frontend_total_gst = sum(float(a.get('gst_amount', 0)) for a in frontend_allocations)
+            
+            logger.info(f"[send_bill_direct] Comparing totals - DB: net=${db_total_net}, gst=${db_total_gst} | Frontend: net=${frontend_total_net}, gst=${frontend_total_gst}")
+            
+            # Allow small tolerance for floating point
+            if abs(db_total_net - frontend_total_net) > 0.01 or abs(db_total_gst - frontend_total_gst) > 0.01:
+                logger.error(f"[send_bill_direct] MISMATCH! Database amounts don't match frontend. Possible unsaved changes.")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Allocation amounts not saved correctly. Database shows ${db_total_net:.2f} but UI shows ${frontend_total_net:.2f}. Please refresh and re-enter allocations.'
                 }, status=400)
         
         # Get Xero authentication
@@ -236,14 +275,25 @@ def send_bill_direct(request):
         # Build line items from allocations
         line_items = []
         for allocation in allocations:
+            # Log each allocation being processed
+            logger.info(f"[send_bill_direct] Processing allocation {allocation.bill_allocation_pk}:")
+            logger.info(f"  - Building line item with amount={allocation.amount}, gst={allocation.gst_amount}")
+            
+            # Check for missing xero_account
+            if not allocation.xero_account:
+                logger.error(f"[send_bill_direct] MISSING xero_account for allocation {allocation.bill_allocation_pk}!")
+                continue
+            
             line_item = {
                 "Description": allocation.notes or "No description",
                 "Quantity": 1,
-                "UnitAmount": float(allocation.amount),
+                "UnitAmount": float(allocation.amount) if allocation.amount else 0,
                 "AccountCode": allocation.xero_account.account_code,
                 "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
                 "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
             }
+            
+            logger.info(f"  - Line item built: {json.dumps(line_item)}")
             
             # Add tracking category if set
             if allocation.tracking_category:
@@ -253,6 +303,9 @@ def send_bill_direct(request):
                 }]
             
             line_items.append(line_item)
+        
+        logger.info(f"[send_bill_direct] Total line items built: {len(line_items)}")
+        logger.info(f"[send_bill_direct] Line items: {json.dumps(line_items, indent=2)}")
         
         # Build invoice payload for Xero
         invoice_payload = {
@@ -1141,6 +1194,8 @@ def create_bill_allocation(request):
         if not bill_pk:
             return JsonResponse({'status': 'error', 'message': 'bill_pk is required'}, status=400)
         
+        logger.info(f"[create_bill_allocation] Creating allocation with data: {data}")
+        
         # Create allocation
         allocation = Bill_allocations.objects.create(
             bill_id=bill_pk,
@@ -1150,7 +1205,11 @@ def create_bill_allocation(request):
             xero_account_id=xero_account_pk if xero_account_pk else None
         )
         
-        logger.info(f"Created invoice allocation {allocation.bill_allocation_pk} for invoice {bill_pk}")
+        logger.info(f"[create_bill_allocation] Created allocation {allocation.bill_allocation_pk}:")
+        logger.info(f"  - bill_id: {bill_pk}")
+        logger.info(f"  - amount: {allocation.amount}")
+        logger.info(f"  - gst_amount: {allocation.gst_amount}")
+        logger.info(f"  - xero_account_id: {allocation.xero_account_id}")
         
         return JsonResponse({
             'status': 'success',
@@ -1184,20 +1243,32 @@ def update_bill_allocation(request):
             return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
         
         # Update fields if provided
+        logger.info(f"[update_bill_allocation] Updating allocation {allocation_pk} with data: {data}")
+        
         if 'amount' in data:
+            logger.info(f"  - Setting amount: {data['amount']}")
             allocation.amount = data['amount']
         if 'gst_amount' in data:
+            logger.info(f"  - Setting gst_amount: {data['gst_amount']}")
             allocation.gst_amount = data['gst_amount']
         if 'notes' in data:
+            logger.info(f"  - Setting notes: {data['notes']}")
             allocation.notes = data['notes']
         if 'xero_account_pk' in data:
+            logger.info(f"  - Setting xero_account_id: {data['xero_account_pk']}")
             allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
         if 'tracking_category_pk' in data:
+            logger.info(f"  - Setting tracking_category_id: {data['tracking_category_pk']}")
             allocation.tracking_category_id = data['tracking_category_pk'] if data['tracking_category_pk'] else None
         
         allocation.save()
         
-        logger.info(f"Updated invoice allocation {allocation_pk}")
+        # Log the saved state
+        logger.info(f"[update_bill_allocation] Saved allocation {allocation_pk}:")
+        logger.info(f"  - amount: {allocation.amount}")
+        logger.info(f"  - gst_amount: {allocation.gst_amount}")
+        logger.info(f"  - xero_account_id: {allocation.xero_account_id}")
+        logger.info(f"  - notes: {allocation.notes}")
         
         return JsonResponse({'status': 'success'})
         
