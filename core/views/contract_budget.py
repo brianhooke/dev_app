@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories
 
 logger = logging.getLogger(__name__)
 
@@ -82,31 +82,31 @@ def contract_budget_view(request):
         if is_construction:
             # Execution + Construction: 14 columns with Uncommitted and Committed subheadings
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '12%', 'field': 'item'},
+                {'header': 'Category / Item', 'width': '10%', 'field': 'item'},
                 {'header': 'Unit', 'width': '4%', 'field': 'unit'},
-                {'header': 'Contract Budget', 'width': '10%', 'field': 'contract_budget'},
-                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
-                {'header': 'Qty', 'width': '5%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
-                {'header': 'Rate', 'width': '5%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
+                {'header': 'Contract Budget', 'width': '8%', 'field': 'contract_budget'},
+                {'header': 'Working Budget', 'width': '8%', 'field': 'working_budget'},
+                {'header': 'Qty', 'width': '6%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
+                {'header': 'Rate', 'width': '6%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
                 {'header': 'Amount', 'width': '7%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
-                {'header': 'Notes', 'width': '2%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
-                {'header': 'Qty', 'width': '5%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
-                {'header': 'Rate', 'width': '5%', 'field': 'committed_rate', 'parent_header': 'Committed'},
-                {'header': 'Amount', 'width': '7%', 'field': 'committed_amount', 'parent_header': 'Committed'},
-                {'header': 'C2C', 'width': '6%', 'field': 'cost_to_complete'},
-                {'header': 'Billed', 'width': '6%', 'field': 'billed'},
-                {'header': 'Fixed on Site', 'width': '6%', 'field': 'fixed_on_site'},
+                {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
+                {'header': 'Qty', 'width': '6%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
+                {'header': 'Rate', 'width': '6%', 'field': 'committed_rate', 'parent_header': 'Committed'},
+                {'header': 'Amount', 'width': '8%', 'field': 'committed_amount', 'parent_header': 'Committed'},
+                {'header': 'C2C', 'width': '7%', 'field': 'cost_to_complete'},
+                {'header': 'Billed', 'width': '7%', 'field': 'billed'},
+                {'header': 'Fixed on Site', 'width': '7%', 'field': 'fixed_on_site'},
             ]
         else:
             # Execution + Non-construction: 10 columns (added Notes)
             main_table_columns = [
-                {'header': 'Category / Item', 'width': '18%', 'field': 'item'},
+                {'header': 'Category / Item', 'width': '12%', 'field': 'item'},
                 {'header': 'Unit', 'width': '5%', 'field': 'unit'},
                 {'header': 'Contract Budget', 'width': '10%', 'field': 'contract_budget'},
                 {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
                 {'header': 'Uncommitted', 'width': '10%', 'field': 'uncommitted_amount', 'input': True},
                 {'header': 'Notes', 'width': '5%', 'field': 'uncommitted_notes', 'icon': True},
-                {'header': 'Committed', 'width': '10%', 'field': 'committed'},
+                {'header': 'Committed', 'width': '15%', 'field': 'committed'},
                 {'header': 'C2C', 'width': '10%', 'field': 'cost_to_complete'},
                 {'header': 'Billed', 'width': '10%', 'field': 'billed'},
                 {'header': 'Fixed on Site', 'width': '10%', 'field': 'fixed_on_site'},
@@ -167,14 +167,20 @@ def get_project_committed_amounts(request, project_pk):
     
     For other project types, returns simple amounts:
     {costing_pk: amount}
+    
+    Query params:
+    - tender_or_execution: '1' for tender, '2' for execution (default: '1')
     """
     try:
         project = get_object_or_404(Projects, pk=project_pk)
         # Use rates_based flag from ProjectTypes instead of hardcoded project type names
         is_construction = (project.project_type and project.project_type.rates_based == 1)
         
-        # Get all quotes for this project
-        project_quotes = Quotes.objects.filter(project=project)
+        # Get tender_or_execution filter (default to tender)
+        tender_or_execution = int(request.GET.get('tender_or_execution', '1'))
+        
+        # Get all quotes for this project filtered by tender_or_execution
+        project_quotes = Quotes.objects.filter(project=project, tender_or_execution=tender_or_execution)
         
         if is_construction:
             # For construction types, return qty, rate, amount per item
@@ -233,7 +239,8 @@ def get_project_committed_amounts(request, project_pk):
         # (since they don't use uncommitted or quote allocations)
         internal_items = Costing.objects.filter(
             project=project,
-            category__category='Internal'
+            category__category='Internal',
+            tender_or_execution=tender_or_execution
         )
         
         for item in internal_items:
@@ -302,4 +309,207 @@ def get_item_quote_allocations(request, item_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting quote allocations: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def validate_fix_contract_budget(request, project_pk):
+    """
+    Validate that a project's costing items are ready to fix the contract budget.
+    Checks:
+    1. All Costing.xero_account_code must be not null (mandatory)
+    2. All Costing.xero_tracking_category should be not null (warning only)
+    """
+    try:
+        project = get_object_or_404(Projects, pk=project_pk)
+        
+        # Get all tender costing items for this project
+        costing_items = Costing.objects.filter(project=project, tender_or_execution=1)
+        
+        missing_xero_account_codes = []
+        missing_xero_tracking_categories = []
+        
+        for item in costing_items:
+            if not item.xero_account_code or item.xero_account_code.strip() == '':
+                missing_xero_account_codes.append({
+                    'costing_pk': item.costing_pk,
+                    'item': item.item
+                })
+            if not item.xero_tracking_category or item.xero_tracking_category.strip() == '':
+                missing_xero_tracking_categories.append({
+                    'costing_pk': item.costing_pk,
+                    'item': item.item
+                })
+        
+        return JsonResponse({
+            'status': 'success',
+            'missing_xero_account_codes': missing_xero_account_codes,
+            'missing_xero_tracking_categories': missing_xero_tracking_categories
+        })
+        
+    except Exception as e:
+        logger.error(f"Error validating fix contract budget: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error validating: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def fix_contract_budget(request, project_pk):
+    """
+    Fix the contract budget - transition project from Tender to Execution mode.
+    
+    This performs the following operations:
+    1. Mark all existing Costing entries as tender (tender_or_execution=1)
+    2. Copy all Costing entries with tender_or_execution=2 and set contract_budget = uncommitted_amount + quote_allocations
+    3. Mark all existing Quotes entries as tender (tender_or_execution=1)
+    4. Copy all Quotes and Quote_allocations with tender_or_execution=2
+    5. Set Projects.project_status=2 (execution mode)
+    """
+    try:
+        from django.db import transaction
+        
+        project = get_object_or_404(Projects, pk=project_pk)
+        
+        # Verify project is in tender mode
+        if project.project_status != 1:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Project is not in Tender mode'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Step 1: Get all tender costing items
+            tender_costings = Costing.objects.filter(project=project, tender_or_execution=1)
+            
+            # Ensure all are marked as tender (should already be default)
+            tender_costings.update(tender_or_execution=1)
+            
+            # Step 2: Copy costing entries for execution mode
+            # Build a mapping of old costing_pk to new costing_pk for quote allocations
+            costing_pk_mapping = {}
+            
+            # Check if project is rates_based
+            rates_based = project.project_type.rates_based if project.project_type else 0
+            
+            logger.info(f"[fix_contract_budget] === Starting contract budget fix for project {project_pk} (rates_based={rates_based}) ===")
+            
+            for tender_costing in tender_costings:
+                # Calculate contract_budget = uncommitted_value + sum of quote allocations
+                quote_allocations = Quote_allocations.objects.filter(item=tender_costing)
+                quote_alloc_sum = quote_allocations.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+                
+                # For rates_based=1: calculate uncommitted from rate * qty
+                # For rates_based=0: use uncommitted_amount directly
+                if rates_based == 1:
+                    uncommitted_rate = tender_costing.uncommitted_rate or Decimal('0')
+                    uncommitted_qty = tender_costing.uncommitted_qty or Decimal('0')
+                    uncommitted_amt = uncommitted_rate * uncommitted_qty
+                else:
+                    uncommitted_amt = tender_costing.uncommitted_amount or Decimal('0')
+                
+                new_contract_budget = uncommitted_amt + quote_alloc_sum
+                
+                # Debug logging
+                logger.info(f"[fix_contract_budget] Costing PK={tender_costing.costing_pk}, Item='{tender_costing.item}'")
+                logger.info(f"  - uncommitted_qty: {tender_costing.uncommitted_qty}")
+                logger.info(f"  - uncommitted_rate: {tender_costing.uncommitted_rate}")
+                logger.info(f"  - uncommitted_amount (raw): {tender_costing.uncommitted_amount}")
+                logger.info(f"  - uncommitted_value (calculated): {uncommitted_amt} {'(rate*qty)' if rates_based == 1 else '(amount)'}")
+                logger.info(f"  - Quote allocations count: {quote_allocations.count()}")
+                for qa in quote_allocations:
+                    logger.info(f"    - Quote Alloc PK={qa.quote_allocations_pk}, amount={qa.amount}, quote_pk={qa.quotes_pk_id}")
+                logger.info(f"  - quote_alloc_sum: {quote_alloc_sum}")
+                logger.info(f"  - NEW contract_budget: {new_contract_budget}")
+                
+                # Create execution copy
+                old_pk = tender_costing.costing_pk
+                
+                # For Internal category items, zero out uncommitted fields in execution mode
+                is_internal = tender_costing.category.category == 'Internal'
+                exec_uncommitted_amount = Decimal('0') if is_internal else tender_costing.uncommitted_amount
+                exec_uncommitted_qty = None if is_internal else tender_costing.uncommitted_qty
+                exec_uncommitted_rate = None if is_internal else tender_costing.uncommitted_rate
+                
+                execution_costing = Costing.objects.create(
+                    project=tender_costing.project,
+                    project_type=tender_costing.project_type,
+                    category=tender_costing.category,
+                    item=tender_costing.item,
+                    order_in_list=tender_costing.order_in_list,
+                    xero_account_code=tender_costing.xero_account_code,
+                    xero_tracking_category=tender_costing.xero_tracking_category,
+                    contract_budget=new_contract_budget,
+                    unit=tender_costing.unit,
+                    rate=tender_costing.rate,
+                    operator=tender_costing.operator,
+                    operator_value=tender_costing.operator_value,
+                    uncommitted_amount=exec_uncommitted_amount,
+                    uncommitted_qty=exec_uncommitted_qty,
+                    uncommitted_rate=exec_uncommitted_rate,
+                    uncommitted_notes=tender_costing.uncommitted_notes,
+                    fixed_on_site=Decimal('0'),
+                    sc_invoiced=Decimal('0'),
+                    sc_paid=Decimal('0'),
+                    tender_or_execution=2  # Execution mode
+                )
+                costing_pk_mapping[old_pk] = execution_costing.costing_pk
+                
+                if is_internal:
+                    logger.info(f"  - Internal category: zeroed uncommitted fields for execution")
+            
+            # Step 3: Mark all tender quotes
+            tender_quotes = Quotes.objects.filter(project=project, tender_or_execution=1)
+            tender_quotes.update(tender_or_execution=1)
+            
+            # Step 4: Copy quotes and quote allocations for execution mode
+            quote_pk_mapping = {}
+            
+            for tender_quote in tender_quotes:
+                old_quote_pk = tender_quote.quotes_pk
+                
+                # Create execution copy of quote
+                execution_quote = Quotes.objects.create(
+                    supplier_quote_number=tender_quote.supplier_quote_number,
+                    total_cost=tender_quote.total_cost,
+                    pdf=tender_quote.pdf,
+                    contact_pk=tender_quote.contact_pk,
+                    project=tender_quote.project,
+                    tender_or_execution=2  # Execution mode
+                )
+                quote_pk_mapping[old_quote_pk] = execution_quote.quotes_pk
+                
+                # Copy quote allocations
+                tender_allocations = Quote_allocations.objects.filter(quotes_pk=tender_quote)
+                for alloc in tender_allocations:
+                    # Map to the new execution costing item
+                    new_costing_pk = costing_pk_mapping.get(alloc.item.costing_pk)
+                    if new_costing_pk:
+                        new_costing = Costing.objects.get(pk=new_costing_pk)
+                        Quote_allocations.objects.create(
+                            quotes_pk=execution_quote,
+                            item=new_costing,
+                            qty=alloc.qty,
+                            rate=alloc.rate,
+                            amount=alloc.amount,
+                            unit=alloc.unit,
+                            notes=alloc.notes
+                        )
+            
+            # Step 5: Set project to execution mode
+            project.project_status = 2
+            project.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Contract budget fixed successfully. Project is now in Execution mode.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fixing contract budget: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error fixing contract budget: {str(e)}'
         }, status=500)

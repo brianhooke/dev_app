@@ -299,7 +299,7 @@ class Projects(models.Model):
     xero_tracking_category = models.CharField(max_length=255, null=True, blank=True)
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
-    project_status = models.IntegerField(default=0)  # 0=tender, 1=won_not_started, 2=started, 3=finished
+    project_status = models.IntegerField(default=1)  # 1=tender, 2=execution
     manager = models.CharField(max_length=255, null=True, blank=True)
     manager_email = models.CharField(max_length=255, null=True, blank=True)
     contracts_admin_emails = models.CharField(max_length=500, null=True, blank=True)
@@ -463,6 +463,7 @@ class Costing(models.Model):
     fixed_on_site = models.DecimalField(max_digits=10, decimal_places=2)
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
+    tender_or_execution = models.IntegerField(default=1)  # 1=tender, 2=execution
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -484,6 +485,7 @@ class Quotes(models.Model):
     pdf = models.FileField(upload_to='pdfs/', null=True)
     contact_pk = models.ForeignKey('Contacts', on_delete=models.CASCADE, null=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, related_name='quotes')
+    tender_or_execution = models.IntegerField(default=1)  # 1=tender, 2=execution
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     def __str__(self):
@@ -599,6 +601,7 @@ class Bill_allocations(models.Model):
         (1, "direct cost in progress claim")
     ])
     xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_allocations')
+    tracking_category = models.ForeignKey('XeroTrackingCategories', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_allocations')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     

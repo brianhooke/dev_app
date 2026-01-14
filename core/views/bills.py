@@ -51,7 +51,7 @@ Note: Uses helper functions from xero.py:
 import csv
 from decimal import Decimal, InvalidOperation
 from django.http import HttpResponse, JsonResponse
-from ..models import Contacts, Costing, Bills, Bill_allocations, Projects
+from ..models import Contacts, Costing, Bills, Bill_allocations, Projects, XeroAccounts, XeroTrackingCategories
 import json
 from django.shortcuts import render
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
@@ -535,7 +535,9 @@ def get_approved_bills(request):
     
     # Prepare invoices data
     invoices_data = []
+    logger.info(f'get_approved_bills: Total invoices from query: {invoices.count()}')
     for invoice in invoices:
+        logger.info(f'Processing invoice {invoice.bill_pk} with status {invoice.bill_status}')
         try:
             # Get project name
             project_name = invoice.project.project if invoice.project else '-'
@@ -557,7 +559,7 @@ def get_approved_bills(request):
             xero_account_name = '-'
             first_allocation = invoice.bill_allocations.first()
             if first_allocation and first_allocation.xero_account:
-                xero_account_name = first_allocation.xero_account.name
+                xero_account_name = first_allocation.xero_account.account_name
             
             # Calculate gross
             total_net = float(invoice.total_net) if invoice.total_net else 0
@@ -576,6 +578,8 @@ def get_approved_bills(request):
             for allocation in invoice.bill_allocations.all():
                 allocations.append({
                     'allocation_pk': allocation.bill_allocation_pk,
+                    'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
+                    'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
                     'costing_name': allocation.item.item if allocation.item else '-',
                     'amount': float(allocation.amount) if allocation.amount else 0,
                     'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
@@ -600,7 +604,9 @@ def get_approved_bills(request):
             }
             invoices_data.append(invoice_data)
         except Exception as e:
+            import traceback
             logger.error(f"Error processing approved invoice {invoice.bill_pk}: {str(e)}")
+            logger.error(traceback.format_exc())
             continue
     
     return JsonResponse({
@@ -811,9 +817,13 @@ def get_project_bills(request, project_pk):
             })
         
         # Get costing items for this project (include unit_name for construction mode)
-        costing_items = list(Costing.objects.filter(
-            project_id=project_pk
-        ).select_related('unit').values('costing_pk', 'item', 'unit__unit_name'))
+        # Exclude internal category items from allocations
+        # Filter by tender_or_execution if provided (1=tender, 2=execution)
+        tender_or_execution = request.GET.get('tender_or_execution')
+        costing_filter = Costing.objects.filter(project_id=project_pk).exclude(category__category='Internal')
+        if tender_or_execution and tender_or_execution != 'null':
+            costing_filter = costing_filter.filter(tender_or_execution=int(tender_or_execution))
+        costing_items = list(costing_filter.select_related('unit').values('costing_pk', 'item', 'unit__unit_name'))
         
         return JsonResponse({
             'status': 'success',
@@ -972,26 +982,87 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
     
     try:
         data = json.loads(request.body)
+        logger.info(f'=== update_unallocated_invoice_allocation pk={allocation_pk} ===')
+        logger.info(f'Received data: {data}')
         
         allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
+        logger.info(f'BEFORE: item_id={allocation.item_id}, amount={allocation.amount}, gst={allocation.gst_amount}, notes={allocation.notes}')
         
         # Update fields if provided
         if 'item_pk' in data:
-            allocation.item_id = data['item_pk'] if data['item_pk'] else None
+            item_pk = data['item_pk'] if data['item_pk'] else None
+            allocation.item_id = item_pk
+            logger.info(f'  Setting item_id to: {allocation.item_id}')
+            
+            # If item is set, apply Costing's xero_account_code and xero_tracking_category
+            if item_pk:
+                try:
+                    costing_item = Costing.objects.get(costing_pk=item_pk)
+                    xero_instance_id = allocation.bill.project.xero_instance_id if allocation.bill.project else None
+                    
+                    # Set xero_account from Costing.xero_account_code
+                    if costing_item.xero_account_code and xero_instance_id:
+                        xero_account = XeroAccounts.objects.filter(
+                            xero_instance_id=xero_instance_id,
+                            account_code=costing_item.xero_account_code
+                        ).first()
+                        allocation.xero_account = xero_account
+                        logger.info(f'  Setting xero_account to: {xero_account}')
+                    
+                    # Set tracking_category from Costing.xero_tracking_category
+                    if costing_item.xero_tracking_category and xero_instance_id:
+                        tracking_value = costing_item.xero_tracking_category
+                        logger.info(f'  Looking for tracking_category: "{tracking_value}" in xero_instance_id={xero_instance_id}')
+                        
+                        # Try matching by option_name first
+                        tracking_cat = XeroTrackingCategories.objects.filter(
+                            xero_instance_id=xero_instance_id,
+                            option_name=tracking_value
+                        ).first()
+                        
+                        # If not found and value contains " - ", try splitting to get option_name
+                        if not tracking_cat and ' - ' in tracking_value:
+                            # Format is "Category - Option", extract just the option
+                            parts = tracking_value.split(' - ', 1)
+                            if len(parts) == 2:
+                                category_name, option_name = parts
+                                tracking_cat = XeroTrackingCategories.objects.filter(
+                                    xero_instance_id=xero_instance_id,
+                                    name=category_name,
+                                    option_name=option_name
+                                ).first()
+                                logger.info(f'  Tried name="{category_name}", option_name="{option_name}", found: {tracking_cat}')
+                        
+                        allocation.tracking_category = tracking_cat
+                        logger.info(f'  Setting tracking_category to: {tracking_cat}')
+                except Costing.DoesNotExist:
+                    logger.warning(f'  Costing item {item_pk} not found')
+            else:
+                # Clear xero fields if item is cleared
+                allocation.xero_account = None
+                allocation.tracking_category = None
+                
         if 'amount' in data:
             allocation.amount = data['amount'] or 0
+            logger.info(f'  Setting amount to: {allocation.amount}')
         if 'gst_amount' in data:
             allocation.gst_amount = data['gst_amount'] or 0
+            logger.info(f'  Setting gst_amount to: {allocation.gst_amount}')
         if 'qty' in data:
             allocation.qty = data['qty'] if data['qty'] else None
+            logger.info(f'  Setting qty to: {allocation.qty}')
         if 'unit' in data:
             allocation.unit = data['unit'] or ''
+            logger.info(f'  Setting unit to: {allocation.unit}')
         if 'rate' in data:
             allocation.rate = data['rate'] if data['rate'] else None
+            logger.info(f'  Setting rate to: {allocation.rate}')
         if 'notes' in data:
             allocation.notes = data['notes'] or ''
+            logger.info(f'  Setting notes to: {allocation.notes}')
         
         allocation.save()
+        logger.info(f'AFTER SAVE: item_id={allocation.item_id}, amount={allocation.amount}, gst={allocation.gst_amount}, notes={allocation.notes}')
         
         return JsonResponse({'status': 'success'})
         

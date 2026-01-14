@@ -514,47 +514,6 @@ Version: v160 (displayed in navbar bottom-left)
         </div>
     </div>
 
-    <!-- Xero Section (hidden initially, shown when Xero clicked) -->
-    <div id="xeroSection" style="display: none; height: 100%; flex-direction: column;">
-        
-        <!-- Xero Table using allocations_layout.html -->
-        <div style="flex: 1; overflow: hidden;">
-            {% include 'core/components/allocations_layout.html' with section_id=xero_config.section_id main_table_columns=xero_config.main_table_columns hide_viewer=xero_config.hide_viewer hide_allocations=xero_config.hide_allocations %}
-        </div>
-        
-        <!-- Footer Buttons -->
-        <div style="display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; padding: 10px 0;">
-            <button type="button" class="btn btn-light" id="addNewXeroBtn" style="border: 1px solid black;">Add New</button>
-        </div>
-    </div>
-
-    <!-- Contacts Section (hidden initially, shown when Contacts clicked) -->
-    <div id="contactsSection" style="display: none; height: 100%; flex-direction: column;">
-        
-        <!-- Xero Instance Dropdown - inline with label -->
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-shrink: 0;">
-            <label for="contactsXeroInstanceSelect" style="margin: 0; white-space: nowrap; font-weight: bold;">Xero Instance:</label>
-            <select class="form-control" id="contactsXeroInstanceSelect" style="max-width: 300px;">
-                {% for instance in xero_instances %}
-                    <option value="{{ instance.xero_instance_pk }}" {% if forloop.first %}selected{% endif %}>
-                        {{ instance.xero_name }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        
-        <!-- Contacts Table using allocations_layout.html -->
-        <div style="flex: 1; overflow: hidden;">
-            {% include 'core/components/allocations_layout.html' with section_id=contacts_config.section_id main_table_columns=contacts_config.main_table_columns hide_viewer=contacts_config.hide_viewer hide_allocations=contacts_config.hide_allocations %}
-        </div>
-        
-        <!-- Footer Buttons -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; padding: 10px 0;">
-            <button type="button" class="btn btn-light" id="pullXeroContactsBtn" style="border: 1px solid black;">Pull/Update Xero Contacts</button>
-            <button type="button" class="btn btn-light" id="addContactBtn" style="border: 1px solid black;">Add Contact</button>
-        </div>
-    </div>
-
     <!-- Project Type Config - must load before projects.html -->
     <script src="{% static 'core/js/project_type_config.js' %}"></script>
     
@@ -577,7 +536,7 @@ Version: v160 (displayed in navbar bottom-left)
 
 {{ ... }}
 {% include 'core/xero.html' %}
-{% include 'core/contacts.html' %}
+{% include 'core/contacts.html' %} <!-- Keep for modals and JS handlers used by Settings -->
 
 <script src="{% static 'core/js/utils.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
@@ -594,9 +553,7 @@ Version: v160 (displayed in navbar bottom-left)
             $('#billsInboxSection').hide();
             $('#billsApprovalsSection').hide();
             $('#allocationsSection').hide();
-            $('#contactsSection').hide();
             $('#projectsSection').hide();
-            $('#xeroSection').hide();
             $('#settingsSection').hide();
             $('#ratesSection').hide();
             
@@ -948,65 +905,6 @@ Version: v160 (displayed in navbar bottom-left)
             $('html, body').animate({ scrollTop: 0 }, 300);
         });
         
-        // Xero controller - shows inline in workspace
-        $('#xeroLink').click(function(e) {
-            e.preventDefault();
-            
-            // Remove active class from all nav items and set this one
-            $('.reusable-navbar a').removeClass('active');
-            $(this).addClass('active');
-            
-            // Hide all sections using universal function
-            window.hideAllSections();
-            
-            // Reset tender view state
-            if (typeof window.resetTenderViewState === 'function') {
-                window.resetTenderViewState();
-            }
-            
-            // Show Xero section and add has-content class to hide background
-            $('#xeroSection').css('display', 'flex').show();
-            $('#dynamicContentArea').addClass('has-content');
-            
-            // Load Xero instances
-            if (typeof loadXeroInstances === 'function') {
-                loadXeroInstances();
-            }
-            
-            // Scroll to top
-            $('html, body').animate({ scrollTop: 0 }, 300);
-        });
-        
-        // Contacts controller - shows inline in workspace
-        $('#contactsLink').click(function(e) {
-            e.preventDefault();
-            
-            // Remove active class from all nav items and set this one
-            $('.reusable-navbar a').removeClass('active');
-            $(this).addClass('active');
-            
-            // Hide all sections using universal function
-            window.hideAllSections();
-            
-            // Reset tender view state
-            if (typeof window.resetTenderViewState === 'function') {
-                window.resetTenderViewState();
-            }
-            
-            // Show contacts section and add has-content class to hide background
-            $('#contactsSection').css('display', 'flex').show();
-            $('#dynamicContentArea').addClass('has-content');
-            
-            // Load contacts for the selected Xero instance
-            const instancePk = $('#contactsXeroInstanceSelect').val();
-            if (instancePk && typeof loadContacts === 'function') {
-                loadContacts(instancePk);
-            }
-            
-            // Scroll to top
-            $('html, body').animate({ scrollTop: 0 }, 300);
-        });
-        
         // Settings controller - shows inline in workspace
         $('#settingsLink').click(function(e) {
             e.preventDefault();
@@ -1058,14 +956,6 @@ Version: v160 (displayed in navbar bottom-left)
             
             // Scroll to top
             $('html, body').animate({ scrollTop: 0 }, 300);
-        });
-        
-        // Handle Xero instance change in workspace contacts dropdown
-        $(document).on('change', '#contactsXeroInstanceSelect', function() {
-            const instancePk = $(this).val();
-            if (instancePk && typeof loadContacts === 'function') {
-                loadContacts(instancePk);
-            }
         });
         
         // Toggle Database Wipe Button visibility with SHIFT+BIN sequence

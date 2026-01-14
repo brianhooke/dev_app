@@ -217,6 +217,10 @@
     
     // Load Bills Inbox data
     window.loadBillsInbox = function() {
+        // Guard: ensure table exists before trying to load
+        if (!$('#billsInboxMainTableBody').length) {
+            return;
+        }
         
         $.ajax({
             url: '{% url "core:get_bills_list" %}',

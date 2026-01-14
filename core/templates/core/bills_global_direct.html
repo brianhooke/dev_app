@@ -141,7 +141,18 @@
                     row.attr('data-xero-account-pk', alloc.xero_account_pk);
                 }
                 
-                // 2. $ Net input
+                // 2. Tracking Category dropdown
+                var trackingSelect = $('<select>')
+                    .addClass('form-control form-control-sm tracking-category-select');
+                trackingSelect.append($('<option>').val('').text('Select...'));
+                row.append($('<td>').append(trackingSelect));
+                
+                // Store tracking_category_pk for later selection
+                if (alloc.tracking_category_pk) {
+                    row.attr('data-tracking-category-pk', alloc.tracking_category_pk);
+                }
+                
+                // 3. $ Net input
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -150,7 +161,7 @@
                     .val(alloc.amount || '');
                 row.append($('<td>').append(netInput));
                 
-                // 3. $ GST input
+                // 4. $ GST input
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -159,7 +170,7 @@
                     .val(alloc.gst_amount || '');
                 row.append($('<td>').append(gstInput));
                 
-                // 4. Notes input
+                // 5. Notes input
                 var notesInput = $('<input>')
                     .attr('type', 'text')
                     .addClass('form-control form-control-sm allocation-notes-input')
@@ -167,7 +178,7 @@
                     .val(alloc.notes || '');
                 row.append($('<td>').append(notesInput));
                 
-                // 5. Delete button
+                // 6. Delete button
                 var deleteBtn = $('<button>')
                     .addClass('btn btn-sm btn-danger delete-allocation-btn')
                     .html('<i class="fas fa-times"></i>')
@@ -205,16 +216,17 @@
             allocationsTableBody.append(row);
         }
         
-        // Populate Xero Account dropdowns for all rows
+        // Populate Xero Account and Tracking Category dropdowns for all rows
         if (instancePk) {
             populateAllXeroAccountDropdowns(instancePk);
+            populateAllTrackingCategoryDropdowns(instancePk);
         }
         
         // Update remaining allocations display
         updateRemainingAllocations();
         
         // Apply column widths for proper alignment (tbody uses display:block for scrolling)
-        Utils.applyColumnStyles('billsDirect', ['30%', '15%', '15%', '35%', '5%'], { addEditableClass: true });
+        Utils.applyColumnStyles('billsDirect', ['25%', '20%', '12%', '12%', '26%', '5%'], { addEditableClass: true });
         
         // Show Add Row button (since we're always in edit mode)
         $('#billsDirectAddAllocationBtn').show();
@@ -249,6 +261,39 @@
                         // Set stored value if exists
                         if (storedAccountPk) {
                             accountSelect.val(storedAccountPk);
+                        }
+                    });
+                }
+            }
+        });
+    }
+    
+    // Populate Tracking Category dropdowns for all allocation rows
+    function populateAllTrackingCategoryDropdowns(instancePk) {
+        if (!instancePk) return;
+        
+        $.ajax({
+            url: '/core/get_tracking_categories/' + instancePk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' && response.tracking_categories) {
+                    $('#billsDirectAllocationsTableBody tr').each(function() {
+                        var row = $(this);
+                        var trackingSelect = row.find('.tracking-category-select');
+                        var storedTrackingPk = row.attr('data-tracking-category-pk');
+                        
+                        // Clear existing options except first
+                        trackingSelect.find('option:not(:first)').remove();
+                        
+                        response.tracking_categories.forEach(function(cat) {
+                            trackingSelect.append($('<option>')
+                                .val(cat.tracking_category_pk)
+                                .text(cat.name));
+                        });
+                        
+                        // Set stored value if exists
+                        if (storedTrackingPk) {
+                            trackingSelect.val(storedTrackingPk);
                         }
                     });
                 }
@@ -439,6 +484,14 @@
             validateDirectSendButton(window.currentSelectedBillPk);
         });
         
+        $(document).on('change' + ns, '#billsDirectAllocationsTableBody .tracking-category-select', function() {
+            var row = $(this).closest('tr');
+            var allocationPk = row.attr('data-allocation-pk');
+            var value = $(this).val();
+            
+            updateAllocationField(allocationPk, 'tracking_category_pk', value, row);
+        });
+        
         $(document).on('change' + ns, '#billsDirectAllocationsTableBody .allocation-net-input', function() {
             var row = $(this).closest('tr');
             var allocationPk = row.attr('data-allocation-pk');
@@ -448,8 +501,8 @@
             var gstValue = (parseFloat(value) * 0.1).toFixed(2);
             row.find('.allocation-gst-input').val(gstValue);
             
-            updateAllocationField(allocationPk, 'amount', value, row);
-            updateAllocationField(allocationPk, 'gst_amount', gstValue, row);
+            // Update both amount and gst together to avoid race condition
+            updateAllocationFields(allocationPk, { amount: value, gst_amount: gstValue }, row);
             updateRemainingAllocations();
         });
         
@@ -479,6 +532,15 @@
             var allocationPk = row.attr('data-allocation-pk');
             
             if (confirm('Delete this allocation?')) {
+                // If no allocation_pk, this is an unsaved row - just remove from DOM
+                if (!allocationPk) {
+                    row.fadeOut(300, function() {
+                        $(this).remove();
+                        updateRemainingAllocations();
+                    });
+                    return;
+                }
+                
                 $.ajax({
                     url: '/core/delete_bill_allocation/',
                     type: 'POST',
@@ -497,15 +559,16 @@
             }
         });
         
-        // Add allocation button - use AllocationsManager's handler, just populate dropdown after
+        // Add allocation button - use AllocationsManager's handler, just populate dropdowns after
         $(document).on('click' + ns, '#billsDirectAddAllocationBtn', function() {
             // AllocationsManager's handler runs first and adds the row
-            // We just need to populate the Xero dropdown for the new row
+            // We just need to populate the dropdowns for the new row
             setTimeout(function() {
                 var instancePk = window.currentBillData ? 
                     (window.currentBillData.xero_instance_pk || window.currentBillData.xero_instance_id) : null;
                 if (instancePk) {
                     populateAllXeroAccountDropdowns(instancePk);
+                    populateAllTrackingCategoryDropdowns(instancePk);
                 }
                 updateRemainingAllocations();
             }, 50);
@@ -576,6 +639,7 @@
                 allocations.push({
                     allocation_pk: $(this).attr('data-allocation-pk'),
                     xero_account_pk: $(this).find('.xero-account-select').val(),
+                    tracking_category_pk: $(this).find('.tracking-category-select').val(),
                     amount: parseFloat($(this).find('.allocation-net-input').val()) || 0,
                     gst_amount: parseFloat($(this).find('.allocation-gst-input').val()) || 0,
                     notes: $(this).find('.allocation-notes-input').val()
@@ -662,11 +726,11 @@
         });
     }
     
-    // Update allocation field in database
-    // If allocationPk is empty, creates the allocation first
-    function updateAllocationField(allocationPk, field, value, row) {
+    // Update multiple allocation fields in database at once
+    // Prevents race condition when updating amount and gst_amount together
+    function updateAllocationFields(allocationPk, fields, row) {
         if (!allocationPk) {
-            // No allocation yet - create one first
+            // No allocation yet - create one first with all fields
             if (!window.currentBillData) return;
             
             var createData = {
@@ -674,7 +738,8 @@
                 amount: 0,
                 gst_amount: 0
             };
-            createData[field] = value;
+            // Merge all fields into createData
+            Object.assign(createData, fields);
             
             $.ajax({
                 url: '/core/create_bill_allocation/',
@@ -694,8 +759,9 @@
             return;
         }
         
+        // Update existing allocation with all fields at once
         var data = { allocation_pk: allocationPk };
-        data[field] = value;
+        Object.assign(data, fields);
         
         $.ajax({
             url: '/core/update_bill_allocation/',
@@ -704,6 +770,14 @@
             contentType: 'application/json',
             data: JSON.stringify(data)
         });
+    }
+    
+    // Update single allocation field in database
+    // If allocationPk is empty, creates the allocation first
+    function updateAllocationField(allocationPk, field, value, row) {
+        var fields = {};
+        fields[field] = value;
+        updateAllocationFields(allocationPk, fields, row);
     }
     
 })();

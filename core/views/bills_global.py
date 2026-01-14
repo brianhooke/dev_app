@@ -79,10 +79,11 @@ def bills_global_direct_view(request):
     
     # Allocations columns for Direct view
     allocations_columns = [
-        {'header': 'Xero Account', 'width': '30%'},
-        {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
-        {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
-        {'header': 'Notes', 'width': '35%'},
+        {'header': 'Xero Account', 'width': '25%'},
+        {'header': 'Tracking', 'width': '20%'},
+        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'RemainingNet'},
+        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'RemainingGst'},
+        {'header': 'Notes', 'width': '26%'},
         {'header': '', 'width': '5%', 'class': 'col-action-first'},  # Delete button
     ]
     
@@ -114,10 +115,12 @@ def bills_global_approvals_view(request):
     
     # Allocations columns for Approvals view (read-only)
     allocations_columns = [
-        {'header': 'Costing Item', 'width': '30%'},
-        {'header': '$ Net', 'width': '20%', 'still_to_allocate_id': 'TotalNet'},
-        {'header': '$ GST', 'width': '20%', 'still_to_allocate_id': 'TotalGst'},
-        {'header': 'Notes', 'width': '30%'},
+        {'header': 'Xero Account', 'width': '20%'},
+        {'header': 'Tracking Category', 'width': '20%'},
+        {'header': 'Costing Item', 'width': '15%'},
+        {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'TotalNet'},
+        {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'TotalGst'},
+        {'header': 'Notes', 'width': '15%'},
     ]
     
     context = {
@@ -200,7 +203,7 @@ def send_bill_direct(request):
             }, status=400)
         
         # Get allocations for this invoice
-        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account')
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account', 'tracking_category')
         
         if not allocations.exists():
             return JsonResponse({
@@ -241,6 +244,14 @@ def send_bill_direct(request):
                 "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
                 "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
             }
+            
+            # Add tracking category if set
+            if allocation.tracking_category:
+                line_item["Tracking"] = [{
+                    "Name": allocation.tracking_category.name,
+                    "Option": allocation.tracking_category.option_name
+                }]
+            
             line_items.append(line_item)
         
         # Build invoice payload for Xero
@@ -311,6 +322,198 @@ def send_bill_direct(request):
         }, status=400)
     except Exception as e:
         logger.error(f"Error in send_bill_direct: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@handle_xero_request_errors
+def send_bill_to_xero(request):
+    """
+    Send an approved bill to Xero from Bills - Approvals workflow.
+    
+    Expected POST data:
+    - bill_pk: int
+    
+    The bill already has all required data (supplier, allocations, etc.)
+    since it was approved through the project workflow.
+    """
+    try:
+        data = json.loads(request.body)
+        bill_pk = data.get('bill_pk')
+        
+        if not bill_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing bill_pk'
+            }, status=400)
+        
+        # Get the invoice
+        try:
+            invoice = Bills.objects.select_related(
+                'contact_pk', 'project', 'xero_instance', 'project__xero_instance'
+            ).get(bill_pk=bill_pk)
+        except Bills.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invoice not found'
+            }, status=404)
+        
+        # Check status - must be approved (2) or PO approved (103)
+        if invoice.bill_status not in [2, 103]:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Invoice status {invoice.bill_status} is not approved'
+            }, status=400)
+        
+        # Get supplier
+        supplier = invoice.contact_pk
+        if not supplier:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invoice has no supplier assigned'
+            }, status=400)
+        
+        if not supplier.xero_contact_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
+            }, status=400)
+        
+        # Get Xero instance (from invoice or project)
+        xero_instance = invoice.xero_instance
+        if not xero_instance and invoice.project:
+            xero_instance = invoice.project.xero_instance
+        
+        if not xero_instance:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No Xero instance found for this invoice'
+            }, status=400)
+        
+        # Get allocations
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
+            'xero_account', 'tracking_category', 'item'
+        )
+        
+        if not allocations.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No allocations found for this invoice'
+            }, status=400)
+        
+        # Check all allocations have Xero accounts
+        for allocation in allocations:
+            if not allocation.xero_account:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'All allocations must have a Xero Account selected'
+                }, status=400)
+        
+        # Get Xero authentication
+        xero_inst, access_token, tenant_id = get_xero_auth(xero_instance.xero_instance_pk)
+        if not xero_inst:
+            return access_token  # This is the error response
+        
+        logger.info(f"Sending approved bill {bill_pk} to Xero for instance: {xero_instance.xero_name}")
+        
+        # Build line items from allocations
+        line_items = []
+        for allocation in allocations:
+            line_item = {
+                "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
+                "Quantity": float(allocation.qty) if allocation.qty else 1,
+                "UnitAmount": float(allocation.amount) / (float(allocation.qty) if allocation.qty else 1),
+                "AccountCode": allocation.xero_account.account_code,
+                "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
+                "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
+            }
+            
+            # Add tracking category if set
+            if allocation.tracking_category:
+                line_item["Tracking"] = [{
+                    "Name": allocation.tracking_category.name,
+                    "Option": allocation.tracking_category.option_name
+                }]
+            
+            line_items.append(line_item)
+        
+        # Build invoice payload for Xero
+        invoice_payload = {
+            "Type": "ACCPAY",
+            "Contact": {
+                "ContactID": supplier.xero_contact_id
+            },
+            "Date": invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else date.today().strftime('%Y-%m-%d'),
+            "DueDate": invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else date.today().strftime('%Y-%m-%d'),
+            "InvoiceNumber": invoice.supplier_bill_number or '',
+            "LineItems": line_items,
+            "Status": "DRAFT"
+        }
+        
+        # Send to Xero API
+        logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
+        
+        response = requests.post(
+            'https://api.xero.com/api.xro/2.0/Invoices',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Xero-tenant-id': tenant_id
+            },
+            json={"Invoices": [invoice_payload]},
+            timeout=30
+        )
+        
+        # Check response
+        if response.status_code != 200:
+            error_msg = parse_xero_validation_errors(response)
+            if not error_msg:
+                error_msg = f'Xero API error: {response.status_code} - {response.text}'
+            logger.error(f"Xero API error: {error_msg}")
+            return JsonResponse({
+                'status': 'error',
+                'message': error_msg
+            }, status=response.status_code)
+        
+        # Success - parse response
+        xero_response = response.json()
+        logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
+        
+        # Extract Xero Invoice ID
+        xero_invoice_id = None
+        if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
+            xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
+        
+        # Update invoice status to "sent to Xero"
+        if invoice.bill_status == 2:
+            invoice.bill_status = 3  # Sent to Xero
+        elif invoice.bill_status == 103:
+            invoice.bill_status = 104  # PO sent to Xero
+        
+        invoice.bill_xero_id = xero_invoice_id
+        invoice.save()
+        
+        logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id})")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Bill sent to Xero successfully',
+            'bill_pk': invoice.bill_pk,
+            'xero_invoice_id': xero_invoice_id
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in send_bill_to_xero: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -440,7 +643,7 @@ def return_to_inbox(request):
                 }, status=404)
             
             # Delete all associated allocations
-            deleted_count = Bill_allocations.objects.filter(bill_pk=invoice).delete()[0]
+            deleted_count = Bill_allocations.objects.filter(bill=invoice).delete()[0]
             logger.info(f"Deleted {deleted_count} allocations for invoice {bill_pk}")
             
             # Clear fields and set status to -2
@@ -874,6 +1077,52 @@ def get_xero_accounts_by_instance(request, instance_pk):
 
 
 @csrf_exempt
+def get_tracking_categories_by_instance(request, instance_pk):
+    """
+    Get all Xero tracking categories for a specific Xero instance.
+    Used to populate the Tracking Category dropdown in bill allocations.
+    Returns "name - option_name" format for display.
+    """
+    try:
+        from core.models import XeroTrackingCategories
+        
+        categories = XeroTrackingCategories.objects.filter(
+            xero_instance_id=instance_pk,
+            status='ACTIVE'
+        ).order_by('name', 'option_name')
+        
+        # Build list with "name - option_name" format
+        tracking_list = []
+        seen_combos = set()
+        for cat in categories:
+            if cat.name and cat.option_name:
+                combo = f"{cat.name} - {cat.option_name}"
+                if combo not in seen_combos:
+                    tracking_list.append({
+                        'tracking_category_pk': cat.tracking_category_pk,
+                        'name': combo,
+                        'category_name': cat.name,
+                        'option_name': cat.option_name,
+                    })
+                    seen_combos.add(combo)
+        
+        # Sort alphabetically
+        tracking_list.sort(key=lambda x: x['name'].lower())
+        
+        return JsonResponse({
+            'status': 'success',
+            'tracking_categories': tracking_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching tracking categories for instance {instance_pk}: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
 def create_bill_allocation(request):
     """
     Create a new invoice allocation entry.
@@ -943,6 +1192,8 @@ def update_bill_allocation(request):
             allocation.notes = data['notes']
         if 'xero_account_pk' in data:
             allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
+        if 'tracking_category_pk' in data:
+            allocation.tracking_category_id = data['tracking_category_pk'] if data['tracking_category_pk'] else None
         
         allocation.save()
         

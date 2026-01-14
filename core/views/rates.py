@@ -946,12 +946,19 @@ def update_unit_qty(request):
 @require_http_methods(["POST"])
 def copy_to_contract_budget(request):
     """
-    Copy Rate and Qty values to Contract Budget (Costing.uncommitted_rate and uncommitted_qty).
-    Expects JSON body with: updates (array of {costing_pk, uncommitted_rate, uncommitted_qty})
+    Copy values to Contract Budget.
+    
+    If rates_based=1: Copy rate and qty to Costing.uncommitted_rate and uncommitted_qty
+    If rates_based=0: Copy total to Costing.uncommitted_amount
+    
+    Expects JSON body with:
+    - updates: array of {costing_pk, uncommitted_rate, uncommitted_qty} or {costing_pk, uncommitted_amount}
+    - rates_based: 0 or 1 (optional, determines which fields to update)
     """
     try:
         data = json.loads(request.body)
         updates = data.get('updates', [])
+        rates_based = data.get('rates_based', 1)  # Default to rates-based behavior
         
         if not updates:
             return JsonResponse({'status': 'error', 'message': 'No updates provided'}, status=400)
@@ -959,8 +966,6 @@ def copy_to_contract_budget(request):
         updated_count = 0
         for update in updates:
             costing_pk = update.get('costing_pk')
-            uncommitted_rate = update.get('uncommitted_rate')
-            uncommitted_qty = update.get('uncommitted_qty')
             
             if not costing_pk:
                 continue
@@ -968,17 +973,28 @@ def copy_to_contract_budget(request):
             try:
                 costing = Costing.objects.get(costing_pk=costing_pk)
                 
-                # Update uncommitted_rate
-                if uncommitted_rate is not None:
-                    costing.uncommitted_rate = round(float(uncommitted_rate), 2)
+                if rates_based == 1:
+                    # rates_based=1: Update uncommitted_rate and uncommitted_qty
+                    uncommitted_rate = update.get('uncommitted_rate')
+                    uncommitted_qty = update.get('uncommitted_qty')
+                    
+                    if uncommitted_rate is not None:
+                        costing.uncommitted_rate = round(float(uncommitted_rate), 2)
+                    else:
+                        costing.uncommitted_rate = None
+                    
+                    if uncommitted_qty is not None:
+                        costing.uncommitted_qty = round(float(uncommitted_qty), 2)
+                    else:
+                        costing.uncommitted_qty = None
                 else:
-                    costing.uncommitted_rate = None
-                
-                # Update uncommitted_qty
-                if uncommitted_qty is not None:
-                    costing.uncommitted_qty = round(float(uncommitted_qty), 2)
-                else:
-                    costing.uncommitted_qty = None
+                    # rates_based=0: Update only uncommitted_amount
+                    uncommitted_amount = update.get('uncommitted_amount')
+                    
+                    if uncommitted_amount is not None:
+                        costing.uncommitted_amount = round(float(uncommitted_amount), 2)
+                    else:
+                        costing.uncommitted_amount = 0
                 
                 costing.save()
                 updated_count += 1
@@ -990,7 +1006,7 @@ def copy_to_contract_budget(request):
                 logger.warning(f"[copy_to_contract_budget] Invalid value for costing {costing_pk}: {str(e)}")
                 continue
         
-        logger.info(f"[copy_to_contract_budget] Updated {updated_count} items")
+        logger.info(f"[copy_to_contract_budget] Updated {updated_count} items (rates_based={rates_based})")
         
         return JsonResponse({
             'status': 'success',
@@ -1229,6 +1245,64 @@ def get_xero_dropdown_data(request):
         
     except Exception as e:
         logger.error(f"[get_xero_dropdown_data] Error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_xero_sales_accounts(request):
+    """
+    Get Xero sales/revenue accounts for project Sales Account dropdown.
+    Filters to REVENUE, SALES, OTHERINCOME account types with ACTIVE status.
+    
+    Query parameters:
+    - xero_instance_pk: int (required) - Xero instance to get accounts from
+    
+    Returns accounts sorted by account_code.
+    """
+    try:
+        xero_instance_pk = request.GET.get('xero_instance_pk')
+        
+        if not xero_instance_pk:
+            return JsonResponse({'status': 'error', 'message': 'xero_instance_pk is required'}, status=400)
+        
+        from core.models import XeroInstances
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Xero instance not found'}, status=404)
+        
+        # Get sales/revenue accounts only - REVENUE, SALES, OTHERINCOME types with ACTIVE status
+        sales_types = ['REVENUE', 'SALES', 'OTHERINCOME']
+        accounts = XeroAccounts.objects.filter(
+            xero_instance=xero_instance,
+            account_status='ACTIVE',
+            account_type__in=sales_types
+        ).order_by('account_code')
+        
+        accounts_list = []
+        for acc in accounts:
+            accounts_list.append({
+                'xero_account_pk': acc.xero_account_pk,
+                'account_code': acc.account_code,
+                'account_name': acc.account_name,
+                'account_type': acc.account_type,
+                'display_name': f"{acc.account_code} - {acc.account_name}",
+            })
+        
+        # Sort by account_code numerically
+        accounts_list.sort(key=lambda x: (
+            float(x['account_code']) if x['account_code'].replace('.', '').isdigit() else float('inf'),
+            x['account_code']
+        ))
+        
+        return JsonResponse({
+            'status': 'success',
+            'accounts': accounts_list
+        })
+        
+    except Exception as e:
+        logger.error(f"[get_xero_sales_accounts] Error: {str(e)}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 

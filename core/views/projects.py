@@ -61,7 +61,7 @@ def create_project(request):
         # Get xero_instance from the project type
         xero_instance = project_type_obj.xero_instance
         
-        # Create project
+        # Create project (always starts in tender mode)
         project = Projects(
             project=project_name,
             project_type=project_type_obj,
@@ -70,7 +70,8 @@ def create_project(request):
             xero_tracking_category=xero_tracking_category,
             manager=manager,
             manager_email=manager_email,
-            contracts_admin_emails=contracts_admin_emails
+            contracts_admin_emails=contracts_admin_emails,
+            project_status=1  # 1=tender, 2=execution
         )
         
         project.save()
@@ -238,6 +239,7 @@ def get_projects(request):
                 'project': project.project,
                 'project_type': project.project_type.project_type if project.project_type else None,
                 'project_type_display': project.project_type.project_type if project.project_type else '',
+                'rates_based': project.project_type.rates_based if project.project_type else 0,
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',

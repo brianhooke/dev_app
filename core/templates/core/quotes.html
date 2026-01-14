@@ -346,9 +346,9 @@ $(document).ready(function() {
         }
         
         
-        // Load items first
+        // Load items first (exclude internal category items for allocations)
         $.ajax({
-            url: '/core/get_project_items/' + pk + '/',
+            url: '/core/get_project_items/' + pk + '/?exclude_internal=1',
             type: 'GET',
             success: function(response) {
                 if (response.status === 'success') {

@@ -15,6 +15,12 @@
     
     .items-right-panel {
         width: 70%;
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+    
+    .items-right-panel .rates-flex-body {
+        max-height: calc(100vh - 320px);
         overflow-y: auto;
     }
     
@@ -350,6 +356,7 @@ $(document).ready(function() {
                         allowDrag: true,
                         allowDelete: true,
                         projectPk: window.currentTenderProject ? window.currentTenderProject.pk : null,
+                        ratesBased: window.currentTenderProject ? window.currentTenderProject.rates_based : 0,
                         units: window.itemsUnits || [],
                         xeroAccounts: window.itemsXeroAccounts || [],
                         trackingCategories: window.itemsTrackingCategories || [],

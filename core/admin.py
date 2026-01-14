@@ -114,19 +114,21 @@ class XeroTrackingCategoriesAdmin(admin.ModelAdmin):
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
-    list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived")
+    list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived", "project_status")
+    list_filter = ('project_type', 'archived', 'project_status')
 
 class ContactsAdmin(admin.ModelAdmin):
     list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_details_verified", "checked")
 
 class QuotesAdmin(admin.ModelAdmin):
     form = QuotesForm
-    list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf")
+    list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf", "tender_or_execution")
+    list_filter = ('project', 'tender_or_execution')
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid")
-    list_filter = ('project', 'project_type', 'category')
+    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution")
+    list_filter = ('project', 'project_type', 'category', 'tender_or_execution')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
     form = QuoteAllocationsForm
@@ -185,7 +187,9 @@ class BillsAdmin(admin.ModelAdmin):
     search_fields = ('supplier_bill_number', 'contact_pk__contact_name', 'bill_xero_id')
 class BillAllocationsAdmin(admin.ModelAdmin):
     form = BillAllocationsForm
-    list_display = ("bill_allocation_pk", "bill", "item", "amount", "gst_amount", "notes", "allocation_type")
+    list_display = ("bill_allocation_pk", "bill", "item", "xero_account", "tracking_category", "amount", "gst_amount", "notes", "allocation_type")
+    list_filter = ('bill__bill_status', 'allocation_type', 'xero_account')
+    search_fields = ('bill__supplier_bill_number', 'notes')
 
 class HC_claimsAdmin(admin.ModelAdmin):
     list_display = ("hc_claim_pk", "date", "status", "display_id")

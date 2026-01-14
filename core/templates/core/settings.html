@@ -121,70 +121,395 @@
         background-color: rgba(40, 167, 69, 0.1);
     }
     
+    /* Settings menu styling */
+    .settings-menu-item {
+        color: var(--color-text, #212529);
+    }
+    
+    .settings-menu-item:hover {
+        background-color: var(--color-bg-muted, #f8f9fa);
+    }
+    
+    .settings-menu-item.active {
+        background-color: var(--color-accent, #3b82f6);
+        color: white;
+    }
+    
+    .settings-menu-item.active:hover {
+        background-color: var(--color-accent, #3b82f6);
+    }
+    
     </style>
 
 <div class="settings-container" style="height: 100%; display: flex; flex-direction: column;">
     <div style="display: flex; flex: 1; overflow: hidden;">
-        <!-- Left side: Main Table -->
-        <div class="settings-left-panel" style="width: 100%; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 0 6px 0;">
-            <!-- Main Table Container -->
-            <div class="settings-table-container reusable-table-container" style="flex: 0 0 auto; display: flex; flex-direction: column; overflow: hidden;">
-                <div id="settingsTableContainer" style="overflow-y: auto;">
-                    <table id="settingsMainTable" class="reusable-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 30%; text-align: left;">Project Type</th>
-                                <th style="width: 30%; text-align: left;">Xero Instance</th>
-                                <th style="width: 15%; text-align: left;">Rates Based</th>
-                                <th style="width: 10%; text-align: center;">Add</th>
-                                <th style="width: 15%; text-align: center;">Archive</th>
-                            </tr>
-                            <tr class="input-row">
-                                <td>
-                                    <input type="text" id="newProjectTypeInput" maxlength="50" placeholder="Enter project type name">
-                                </td>
-                                <td>
-                                    <select id="newXeroInstanceSelect">
-                                        <option value="">-- Select Xero Instance --</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <select id="newRatesBasedSelect">
-                                        <option value="">-- Select --</option>
-                                        <option value="1">Yes</option>
-                                        <option value="0">No</option>
-                                    </select>
-                                </td>
-                                <td style="text-align: center;">
-                                    <button id="addProjectTypeBtn" class="add-btn disabled" disabled>Add</button>
-                                </td>
-                                <td></td>
-                            </tr>
-                        </thead>
-                        <tbody id="settingsMainTableBody">
-                            <tr>
-                                <td colspan="3" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
-                                    Loading...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+        <!-- Left side: Settings Menu (25%) -->
+        <div class="settings-menu-panel" style="width: 25%; display: flex; flex-direction: column; height: 100%; padding: 12px; border-right: 1px solid var(--color-border, #dee2e6);">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: var(--color-text, #212529);">Settings</h3>
+            <div class="settings-menu-list" style="display: flex; flex-direction: column; gap: 4px;">
+                <div class="settings-menu-item active" data-section="project-type" style="padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; transition: background-color 0.15s;">
+                    <i class="fas fa-folder-open" style="margin-right: 8px; width: 16px;"></i>Project Type
+                </div>
+                <div class="settings-menu-item" data-section="contacts" style="padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; transition: background-color 0.15s;">
+                    <i class="fas fa-address-book" style="margin-right: 8px; width: 16px;"></i>Contacts
+                </div>
+                <div class="settings-menu-item" data-section="xero" style="padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; transition: background-color 0.15s;">
+                    <i class="fas fa-plug" style="margin-right: 8px; width: 16px;"></i>Xero
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Settings Footer with toggle button - fixed at bottom -->
-    <div id="settingsFooter" style="display: flex; justify-content: flex-start; align-items: center; margin-top: 15px; flex-shrink: 0; padding-top: 15px; border-top: 1px solid #e9ecef;">
-        <button id="toggleArchivedBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
-            <i class="fas fa-archive"></i> Show Archived
-        </button>
+        
+        <!-- Right side: Content Area (75%) -->
+        <div class="settings-content-panel" style="width: 75%; display: flex; flex-direction: column; height: 100%; padding: 12px 12px 6px 12px; overflow: hidden;">
+            
+            <!-- Project Type Section -->
+            <div id="settingsProjectTypeSection" class="settings-section" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                <div class="settings-table-container reusable-table-container" style="flex: 0 1 auto; display: flex; flex-direction: column; overflow: hidden; max-height: calc(100% - 60px);">
+                    <div id="settingsTableContainer" style="overflow-y: auto;">
+                        <table id="settingsMainTable" class="reusable-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%; text-align: left;">Project Type</th>
+                                    <th style="width: 30%; text-align: left;">Xero Instance</th>
+                                    <th style="width: 15%; text-align: left;">Rates Based</th>
+                                    <th style="width: 10%; text-align: center;">Add</th>
+                                    <th style="width: 15%; text-align: center;">Archive</th>
+                                </tr>
+                                <tr class="input-row">
+                                    <td>
+                                        <input type="text" id="newProjectTypeInput" maxlength="50" placeholder="Enter project type name">
+                                    </td>
+                                    <td>
+                                        <select id="newXeroInstanceSelect">
+                                            <option value="">-- Select Xero Instance --</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select id="newRatesBasedSelect">
+                                            <option value="">-- Select --</option>
+                                            <option value="1">Yes</option>
+                                            <option value="0">No</option>
+                                        </select>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <button id="addProjectTypeBtn" class="add-btn disabled" disabled>Add</button>
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsMainTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                        Loading...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Project Type Footer - fixed at bottom -->
+                <div id="settingsFooter" style="display: flex; justify-content: flex-start; align-items: center; margin-top: auto; flex-shrink: 0; padding-top: 15px;">
+                    <button id="toggleArchivedBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
+                        <i class="fas fa-archive"></i> Show Archived
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Contacts Section -->
+            <div id="settingsContactsSection" class="settings-section" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+                <!-- Xero Instance Dropdown -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-shrink: 0;">
+                    <label for="settingsContactsXeroSelect" style="margin: 0; white-space: nowrap; font-weight: bold;">Xero Instance:</label>
+                    <select class="form-control" id="settingsContactsXeroSelect" style="max-width: 300px;">
+                        <option value="">-- Select Xero Instance --</option>
+                    </select>
+                </div>
+                
+                <!-- Contacts Table -->
+                <div class="settings-table-container reusable-table-container" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="settingsContactsTableContainer" style="overflow-y: auto; flex: 1;">
+                        <table id="settingsContactsTable" class="reusable-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%; text-align: left;" class="sortable">Name</th>
+                                    <th style="width: 10%; text-align: left;" class="sortable">First Name</th>
+                                    <th style="width: 10%; text-align: left;" class="sortable">Last Name</th>
+                                    <th style="width: 18%; text-align: left;" class="sortable">Email</th>
+                                    <th style="width: 8%; text-align: left;">BSB</th>
+                                    <th style="width: 10%; text-align: left;">Account</th>
+                                    <th style="width: 12%; text-align: left;">ABN</th>
+                                    <th style="width: 7%; text-align: center;" class="col-action-first">Verify</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Update</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsContactsTableBody">
+                                <tr>
+                                    <td colspan="9" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                        Select a Xero Instance to view contacts
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Contacts Footer Button -->
+                <div style="display: flex; justify-content: flex-start; align-items: center; flex-shrink: 0; padding: 10px 0; margin-top: auto;">
+                    <button type="button" class="btn btn-light" id="settingsAddContactBtn" style="border: 1px solid black;">Add Contact</button>
+                </div>
+            </div>
+            
+            <!-- Xero Section -->
+            <div id="settingsXeroSection" class="settings-section" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+                <!-- Xero Instances Table -->
+                <div class="settings-table-container reusable-table-container" style="flex: 0 1 auto; display: flex; flex-direction: column; overflow: hidden; max-height: calc(100% - 60px);">
+                    <div id="settingsXeroTableContainer" style="overflow-y: auto;">
+                        <table id="settingsXeroTable" class="reusable-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%; text-align: left;" class="sortable">Xero Name</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action-first">Test</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Authorise</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Contacts</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Accounts</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Tracking</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Edit</th>
+                                    <th style="width: 5%; text-align: center;" class="col-action">Delete</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsXeroTableBody">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                        Loading...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Xero Footer Button -->
+                <div style="display: flex; justify-content: flex-start; align-items: center; flex-shrink: 0; padding: 10px 0; margin-top: auto;">
+                    <button type="button" class="btn btn-light" id="settingsAddNewXeroBtn" style="border: 1px solid black;">Add New Xero Instance</button>
+                </div>
+            </div>
+            
+        </div>
     </div>
 </div>
 
 <script>
 $(document).ready(function() {
     var xeroInstances = [];
+    
+    // ============================================
+    // SETTINGS MENU NAVIGATION
+    // ============================================
+    $('.settings-menu-item').on('click', function() {
+        var $item = $(this);
+        var section = $item.data('section');
+        
+        // Update active menu item
+        $('.settings-menu-item').removeClass('active');
+        $item.addClass('active');
+        
+        // Hide all sections
+        $('.settings-section').hide();
+        
+        // Show selected section
+        if (section === 'project-type') {
+            $('#settingsProjectTypeSection').show().css('display', 'flex');
+        } else if (section === 'contacts') {
+            $('#settingsContactsSection').show().css('display', 'flex');
+            loadSettingsContactsXeroInstances();
+        } else if (section === 'xero') {
+            $('#settingsXeroSection').show().css('display', 'flex');
+            loadSettingsXeroInstances();
+        }
+    });
+    
+    // ============================================
+    // SETTINGS XERO FUNCTIONALITY
+    // ============================================
+    var settingsXeroLoaded = false;
+    
+    function loadSettingsXeroInstances() {
+        if (settingsXeroLoaded) return;
+        
+        var tbody = $('#settingsXeroTableBody');
+        
+        $.ajax({
+            url: '/core/get_xero_instances/',
+            type: 'GET',
+            success: function(instances) {
+                settingsXeroLoaded = true;
+                tbody.empty();
+                
+                if (instances.length === 0) {
+                    tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>');
+                    return;
+                }
+                
+                instances.forEach(function(instance) {
+                    var row = $('<tr data-instance-pk="' + instance.xero_instance_pk + '"></tr>');
+                    row.data('instance', instance);
+                    
+                    row.append('<td>' + Utils.escapeHtml(instance.xero_name) + '</td>');
+                    row.append('<td class="col-action-first"><button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Test</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Authorise</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-contacts-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-accounts-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-tracking-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-warning edit-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '" data-client-id="' + Utils.escapeHtml(instance.xero_client_id) + '">Edit</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-danger delete-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '"><i class="fas fa-times"></i></button></td>');
+                    
+                    tbody.append(row);
+                });
+                
+                Utils.initSortableTable('settingsXeroTable', { tbodyId: 'settingsXeroTableBody' });
+            },
+            error: function() {
+                tbody.html('<tr><td colspan="8" style="text-align: center; color: #dc3545; padding: 20px;">Error loading Xero instances</td></tr>');
+            }
+        });
+    }
+    
+    // Add New Xero Instance button - triggers the existing modal
+    $('#settingsAddNewXeroBtn').on('click', function() {
+        $('#xeroNameInput').val('');
+        $('#xeroClientIdInput').val('');
+        $('#xeroClientSecretInput').val('');
+        $('#addXeroInstanceModal').modal('show');
+        setTimeout(function() {
+            $('.modal-backdrop').last().css('z-index', 1055);
+            $('#xeroNameInput').focus();
+        }, 100);
+    });
+    
+    // ============================================
+    // SETTINGS CONTACTS FUNCTIONALITY
+    // ============================================
+    var settingsContactsXeroInstances = [];
+    
+    function loadSettingsContactsXeroInstances() {
+        var $select = $('#settingsContactsXeroSelect');
+        if ($select.find('option').length > 1) return; // Already loaded
+        
+        $.ajax({
+            url: '/core/get_xero_instances_list/',
+            type: 'GET',
+            success: function(response) {
+                settingsContactsXeroInstances = response.xero_instances || [];
+                $select.empty().append('<option value="">-- Select Xero Instance --</option>');
+                settingsContactsXeroInstances.forEach(function(instance) {
+                    $select.append('<option value="' + instance.xero_instance_pk + '">' + Utils.escapeHtml(instance.xero_name) + '</option>');
+                });
+            }
+        });
+    }
+    
+    // Load contacts when Xero instance is selected
+    $('#settingsContactsXeroSelect').on('change', function() {
+        var instancePk = $(this).val();
+        if (instancePk) {
+            loadSettingsContacts(instancePk);
+        } else {
+            $('#settingsContactsTableBody').html('<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--color-text-muted);">Select a Xero Instance to view contacts</td></tr>');
+        }
+    });
+    
+    function loadSettingsContacts(instancePk) {
+        var tbody = $('#settingsContactsTableBody');
+        tbody.html('<tr><td colspan="9" style="text-align: center; padding: 20px;">Loading...</td></tr>');
+        
+        $.ajax({
+            url: '/core/get_contacts_by_instance/' + instancePk + '/',
+            type: 'GET',
+            success: function(contacts) {
+                tbody.empty();
+                
+                if (contacts.length === 0) {
+                    tbody.html('<tr><td colspan="9" style="text-align: center; padding: 40px;">No contacts found. Click "Pull Xero Contacts" to import.</td></tr>');
+                    return;
+                }
+                
+                contacts.forEach(function(contact) {
+                    var row = $('<tr data-contact-pk="' + contact.contact_pk + '"></tr>');
+                    row.data('contact', contact);
+                    
+                    // Format BSB as XXX-XXX
+                    var formattedBsb = contact.bank_bsb && contact.bank_bsb.length === 6 ? 
+                        contact.bank_bsb.substring(0, 3) + '-' + contact.bank_bsb.substring(3) : (contact.bank_bsb || '');
+                    
+                    // Format ABN as XX XXX XXX XXX
+                    var formattedAbn = '';
+                    if (contact.tax_number) {
+                        var cleaned = contact.tax_number.replace(/\s/g, '');
+                        if (cleaned.length === 11) {
+                            formattedAbn = cleaned.substring(0, 2) + ' ' + cleaned.substring(2, 5) + ' ' + 
+                                           cleaned.substring(5, 8) + ' ' + cleaned.substring(8);
+                        } else {
+                            formattedAbn = contact.tax_number;
+                        }
+                    }
+                    
+                    // Verified badge
+                    var verifiedBadge = '';
+                    if (contact.verified === 1) {
+                        verifiedBadge = ' <span class="badge badge-success" style="font-size: 0.7em;">✓ Verified</span>';
+                    } else if (contact.verified === 2) {
+                        verifiedBadge = ' <span class="badge badge-danger" style="font-size: 0.7em;">✗ Details Changed</span>';
+                    }
+                    
+                    row.append('<td class="contact-name">' + Utils.escapeHtml(contact.name || '') + verifiedBadge + '</td>');
+                    row.append('<td class="contact-first-name">' + Utils.escapeHtml(contact.first_name || '') + '</td>');
+                    row.append('<td class="contact-last-name">' + Utils.escapeHtml(contact.last_name || '') + '</td>');
+                    row.append('<td class="contact-email">' + Utils.escapeHtml(contact.email || '') + '</td>');
+                    row.append('<td class="contact-bsb" data-bsb="' + Utils.escapeHtml(contact.bank_bsb || '') + '">' + formattedBsb + '</td>');
+                    row.append('<td class="contact-account" data-account="' + Utils.escapeHtml(contact.bank_account_number || '') + '">' + Utils.escapeHtml(contact.bank_account_number || '') + '</td>');
+                    row.append('<td class="contact-abn" data-abn="' + Utils.escapeHtml(contact.tax_number || '') + '">' + formattedAbn + '</td>');
+                    row.append('<td class="col-action-first"><button class="btn btn-sm btn-info verify-contact-btn">Verify</button></td>');
+                    row.append('<td class="col-action"><button class="btn btn-sm btn-warning update-contact-btn">Update</button></td>');
+                    
+                    tbody.append(row);
+                });
+                
+                Utils.initSortableTable('settingsContactsTable', { tbodyId: 'settingsContactsTableBody' });
+            },
+            error: function() {
+                tbody.html('<tr><td colspan="9" style="text-align: center; color: #dc3545; padding: 20px;">Error loading contacts</td></tr>');
+            }
+        });
+    }
+    
+    // Add Contact button - triggers the existing add contact flow
+    $('#settingsAddContactBtn').on('click', function() {
+        var instancePk = $('#settingsContactsXeroSelect').val();
+        if (!instancePk) {
+            alert('Please select a Xero instance');
+            return;
+        }
+        
+        var tbody = $('#settingsContactsTableBody');
+        if (tbody.find('.add-contact-row').length > 0) {
+            alert('Please complete or cancel the current add operation');
+            return;
+        }
+        
+        var addRow = $('<tr class="add-contact-row" style="background-color: #f8f9fa;"></tr>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm name-input" placeholder="Name *" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm first-name-input" placeholder="First" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm last-name-input" placeholder="Last" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm email-input" placeholder="Email *" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm bsb-input" placeholder="XXX-XXX" maxlength="7" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm account-input" placeholder="Account" style="width: 100%;"></td>');
+        addRow.append('<td><input type="text" class="form-control form-control-sm abn-input" placeholder="XX XXX XXX XXX" maxlength="14" style="width: 100%;"></td>');
+        addRow.append('<td></td>');
+        addRow.append('<td><button class="btn btn-sm btn-success add-new-contact-btn">Add</button> <button class="btn btn-sm btn-secondary cancel-add-contact-btn">Cancel</button></td>');
+        
+        tbody.prepend(addRow);
+        addRow.find('.name-input').focus();
+    });
     
     // ============================================
     // LOAD SETTINGS TABLE

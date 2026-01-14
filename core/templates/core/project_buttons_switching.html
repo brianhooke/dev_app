@@ -122,6 +122,7 @@ $(document).ready(function() {
         const projectName = card.find('.card-title').text();
         const xeroInstancePk = card.data('xero-instance-pk');
         const projectType = card.data('project-type');
+        const ratesBased = card.data('rates-based') || 0;
         
         
         // Store current project info globally
@@ -129,7 +130,8 @@ $(document).ready(function() {
             pk: projectPk,
             name: projectName,
             xero_instance_pk: xeroInstancePk,
-            project_type: projectType
+            project_type: projectType,
+            rates_based: ratesBased
         };
         
         // Hide projects header and grid

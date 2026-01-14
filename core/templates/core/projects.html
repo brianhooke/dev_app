@@ -259,6 +259,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 20px;
+        align-items: start;  /* Prevent cards from stretching to match heights */
         padding: 10px 0;
     }
     
@@ -385,6 +386,73 @@
     .project-card .card-actions button {
         padding: 4px 8px;
         font-size: 11px;
+    }
+    
+    /* Card clickable area */
+    .project-card {
+        cursor: pointer;
+    }
+    
+    .project-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .project-card .card-chevron {
+        color: #6c757d;
+        transition: transform 0.3s ease;
+    }
+    
+    .project-card.expanded .card-chevron {
+        transform: rotate(180deg);
+    }
+    
+    /* Card dropdown form - hidden by default, shown when expanded */
+    .project-card .card-dropdown {
+        display: none !important;
+        cursor: default;
+        border-top: 1px solid #e9ecef;
+        background: #f8f9fa;
+        padding: 15px;
+        overflow: hidden;
+    }
+    
+    .project-card.expanded .card-dropdown {
+        display: block !important;
+    }
+    
+    .project-card .dropdown-form .form-group {
+        margin-bottom: 10px;
+    }
+    
+    .project-card .dropdown-form label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6c757d;
+        margin-bottom: 3px;
+        display: block;
+    }
+    
+    .project-card .dropdown-form input,
+    .project-card .dropdown-form select {
+        font-size: 13px;
+    }
+    
+    .project-card .dropdown-form input:disabled,
+    .project-card .dropdown-form select:disabled {
+        background: #e9ecef;
+        cursor: not-allowed;
+    }
+    
+    .project-card .dropdown-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+    }
+    
+    .project-card .dropdown-actions button {
+        font-size: 12px;
     }
     
     /* Project Modal Styles */
@@ -721,8 +789,9 @@ $(document).ready(function() {
             
             const card = $(`
                 <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}">
-                    <div class="card-header">
+                    <div class="card-header card-toggle">
                         <h5 class="card-title">${project.project}</h5>
+                        <i class="fas fa-chevron-down card-chevron"></i>
                     </div>
                     <div class="card-body">
                         <div class="card-info">
@@ -742,10 +811,43 @@ $(document).ready(function() {
                             </div>
                         </div>
                     </div>
+                    <div class="card-dropdown">
+                        <div class="dropdown-form">
+                            <div class="form-group">
+                                <label>Project Name</label>
+                                <input type="text" class="form-control form-control-sm dropdown-project-name" value="${project.project}" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Manager</label>
+                                <input type="text" class="form-control form-control-sm dropdown-manager" value="${project.manager || ''}" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Manager Email</label>
+                                <input type="email" class="form-control form-control-sm dropdown-manager-email" value="${project.manager_email || ''}" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Contracts Admin Emails</label>
+                                <input type="text" class="form-control form-control-sm dropdown-contracts-admin" value="${project.contracts_admin_emails || ''}" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label>Sales Account</label>
+                                <select class="form-control form-control-sm dropdown-sales-account" disabled>
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="dropdown-actions">
+                                <button class="btn btn-warning btn-sm dropdown-update-btn">Update</button>
+                                <button class="btn btn-success btn-sm dropdown-save-btn" style="display: none;">Save</button>
+                                <button class="btn btn-secondary btn-sm dropdown-cancel-btn" style="display: none;">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="card-footer">
                         <div class="card-status">
-                            <a href="#" class="project-status-link" data-status="${project.project_status}">Tender</a>
-                            <a href="#" class="construction-link">Execution</a>
+                            ${project.project_status === 1 
+                                ? '<a href="#" class="project-status-link" data-status="1">Tender</a>'
+                                : '<a href="#" class="construction-link" data-status="2">Execution</a>'
+                            }
                         </div>
                         <div class="card-actions">
                             <button class="btn ${archiveBtnClass} btn-sm archive-project-btn" title="${archiveBtnTitle}">
@@ -765,6 +867,8 @@ $(document).ready(function() {
             card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
             card.data('xero-instance-pk', project.xero_instance_pk);
             card.data('project-type', project.project_type);
+            card.data('rates-based', project.rates_based || 0);  // 0=not rates-based, 1=rates-based
+            card.data('project-status', project.project_status);  // 1=tender, 2=execution
             
             grid.append(card);
         });
@@ -800,23 +904,143 @@ $(document).ready(function() {
         openProjectModal(null, true);
     });
     
-    // Click on project card to open modal
+    // Click anywhere on card (except buttons/links/dropdown) to toggle dropdown
     $(document).on('click', '.project-card', function(e) {
-        // Don't open modal if clicking on a button or link
-        if ($(e.target).closest('a, button').length) return;
+        e.stopPropagation();
+        
+        // Don't toggle if clicking on a button, link, or inside dropdown form
+        if ($(e.target).closest('a, button, .card-dropdown').length) return;
         
         const card = $(this);
-        const project = {
-            projects_pk: card.data('project-pk'),
-            project: card.find('.card-title').text(),
-            project_type: card.data('project-type'),
-            manager: card.data('original-manager'),
-            manager_email: card.data('original-manager-email'),
-            contracts_admin_emails: card.data('original-contracts-admin-emails'),
-            xero_instance_pk: card.data('xero-instance-pk'),
-            xero_sales_account: card.data('original-sales-account')
-        };
-        openProjectModal(project, false);
+        const wasExpanded = card.hasClass('expanded');
+        
+        // Hide ALL dropdowns and remove expanded class from ALL cards
+        $('.project-card').removeClass('expanded');
+        $('.project-card .card-dropdown').hide();
+        
+        // If this card wasn't expanded, expand it now
+        if (!wasExpanded) {
+            card.addClass('expanded');
+            card.find('.card-dropdown').show();
+            
+            // Load sales accounts if not already loaded
+            const xeroInstancePk = card.data('xero-instance-pk');
+            const salesAccountSelect = card.find('.dropdown-sales-account');
+            if (xeroInstancePk && salesAccountSelect.find('option').length <= 1) {
+                loadSalesAccountsForCard(card, xeroInstancePk);
+            }
+        }
+    });
+    
+    // Load sales accounts for a card's dropdown
+    function loadSalesAccountsForCard(card, xeroInstancePk) {
+        const salesAccountSelect = card.find('.dropdown-sales-account');
+        const currentValue = card.data('original-sales-account') || '';
+        
+        $.ajax({
+            url: '/core/get_xero_accounts/' + xeroInstancePk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    salesAccountSelect.empty();
+                    salesAccountSelect.append('<option value="">Select...</option>');
+                    response.accounts.forEach(function(acc) {
+                        const selected = acc.account_code === currentValue ? ' selected' : '';
+                        salesAccountSelect.append(`<option value="${acc.account_code}"${selected}>${acc.account_code} - ${acc.account_name}</option>`);
+                    });
+                }
+            }
+        });
+    }
+    
+    // Dropdown Update button - enable editing
+    $(document).on('click', '.dropdown-update-btn', function(e) {
+        e.stopPropagation();
+        const card = $(this).closest('.project-card');
+        const dropdown = card.find('.card-dropdown');
+        
+        // Enable inputs
+        dropdown.find('input, select').prop('disabled', false);
+        
+        // Toggle buttons
+        $(this).hide();
+        dropdown.find('.dropdown-save-btn, .dropdown-cancel-btn').show();
+    });
+    
+    // Dropdown Cancel button - disable editing and reset
+    $(document).on('click', '.dropdown-cancel-btn', function(e) {
+        e.stopPropagation();
+        const card = $(this).closest('.project-card');
+        const dropdown = card.find('.card-dropdown');
+        
+        // Reset values
+        dropdown.find('.dropdown-project-name').val(card.data('original-project'));
+        dropdown.find('.dropdown-manager').val(card.data('original-manager') || '');
+        dropdown.find('.dropdown-manager-email').val(card.data('original-manager-email') || '');
+        dropdown.find('.dropdown-contracts-admin').val(card.data('original-contracts-admin-emails') || '');
+        dropdown.find('.dropdown-sales-account').val(card.data('original-sales-account') || '');
+        
+        // Disable inputs
+        dropdown.find('input, select').prop('disabled', true);
+        
+        // Toggle buttons
+        dropdown.find('.dropdown-save-btn, .dropdown-cancel-btn').hide();
+        dropdown.find('.dropdown-update-btn').show();
+    });
+    
+    // Dropdown Save button - save changes
+    $(document).on('click', '.dropdown-save-btn', function(e) {
+        e.stopPropagation();
+        const btn = $(this);
+        const card = btn.closest('.project-card');
+        const dropdown = card.find('.card-dropdown');
+        const projectPk = card.data('project-pk');
+        
+        btn.prop('disabled', true).text('Saving...');
+        
+        const formData = new FormData();
+        formData.append('project_name', dropdown.find('.dropdown-project-name').val());
+        formData.append('manager', dropdown.find('.dropdown-manager').val());
+        formData.append('manager_email', dropdown.find('.dropdown-manager-email').val());
+        formData.append('contracts_admin_emails', dropdown.find('.dropdown-contracts-admin').val());
+        formData.append('xero_sales_account', dropdown.find('.dropdown-sales-account').val());
+        
+        $.ajax({
+            url: '/core/update_project/' + projectPk + '/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Update card data
+                    card.data('original-project', dropdown.find('.dropdown-project-name').val());
+                    card.data('original-manager', dropdown.find('.dropdown-manager').val());
+                    card.data('original-manager-email', dropdown.find('.dropdown-manager-email').val());
+                    card.data('original-contracts-admin-emails', dropdown.find('.dropdown-contracts-admin').val());
+                    card.data('original-sales-account', dropdown.find('.dropdown-sales-account').val());
+                    
+                    // Update card display
+                    card.find('.card-title').text(dropdown.find('.dropdown-project-name').val());
+                    card.find('.card-row:contains("Manager") .card-value').text(dropdown.find('.dropdown-manager').val() || '-');
+                    
+                    // Disable inputs
+                    dropdown.find('input, select').prop('disabled', true);
+                    
+                    // Toggle buttons
+                    dropdown.find('.dropdown-save-btn, .dropdown-cancel-btn').hide();
+                    dropdown.find('.dropdown-update-btn').show();
+                } else {
+                    alert(response.message || 'Error updating project');
+                }
+                btn.prop('disabled', false).text('Save');
+            },
+            error: function() {
+                alert('Error updating project');
+                btn.prop('disabled', false).text('Save');
+            }
+        });
     });
     
     // Open project modal
@@ -889,6 +1113,15 @@ $(document).ready(function() {
             $('#modalUpdateBtn').show();
             $('#modalSaveBtn').hide();
             $('#modalCreateBtn').hide();
+            
+            // Show only the appropriate nav button based on project_status
+            if (project.project_status === 1) {
+                $('#modalTenderBtn').show();
+                $('#modalExecutionBtn').hide();
+            } else {
+                $('#modalTenderBtn').hide();
+                $('#modalExecutionBtn').show();
+            }
             $('.nav-buttons').show();
         }
         
@@ -937,14 +1170,27 @@ $(document).ready(function() {
             return Promise.resolve();
         }
         
-        return $.ajax({
-            url: `/core/get_xero_dropdown_data/?xero_instance_pk=${xeroInstancePk}`,
-            type: 'GET'
-        }).then(function(response) {
-            if (response.status === 'success') {
-                xeroDropdownCache[xeroInstancePk] = response;
-                populateXeroDropdowns(response);
-            }
+        // Load sales accounts and tracking categories in parallel
+        return Promise.all([
+            $.ajax({
+                url: `/core/get_xero_sales_accounts/?xero_instance_pk=${xeroInstancePk}`,
+                type: 'GET'
+            }),
+            $.ajax({
+                url: `/core/get_xero_dropdown_data/?xero_instance_pk=${xeroInstancePk}`,
+                type: 'GET'
+            })
+        ]).then(function(results) {
+            const salesResponse = results[0];
+            const dropdownResponse = results[1];
+            
+            const combinedData = {
+                sales_accounts: salesResponse.status === 'success' ? salesResponse.accounts : [],
+                tracking_categories: dropdownResponse.status === 'success' ? dropdownResponse.tracking_categories : []
+            };
+            
+            xeroDropdownCache[xeroInstancePk] = combinedData;
+            populateXeroDropdowns(combinedData);
         }).catch(function() {
             $('#modalSalesAccount').html('<option value="">Error loading accounts</option>');
             $('#modalTrackingCategory').html('<option value="">Error loading categories</option>');
@@ -952,14 +1198,12 @@ $(document).ready(function() {
     }
     
     function populateXeroDropdowns(data) {
-        // Populate sales accounts (REVENUE type only)
+        // Populate sales accounts (pre-filtered by backend)
         const salesSelect = $('#modalSalesAccount');
         salesSelect.prop('disabled', false);
         salesSelect.html('<option value="">Select Sales Account...</option>');
-        (data.xero_accounts || []).forEach(function(acc) {
-            if (acc.account_type === 'REVENUE' || acc.account_type === 'SALES' || acc.account_type === 'OTHERINCOME') {
-                salesSelect.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
-            }
+        (data.sales_accounts || []).forEach(function(acc) {
+            salesSelect.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
         });
         
         // Populate tracking categories (name - option_name format)
@@ -967,8 +1211,7 @@ $(document).ready(function() {
         trackingSelect.prop('disabled', false);
         trackingSelect.html('<option value="">Select Tracking Category...</option>');
         (data.tracking_categories || []).forEach(function(cat) {
-            const displayText = `${cat.name} - ${cat.option_name}`;
-            trackingSelect.append(`<option value="${cat.option_name}">${displayText}</option>`);
+            trackingSelect.append(`<option value="${cat.option_name}">${cat.name}</option>`);
         });
     }
     

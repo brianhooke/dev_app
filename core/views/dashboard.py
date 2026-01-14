@@ -56,11 +56,9 @@ try:
 except ImportError:
     from pypdf import PdfMerger, PdfReader
 # Import helpers from core.views.xero
-from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors, get_xero_config
+from core.views.xero import get_xero_auth, format_bank_details, parse_xero_validation_errors, handle_xero_request_errors
 # Import validators
 from core.validators import validate_email, validate_bsb, validate_account_number, validate_abn, validate_required_field
-# Import contacts config
-from core.views.contacts import get_contacts_config
 
 logger = logging.getLogger(__name__)
 
@@ -95,17 +93,9 @@ def dashboard_view(request):
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True, 'icon': 'fa-boxes'},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True, 'icon': 'fa-user-clock'},
         {'label': 'Rates', 'url': '#', 'id': 'ratesLink', 'page_id': 'rates', 'icon': 'fa-percentage'},
-        {'label': 'Contacts', 'url': '#', 'id': 'contactsLink', 'page_id': 'contacts', 'icon': 'fa-address-book'},
-        {'label': 'Xero', 'url': '#', 'id': 'xeroLink', 'page_id': 'xero', 'icon': 'fa-sync-alt'},
         {'divider': True},
         {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings', 'icon': 'fa-cog'},
     ]
-    
-    # Contacts table configuration - uses allocations_layout.html with full config
-    contacts_config = get_contacts_config()
-    
-    # Xero table configuration - uses allocations_layout.html with full config
-    xero_config = get_xero_config()
     
     # Get XeroInstances for dropdown
     xero_instances = XeroInstances.objects.all()
@@ -125,8 +115,6 @@ def dashboard_view(request):
         "project_name": settings.PROJECT_NAME,
         "spv_data": spv_data,
         "nav_items": nav_items,
-        "contacts_config": contacts_config,
-        "xero_config": xero_config,
         "xero_instances": xero_instances,
         "xero_instances_json": xero_instances_json,
         "settings": settings,  # Add settings to context for environment indicator
@@ -414,13 +402,26 @@ def get_project_categories(request, project_pk):
 def get_project_items(request, project_pk):
     """
     Get all items (costings) for a specific project, grouped by category.
+    
+    Query params:
+    - exclude_internal: '1' to exclude Internal category items (for allocations dropdowns)
+    - tender_or_execution: '1' for tender items, '2' for execution items (default: '1')
     """
     try:
         from core.models import Costing
         
+        exclude_internal = request.GET.get('exclude_internal', '0') == '1'
+        tender_or_execution = int(request.GET.get('tender_or_execution', '1'))
+        
         items = Costing.objects.filter(
-            project_id=project_pk
-        ).select_related('category', 'unit').order_by('category__order_in_list', 'order_in_list')
+            project_id=project_pk,
+            tender_or_execution=tender_or_execution
+        )
+        
+        if exclude_internal:
+            items = items.exclude(category__category='Internal')
+        
+        items = items.select_related('category', 'unit').order_by('category__order_in_list', 'order_in_list')
         
         items_list = []
         for item in items:
@@ -445,6 +446,7 @@ def get_project_items(request, project_pk):
                 'operator': item.operator,
                 'operator_value': float(item.operator_value) if item.operator_value is not None else None,
                 'quantity': quantity,
+                'contract_budget': float(item.contract_budget) if item.contract_budget else 0,
                 'uncommitted_amount': float(item.uncommitted_amount) if item.uncommitted_amount else 0,
                 'uncommitted_qty': float(item.uncommitted_qty) if item.uncommitted_qty else None,
                 'uncommitted_rate': float(item.uncommitted_rate) if item.uncommitted_rate else None,

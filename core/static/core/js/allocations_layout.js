@@ -313,11 +313,13 @@ var AllocationsManager = (function() {
     function bindEventHandlers(sectionId) {
         var cfg = configs[sectionId];
         
-        // Add allocation button
-        $(document).off('click', '#' + sectionId + 'AddAllocationBtn')
-            .on('click', '#' + sectionId + 'AddAllocationBtn', function() {
-                addAllocationRow(sectionId);
-            });
+        // Add allocation button (skip if section uses custom handler)
+        if (!cfg.features.customAddRowHandler) {
+            $(document).off('click', '#' + sectionId + 'AddAllocationBtn')
+                .on('click', '#' + sectionId + 'AddAllocationBtn', function() {
+                    addAllocationRow(sectionId);
+                });
+        }
         
         // Save allocations button
         $(document).off('click', '#' + sectionId + 'SaveAllocationsBtn')

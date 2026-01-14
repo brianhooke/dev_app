@@ -249,6 +249,8 @@ Column Behaviors:
 <!-- Include the reusable allocations layout -->
 {% include 'core/components/allocations_layout.html' %}
 
+<!-- Fix Contract Budget Section will be injected via JavaScript -->
+
 <script>
 (function() {
     'use strict';
@@ -290,11 +292,14 @@ Column Behaviors:
         
         tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; padding: 20px;">Loading...</td></tr>');
         
+        // Determine tender_or_execution value (1=tender, 2=execution)
+        var tenderOrExecution = isTender ? 1 : 2;
+        
         // Load categories, items, and committed amounts in parallel
         Promise.all([
             $.ajax({ url: '/core/get_project_categories/' + pk + '/', type: 'GET' }),
-            $.ajax({ url: '/core/get_project_items/' + pk + '/', type: 'GET' }),
-            $.ajax({ url: '/core/get_project_committed_amounts/' + pk + '/', type: 'GET' })
+            $.ajax({ url: '/core/get_project_items/' + pk + '/?tender_or_execution=' + tenderOrExecution, type: 'GET' }),
+            $.ajax({ url: '/core/get_project_committed_amounts/' + pk + '/?tender_or_execution=' + tenderOrExecution, type: 'GET' })
         ]).then(function(results) {
             var categories = results[0].categories || [];
             var items = results[1].items || [];
@@ -476,18 +481,22 @@ Column Behaviors:
         var workingBudget = uncommittedAmount + committedAmount;
         row.append('<td class="working-budget-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(workingBudget) + '</td>');
         
+        // Internal category items in execution mode: show blank/non-editable uncommitted fields
+        var internalInExecution = isInternal && !isTender;
+        
         if (isConstruction) {
             // Uncommitted: Qty | Rate | Amount | Notes (construction mode)
-            if (isInternal) {
-                row.append('<td>-</td>');  // Qty
-                row.append('<td>-</td>');  // Rate
-                row.append('<td>-</td>');  // Amount
-                row.append('<td>-</td>');  // Notes
+            if (internalInExecution) {
+                // Internal in execution: show blank non-editable cells
+                row.append('<td class="qty-cell" data-item-pk="' + item.costing_pk + '"></td>');
+                row.append('<td class="rate-cell" data-item-pk="' + item.costing_pk + '"></td>');
+                row.append('<td class="uncommitted-amount" data-item-pk="' + item.costing_pk + '"></td>');
+                row.append('<td style="text-align: center;"></td>');  // No notes icon
             } else {
                 // Qty - clickable text that becomes input
                 var qtyVal = parseFloat(item.uncommitted_qty || 0);
                 var qtyTd = $('<td class="qty-cell" data-item-pk="' + item.costing_pk + '"></td>');
-                var qtyLink = $('<a href="#" class="click-to-edit qty-display" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(qtyVal, 2) + '</a>');
+                var qtyLink = $('<a href="#" class="click-to-edit qty-display" data-item-pk="' + item.costing_pk + '" data-value="' + qtyVal + '">' + Utils.formatNumber(qtyVal, 2) + '</a>');
                 qtyLink.on('click', function(e) {
                     e.preventDefault();
                     convertToInput(item.costing_pk, 'qty');
@@ -498,7 +507,7 @@ Column Behaviors:
                 // Rate - clickable text that becomes input
                 var rateVal = parseFloat(item.uncommitted_rate || 0);
                 var rateTd = $('<td class="rate-cell" data-item-pk="' + item.costing_pk + '"></td>');
-                var rateLink = $('<a href="#" class="click-to-edit rate-display" data-item-pk="' + item.costing_pk + '">' + Utils.formatNumber(rateVal, 2) + '</a>');
+                var rateLink = $('<a href="#" class="click-to-edit rate-display" data-item-pk="' + item.costing_pk + '" data-value="' + rateVal + '">' + Utils.formatNumber(rateVal, 2) + '</a>');
                 rateLink.on('click', function(e) {
                     e.preventDefault();
                     convertToInput(item.costing_pk, 'rate');
@@ -523,9 +532,10 @@ Column Behaviors:
             }
         } else {
             // Uncommitted: single Amount field with click-to-edit (non-construction mode)
-            if (isInternal) {
-                row.append('<td>-</td>');
-                row.append('<td>-</td>');  // Notes
+            if (internalInExecution) {
+                // Internal in execution: show blank non-editable cell
+                row.append('<td class="amount-cell" data-item-pk="' + item.costing_pk + '"></td>');
+                row.append('<td style="text-align: center;"></td>');  // No notes icon
             } else {
                 // Amount - clickable text that becomes input (same UX as construction)
                 var amountVal = parseFloat(item.uncommitted_amount || 0);
@@ -559,9 +569,10 @@ Column Behaviors:
         if (isConstruction) {
             // Construction: Committed Qty | Rate | Amount
             if (isInternal) {
-                row.append('<td>-</td>');  // Qty
-                row.append('<td>-</td>');  // Rate
-                row.append('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+                // Internal items: blank committed cells (no allocations allowed)
+                row.append('<td></td>');  // Qty - blank
+                row.append('<td></td>');  // Rate - blank
+                row.append('<td></td>');  // Amount - blank
             } else {
                 // If multiple rates exist, show "multiple" for qty and rate
                 var qtyDisplay = hasMultipleRates ? 'multiple' : Utils.formatNumber(committedQty, 2);
@@ -606,7 +617,8 @@ Column Behaviors:
         var display = $(displaySelector);
         if (!display.length) return;
         
-        var currentVal = parseFloat(display.text()) || 0;
+        // Use data-value attribute for accurate value (avoids formatting issues)
+        var currentVal = parseFloat(display.attr('data-value')) || 0;
         var td = display.parent();
         
         // Create input
@@ -625,10 +637,18 @@ Column Behaviors:
             updateUncommittedAmount(itemPk);
         });
         
-        // Handle blur - convert back to link
+        // Handle Enter key - submit and blur
+        input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
+        // Handle blur - convert back to link and save
         input.on('blur', function() {
             var newVal = parseFloat($(this).val()) || 0;
-            var newLink = $('<a href="#" class="click-to-edit ' + field + '-display" data-item-pk="' + itemPk + '">' + Utils.formatNumber(newVal, 2) + '</a>');
+            var newLink = $('<a href="#" class="click-to-edit ' + field + '-display" data-item-pk="' + itemPk + '" data-value="' + newVal + '">' + Utils.formatNumber(newVal, 2) + '</a>');
             newLink.on('click', function(e) {
                 e.preventDefault();
                 convertToInput(itemPk, field);
@@ -787,7 +807,7 @@ Column Behaviors:
         };
         
         // Sum up values from item rows in this category
-        $('tr.item-row[data-category="' + categoryName + '"]:not([data-is-internal="true"])').each(function() {
+        $('tr.item-row[data-category="' + categoryName + '"]').each(function() {
             var itemPk = $(this).attr('data-item-pk');
             
             // Uncommitted
@@ -813,7 +833,7 @@ Column Behaviors:
         
         // For non-tender mode, also get contract_budget, cost_to_complete, billed, fixed_on_site from the row text
         if (!isTender) {
-            $('tr.item-row[data-category="' + categoryName + '"]:not([data-is-internal="true"])').each(function() {
+            $('tr.item-row[data-category="' + categoryName + '"]').each(function() {
                 var cells = $(this).find('td');
                 // Contract budget is the 3rd cell (index 2) in execution mode
                 var contractBudgetText = cells.eq(2).text();
@@ -936,7 +956,11 @@ Column Behaviors:
         
         // Columns before Uncommitted Rate: Cat/Item, Unit, Working, UncommQty = 4 cols in tender
         var colsBeforeBox = isTender ? 4 : 5;
-        var boxCols = isConstruction ? 6 : 4;  // UncommRate + UncommAmt + Notes + Committed cols
+        // Box spans from UncommRate to end of Committed section
+        // Execution + Construction: extend to include C2C (7 cols)
+        // Tender + Construction: 6 cols
+        // Non-construction: 4 cols
+        var boxCols = isConstruction ? (isTender ? 6 : 7) : 4;
         
         var detailsRow = $('<tr id="committed-details-row-' + itemPk + '" class="committed-details-row" data-item-pk="' + itemPk + '"></tr>');
         
@@ -1084,7 +1108,7 @@ Column Behaviors:
     function updateTotals() {
         var totals = { uncommitted: 0, committed: 0, working_budget: 0 };
         
-        $('#contractBudgetMainTableBody tr.item-row:not([data-is-internal="true"])').each(function() {
+        $('#contractBudgetMainTableBody tr.item-row').each(function() {
             var itemPk = $(this).attr('data-item-pk');
             var uncommitted = 0;
             
@@ -1237,6 +1261,88 @@ Column Behaviors:
             }
         });
     }
+    
+    // Show Fix Contract Budget button only in Tender mode
+    if (isTender && projectPk) {
+        // Inject the button section into the layout (after the table container)
+        var fixBudgetHtml = `
+            <div id="fixContractBudgetSection" style="margin-top: 12px; padding: 0 12px;">
+                <button id="fixContractBudgetBtn" class="btn btn-success">Fix Contract Budget</button>
+                <div style="color: #dc3545; font-size: 12px; margin-top: 8px; max-width: 400px;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    Fixing the Contract Budget moves the project from Tender to Execution. Tender values are saved for reference but this action is irreversible.
+                </div>
+            </div>
+        `;
+        // Insert after the table container inside the left panel
+        $('.contractBudget-table-container').first().after(fixBudgetHtml);
+    }
+    
+    // Fix Contract Budget button click handler (use .off first to prevent duplicate handlers)
+    $(document).off('click', '#fixContractBudgetBtn').on('click', '#fixContractBudgetBtn', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).text('Validating...');
+        
+        // Step 1: Validate all costing items have xero_account_code
+        $.ajax({
+            url: '/core/validate_fix_contract_budget/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status !== 'success') {
+                    alert(response.message || 'Validation failed');
+                    btn.prop('disabled', false).text('Fix Contract Budget');
+                    return;
+                }
+                
+                // Check for missing xero_account_code (mandatory)
+                if (response.missing_xero_account_codes && response.missing_xero_account_codes.length > 0) {
+                    alert('All Budget Items Must Have an Associated Xero Account. Fill in Missing Xero Accounts in BOM.');
+                    btn.prop('disabled', false).text('Fix Contract Budget');
+                    return;
+                }
+                
+                // Check for missing xero_tracking_category (optional warning)
+                if (response.missing_xero_tracking_categories && response.missing_xero_tracking_categories.length > 0) {
+                    if (!confirm('Some Contract Budget Items Do Not Have an Associated Xero Tracking Category. Return to BOM if required.\n\nClick OK to proceed anyway, or Cancel to return.')) {
+                        btn.prop('disabled', false).text('Fix Contract Budget');
+                        return;
+                    }
+                }
+                
+                // Final confirmation
+                if (!confirm('Fixing the Contract Budget is Irreversible. Proceed?')) {
+                    btn.prop('disabled', false).text('Fix Contract Budget');
+                    return;
+                }
+                
+                // Proceed with fixing the contract budget
+                btn.text('Processing...');
+                $.ajax({
+                    url: '/core/fix_contract_budget/' + projectPk + '/',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    success: function(fixResponse) {
+                        if (fixResponse.status === 'success') {
+                            alert('Contract Budget has been fixed. Project is now in Execution mode.');
+                            // Reload the page to reflect execution mode
+                            window.location.reload();
+                        } else {
+                            alert(fixResponse.message || 'Error fixing contract budget');
+                            btn.prop('disabled', false).text('Fix Contract Budget');
+                        }
+                    },
+                    error: function() {
+                        alert('Error fixing contract budget');
+                        btn.prop('disabled', false).text('Fix Contract Budget');
+                    }
+                });
+            },
+            error: function() {
+                alert('Error validating contract budget');
+                btn.prop('disabled', false).text('Fix Contract Budget');
+            }
+        });
+    });
     
 })();
 </script>

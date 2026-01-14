@@ -6,16 +6,17 @@ from .views.bills import update_bill, null_allocation_xero_fields, get_approved_
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
     bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
-    send_bill_direct, return_bill_to_project,
+    send_bill_direct, send_bill_to_xero, return_bill_to_project,
     # Moved from bills.py:
     get_bills_list, archive_bill, return_to_inbox, 
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
-    create_bill_allocation, update_bill_allocation, delete_bill_allocation
+    create_bill_allocation, update_bill_allocation, delete_bill_allocation,
+    get_tracking_categories_by_instance
 )
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
-from .views.contract_budget import contract_budget_view, update_uncommitted, get_project_committed_amounts, get_item_quote_allocations
+from .views.contract_budget import contract_budget_view, update_uncommitted, get_project_committed_amounts, get_item_quote_allocations, validate_fix_contract_budget, fix_contract_budget
 from .views.hc_variations import (
     hc_variations_view, get_hc_variations, get_hc_variation_allocations,
     save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
@@ -35,7 +36,7 @@ from .views.contacts import verify_contact_details, get_contacts_by_instance
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
@@ -98,6 +99,8 @@ urlpatterns = [
     path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
     path('get_project_committed_amounts/<int:project_pk>/', get_project_committed_amounts, name='get_project_committed_amounts'),
     path('get_item_quote_allocations/<int:item_pk>/', get_item_quote_allocations, name='get_item_quote_allocations'),
+    path('validate_fix_contract_budget/<int:project_pk>/', validate_fix_contract_budget, name='validate_fix_contract_budget'),
+    path('fix_contract_budget/<int:project_pk>/', fix_contract_budget, name='fix_contract_budget'),
     path('get_bill_allocations/<int:invoice_id>/', get_bill_allocations, name='get_bill_allocations'),
     path('post_progress_claim_data/', views.post_progress_claim_data, name='post_progress_claim_data'),
     path('post_direct_cost_data/', views.post_direct_cost_data, name='post_direct_cost_data'),
@@ -142,6 +145,7 @@ urlpatterns = [
     path('pull_xero_accounts_and_divisions/', pull_xero_accounts_and_divisions, name='pull_xero_accounts_and_divisions'),
     path('pull_xero_accounts/<int:instance_pk>/', pull_xero_accounts, name='pull_xero_accounts'),
     path('get_xero_accounts/<int:instance_pk>/', get_xero_accounts_by_instance, name='get_xero_accounts_by_instance'),
+    path('get_tracking_categories/<int:instance_pk>/', get_tracking_categories_by_instance, name='get_tracking_categories_by_instance'),
     path('create_bill_allocation/', create_bill_allocation, name='create_bill_allocation'),
     path('update_bill_allocation/', update_bill_allocation, name='update_bill_allocation'),
     path('delete_bill_allocation/', delete_bill_allocation, name='delete_bill_allocation'),
@@ -223,6 +227,7 @@ urlpatterns = [
     path('verify_contact_details/<int:contact_pk>/', verify_contact_details, name='verify_contact_details'),
     path('send_bill/', send_bill, name='send_bill'),
     path('send_bill_direct/', send_bill_direct, name='send_bill_direct'),
+    path('send_bill_to_xero/', send_bill_to_xero, name='send_bill_to_xero'),
     path('send_po_email/<int:project_pk>/<int:supplier_pk>/', dashboard_send_po_email, name='dashboard_send_po_email'),
     path('download_po_pdf/<int:project_pk>/<int:supplier_pk>/', download_po_pdf, name='download_po_pdf'),
     path('preview_po/<int:project_pk>/<int:supplier_pk>/', preview_po, name='preview_po'),
@@ -251,6 +256,7 @@ urlpatterns = [
     path('update_item_xero_account/', update_item_xero_account, name='update_item_xero_account'),
     path('update_item_tracking_category/', update_item_tracking_category, name='update_item_tracking_category'),
     path('get_xero_dropdown_data/', get_xero_dropdown_data, name='get_xero_dropdown_data'),
+    path('get_xero_sales_accounts/', get_xero_sales_accounts, name='get_xero_sales_accounts'),
     path('add_unit/', add_unit, name='add_unit'),
     path('reorder_unit/<int:unit_pk>/', reorder_unit, name='reorder_unit'),
     path('delete_unit/', delete_unit, name='delete_unit'),

@@ -42,6 +42,9 @@
         border: 1px solid #000;
         border-radius: 4px;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 180px);
     }
     
     /* Header Row 1 - Main headings */
@@ -151,7 +154,9 @@
     
     /* Body container */
     .rates-flex-body {
+        flex: 1;
         overflow-y: auto;
+        min-height: 0;
     }
     
     /* Category Row - ~25px height */
@@ -919,6 +924,7 @@
         var showQuantityColumn = options.showQuantityColumn === true; // default false
         var defaultExpanded = options.defaultExpanded === true; // default false (collapsed)
         var showCopyToContractButton = options.showCopyToContractButton === true; // default false
+        var ratesBased = options.ratesBased || 0; // 0=not rates-based, 1=rates-based
         
         var container = $(containerSelector);
         if (container.length === 0) {
@@ -1307,11 +1313,11 @@
         window.ratesTableUnits = units;
         
         // Attach event handlers
-        attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, options.onReload, options.useRatesEndpoint, options.projectType, showQuantityColumn, units, showCopyToContractButton);
+        attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, options.onReload, options.useRatesEndpoint, options.projectType, showQuantityColumn, units, showCopyToContractButton, ratesBased);
     };
     
     // Attach event handlers for the rates table
-    function attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, onReload, useRatesEndpoint, projectType, showQuantityColumn, units, showCopyToContractButton) {
+    function attachRatesTableHandlers(containerSelector, projectPk, allowDrag, allowDelete, onReload, useRatesEndpoint, projectType, showQuantityColumn, units, showCopyToContractButton, ratesBased) {
         var container = $(containerSelector);
         
         // DEBUG: Log handler attachment
@@ -1327,34 +1333,6 @@
         });
         console.log('=============================');
         
-        // DEBUG: Add document-level click capture to see ALL clicks
-        $(document).off('click.debugCapture').on('click.debugCapture', function(e) {
-            // Log ALL clicks with position info
-            console.log('=== DOCUMENT CLICK (any) ===');
-            console.log('Click at:', e.clientX, e.clientY);
-            console.log('Target:', e.target);
-            console.log('Target tag:', e.target.tagName);
-            console.log('Target classes:', e.target.className);
-            
-            // Check what element is at that point
-            var elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
-            console.log('Element at point:', elementAtPoint);
-            if (elementAtPoint !== e.target) {
-                console.log('WARNING: Element at point differs from target!');
-            }
-            
-            // Check if it's near a rate/unit/value cell
-            var $target = $(e.target);
-            var $cell = $target.closest('.col-rate, .col-unit, .col-value');
-            var $item = $target.closest('.rates-flex-item');
-            if ($item.length) {
-                console.log('In item row - PK:', $item.attr('data-item-pk'), 'Internal:', $item.hasClass('internal-item'));
-            }
-            if ($cell.length) {
-                console.log('In cell type:', $cell.hasClass('col-rate') ? 'rate' : ($cell.hasClass('col-unit') ? 'unit' : 'value'));
-            }
-            console.log('============================');
-        });
         
         // Helper function to update Qty and Total cells dynamically
         function updateQtyAndTotal(itemPk) {
@@ -1456,24 +1434,39 @@
         // Copy to Contract Budget button handler
         if (showCopyToContractButton) {
             $('#copyToContractBudgetBtn').off('click').on('click', function() {
-                if (!confirm('Are you sure you want to copy the Rate and Qty values to Contract Budget? This will overwrite existing uncommitted_rate and uncommitted_qty values.')) {
+                // Different behavior based on rates_based
+                var confirmMsg = ratesBased === 1 
+                    ? 'Are you sure you want to copy the Rate and Qty values to Contract Budget? This will overwrite existing uncommitted_rate and uncommitted_qty values.'
+                    : 'Are you sure you want to copy the Total values to Contract Budget? This will overwrite existing uncommitted_amount values.';
+                
+                if (!confirm(confirmMsg)) {
                     return;
                 }
                 
-                // Gather all item rates and quantities
+                // Gather all item data
                 var updates = [];
                 container.find('.rates-flex-item').each(function() {
                     var $row = $(this);
                     var itemPk = $row.attr('data-item-pk');
-                    var rate = parseFloat($row.find('.rate-input').val()) || null;
-                    var qty = parseFloat($row.find('.col-quantity').attr('data-qty-value')) || null;
                     
                     if (itemPk) {
-                        updates.push({
-                            costing_pk: parseInt(itemPk),
-                            uncommitted_rate: rate,
-                            uncommitted_qty: qty
-                        });
+                        if (ratesBased === 1) {
+                            // rates_based=1: Copy rate and qty
+                            var rate = parseFloat($row.find('.rate-input').val()) || null;
+                            var qty = parseFloat($row.find('.col-quantity').attr('data-qty-value')) || null;
+                            updates.push({
+                                costing_pk: parseInt(itemPk),
+                                uncommitted_rate: rate,
+                                uncommitted_qty: qty
+                            });
+                        } else {
+                            // rates_based=0: Only copy total to uncommitted_amount
+                            var total = parseFloat($row.find('.col-total').attr('data-total-value')) || 0;
+                            updates.push({
+                                costing_pk: parseInt(itemPk),
+                                uncommitted_amount: total
+                            });
+                        }
                     }
                 });
                 
@@ -1489,7 +1482,7 @@
                     type: 'POST',
                     contentType: 'application/json',
                     headers: { 'X-CSRFToken': csrfToken },
-                    data: JSON.stringify({ updates: updates }),
+                    data: JSON.stringify({ updates: updates, rates_based: ratesBased }),
                     success: function(response) {
                         if (response.status === 'success') {
                             alert('Successfully copied ' + response.updated_count + ' items to Contract Budget.');
