@@ -416,6 +416,10 @@ $(document).ready(function() {
         var netInput = $('<input>').attr('type', 'number').attr('step', '0.01')
             .addClass('form-control form-control-sm quote-edit-net')
             .val(currentNet.toFixed(2));
+        // Update still-to-allocate when net value changes
+        netInput.on('input change', function() {
+            AllocationsManager.updateStillToAllocate('quote');
+        });
         netCell.empty().append(netInput);
         
         // Cell 2: Quote # - convert to input

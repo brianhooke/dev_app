@@ -905,6 +905,22 @@ var AllocationsManager = (function() {
                 var gstInput = $('.new-' + sectionId + '-gst');
                 totalGst = parseFloat(gstInput.val()) || 0;
             }
+        } else if (st.editMode) {
+            // Edit mode: check for editable input first (e.g., quote-edit-net)
+            var editNetInput = $('.' + sectionId + '-edit-net');
+            if (editNetInput.length) {
+                totalNet = parseFloat(editNetInput.val()) || 0;
+            } else if (cfg.data.currentItem) {
+                totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
+            }
+            if (hasGst) {
+                var editGstInput = $('.' + sectionId + '-edit-gst');
+                if (editGstInput.length) {
+                    totalGst = parseFloat(editGstInput.val()) || 0;
+                } else if (cfg.data.currentItem) {
+                    totalGst = parseFloat(cfg.data.currentItem.total_gst || 0);
+                }
+            }
         } else if (cfg.data.currentItem) {
             totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
             if (hasGst) {
@@ -954,6 +970,14 @@ var AllocationsManager = (function() {
                 // View mode: show total allocated
                 netDisplayEl.text('$' + Utils.formatMoney(allocatedNet));
                 netDisplayEl.css('color', '#90EE90');
+            }
+        }
+        
+        // Update footer total Net display (e.g., quoteFooterCol2) when in edit mode
+        if (st.editMode) {
+            var footerNetEl = $('#' + sectionId + 'FooterCol2');
+            if (footerNetEl.length) {
+                footerNetEl.text('$' + Utils.formatMoney(totalNet));
             }
         }
         
