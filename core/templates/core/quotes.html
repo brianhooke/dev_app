@@ -19,6 +19,7 @@
         window.projectPk = '{{ project_pk }}';
     }
     window.quoteIsConstruction = {{ is_construction|yesno:"true,false" }};
+    window.quoteProjectStatus = {{ project_status }};
     // Column widths from Python context (single source of truth)
     window.quoteAllocationWidths = [{% for col in allocations_columns %}'{{ col.width }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
 </script>
@@ -185,6 +186,32 @@ $(document).ready(function() {
             },
             onAllocationsLoaded: function(sectionId, allocations) {
             },
+            preparePayload: function(payload, cfg) {
+                // Add main quote fields from editable inputs if in edit mode
+                if (window.editingQuotePk) {
+                    var row = $('#quoteMainTableBody tr[data-pk="' + window.editingQuotePk + '"]');
+                    var supplierSelect = row.find('.quote-edit-supplier');
+                    var netInput = row.find('.quote-edit-net');
+                    var quoteNumInput = row.find('.quote-edit-number');
+                    
+                    if (supplierSelect.length && supplierSelect.val()) {
+                        payload.supplier_pk = supplierSelect.val();
+                    }
+                    if (netInput.length) {
+                        payload.total_cost = parseFloat(netInput.val()) || 0;
+                    }
+                    if (quoteNumInput.length) {
+                        payload.supplier_quote_number = quoteNumInput.val();
+                    }
+                    
+                    console.log('[quotes.html] preparePayload - added main fields:', {
+                        supplier_pk: payload.supplier_pk,
+                        total_cost: payload.total_cost,
+                        supplier_quote_number: payload.supplier_quote_number
+                    });
+                }
+                return payload;
+            },
             onSave: function(itemPk, allocations, cfg) {
                 // Validate allocations before saving
                 var result = AllocationsManager.updateStillToAllocate('quote');
@@ -280,8 +307,33 @@ $(document).ready(function() {
         var row = $('#quoteMainTableBody tr[data-pk="' + quotePk + '"]');
         var saveBtn = row.find('.quote-save-btn');
         if (saveBtn.length) {
-            // Get the quote data from the row
+            // Get the updated quote data from the editable fields
             var quoteData = row.data('quote') || { quotes_pk: quotePk };
+            
+            // Read values from edit fields if they exist
+            var supplierSelect = row.find('.quote-edit-supplier');
+            var netInput = row.find('.quote-edit-net');
+            var quoteNumInput = row.find('.quote-edit-number');
+            
+            if (supplierSelect.length) {
+                quoteData.supplier_pk = supplierSelect.val();
+                quoteData.supplier_name = supplierSelect.find('option:selected').text();
+            }
+            if (netInput.length) {
+                quoteData.total_cost = parseFloat(netInput.val()) || 0;
+            }
+            if (quoteNumInput.length) {
+                quoteData.supplier_quote_number = quoteNumInput.val();
+            }
+            
+            // Update stored data
+            row.data('quote', quoteData);
+            
+            // Restore cells to read-only display
+            var cells = row.find('td');
+            $(cells[0]).empty().text(quoteData.supplier_name || '-').attr('title', quoteData.supplier_name || '');
+            $(cells[1]).empty().text('$' + Utils.formatMoney(quoteData.total_cost || 0));
+            $(cells[2]).empty().text(quoteData.supplier_quote_number || '-').attr('title', quoteData.supplier_quote_number || '');
             
             saveBtn
                 .removeClass('btn-success btn-secondary quote-save-btn')
@@ -299,6 +351,10 @@ $(document).ready(function() {
     
     // Open quote for editing
     function openQuoteForEditing(quote) {
+        console.log('[quotes.html] openQuoteForEditing called, quote:', quote);
+        console.log('[quotes.html] window.quotesCostingItems:', window.quotesCostingItems);
+        console.log('[quotes.html] window.itemsItems:', window.itemsItems);
+        console.log('[quotes.html] costingItems count:', (window.quotesCostingItems || window.itemsItems || []).length);
         
         // Set edit mode BEFORE anything else
         AllocationsManager.setEditMode('quote', true);
@@ -323,6 +379,53 @@ $(document).ready(function() {
                 });
         }
         
+        // Make Supplier, $ Net, Quote # cells editable
+        var cells = row.find('td');
+        
+        // Cell 0: Supplier - convert to supplier dropdown
+        var supplierCell = $(cells[0]);
+        var currentSupplierName = quote.supplier_name || supplierCell.text();
+        var currentSupplierPk = quote.supplier_pk || '';
+        var supplierSelect = $('<select>').addClass('form-control form-control-sm quote-edit-supplier');
+        supplierSelect.append($('<option>').val('').text('Select Supplier...'));
+        // Load suppliers for this project
+        var pk = projectPk || (window.currentQuotesProject && window.currentQuotesProject.pk);
+        if (pk) {
+            $.ajax({
+                url: '/core/get_project_contacts/' + pk + '/',
+                type: 'GET',
+                async: false,  // Need synchronous to populate before continuing
+                success: function(response) {
+                    if (response.status === 'success' && response.contacts) {
+                        response.contacts.forEach(function(contact) {
+                            var opt = $('<option>').val(contact.contact_pk).text(contact.name);
+                            if (contact.contact_pk == currentSupplierPk) {
+                                opt.prop('selected', true);
+                            }
+                            supplierSelect.append(opt);
+                        });
+                    }
+                }
+            });
+        }
+        supplierCell.empty().append(supplierSelect);
+        
+        // Cell 1: $ Net - convert to input
+        var netCell = $(cells[1]);
+        var currentNet = quote.total_cost ? parseFloat(quote.total_cost) : 0;
+        var netInput = $('<input>').attr('type', 'number').attr('step', '0.01')
+            .addClass('form-control form-control-sm quote-edit-net')
+            .val(currentNet.toFixed(2));
+        netCell.empty().append(netInput);
+        
+        // Cell 2: Quote # - convert to input
+        var quoteNumCell = $(cells[2]);
+        var currentQuoteNum = quote.supplier_quote_number || '';
+        var quoteNumInput = $('<input>').attr('type', 'text')
+            .addClass('form-control form-control-sm quote-edit-number')
+            .val(currentQuoteNum);
+        quoteNumCell.empty().append(quoteNumInput);
+        
         // Hide the footer Save button (we're using the main table Save button now)
         $('#quoteSaveAllocationsBtn').hide();
         
@@ -345,16 +448,31 @@ $(document).ready(function() {
             return;
         }
         
+        console.log('[quotes.html] loadQuotesData called, projectPk:', pk);
+        
+        // Determine tender_or_execution based on project status (from backend)
+        // project_status: 1=tender, 2=execution -> tender_or_execution: 1=tender, 2=execution
+        var projectStatus = window.quoteProjectStatus || 1;
+        var tenderOrExecution = (projectStatus == 2) ? 2 : 1;
+        console.log('[quotes.html] projectStatus:', projectStatus, 'tenderOrExecution:', tenderOrExecution);
         
         // Load items first (exclude internal category items for allocations)
         $.ajax({
-            url: '/core/get_project_items/' + pk + '/?exclude_internal=1',
+            url: '/core/get_project_items/' + pk + '/?exclude_internal=1&tender_or_execution=' + tenderOrExecution,
             type: 'GET',
             success: function(response) {
+                console.log('[quotes.html] get_project_items response:', response);
                 if (response.status === 'success') {
                     window.itemsItems = response.items;
                     window.quotesCostingItems = response.items;
+                    console.log('[quotes.html] Loaded costingItems count:', response.items.length);
+                    if (response.items.length > 0) {
+                        console.log('[quotes.html] First item sample:', response.items[0]);
+                    }
                 }
+            },
+            error: function(xhr, status, error) {
+                console.error('[quotes.html] Failed to load items:', error);
             }
         }).always(function() {
             // Then load quotes

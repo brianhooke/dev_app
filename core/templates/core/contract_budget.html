@@ -682,6 +682,14 @@ Column Behaviors:
             updateWorkingBudget(itemPk);
         });
         
+        // Handle Enter key - submit and blur
+        input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
         // Handle blur - convert back to link and save
         input.on('blur', function() {
             var newVal = parseFloat($(this).val()) || 0;

@@ -59,12 +59,14 @@ def quotes_view(request):
     """
     project_pk = request.GET.get('project_pk')
     is_construction = False
+    project_status = 1  # Default to tender mode
     
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
             # Use rates_based flag from ProjectTypes instead of hardcoded project type names
             is_construction = (project.project_type and project.project_type.rates_based == 1)
+            project_status = project.project_status or 1
         except Projects.DoesNotExist:
             pass
     
@@ -99,6 +101,7 @@ def quotes_view(request):
     context = {
         'project_pk': project_pk,
         'is_construction': is_construction,
+        'project_status': project_status,
         'main_table_columns': main_table_columns,
         'allocations_columns': allocations_columns,
     }
@@ -649,13 +652,17 @@ def save_project_quote(request):
                     logger.info(f"After save - Quote.pdf.url: {quote.pdf.url}")
             else:
                 # Create new quote
-                logger.info(f"Creating new quote with PDF...")
+                # Set tender_or_execution based on project status (1=tender, 2=execution)
+                tender_or_execution = 2 if project.project_status == 2 else 1
+                
+                logger.info(f"Creating new quote with PDF... tender_or_execution={tender_or_execution}")
                 quote = Quotes.objects.create(
                     supplier_quote_number=quote_number,
                     total_cost=total_cost,
                     pdf=pdf_content,
                     contact_pk=contact,
-                    project=project
+                    project=project,
+                    tender_or_execution=tender_or_execution
                 )
                 
                 # LOGGING: Check where the file was saved
@@ -760,9 +767,14 @@ def get_project_quotes(request, project_pk):
                 'message': 'Project not found'
             }, status=404)
         
-        # Get all quotes for this project with related data
+        # Filter quotes by tender_or_execution based on project status
+        # project_status: 1=tender, 2=execution
+        tender_or_execution = 2 if project.project_status == 2 else 1
+        
+        # Get quotes for this project filtered by tender_or_execution
         quotes = Quotes.objects.filter(
-            project_id=project_pk
+            project_id=project_pk,
+            tender_or_execution=tender_or_execution
         ).select_related('contact_pk').prefetch_related(
             Prefetch(
                 'quote_allocations',
@@ -915,10 +927,14 @@ def get_quote_allocations_by_quotes(request):
 def save_quote_allocations(request):
     """
     Save allocations for an existing quote (update mode).
+    Also updates main quote fields if provided.
     
     Expected POST data:
     {
         "pk": int (quote_pk),
+        "supplier_pk": int (optional),
+        "total_cost": decimal (optional),
+        "supplier_quote_number": str (optional),
         "allocations": [
             {"item_pk": int, "amount": decimal, "qty": decimal, "rate": decimal, "unit": str, "notes": str}
         ]
@@ -928,6 +944,11 @@ def save_quote_allocations(request):
         data = json.loads(request.body)
         quote_pk = data.get('pk')
         allocations_data = data.get('allocations', [])
+        
+        # Main quote fields (optional)
+        supplier_pk = data.get('supplier_pk')
+        total_cost = data.get('total_cost')
+        supplier_quote_number = data.get('supplier_quote_number')
         
         # DEBUG: Log what we received
         logger.info(f"=== SAVE QUOTE ALLOCATIONS DEBUG ===")
@@ -956,6 +977,30 @@ def save_quote_allocations(request):
         is_construction = (quote.project and quote.project.project_type and quote.project.project_type.rates_based == 1)
         
         with transaction.atomic():
+            # Update main quote fields if provided
+            quote_updated = False
+            if supplier_pk:
+                try:
+                    from core.models import Contacts
+                    quote.contact_pk = Contacts.objects.get(contact_pk=supplier_pk)
+                    quote_updated = True
+                    logger.info(f"Updated quote {quote_pk} supplier to {supplier_pk}")
+                except Contacts.DoesNotExist:
+                    logger.warning(f"Supplier {supplier_pk} not found")
+            
+            if total_cost is not None:
+                quote.total_cost = Decimal(str(total_cost))
+                quote_updated = True
+                logger.info(f"Updated quote {quote_pk} total_cost to {total_cost}")
+            
+            if supplier_quote_number is not None:
+                quote.supplier_quote_number = supplier_quote_number
+                quote_updated = True
+                logger.info(f"Updated quote {quote_pk} supplier_quote_number to {supplier_quote_number}")
+            
+            if quote_updated:
+                quote.save()
+            
             # Delete existing allocations and recreate
             Quote_allocations.objects.filter(quotes_pk=quote).delete()
             

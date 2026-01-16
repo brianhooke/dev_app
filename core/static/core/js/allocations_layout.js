@@ -1487,20 +1487,43 @@ var AllocationsManager = (function() {
         
         // Populate with costing items, grouped by category
         var currentCategory = null;
+        // Get the item pk from allocation - could be item_pk or costing_pk
+        // Convert to string for consistent comparison with option values
+        var allocItemPk = alloc.item_pk || alloc.costing_pk || null;
+        if (allocItemPk) allocItemPk = String(allocItemPk);
+        
+        console.log('[createEditableAllocationRow] sectionId:', sectionId);
+        console.log('[createEditableAllocationRow] alloc:', JSON.stringify(alloc));
+        console.log('[createEditableAllocationRow] allocItemPk:', allocItemPk);
+        console.log('[createEditableAllocationRow] costingItems:', costingItems);
+        console.log('[createEditableAllocationRow] costingItems.length:', costingItems ? costingItems.length : 'undefined');
+        
+        if (!costingItems || costingItems.length === 0) {
+            console.error('[createEditableAllocationRow] WARNING: costingItems is empty or undefined!');
+        }
+        
         costingItems.forEach(function(item) {
             // Add category optgroup if category changed
             if (item.category__category !== currentCategory) {
                 currentCategory = item.category__category;
                 itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
             }
-            var option = $('<option>').val(item.costing_pk).text(item.item);
+            // Use string for option value for consistent matching
+            var itemPkStr = String(item.costing_pk);
+            var option = $('<option>').val(itemPkStr).text(item.item);
             // Store unit as data attribute for construction mode
             option.attr('data-unit', item.unit__unit_name || item.unit || '');
-            if (alloc.item_pk && item.costing_pk == alloc.item_pk) {
+            // Set selected if this is the allocation's item
+            if (allocItemPk && itemPkStr === allocItemPk) {
                 option.prop('selected', true);
             }
             itemSelect.find('optgroup').last().append(option);
         });
+        
+        // After populating, force set the value if we have an allocItemPk
+        if (allocItemPk) {
+            itemSelect.val(allocItemPk);
+        }
         
         
         if (isConstruction) {
@@ -1667,13 +1690,16 @@ var AllocationsManager = (function() {
         var deleteBtn = $('<button>')
             .addClass('btn btn-sm btn-danger delete-allocation-btn')
             .html('<i class="fas fa-times"></i>')
-            .on('click', function() {
+            .on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 var pk = row.attr('data-allocation-pk');
                 if (pk && api.delete) {
                     var url = typeof api.delete === 'function' ? api.delete(pk) : api.delete.replace('{pk}', pk);
                     $.ajax({
                         url: url,
-                        type: 'POST',
+                        type: 'DELETE',
+                        headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                         success: function(response) {
                             row.remove();
                             onUpdate();
