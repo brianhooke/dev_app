@@ -634,6 +634,15 @@ $(document).ready(function() {
                         response.contacts.forEach(function(contact, index) {
                             supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
                         });
+                        // Initialize searchable dropdown after options are populated
+                        if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
+                            Utils.createSearchableDropdown(supplierSelect, {
+                                placeholder: 'Search suppliers...',
+                                onChange: function(value, text, $sel) {
+                                    window.validateNewQuote();
+                                }
+                            });
+                        }
                     }
                 },
                 error: function(xhr, status, error) {

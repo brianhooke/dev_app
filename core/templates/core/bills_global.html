@@ -420,7 +420,16 @@
                             supplierSelect.append($('<option>').val('').text('Select Xero Instance first...'));
                             supplierSelect.prop('disabled', true);
                         }
-                        row.append($('<td>').append(supplierSelect));
+                        var supplierTd = $('<td>').append(supplierSelect);
+                        row.append(supplierTd);
+                        
+                        // Initialize searchable dropdown for supplier if enabled
+                        if (selectedXeroInstanceId && typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
+                            Utils.createSearchableDropdown(supplierSelect, {
+                                pinnedValues: ['add_supplier'],
+                                placeholder: 'Search suppliers...'
+                            });
+                        }
                         
                         // 3. Bill # input
                         var billNumberInput = $('<input>')
@@ -1063,6 +1072,12 @@
                 populateAllAllocationDropdowns();
             }
             
+            // Destroy existing searchable dropdown if any
+            var existingController = supplierSelect.data('searchable-dropdown');
+            if (existingController) {
+                existingController.destroy();
+            }
+            
             // Rebuild supplier dropdown
             supplierSelect.empty();
             
@@ -1095,6 +1110,14 @@
                 // Restore selection if still valid
                 if (selectedSupplier && supplierSelect.find('option[value="' + selectedSupplier + '"]').length > 0) {
                     supplierSelect.val(selectedSupplier);
+                }
+                
+                // Initialize searchable dropdown
+                if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
+                    Utils.createSearchableDropdown(supplierSelect, {
+                        pinnedValues: ['add_supplier'],
+                        placeholder: 'Search suppliers...'
+                    });
                 }
             } else {
                 // Disable and show placeholder

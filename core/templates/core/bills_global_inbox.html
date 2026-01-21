@@ -127,7 +127,14 @@
                     .val(bill.supplier_bill_number || '');
                 row.append($('<td>').append(billNumberInput));
                 
-                // 4. $ Net input
+                // 4. $ Gross (calculated: Net + GST)
+                var netVal = bill.total_net !== null ? parseFloat(bill.total_net) : 0;
+                var gstVal = bill.total_gst !== null ? parseFloat(bill.total_gst) : 0;
+                var grossVal = netVal + gstVal;
+                var grossCell = $('<td>').addClass('gross-cell').text(grossVal ? Utils.formatCurrency(grossVal) : '');
+                row.append(grossCell);
+                
+                // 5. $ Net input
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -136,7 +143,7 @@
                     .val(bill.total_net !== null ? bill.total_net : '');
                 row.append($('<td>').append(netInput));
                 
-                // 5. $ GST input
+                // 6. $ GST input
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -238,6 +245,9 @@
                 // Populate table
                 AllocationsManager.populateMainTable('billsInbox', inboxBills);
                 
+                // Initialize searchable dropdowns for supplier selects
+                initSupplierSearchableDropdowns();
+                
                 // Add truncation tooltips
                 Utils.addTruncationTooltips('billsInboxMainTable');
                 
@@ -249,6 +259,36 @@
             }
         });
     };
+    
+    // Initialize searchable dropdowns for supplier selects
+    function initSupplierSearchableDropdowns() {
+        $('#billsInboxMainTableBody .supplier-select').each(function() {
+            var $select = $(this);
+            // Skip if already initialized or disabled
+            if ($select.data('searchable-dropdown') || $select.prop('disabled')) {
+                return;
+            }
+            
+            Utils.createSearchableDropdown($select, {
+                pinnedValues: ['__new__'],
+                placeholder: 'Search suppliers...',
+                onChange: function(value, text, $sel) {
+                    var row = $sel.closest('tr');
+                    
+                    // Trigger the existing change handler for "+ New Supplier" logic
+                    if (value === '__new__') {
+                        row.find('.searchable-dropdown-wrapper').hide();
+                        row.find('.new-supplier-form').show();
+                        row.find('.new-supplier-name').val('').focus();
+                    }
+                    
+                    // Validate send button
+                    var billPk = row.attr('data-bill-pk');
+                    validateInboxSendButton(billPk);
+                }
+            });
+        });
+    }
     
     // Bind input change handlers for validation
     function bindInboxInputHandlers() {
@@ -266,6 +306,14 @@
                 row.find('.gst-input').val(gstValue);
             }
             
+            // Update $ Gross when Net or GST changes
+            if ($(this).hasClass('net-input') || $(this).hasClass('gst-input')) {
+                var netVal = parseFloat(row.find('.net-input').val()) || 0;
+                var gstVal = parseFloat(row.find('.gst-input').val()) || 0;
+                var grossVal = netVal + gstVal;
+                row.find('.gross-cell').text(grossVal ? Utils.formatCurrency(grossVal) : '');
+            }
+            
             // Update supplier dropdown when Xero Instance changes
             if ($(this).hasClass('xero-project-select')) {
                 updateSupplierDropdown(row, $(this).val());
@@ -280,7 +328,8 @@
         
         // Hide any open new supplier form
         row.find('.new-supplier-form').hide();
-        row.find('.supplier-select').show();
+        // Show the searchable dropdown wrapper, not the hidden original select
+        row.find('.searchable-dropdown-wrapper').show();
         
         var xeroInstanceId = null;
         if (selectedValue && selectedValue.startsWith('xero_')) {
@@ -306,9 +355,35 @@
                     supplierSelect.append($('<option>').val(supplier.contact_pk).text(supplier.name));
                 }
             });
+            
+            // Refresh or initialize searchable dropdown
+            var controller = supplierSelect.data('searchable-dropdown');
+            if (controller) {
+                controller.refresh();
+            } else {
+                Utils.createSearchableDropdown(supplierSelect, {
+                    pinnedValues: ['__new__'],
+                    placeholder: 'Search suppliers...',
+                    onChange: function(value, text, $sel) {
+                        var r = $sel.closest('tr');
+                        if (value === '__new__') {
+                            r.find('.searchable-dropdown-wrapper').hide();
+                            r.find('.new-supplier-form').show();
+                            r.find('.new-supplier-name').val('').focus();
+                        }
+                        var billPk = r.attr('data-bill-pk');
+                        validateInboxSendButton(billPk);
+                    }
+                });
+            }
         } else {
             supplierSelect.prop('disabled', true);
             supplierSelect.find('option:first').text('Select Xero Instance first...');
+            // Destroy searchable dropdown if disabled
+            var controller = supplierSelect.data('searchable-dropdown');
+            if (controller) {
+                controller.destroy();
+            }
         }
     }
     
@@ -338,7 +413,10 @@
         
         var row = $(this).closest('tr');
         row.find('.new-supplier-form').hide();
-        row.find('.supplier-select').show().val('');
+        // Show the searchable dropdown wrapper, reset value
+        row.find('.searchable-dropdown-wrapper').show();
+        var controller = row.find('.supplier-select').val('').data('searchable-dropdown');
+        if (controller) controller.refresh();
         
         var billPk = row.attr('data-bill-pk');
         validateInboxSendButton(billPk);
@@ -407,9 +485,12 @@
                     supplierSelect.find('option[value="__new__"]').after(newOption);
                     supplierSelect.val(newSupplier.contact_pk);
                     
-                    // Hide form, show dropdown
+                    // Hide form, show searchable dropdown wrapper
                     row.find('.new-supplier-form').hide();
-                    supplierSelect.show();
+                    row.find('.searchable-dropdown-wrapper').show();
+                    // Refresh searchable dropdown to show new option
+                    var controller = supplierSelect.data('searchable-dropdown');
+                    if (controller) controller.refresh();
                     
                     // Validate send button
                     var billPk = row.attr('data-bill-pk');
@@ -510,12 +591,23 @@
             }),
             success: function(response) {
                 if (response.status === 'success') {
+                    // Get next row (or previous if no next) before fade
+                    var nextRow = row.next('tr');
+                    if (!nextRow.length) {
+                        nextRow = row.prev('tr');
+                    }
+                    
                     AllocationsManager.showSuccessAndFadeRow(button, row, function() {
                         if (window.currentSelectedBillPk === billPk) {
                             $('#billsInboxPdfViewer').hide();
                             $('#billsInboxViewerPlaceholder').show();
                             window.currentSelectedBillPk = null;
                             window.currentBillData = null;
+                        }
+                        
+                        // Auto-select next row after fade completes
+                        if (nextRow.length) {
+                            nextRow.click();
                         }
                     });
                 } else {

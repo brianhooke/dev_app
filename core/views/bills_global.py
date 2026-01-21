@@ -42,14 +42,15 @@ def bills_global_inbox_view(request):
     """
     # Main table columns for Inbox view
     main_table_columns = [
-        {'header': 'Xero / Project', 'width': '15%'},
-        {'header': 'Supplier', 'width': '20%'},
-        {'header': 'Bill #', 'width': '12%'},
-        {'header': '$ Net', 'width': '13%'},
-        {'header': '$ GST', 'width': '13%'},
+        {'header': 'Xero / Project', 'width': '14%'},
+        {'header': 'Supplier', 'width': '18%'},
+        {'header': 'Bill #', 'width': '10%'},
+        {'header': '$ Gross', 'width': '11%'},
+        {'header': '$ Net', 'width': '11%'},
+        {'header': '$ GST', 'width': '11%'},
         {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Send', 'width': '7%', 'class': 'col-action'},
-        {'header': 'Archive', 'width': '7%', 'class': 'col-action'},
+        {'header': 'Send', 'width': '6%', 'class': 'col-action'},
+        {'header': 'Archive', 'width': '6%', 'class': 'col-action'},
     ]
     
     context = {
@@ -68,22 +69,24 @@ def bills_global_direct_view(request):
     # Main table columns for Direct view
     main_table_columns = [
         {'header': 'Xero / Project', 'width': '14%'},
-        {'header': 'Supplier', 'width': '23%'},
+        {'header': 'Supplier', 'width': '20%'},
         {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Net', 'width': '10%'},
-        {'header': '$ GST', 'width': '10%'},
-        {'header': 'Email', 'width': '8%', 'class': 'col-action-first'},
-        {'header': 'Send to Xero', 'width': '12%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '8%', 'class': 'col-action'},
+        {'header': '$ Gross', 'width': '9%'},
+        {'header': '$ Net', 'width': '9%'},
+        {'header': '$ GST', 'width': '9%'},
+        {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
+        {'header': 'Send to Xero', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '7%', 'class': 'col-action'},
     ]
     
     # Allocations columns for Direct view
     allocations_columns = [
-        {'header': 'Xero Account', 'width': '25%'},
-        {'header': 'Tracking', 'width': '20%'},
-        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'RemainingNet'},
-        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'RemainingGst'},
-        {'header': 'Notes', 'width': '26%'},
+        {'header': 'Xero Account', 'width': '23%'},
+        {'header': 'Tracking', 'width': '18%'},
+        {'header': '$ Gross', 'width': '11%', 'still_to_allocate_id': 'RemainingGross'},
+        {'header': '$ Net', 'width': '11%', 'still_to_allocate_id': 'RemainingNet'},
+        {'header': '$ GST', 'width': '11%', 'still_to_allocate_id': 'RemainingGst'},
+        {'header': 'Notes', 'width': '21%'},
         {'header': '', 'width': '5%', 'class': 'col-action-first'},  # Delete button
     ]
     
@@ -115,12 +118,13 @@ def bills_global_approvals_view(request):
     
     # Allocations columns for Approvals view (read-only)
     allocations_columns = [
-        {'header': 'Xero Account', 'width': '20%'},
-        {'header': 'Tracking Category', 'width': '20%'},
-        {'header': 'Costing Item', 'width': '15%'},
-        {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'TotalNet'},
-        {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'TotalGst'},
-        {'header': 'Notes', 'width': '15%'},
+        {'header': 'Xero Account', 'width': '18%'},
+        {'header': 'Tracking Category', 'width': '18%'},
+        {'header': 'Costing Item', 'width': '14%'},
+        {'header': '$ Gross', 'width': '12%', 'still_to_allocate_id': 'TotalGross'},
+        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
+        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
+        {'header': 'Notes', 'width': '14%'},
     ]
     
     context = {

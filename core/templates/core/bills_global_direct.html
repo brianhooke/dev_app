@@ -74,13 +74,18 @@
                 // 3. Bill # (display only)
                 row.append($('<td>').text(bill.supplier_bill_number || ''));
                 
-                // 4. $ Net (display only)
+                // 4. $ Gross (calculated: Net + GST)
+                var netVal = parseFloat(bill.total_net) || 0;
+                var gstVal = parseFloat(bill.total_gst) || 0;
+                row.append($('<td>').text('$' + Utils.formatMoney(netVal + gstVal)));
+                
+                // 5. $ Net (display only)
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 5. $ GST (display only)
+                // 6. $ GST (display only)
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 6. Email link
+                // 7. Email link
                 var emailLink = $('<a>')
                     .attr('href', '#')
                     .text('email')
@@ -152,7 +157,13 @@
                     row.attr('data-tracking-category-pk', alloc.tracking_category_pk);
                 }
                 
-                // 3. $ Net input
+                // 3. $ Gross (calculated: Net + GST, display only)
+                var allocNetVal = parseFloat(alloc.amount) || 0;
+                var allocGstVal = parseFloat(alloc.gst_amount) || 0;
+                var grossCell = $('<td>').addClass('allocation-gross-cell').text('$' + Utils.formatMoney(allocNetVal + allocGstVal));
+                row.append(grossCell);
+                
+                // 4. $ Net input
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -161,7 +172,7 @@
                     .val(alloc.amount || '');
                 row.append($('<td>').append(netInput));
                 
-                // 4. $ GST input
+                // 5. $ GST input
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -170,7 +181,7 @@
                     .val(alloc.gst_amount || '');
                 row.append($('<td>').append(gstInput));
                 
-                // 5. Notes input
+                // 6. Notes input
                 var notesInput = $('<input>')
                     .attr('type', 'text')
                     .addClass('form-control form-control-sm allocation-notes-input')
@@ -226,7 +237,7 @@
         updateRemainingAllocations();
         
         // Apply column widths for proper alignment (tbody uses display:block for scrolling)
-        Utils.applyColumnStyles('billsDirect', ['25%', '20%', '12%', '12%', '26%', '5%'], { addEditableClass: true });
+        Utils.applyColumnStyles('billsDirect', ['23%', '18%', '11%', '11%', '11%', '21%', '5%'], { addEditableClass: true });
         
         // Show Add Row button (since we're always in edit mode)
         $('#billsDirectAddAllocationBtn').show();
@@ -516,6 +527,12 @@
         });
         
         $(document).on('input' + ns, '#billsDirectAllocationsTableBody .allocation-net-input, #billsDirectAllocationsTableBody .allocation-gst-input', function() {
+            // Update $ Gross cell
+            var row = $(this).closest('tr');
+            var netVal = parseFloat(row.find('.allocation-net-input').val()) || 0;
+            var gstVal = parseFloat(row.find('.allocation-gst-input').val()) || 0;
+            row.find('.allocation-gross-cell').text('$' + Utils.formatMoney(netVal + gstVal));
+            
             updateRemainingAllocations();
         });
         

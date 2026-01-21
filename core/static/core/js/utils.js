@@ -396,6 +396,272 @@ function addTruncationTooltips(tableId) {
     });
 }
 
+/**
+ * Convert a select element into a searchable dropdown.
+ * Features:
+ * - Type-ahead search filtering
+ * - Pinned items stay at top (e.g., "+ New Supplier")
+ * - Keyboard navigation (arrows, enter, escape)
+ * - Click outside to close
+ * 
+ * @param {jQuery|HTMLElement|string} selectElement - Select element, jQuery object, or selector
+ * @param {Object} options - Configuration options
+ * @param {Array} options.pinnedValues - Values that should stay pinned at top (e.g., ['__new__'])
+ * @param {string} options.placeholder - Placeholder text for search input
+ * @param {Function} options.onChange - Callback when value changes (value, text, $select)
+ * @returns {Object} Controller object with methods: refresh(), destroy(), getValue(), setValue(val)
+ */
+function createSearchableDropdown(selectElement, options) {
+    var $select = $(selectElement);
+    if (!$select.length) return null;
+    
+    var opts = $.extend({
+        pinnedValues: [],
+        placeholder: 'Search...',
+        onChange: null
+    }, options);
+    
+    // Skip if already initialized
+    if ($select.data('searchable-dropdown')) {
+        return $select.data('searchable-dropdown');
+    }
+    
+    // Hide original select
+    $select.hide();
+    
+    // Create wrapper - dropdown appended to body to escape overflow constraints
+    var $wrapper = $('<div class="searchable-dropdown-wrapper"></div>');
+    var $trigger = $('<div class="searchable-dropdown-trigger form-control form-control-sm"></div>');
+    var $dropdown = $('<div class="searchable-dropdown-menu"></div>');
+    var $searchInput = $('<input type="text" class="searchable-dropdown-search form-control form-control-sm" placeholder="' + opts.placeholder + '">');
+    var $pinnedList = $('<div class="searchable-dropdown-pinned"></div>');
+    var $optionsList = $('<div class="searchable-dropdown-options"></div>');
+    
+    $dropdown.append($searchInput).append($pinnedList).append($optionsList);
+    $wrapper.append($trigger);
+    $select.after($wrapper);
+    // Append dropdown to body so it escapes table row overflow
+    $('body').append($dropdown);
+    
+    // Build options from select
+    function buildOptions() {
+        $pinnedList.empty();
+        $optionsList.empty();
+        
+        $select.find('option').each(function() {
+            var $opt = $(this);
+            var val = $opt.val();
+            var text = $opt.text();
+            var disabled = $opt.prop('disabled');
+            
+            if (!val && !disabled) {
+                // Skip empty placeholder option
+                return;
+            }
+            
+            var $item = $('<div class="searchable-dropdown-item"></div>')
+                .attr('data-value', val)
+                .text(text);
+            
+            if (disabled) {
+                $item.addClass('disabled');
+            }
+            
+            if (opts.pinnedValues.indexOf(val) !== -1) {
+                $item.addClass('pinned');
+                $pinnedList.append($item);
+            } else {
+                $optionsList.append($item);
+            }
+        });
+        
+        updateTriggerText();
+    }
+    
+    // Update trigger text based on selected value
+    function updateTriggerText() {
+        var selectedOption = $select.find('option:selected');
+        var text = selectedOption.length && selectedOption.val() ? selectedOption.text() : $select.find('option:first').text();
+        $trigger.text(text);
+        
+        if (!selectedOption.val()) {
+            $trigger.addClass('placeholder');
+        } else {
+            $trigger.removeClass('placeholder');
+        }
+    }
+    
+    // Filter options based on search
+    function filterOptions(query) {
+        var q = query.toLowerCase().trim();
+        var visibleCount = 0;
+        
+        // Remove existing no-results message
+        $optionsList.find('.searchable-dropdown-no-results').remove();
+        
+        $optionsList.find('.searchable-dropdown-item').each(function() {
+            var $item = $(this);
+            var text = $item.text().toLowerCase();
+            
+            if (!q || text.indexOf(q) !== -1) {
+                $item.show();
+                visibleCount++;
+            } else {
+                $item.hide();
+            }
+        });
+        
+        // Show "no results" if nothing matches
+        if (visibleCount === 0 && q) {
+            $optionsList.append('<div class="searchable-dropdown-no-results">No matches found</div>');
+        }
+        
+        // Pinned items always visible
+        $pinnedList.find('.searchable-dropdown-item').show();
+        
+        // Auto-highlight first visible item
+        $dropdown.find('.searchable-dropdown-item').removeClass('highlighted');
+        $dropdown.find('.searchable-dropdown-item:visible:not(.disabled):first').addClass('highlighted');
+    }
+    
+    // Open dropdown
+    function open() {
+        $trigger.addClass('open');
+        $dropdown.addClass('open');
+        
+        // Position dropdown below trigger (since dropdown is in body)
+        var triggerOffset = $trigger.offset();
+        var triggerHeight = $trigger.outerHeight();
+        var triggerWidth = $trigger.outerWidth();
+        
+        $dropdown.css({
+            position: 'fixed',
+            top: triggerOffset.top + triggerHeight - $(window).scrollTop(),
+            left: triggerOffset.left - $(window).scrollLeft(),
+            width: triggerWidth,
+            minWidth: 200
+        });
+        
+        $searchInput.val('').focus();
+        filterOptions('');
+    }
+    
+    // Close dropdown
+    function close() {
+        $trigger.removeClass('open');
+        $dropdown.removeClass('open');
+        $searchInput.val('');
+        filterOptions('');
+        $dropdown.find('.searchable-dropdown-item').removeClass('highlighted');
+    }
+    
+    // Select an option
+    function selectOption(value) {
+        $select.val(value).trigger('change');
+        updateTriggerText();
+        close();
+        
+        if (opts.onChange) {
+            var text = $select.find('option:selected').text();
+            opts.onChange(value, text, $select);
+        }
+    }
+    
+    // Event handlers
+    $trigger.on('click', function(e) {
+        e.stopPropagation();
+        if ($dropdown.hasClass('open')) {
+            close();
+        } else {
+            open();
+        }
+    });
+    
+    $searchInput.on('input', function() {
+        filterOptions($(this).val());
+    });
+    
+    $searchInput.on('keydown', function(e) {
+        var $visible = $dropdown.find('.searchable-dropdown-item:visible:not(.disabled)');
+        var $highlighted = $dropdown.find('.searchable-dropdown-item.highlighted');
+        var idx = $visible.index($highlighted);
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            $visible.removeClass('highlighted');
+            var nextIdx = idx < $visible.length - 1 ? idx + 1 : 0;
+            $visible.eq(nextIdx).addClass('highlighted');
+            scrollToHighlighted();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            $visible.removeClass('highlighted');
+            var prevIdx = idx > 0 ? idx - 1 : $visible.length - 1;
+            $visible.eq(prevIdx).addClass('highlighted');
+            scrollToHighlighted();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if ($highlighted.length) {
+                selectOption($highlighted.attr('data-value'));
+            }
+        } else if (e.key === 'Escape') {
+            close();
+        }
+    });
+    
+    function scrollToHighlighted() {
+        var $highlighted = $dropdown.find('.searchable-dropdown-item.highlighted');
+        if ($highlighted.length) {
+            $highlighted[0].scrollIntoView({ block: 'nearest' });
+        }
+    }
+    
+    $dropdown.on('click', '.searchable-dropdown-item:not(.disabled)', function(e) {
+        e.stopPropagation();
+        selectOption($(this).attr('data-value'));
+    });
+    
+    $dropdown.on('mouseenter', '.searchable-dropdown-item', function() {
+        $dropdown.find('.searchable-dropdown-item').removeClass('highlighted');
+        $(this).addClass('highlighted');
+    });
+    
+    // Close on click outside (check both wrapper and dropdown since dropdown is in body)
+    $(document).on('click.searchableDropdown', function(e) {
+        var clickedWrapper = $wrapper.is(e.target) || $wrapper.has(e.target).length > 0;
+        var clickedDropdown = $dropdown.is(e.target) || $dropdown.has(e.target).length > 0;
+        if (!clickedWrapper && !clickedDropdown) {
+            close();
+        }
+    });
+    
+    // Build initial options
+    buildOptions();
+    
+    // Controller object
+    var controller = {
+        refresh: function() {
+            buildOptions();
+        },
+        destroy: function() {
+            $(document).off('click.searchableDropdown');
+            $dropdown.remove();  // Remove from body
+            $wrapper.remove();
+            $select.show().removeData('searchable-dropdown');
+        },
+        getValue: function() {
+            return $select.val();
+        },
+        setValue: function(val) {
+            $select.val(val);
+            updateTriggerText();
+        }
+    };
+    
+    $select.data('searchable-dropdown', controller);
+    
+    return controller;
+}
+
 // Expose as Utils namespace object
 window.Utils = {
     getCookie: getCookie,
@@ -412,5 +678,126 @@ window.Utils = {
     getCSRFToken: getCSRFToken,
     getJSONHeaders: getJSONHeaders,
     initSortableTable: initSortableTable,
-    addTruncationTooltips: addTruncationTooltips
+    addTruncationTooltips: addTruncationTooltips,
+    createSearchableDropdown: createSearchableDropdown
 };
+
+// Inject CSS for searchable dropdown (only once)
+(function() {
+    if (document.getElementById('searchable-dropdown-styles')) return;
+    
+    var css = `
+        .searchable-dropdown-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        .searchable-dropdown-trigger {
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 2px 20px 2px 6px !important;
+            font-size: 12px;
+            height: 24px;
+            border: 1px solid var(--color-border, #ced4da);
+            border-radius: 3px;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E") no-repeat right 6px center;
+        }
+        .searchable-dropdown-trigger.placeholder {
+            color: #6c757d;
+        }
+        .searchable-dropdown-trigger.open {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-color: transparent;
+        }
+        .searchable-dropdown-menu {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            background: #fff;
+            border: 1px solid black;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-height: 400px;
+            overflow: hidden;
+        }
+        .searchable-dropdown-menu.open {
+            display: flex;
+            flex-direction: column;
+        }
+        .searchable-dropdown-search {
+            margin: 6px;
+            width: calc(100% - 12px) !important;
+            flex-shrink: 0;
+            font-size: 12px;
+            padding: 2px 6px;
+            height: 24px;
+            border: 1px solid var(--color-border, #ced4da);
+            border-radius: 3px;
+        }
+        .searchable-dropdown-search:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        .searchable-dropdown-pinned {
+            flex-shrink: 0;
+            border-bottom: 1px solid #e9ecef;
+            background: var(--color-bg-muted, #f8f9fa);
+        }
+        .searchable-dropdown-pinned:empty {
+            display: none;
+        }
+        .searchable-dropdown-options {
+            overflow-y: auto;
+            flex: 1;
+            max-height: 320px;
+        }
+        .searchable-dropdown-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 12px;
+        }
+        .searchable-dropdown-item:hover,
+        .searchable-dropdown-item.highlighted {
+            background: #007bff;
+            color: #fff;
+        }
+        .searchable-dropdown-item.pinned {
+            font-weight: 600;
+            color: #28a745;
+        }
+        .searchable-dropdown-item.pinned:hover,
+        .searchable-dropdown-item.pinned.highlighted {
+            background: #28a745;
+            color: #fff;
+        }
+        .searchable-dropdown-item.disabled {
+            color: #6c757d;
+            cursor: default;
+            font-style: italic;
+            font-size: 11px;
+        }
+        .searchable-dropdown-item.disabled:hover {
+            background: transparent;
+            color: #6c757d;
+        }
+        .searchable-dropdown-no-results {
+            padding: 6px 8px;
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            font-size: 12px;
+        }
+    `;
+    
+    var style = document.createElement('style');
+    style.id = 'searchable-dropdown-styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+})();

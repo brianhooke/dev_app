@@ -84,8 +84,9 @@ $(document).ready(function() {
             emptyMessage: 'No unallocated bills found for this project.',
             showFooter: true,
             footerTotals: [
-                { colIndex: 3, valueKey: 'total_net' },
-                { colIndex: 4, valueKey: 'total_gst' }
+                { colIndex: 3, valueKey: 'total_gross' },
+                { colIndex: 4, valueKey: 'total_net' },
+                { colIndex: 5, valueKey: 'total_gst' }
             ],
             // Custom row renderer for unallocated bills (supplier dropdown, inputs, buttons)
             renderRow: function(bill, index, cfg) {
@@ -101,7 +102,15 @@ $(document).ready(function() {
                     if (bill.supplier_pk === supplier.contact_pk) option.prop('selected', true);
                     supplierSelect.append(option);
                 });
-                row.append($('<td>').append(supplierSelect));
+                var supplierTd = $('<td>').append(supplierSelect);
+                row.append(supplierTd);
+                
+                // Initialize searchable dropdown for supplier
+                if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
+                    Utils.createSearchableDropdown(supplierSelect, {
+                        placeholder: 'Search suppliers...'
+                    });
+                }
                 
                 // 2. Bill # input
                 var billNumberInput = $('<input>')
@@ -111,7 +120,12 @@ $(document).ready(function() {
                     .attr('placeholder', 'Bill #');
                 row.append($('<td>').append(billNumberInput));
                 
-                // 3. $ Net input
+                // 3. $ Gross (calculated: Net + GST)
+                var netVal = parseFloat(bill.total_net) || 0;
+                var gstVal = parseFloat(bill.total_gst) || 0;
+                row.append($('<td>').addClass('gross-cell').text('$' + Utils.formatMoney(netVal + gstVal)));
+                
+                // 4. $ Net input
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -126,11 +140,16 @@ $(document).ready(function() {
                             var parts = value.split('.');
                             if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
                         }
-                        var gstInputEl = $(this).closest('tr').find('.gst-input');
+                        var r = $(this).closest('tr');
+                        var gstInputEl = r.find('.gst-input');
                         if (!gstInputEl.data('manually-edited')) {
                             var netValue = parseFloat($(this).val());
                             if (!isNaN(netValue)) gstInputEl.val((netValue * 0.1).toFixed(2));
                         }
+                        // Update $ Gross cell
+                        var nv = parseFloat(r.find('.net-input').val()) || 0;
+                        var gv = parseFloat(r.find('.gst-input').val()) || 0;
+                        r.find('.gross-cell').text('$' + Utils.formatMoney(nv + gv));
                     });
                 row.append($('<td>').append(netInput));
                 
@@ -150,6 +169,11 @@ $(document).ready(function() {
                             var parts = value.split('.');
                             if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
                         }
+                        // Update $ Gross cell
+                        var r = $(this).closest('tr');
+                        var nv = parseFloat(r.find('.net-input').val()) || 0;
+                        var gv = parseFloat(r.find('.gst-input').val()) || 0;
+                        r.find('.gross-cell').text('$' + Utils.formatMoney(nv + gv));
                     });
                 row.append($('<td>').append(gstInput));
                 
@@ -482,8 +506,9 @@ $(document).ready(function() {
     // Recalculate footer totals (uses utils.js)
     function recalculateFooterTotals() {
         Utils.recalculateFooterTotals('bill', [
-            { colIndex: 3, inputSelector: '.net-input' },
-            { colIndex: 4, inputSelector: '.gst-input' }
+            { colIndex: 3, inputSelector: '.gross-cell', isText: true },
+            { colIndex: 4, inputSelector: '.net-input' },
+            { colIndex: 5, inputSelector: '.gst-input' }
         ]);
     }
     
@@ -521,7 +546,7 @@ $(document).ready(function() {
         tbody.removeClass('has-selection');
         
         if (bills.length === 0) {
-            tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
+            tbody.html('<tr><td colspan="9" style="text-align: center; padding: 40px; color: #6c757d;">No allocated bills found for this project.</td></tr>');
             return;
         }
         
@@ -550,10 +575,15 @@ $(document).ready(function() {
             }
             row.append(billNumCell);
             
-            // 3. $ Net (read-only)
+            // 3. $ Gross (calculated: Net + GST)
+            var netVal = parseFloat(bill.total_net) || 0;
+            var gstVal = parseFloat(bill.total_gst) || 0;
+            row.append($('<td>').text('$' + Utils.formatMoney(netVal + gstVal)));
+            
+            // 4. $ Net (read-only)
             row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
             
-            // 4. $ GST
+            // 5. $ GST
             var gstCell = $('<td>');
             if (isPOClaim) {
                 var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
@@ -572,7 +602,7 @@ $(document).ready(function() {
             }
             row.append(gstCell);
             
-            // 5. Progress Claim column
+            // 6. Progress Claim column
             var poCell = $('<td>').addClass('col-action-first');
             if (isPOClaim) {
                 poCell.append($('<i>').addClass('fas fa-check').css({'color': '#28a745', 'margin-right': '4px'}));
@@ -583,7 +613,7 @@ $(document).ready(function() {
             }
             row.append(poCell);
             
-            // 6. Unallocate button
+            // 7. Unallocate button
             var unallocateBtn = $('<button>').addClass('btn btn-sm allocated-action-btn').text('Unallocate').attr('data-bill-pk', bill.bill_pk);
             if (isPOClaim) {
                 unallocateBtn.addClass('btn-secondary').prop('disabled', true).css('opacity', '0.5');
@@ -592,7 +622,7 @@ $(document).ready(function() {
             }
             row.append($('<td>').addClass('col-action').append(unallocateBtn));
             
-            // 7. Approve button
+            // 8. Approve button
             var approveBtn = $('<button>').addClass('btn btn-sm allocated-action-btn allocated-approve-btn').text('Approve').attr('data-bill-pk', bill.bill_pk)
                 .on('click', function(e) { e.stopPropagation(); if (!$(this).prop('disabled')) approveBill($(this)); });
             if (isPOClaim) {
@@ -607,7 +637,7 @@ $(document).ready(function() {
             }
             row.append($('<td>').addClass('col-action').append(approveBtn));
             
-            // 8. Save/Edit button - only for PO claims
+            // 9. Save/Edit button - only for PO claims
             if (isPOClaim) {
                 var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';
                 var saveEditBtn = $('<button>').addClass('btn btn-sm allocated-action-btn allocated-save-btn').attr('data-bill-pk', bill.bill_pk).attr('data-mode', hasBillNumber ? 'edit' : 'save');
@@ -634,8 +664,10 @@ $(document).ready(function() {
         // Calculate and show footer totals
         var totalNet = 0, totalGst = 0;
         bills.forEach(function(bill) { totalNet += bill.total_net || 0; totalGst += bill.total_gst || 0; });
-        $('#billFooterCol3').text('$' + Utils.formatMoney(totalNet));
-        $('#billFooterCol4').text('$' + Utils.formatMoney(totalGst));
+        var totalGross = totalNet + totalGst;
+        $('#billFooterCol3').text('$' + Utils.formatMoney(totalGross));
+        $('#billFooterCol4').text('$' + Utils.formatMoney(totalNet));
+        $('#billFooterCol5').text('$' + Utils.formatMoney(totalGst));
         $('#billMainTableFooter').show();
         
         // Auto-select first row
@@ -784,18 +816,25 @@ $(document).ready(function() {
                             row.append($('<td>').text(alloc.notes || '-'));
                             totalNet += amount;
                         } else {
-                            row.append($('<td>').text(alloc.item_name || '-'));
-                            row.append($('<td>').text('$' + Utils.formatMoney(alloc.amount || 0)));
-                            row.append($('<td>').text('$' + Utils.formatMoney(alloc.gst_amount || 0)));
-                            row.append($('<td>').text(alloc.notes || '-'));
-                            totalNet += alloc.amount || 0;
-                            totalGst += alloc.gst_amount || 0;
+                            var allocNet = parseFloat(alloc.amount) || 0;
+                            var allocGst = parseFloat(alloc.gst_amount) || 0;
+                            // Apply column widths inline for display:block tbody alignment
+                            row.append($('<td>').css('width', '18%').text(alloc.item_name || '-'));
+                            row.append($('<td>').css('width', '11%').text('$' + Utils.formatMoney(allocNet + allocGst)));  // $ Gross
+                            row.append($('<td>').css('width', '11%').text('$' + Utils.formatMoney(allocNet)));  // $ Net
+                            row.append($('<td>').css('width', '11%').text('$' + Utils.formatMoney(allocGst)));  // $ GST
+                            row.append($('<td>').css('width', '49%').text(alloc.notes || '-'));
+                            totalNet += allocNet;
+                            totalGst += allocGst;
                         }
                         tbody.append(row);
                     });
                     
                     $('#billTotalNet').text('$' + Utils.formatMoney(totalNet));
-                    if (!isConstruction) $('#billTotalGst').text('$' + Utils.formatMoney(totalGst));
+                    if (!isConstruction) {
+                        $('#billTotalGross').text('$' + Utils.formatMoney(totalNet + totalGst));
+                        $('#billTotalGst').text('$' + Utils.formatMoney(totalGst));
+                    }
                 }
             },
             error: function(xhr, status, error) { console.error('Failed to load allocations:', error); }
@@ -856,6 +895,7 @@ $(document).ready(function() {
     // Cleanup after allocated bill row is removed (called from showSuccessAndFadeRow callback)
     function removeAllocatedBillRowCleanup() {
         $('#billAllocationsTableBody').empty();
+        $('#billTotalGross').text('$0.00');
         $('#billTotalNet').text('$0.00');
         $('#billTotalGst').text('$0.00');
         
@@ -999,14 +1039,14 @@ $(document).ready(function() {
         $('#billViewerPlaceholder').css({'width': '100%', 'height': '100%', 'text-align': 'center'}).html(tableHtml).show();
     }
     
-    // Event handlers
-    $(document).on('click', '#billAddAllocationBtn', function(e) {
+    // Event handlers (use .off().on() to prevent duplicate bindings)
+    $(document).off('click', '#billAddAllocationBtn').on('click', '#billAddAllocationBtn', function(e) {
         e.preventDefault();
         if (!currentSelectedBill) { alert('Please select a bill first'); return; }
         addNewAllocationRow();
     });
     
-    $(document).on('click', '.allocate-bill-btn', function(e) {
+    $(document).off('click', '.allocate-bill-btn').on('click', '.allocate-bill-btn', function(e) {
         e.stopPropagation();
         allocateBill($(this));
     });

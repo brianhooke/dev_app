@@ -32,22 +32,47 @@ Column Behaviors:
 <style>
     /* Contract Budget specific styles - extend allocations_layout styles */
     
-    /* Make table container scrollable with max height */
-    #contractBudgetTableContainer {
-        max-height: calc(100vh - 200px);
-        overflow-y: auto;
-    }
-    
-    /* Move the border to the scrollable container so it includes the scrollbar */
+    /* Table container with fixed footer outside scroll */
     .contractBudget-container .reusable-table-container {
-        border: none;
-        border-radius: 0;
-        overflow: visible;
-    }
-    
-    .contractBudget-container #contractBudgetTableContainer {
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 200px);
         border: 1px solid black;
         border-radius: 6px;
+        overflow: hidden;
+    }
+    
+    /* Scrollable area for table content */
+    #contractBudgetTableContainer {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    
+    /* Hide the original tfoot (we'll use a fixed footer instead) */
+    #contractBudgetMainTableFooter {
+        display: none !important;
+    }
+    
+    /* Fixed footer outside scroll area */
+    #contractBudgetFixedFooter {
+        flex-shrink: 0;
+        background: var(--color-bg-muted);
+        border-top: 1px solid black;
+    }
+    
+    #contractBudgetFixedFooter table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+    
+    #contractBudgetFixedFooter td {
+        padding: 4px 8px;
+        font-weight: 600;
+        font-size: 13px;
+        border: none;
+        box-shadow: none;
     }
     
     /* Add visual separation between Uncommitted and Committed column groups */
@@ -272,6 +297,33 @@ Column Behaviors:
             );
         }
     }, 100);
+    
+    // Create fixed footer outside scrollable area
+    setTimeout(function() {
+        createFixedFooter();
+    }, 50);
+    
+    function createFixedFooter() {
+        // Insert fixed footer after the scrollable container
+        var tableContainer = $('#contractBudgetTableContainer');
+        if (!tableContainer.length) return;
+        
+        // Get column widths from the main table colgroup
+        var colWidths = [];
+        $('#contractBudgetMainTable colgroup col').each(function() {
+            colWidths.push($(this).css('width') || $(this).attr('style').match(/width:\s*([^;]+)/)[1]);
+        });
+        
+        // Build footer HTML with matching columns
+        var footerHtml = '<div id="contractBudgetFixedFooter"><table><colgroup>';
+        colWidths.forEach(function(w) {
+            footerHtml += '<col style="width: ' + w + ';">';
+        });
+        footerHtml += '</colgroup><tbody id="contractBudgetFixedFooterBody"></tbody></table></div>';
+        
+        // Insert after the scrollable container (inside reusable-table-container)
+        tableContainer.after(footerHtml);
+    }
     
     // Get column count based on mode
     // Construction has Committed Qty|Rate|Amount (3 cols), non-construction has single Committed col
@@ -1140,9 +1192,16 @@ Column Behaviors:
         $('#totalWorkingBudget').text(Utils.formatCurrency(totals.working_budget));
     }
     
-    // Render totals footer
+    // Render totals footer (now targets fixed footer)
     function renderTotalsFooter(tfoot, totals) {
-        tfoot.empty().show();
+        // Use fixed footer instead of original tfoot
+        var fixedFooterBody = $('#contractBudgetFixedFooterBody');
+        if (fixedFooterBody.length) {
+            fixedFooterBody.empty();
+        } else {
+            // Fallback to original if fixed footer not ready
+            tfoot.empty().show();
+        }
         
         var row = $('<tr style="background: var(--color-bg-muted); font-weight: 600;"></tr>');
         
@@ -1176,7 +1235,13 @@ Column Behaviors:
             row.append('<td id="totalFixedOnSite">' + Utils.formatCurrency(totals.fixed_on_site) + '</td>');
         }
         
-        tfoot.append(row);
+        // Append to fixed footer if available, otherwise original tfoot
+        var fixedFooterBody = $('#contractBudgetFixedFooterBody');
+        if (fixedFooterBody.length) {
+            fixedFooterBody.append(row);
+        } else {
+            tfoot.append(row);
+        }
     }
     
     // Save uncommitted data to server

@@ -722,8 +722,12 @@ var AllocationsManager = (function() {
             }
         } else if (cfg.features.alwaysShowAddButton) {
             // Always show editable rows (bills_project style)
+            // If customAddRowHandler is true, don't auto-create blank rows - let onAllocationsLoaded handle it
             if (!allocations || allocations.length === 0) {
-                addAllocationRow(sectionId);
+                if (!cfg.features.customAddRowHandler) {
+                    addAllocationRow(sectionId);
+                }
+                // else: onAllocationsLoaded callback will create the row with proper DB record
             } else {
                 allocations.forEach(function(alloc) {
                     addAllocationRow(sectionId, alloc);
@@ -992,6 +996,27 @@ var AllocationsManager = (function() {
                     gstDisplayEl.text('$' + Utils.formatMoney(allocatedGst));
                     gstDisplayEl.css('color', '#90EE90');
                 }
+            }
+            
+            // Update Gross display (Net + GST)
+            var totalGross = totalNet + totalGst;
+            var allocatedGross = allocatedNet + allocatedGst;
+            var remainingGross = remainingNet + remainingGst;
+            var grossDisplayEl = $('#' + sectionId + 'RemainingGross');
+            if (grossDisplayEl.length) {
+                if (st.isNewMode || st.editMode) {
+                    grossDisplayEl.text('$' + Utils.formatMoney(remainingGross));
+                    grossDisplayEl.css('color', Math.abs(remainingGross) < 0.01 ? '#90EE90' : '#ffcccc');
+                } else {
+                    grossDisplayEl.text('$' + Utils.formatMoney(allocatedGross));
+                    grossDisplayEl.css('color', '#90EE90');
+                }
+            }
+            // Also check for TotalGross (used in read-only views)
+            var totalGrossEl = $('#' + sectionId + 'TotalGross');
+            if (totalGrossEl.length) {
+                totalGrossEl.text('$' + Utils.formatMoney(allocatedGross));
+                totalGrossEl.css('color', '#90EE90');
             }
         }
         
@@ -1628,7 +1653,7 @@ var AllocationsManager = (function() {
             row.append($('<td>').append(notesInput));
             
         } else {
-            // Non-construction mode: Item | $ Net | Notes | Del (GST only for bills, not quotes)
+            // Non-construction mode: Item | $ Gross | $ Net | $ GST | Notes | Del (GST only for bills, not quotes)
             
             // Save on change and update validation
             itemSelect.on('change', function() {
@@ -1637,7 +1662,15 @@ var AllocationsManager = (function() {
             });
             row.append($('<td>').append(itemSelect));
             
-            // 2. $ Net input
+            // 2. $ Gross (calculated: Net + GST) - only for bills with GST
+            if (sectionId !== 'quote') {
+                var allocNetVal = parseFloat(alloc.amount) || 0;
+                var allocGstVal = parseFloat(alloc.gst_amount) || 0;
+                var grossCell = $('<td>').addClass(cls + '-gross-cell').text('$' + Utils.formatMoney(allocNetVal + allocGstVal));
+                row.append(grossCell);
+            }
+            
+            // 3. $ Net input
             var netInput = $('<input>')
                 .attr('type', 'number')
                 .attr('step', '0.01')
@@ -1658,13 +1691,18 @@ var AllocationsManager = (function() {
                     }
                     // Only calculate GST for bills, not quotes
                     if (sectionId !== 'quote') {
-                        var gstInputEl = $(this).closest('tr').find('.' + cls + '-gst-input');
+                        var r = $(this).closest('tr');
+                        var gstInputEl = r.find('.' + cls + '-gst-input');
                         if (!gstInputEl.data('manually-edited')) {
                             var netVal = parseFloat($(this).val());
                             if (!isNaN(netVal)) {
                                 gstInputEl.val((netVal * 0.1).toFixed(2));
                             }
                         }
+                        // Update $ Gross cell
+                        var nv = parseFloat(r.find('.' + cls + '-net-input').val()) || 0;
+                        var gv = parseFloat(r.find('.' + cls + '-gst-input').val()) || 0;
+                        r.find('.' + cls + '-gross-cell').text('$' + Utils.formatMoney(nv + gv));
                     }
                     onUpdate();
                     saveAllocation();
@@ -1694,6 +1732,12 @@ var AllocationsManager = (function() {
                                 $(this).val(parseFloat(value).toFixed(2));
                             }
                         }
+                        // Update $ Gross cell
+                        var r = $(this).closest('tr');
+                        var nv = parseFloat(r.find('.' + cls + '-net-input').val()) || 0;
+                        var gv = parseFloat(r.find('.' + cls + '-gst-input').val()) || 0;
+                        r.find('.' + cls + '-gross-cell').text('$' + Utils.formatMoney(nv + gv));
+                        
                         onUpdate();
                         saveAllocation();
                     });
@@ -1722,7 +1766,7 @@ var AllocationsManager = (function() {
                     var url = typeof api.delete === 'function' ? api.delete(pk) : api.delete.replace('{pk}', pk);
                     $.ajax({
                         url: url,
-                        type: 'DELETE',
+                        type: 'POST',
                         headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                         success: function(response) {
                             row.remove();

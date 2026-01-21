@@ -650,23 +650,25 @@ def bills_view(request):
         # Main table columns (same for both project types)
         if is_allocated:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '15%', 'sortable': True},
-                {'header': 'Bill #', 'width': '12%', 'sortable': True},
-                {'header': '$ Net', 'width': '10%', 'sortable': True},
-                {'header': '$ GST', 'width': '10%', 'sortable': True},
+                {'header': 'Supplier', 'width': '14%', 'sortable': True},
+                {'header': 'Bill #', 'width': '10%', 'sortable': True},
+                {'header': '$ Gross', 'width': '9%', 'sortable': True},
+                {'header': '$ Net', 'width': '9%', 'sortable': True},
+                {'header': '$ GST', 'width': '9%', 'sortable': True},
                 {'header': 'Progress Claim', 'width': '10%', 'class': 'col-action-first'},
-                {'header': 'Unallocate', 'width': '13%', 'class': 'col-action'},
-                {'header': 'Approve', 'width': '13%', 'class': 'col-action'},
-                {'header': 'Save', 'width': '10%', 'class': 'col-action'},
+                {'header': 'Unallocate', 'width': '12%', 'class': 'col-action'},
+                {'header': 'Approve', 'width': '12%', 'class': 'col-action'},
+                {'header': 'Save', 'width': '9%', 'class': 'col-action'},
             ]
         else:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '25%', 'sortable': True},
-                {'header': 'Bill #', 'width': '20%', 'sortable': True},
-                {'header': '$ Net', 'width': '17%', 'sortable': True},
-                {'header': '$ GST', 'width': '17%', 'sortable': True},
-                {'header': 'Allocate', 'width': '13%', 'class': 'col-action-first'},
-                {'header': 'Del', 'width': '8%', 'class': 'col-action'},
+                {'header': 'Supplier', 'width': '22%', 'sortable': True},
+                {'header': 'Bill #', 'width': '15%', 'sortable': True},
+                {'header': '$ Gross', 'width': '14%', 'sortable': True},
+                {'header': '$ Net', 'width': '14%', 'sortable': True},
+                {'header': '$ GST', 'width': '14%', 'sortable': True},
+                {'header': 'Allocate', 'width': '12%', 'class': 'col-action-first'},
+                {'header': 'Del', 'width': '7%', 'class': 'col-action'},
             ]
         
         # Allocations columns differ by project type AND allocated status
@@ -696,18 +698,20 @@ def bills_view(request):
             if is_allocated:
                 # Non-construction + Allocated (read-only, no delete column)
                 allocations_columns = [
-                    {'header': 'Item', 'width': '20%'},
-                    {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
-                    {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
-                    {'header': 'Notes', 'width': '56%'},
+                    {'header': 'Item', 'width': '18%'},
+                    {'header': '$ Gross', 'width': '11%', 'still_to_allocate_id': 'TotalGross'},
+                    {'header': '$ Net', 'width': '11%', 'still_to_allocate_id': 'TotalNet'},
+                    {'header': '$ GST', 'width': '11%', 'still_to_allocate_id': 'TotalGst'},
+                    {'header': 'Notes', 'width': '49%'},
                 ]
             else:
                 # Non-construction + Unallocated (editable, has delete column)
                 allocations_columns = [
-                    {'header': 'Item', 'width': '35%'},
-                    {'header': '$ Net', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
-                    {'header': '$ GST', 'width': '15%', 'still_to_allocate_id': 'RemainingGst'},
-                    {'header': 'Notes', 'width': '30%'},
+                    {'header': 'Item', 'width': '30%'},
+                    {'header': '$ Gross', 'width': '13%', 'still_to_allocate_id': 'RemainingGross'},
+                    {'header': '$ Net', 'width': '13%', 'still_to_allocate_id': 'RemainingNet'},
+                    {'header': '$ GST', 'width': '13%', 'still_to_allocate_id': 'RemainingGst'},
+                    {'header': 'Notes', 'width': '26%'},
                     {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
                 ]
         

@@ -102,7 +102,7 @@
         allocations: {
             editable: false,
             showStillToAllocate: false,
-            columnWidths: ['20%', '20%', '15%', '15%', '15%', '15%']
+            columnWidths: ['18%', '18%', '14%', '12%', '12%', '12%', '14%']
         },
         api: {},
         callbacks: {}
@@ -123,16 +123,21 @@
                 // 2. Tracking Category (20%)
                 row.append($('<td>').text(alloc.tracking_category_name || '-'));
                 
-                // 3. Costing Item (15%)
+                // 3. Costing Item (14%)
                 row.append($('<td>').text(alloc.costing_name || '-'));
                 
-                // 4. $ Net (15%)
+                // 4. $ Gross (12%)
+                var allocNet = parseFloat(alloc.amount) || 0;
+                var allocGst = parseFloat(alloc.gst_amount) || 0;
+                row.append($('<td>').text('$' + Utils.formatMoney(allocNet + allocGst)));
+                
+                // 5. $ Net (12%)
                 row.append($('<td>').text('$' + Utils.formatMoney(alloc.amount)));
                 
-                // 5. $ GST (15%)
+                // 6. $ GST (12%)
                 row.append($('<td>').text('$' + Utils.formatMoney(alloc.gst_amount)));
                 
-                // 6. Notes (15%)
+                // 7. Notes (14%)
                 row.append($('<td>').text(alloc.notes || ''));
                 
                 allocationsTableBody.append(row);
@@ -143,7 +148,7 @@
         $('#billsApprovalsAllocationsFooter').hide();
         
         // Apply column widths for proper alignment (tbody uses display:block for scrolling)
-        Utils.applyColumnStyles('billsApprovals', ['20%', '20%', '15%', '15%', '15%', '15%'], { addEditableClass: false });
+        Utils.applyColumnStyles('billsApprovals', ['18%', '18%', '14%', '12%', '12%', '12%', '14%'], { addEditableClass: false });
     }
     
     // Load Approved Bills data
