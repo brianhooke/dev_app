@@ -276,7 +276,11 @@
 </script>
 
 <!-- PDF Confirmation Modal -->
-<div class="modal fade" id="pdfConfirmModal" tabindex="-1" aria-labelledby="pdfConfirmModalLabel" aria-hidden="true" style="z-index: 9999;">
+<style>
+    #pdfConfirmModal { z-index: 1060 !important; }
+    #pdfConfirmModal + .modal-backdrop { z-index: 1055 !important; }
+</style>
+<div class="modal fade" id="pdfConfirmModal" tabindex="-1" aria-labelledby="pdfConfirmModalLabel" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-height: 90vh; margin-top: 5vh;">
         <div class="modal-content" style="max-height: 85vh;">
             <div class="modal-header" style="flex-shrink: 0;">
@@ -397,10 +401,10 @@
             contentType: 'application/json',
             data: JSON.stringify({ bill_pk: pendingBillPk }),
             success: function(response) {
-                pdfConfirmModal.hide();
                 confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
                 
                 if (response.status === 'success') {
+                    pdfConfirmModal.hide();
                     // Show attachment status
                     var msg = 'Bill sent to Xero!';
                     if (response.attachment_status) {
@@ -418,13 +422,21 @@
                         }
                     });
                 } else {
+                    // Keep modal open on error so user can retry or cancel
                     alert('Error: ' + response.message);
                 }
             },
-            error: function() {
-                pdfConfirmModal.hide();
+            error: function(xhr, status, error) {
+                // Keep modal open on error so user can retry or cancel
                 confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
-                alert('Failed to send to Xero. Please try again.');
+                var errMsg = 'Failed to send to Xero.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg += '\n' + xhr.responseJSON.message;
+                } else if (xhr.status) {
+                    errMsg += '\nStatus: ' + xhr.status + ' ' + error;
+                }
+                console.error('Send to Xero error:', xhr, status, error);
+                alert(errMsg);
             }
         });
     });
