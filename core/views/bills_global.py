@@ -27,6 +27,7 @@ from datetime import date
 import json
 import logging
 import requests
+from urllib.parse import quote
 
 from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts
 from .xero import get_xero_auth, parse_xero_validation_errors, handle_xero_request_errors
@@ -654,12 +655,14 @@ def send_bill_to_xero(request):
                         file_data = pdf_response.content
                         
                         # Upload attachment to Xero
-                        logger.info(f"Uploading attachment '{file_name}' to Xero invoice {xero_invoice_id}")
+                        # URL-encode the filename for the API endpoint
+                        encoded_filename = quote(file_name, safe='')
+                        logger.info(f"Uploading attachment '{file_name}' (encoded: {encoded_filename}) to Xero invoice {xero_invoice_id}, size: {len(file_data)} bytes")
                         attach_response = requests.post(
-                            f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{file_name}',
+                            f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}',
                             headers={
                                 'Authorization': f'Bearer {access_token}',
-                                'Content-Type': 'application/octet-stream',
+                                'Content-Type': 'application/pdf',
                                 'Xero-tenant-id': tenant_id
                             },
                             data=file_data,
