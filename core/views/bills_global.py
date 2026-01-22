@@ -410,7 +410,7 @@ def send_bill_to_xero(request):
         # Get the invoice
         try:
             invoice = Bills.objects.select_related(
-                'contact_pk', 'project', 'xero_instance', 'project__xero_instance'
+                'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
             ).get(bill_pk=bill_pk)
         except Bills.DoesNotExist:
             return JsonResponse({
@@ -545,6 +545,67 @@ def send_bill_to_xero(request):
         if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
             xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
         
+        # Attach PDF to the Xero invoice if available
+        attachment_status = None
+        if xero_invoice_id:
+            pdf_url = None
+            file_name = None
+            
+            # Check for PDF - first try invoice.pdf, then email_attachment
+            if invoice.pdf:
+                try:
+                    pdf_url = invoice.pdf.url
+                    file_name = pdf_url.split('/')[-1]
+                    logger.info(f"Found invoice.pdf: {pdf_url}")
+                except Exception as e:
+                    logger.error(f"Error getting invoice.pdf URL: {str(e)}")
+            
+            if not pdf_url and invoice.email_attachment:
+                try:
+                    pdf_url = invoice.email_attachment.get_download_url()
+                    file_name = invoice.email_attachment.file_name or f"bill_{bill_pk}.pdf"
+                    logger.info(f"Found email_attachment: {pdf_url}")
+                except Exception as e:
+                    logger.error(f"Error getting email_attachment URL: {str(e)}")
+            
+            if pdf_url and file_name:
+                try:
+                    # Download the PDF
+                    logger.info(f"Downloading PDF from: {pdf_url}")
+                    pdf_response = requests.get(pdf_url, timeout=30)
+                    
+                    if pdf_response.status_code == 200:
+                        file_data = pdf_response.content
+                        
+                        # Upload attachment to Xero
+                        logger.info(f"Uploading attachment '{file_name}' to Xero invoice {xero_invoice_id}")
+                        attach_response = requests.post(
+                            f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{file_name}',
+                            headers={
+                                'Authorization': f'Bearer {access_token}',
+                                'Content-Type': 'application/octet-stream',
+                                'Xero-tenant-id': tenant_id
+                            },
+                            data=file_data,
+                            timeout=60
+                        )
+                        
+                        if attach_response.status_code == 200:
+                            logger.info(f"Successfully attached PDF to Xero invoice {xero_invoice_id}")
+                            attachment_status = 'success'
+                        else:
+                            logger.error(f"Failed to attach PDF to Xero: {attach_response.status_code} - {attach_response.text}")
+                            attachment_status = 'failed'
+                    else:
+                        logger.error(f"Failed to download PDF: {pdf_response.status_code}")
+                        attachment_status = 'download_failed'
+                except Exception as e:
+                    logger.error(f"Error attaching PDF to Xero: {str(e)}", exc_info=True)
+                    attachment_status = 'error'
+            else:
+                logger.info(f"No PDF found for bill {bill_pk}")
+                attachment_status = 'no_pdf'
+        
         # Update invoice status to "sent to Xero"
         if invoice.bill_status == 2:
             invoice.bill_status = 3  # Sent to Xero
@@ -554,13 +615,14 @@ def send_bill_to_xero(request):
         invoice.bill_xero_id = xero_invoice_id
         invoice.save()
         
-        logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id})")
+        logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id}, attachment: {attachment_status})")
         
         return JsonResponse({
             'status': 'success',
-            'message': 'Bill sent to Xero successfully',
+            'message': 'Bill sent to Xero successfully' + ('' if attachment_status == 'success' else ' (PDF attachment may have failed)'),
             'bill_pk': invoice.bill_pk,
-            'xero_invoice_id': xero_invoice_id
+            'xero_invoice_id': xero_invoice_id,
+            'attachment_status': attachment_status
         })
         
     except json.JSONDecodeError:
