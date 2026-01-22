@@ -287,6 +287,9 @@
     $(document).ready(function() {
         var modalEl = document.getElementById('pdfConfirmModal');
         if (modalEl) {
+            // Move modal to body to escape any overflow:hidden containers
+            document.body.appendChild(modalEl);
+            
             pdfConfirmModal = new bootstrap.Modal(modalEl, {
                 backdrop: true,
                 keyboard: true,
