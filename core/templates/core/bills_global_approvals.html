@@ -378,6 +378,30 @@
             success: function(response) {
                 confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
                 
+                // Log full response for debugging
+                console.log('=== SEND TO XERO RESPONSE ===');
+                console.log('Full response:', response);
+                console.log('Status:', response.status);
+                console.log('Message:', response.message);
+                console.log('Xero Invoice ID:', response.xero_invoice_id);
+                console.log('Attachment Status:', response.attachment_status);
+                if (response.attachment_debug) {
+                    console.log('=== ATTACHMENT DEBUG INFO ===');
+                    console.log('PDF Source:', response.attachment_debug.pdf_source);
+                    console.log('PDF URL:', response.attachment_debug.pdf_url);
+                    console.log('Filename:', response.attachment_debug.filename);
+                    console.log('Encoded Filename:', response.attachment_debug.encoded_filename);
+                    console.log('Download Status:', response.attachment_debug.download_status);
+                    console.log('File Size:', response.attachment_debug.file_size);
+                    console.log('Content-Type Received:', response.attachment_debug.content_type_received);
+                    console.log('Is Valid PDF:', response.attachment_debug.is_valid_pdf);
+                    console.log('Xero Response Status:', response.attachment_debug.xero_response_status);
+                    console.log('Xero Response Text:', response.attachment_debug.xero_response_text);
+                    console.log('Error:', response.attachment_debug.error);
+                    console.log('Exception:', response.attachment_debug.exception);
+                    console.log('Full attachment_debug:', JSON.stringify(response.attachment_debug, null, 2));
+                }
+                
                 if (response.status === 'success') {
                     pdfConfirmModal.hide();
                     // Show attachment status
