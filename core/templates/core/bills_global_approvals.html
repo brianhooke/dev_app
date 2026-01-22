@@ -274,3 +274,160 @@
     
 })();
 </script>
+
+<!-- PDF Confirmation Modal -->
+<div class="modal fade" id="pdfConfirmModal" tabindex="-1" aria-labelledby="pdfConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pdfConfirmModalLabel">Confirm PDF Attachment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <strong>PDF Source:</strong> <span id="pdfSourceInfo">Loading...</span>
+                </div>
+                <div class="alert alert-warning mb-3" id="pdfUrlDisplay">
+                    <strong>URL:</strong> <code id="pdfUrlText" style="word-break: break-all; font-size: 0.85em;"></code>
+                </div>
+                <div id="pdfPreviewContainer" style="height: 500px; border: 1px solid #ddd; background: #f5f5f5;">
+                    <iframe id="pdfPreviewFrame" style="width: 100%; height: 100%; border: none;"></iframe>
+                    <div id="pdfPreviewError" class="text-center text-danger p-4" style="display: none;">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                        <p>Could not load PDF preview. The URL may be invalid or inaccessible.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmSendToXeroBtn">
+                    <i class="fas fa-check"></i> Confirm & Send to Xero
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var pendingBillPk = null;
+    var pendingButton = null;
+    var pendingRow = null;
+    var pdfConfirmModal = null;
+    
+    // Initialize modal
+    $(document).ready(function() {
+        var modalEl = document.getElementById('pdfConfirmModal');
+        if (modalEl) {
+            pdfConfirmModal = new bootstrap.Modal(modalEl);
+        }
+    });
+    
+    // Override the send button handler to show confirmation first
+    $(document).off('click.billsApprovals', '.approvals-send-btn');
+    $(document).on('click.pdfConfirm', '.approvals-send-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var button = $(this);
+        var billPk = button.attr('data-bill-pk');
+        var row = button.closest('tr');
+        
+        // Store for later
+        pendingBillPk = billPk;
+        pendingButton = button;
+        pendingRow = row;
+        
+        // Fetch PDF info from backend
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/get_bill_pdf_info/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({ bill_pk: billPk }),
+            success: function(response) {
+                button.prop('disabled', false).text('Send');
+                
+                if (response.status === 'success') {
+                    // Show PDF info in modal
+                    $('#pdfSourceInfo').text(response.source || 'Unknown');
+                    $('#pdfUrlText').text(response.pdf_url || 'No URL');
+                    
+                    // Load PDF in iframe
+                    var pdfUrl = response.pdf_url;
+                    if (pdfUrl) {
+                        $('#pdfPreviewFrame').attr('src', pdfUrl).show();
+                        $('#pdfPreviewError').hide();
+                        $('#pdfUrlDisplay').removeClass('alert-danger').addClass('alert-warning');
+                    } else {
+                        $('#pdfPreviewFrame').hide();
+                        $('#pdfPreviewError').show();
+                        $('#pdfUrlDisplay').removeClass('alert-warning').addClass('alert-danger');
+                        $('#pdfSourceInfo').text('NO PDF FOUND - ' + (response.source || 'Unknown'));
+                    }
+                    
+                    // Show modal
+                    pdfConfirmModal.show();
+                } else {
+                    alert('Error getting PDF info: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                button.prop('disabled', false).text('Send');
+                alert('Failed to get PDF info: ' + (xhr.responseJSON?.message || 'Unknown error'));
+            }
+        });
+    });
+    
+    // Confirm send button
+    $(document).on('click', '#confirmSendToXeroBtn', function() {
+        if (!pendingBillPk || !pendingButton) return;
+        
+        var confirmBtn = $(this);
+        confirmBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+        
+        $.ajax({
+            url: '/core/send_bill_to_xero/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({ bill_pk: pendingBillPk }),
+            success: function(response) {
+                pdfConfirmModal.hide();
+                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
+                
+                if (response.status === 'success') {
+                    // Show attachment status
+                    var msg = 'Bill sent to Xero!';
+                    if (response.attachment_status) {
+                        msg += '\nAttachment status: ' + response.attachment_status;
+                    }
+                    alert(msg);
+                    
+                    AllocationsManager.showSuccessAndFadeRow(pendingButton, pendingRow, function() {
+                        if (window.currentSelectedBillPk == pendingBillPk) {
+                            $('#billsApprovalsAllocationsTableBody').empty();
+                            $('#billsApprovalsPdfViewer').hide();
+                            $('#billsApprovalsViewerPlaceholder').show();
+                            window.currentSelectedBillPk = null;
+                            window.currentBillData = null;
+                        }
+                    });
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                pdfConfirmModal.hide();
+                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
+                alert('Failed to send to Xero. Please try again.');
+            }
+        });
+    });
+    
+})();
+</script>

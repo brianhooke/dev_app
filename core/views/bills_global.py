@@ -386,6 +386,78 @@ def send_bill_direct(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def get_bill_pdf_info(request):
+    """
+    Get PDF info for a bill before sending to Xero.
+    Returns the PDF URL and source (invoice.pdf or email_attachment).
+    """
+    try:
+        data = json.loads(request.body)
+        bill_pk = data.get('bill_pk')
+        
+        if not bill_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing bill_pk'
+            }, status=400)
+        
+        try:
+            invoice = Bills.objects.select_related('email_attachment').get(bill_pk=bill_pk)
+        except Bills.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invoice not found'
+            }, status=404)
+        
+        pdf_url = None
+        source = None
+        
+        # Check invoice.pdf first (FileField)
+        if invoice.pdf and invoice.pdf.name:
+            try:
+                pdf_url = invoice.pdf.url
+                source = f"invoice.pdf (name: {invoice.pdf.name})"
+                logger.info(f"Bill {bill_pk} PDF info: source=invoice.pdf, url={pdf_url}")
+            except Exception as e:
+                logger.error(f"Error getting invoice.pdf URL: {str(e)}")
+                source = f"invoice.pdf ERROR: {str(e)}"
+        
+        # Check email_attachment if no invoice.pdf
+        if not pdf_url and invoice.email_attachment:
+            try:
+                pdf_url = invoice.email_attachment.get_download_url()
+                source = f"email_attachment (id: {invoice.email_attachment.id}, filename: {invoice.email_attachment.filename}, s3_key: {invoice.email_attachment.s3_key})"
+                logger.info(f"Bill {bill_pk} PDF info: source=email_attachment, url={pdf_url}")
+            except Exception as e:
+                logger.error(f"Error getting email_attachment URL: {str(e)}")
+                source = f"email_attachment ERROR: {str(e)}"
+        
+        if not pdf_url:
+            source = f"NO PDF - invoice.pdf.name={invoice.pdf.name if invoice.pdf else None}, email_attachment_id={invoice.email_attachment_id}"
+            logger.warning(f"Bill {bill_pk} has no PDF: {source}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'bill_pk': bill_pk,
+            'pdf_url': pdf_url,
+            'source': source
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in get_bill_pdf_info: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 @handle_xero_request_errors
 def send_bill_to_xero(request):
     """

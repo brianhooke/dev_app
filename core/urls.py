@@ -6,7 +6,7 @@ from .views.bills import update_bill, null_allocation_xero_fields, get_approved_
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
     bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
-    send_bill_direct, send_bill_to_xero, return_bill_to_project,
+    send_bill_direct, send_bill_to_xero, get_bill_pdf_info, return_bill_to_project,
     # Moved from bills.py:
     get_bills_list, archive_bill, return_to_inbox, 
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
@@ -228,6 +228,7 @@ urlpatterns = [
     path('send_bill/', send_bill, name='send_bill'),
     path('send_bill_direct/', send_bill_direct, name='send_bill_direct'),
     path('send_bill_to_xero/', send_bill_to_xero, name='send_bill_to_xero'),
+    path('get_bill_pdf_info/', get_bill_pdf_info, name='get_bill_pdf_info'),
     path('send_po_email/<int:project_pk>/<int:supplier_pk>/', dashboard_send_po_email, name='dashboard_send_po_email'),
     path('download_po_pdf/<int:project_pk>/<int:supplier_pk>/', download_po_pdf, name='download_po_pdf'),
     path('preview_po/<int:project_pk>/<int:supplier_pk>/', preview_po, name='preview_po'),
