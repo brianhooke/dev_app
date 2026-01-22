@@ -551,8 +551,12 @@ def send_bill_to_xero(request):
             pdf_url = None
             file_name = None
             
-            # Check for PDF - first try invoice.pdf, then email_attachment
-            if invoice.pdf:
+            # Log what we have for debugging
+            logger.info(f"Bill {bill_pk}: invoice.pdf={invoice.pdf}, invoice.pdf.name={invoice.pdf.name if invoice.pdf else None}, email_attachment_id={invoice.email_attachment_id}")
+            
+            # Check for PDF - first try invoice.pdf (FileField), then email_attachment
+            # Note: FileField can be truthy even when empty, so check .name
+            if invoice.pdf and invoice.pdf.name:
                 try:
                     pdf_url = invoice.pdf.url
                     file_name = pdf_url.split('/')[-1]
@@ -563,8 +567,8 @@ def send_bill_to_xero(request):
             if not pdf_url and invoice.email_attachment:
                 try:
                     pdf_url = invoice.email_attachment.get_download_url()
-                    file_name = invoice.email_attachment.file_name or f"bill_{bill_pk}.pdf"
-                    logger.info(f"Found email_attachment: {pdf_url}")
+                    file_name = invoice.email_attachment.filename or f"bill_{bill_pk}.pdf"
+                    logger.info(f"Found email_attachment: {pdf_url}, filename: {file_name}")
                 except Exception as e:
                     logger.error(f"Error getting email_attachment URL: {str(e)}")
             
