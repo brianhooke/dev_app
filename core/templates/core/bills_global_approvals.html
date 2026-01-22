@@ -190,46 +190,8 @@
         // Unbind previous handlers
         $(document).off(ns);
         
-        // Send to Xero button
-        $(document).on('click' + ns, '.approvals-send-btn', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var button = $(this);
-            var billPk = button.attr('data-bill-pk');
-            var row = button.closest('tr');
-            
-            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-            
-            // TODO: Implement actual Xero send logic
-            $.ajax({
-                url: '/core/send_bill_to_xero/',
-                type: 'POST',
-                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-                contentType: 'application/json',
-                data: JSON.stringify({ bill_pk: billPk }),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        AllocationsManager.showSuccessAndFadeRow(button, row, function() {
-                            if (window.currentSelectedBillPk == billPk) {
-                                $('#billsApprovalsAllocationsTableBody').empty();
-                                $('#billsApprovalsPdfViewer').hide();
-                                $('#billsApprovalsViewerPlaceholder').show();
-                                window.currentSelectedBillPk = null;
-                                window.currentBillData = null;
-                            }
-                        });
-                    } else {
-                        alert('Error: ' + response.message);
-                        button.prop('disabled', false).text('Send');
-                    }
-                },
-                error: function() {
-                    alert('Failed to send to Xero. Please try again.');
-                    button.prop('disabled', false).text('Send');
-                }
-            });
-        });
+        // Send to Xero button - shows PDF preview modal first
+        // Note: Actual send logic is in the second script block below (confirmSendToXeroBtn handler)
         
         // Return to Project button
         $(document).on('click' + ns, '.approvals-return-btn', function(e) {
@@ -325,7 +287,17 @@
     $(document).ready(function() {
         var modalEl = document.getElementById('pdfConfirmModal');
         if (modalEl) {
-            pdfConfirmModal = new bootstrap.Modal(modalEl);
+            pdfConfirmModal = new bootstrap.Modal(modalEl, {
+                backdrop: true,
+                keyboard: true,
+                focus: true
+            });
+            
+            // Ensure modal gets focus when shown
+            modalEl.addEventListener('shown.bs.modal', function() {
+                modalEl.focus();
+                $('#confirmSendToXeroBtn').focus();
+            });
         }
     });
     
