@@ -105,15 +105,14 @@ def bills_global_approvals_view(request):
     """
     # Main table columns for Approvals view
     main_table_columns = [
-        {'header': 'Project', 'width': '12%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '12%', 'sortable': True},
-        {'header': 'Xero Account', 'width': '12%', 'sortable': True},
-        {'header': 'Supplier', 'width': '12%', 'sortable': True},
-        {'header': '$ Gross', 'width': '12%', 'sortable': True},
-        {'header': '$ Net', 'width': '11%', 'sortable': True},
-        {'header': '$ GST', 'width': '11%', 'sortable': True},
-        {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Return', 'width': '7%', 'class': 'col-action'},
+        {'header': 'Project', 'width': '14%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '14%', 'sortable': True},
+        {'header': 'Supplier', 'width': '14%', 'sortable': True},
+        {'header': '$ Gross', 'width': '13%', 'sortable': True},
+        {'header': '$ Net', 'width': '13%', 'sortable': True},
+        {'header': '$ GST', 'width': '13%', 'sortable': True},
+        {'header': 'Send', 'width': '8%', 'class': 'col-action-first'},
+        {'header': 'Return', 'width': '8%', 'class': 'col-action'},
     ]
     
     # Allocations columns for Approvals view (read-only)

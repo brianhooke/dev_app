@@ -555,12 +555,6 @@ def get_approved_bills(request):
             # Get supplier name
             supplier_name = invoice.contact_pk.name if invoice.contact_pk else '-'
             
-            # Get Xero account from first allocation (if exists)
-            xero_account_name = '-'
-            first_allocation = invoice.bill_allocations.first()
-            if first_allocation and first_allocation.xero_account:
-                xero_account_name = first_allocation.xero_account.account_name
-            
             # Calculate gross
             total_net = float(invoice.total_net) if invoice.total_net else 0
             total_gst = float(invoice.total_gst) if invoice.total_gst else 0
@@ -593,7 +587,6 @@ def get_approved_bills(request):
                 'project_pk': invoice.project.projects_pk if invoice.project else None,
                 'xero_instance_name': xero_instance_name,
                 'xero_instance_id': xero_instance_id,
-                'xero_account_name': xero_account_name,
                 'supplier_name': supplier_name,
                 'supplier_bill_number': invoice.supplier_bill_number or '',
                 'total_gross': total_gross,

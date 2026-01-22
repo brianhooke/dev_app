@@ -53,23 +53,20 @@
                 var xeroInstanceName = bill.xero_instance_name || '-';
                 row.append($('<td>').attr('title', xeroInstanceName).text(xeroInstanceName));
                 
-                // 3. Xero Account
-                row.append($('<td>').text(bill.xero_account_name || '-'));
-                
-                // 4. Supplier
+                // 3. Supplier
                 var supplierName = bill.supplier_name || '-';
                 row.append($('<td>').attr('title', supplierName).text(supplierName));
                 
-                // 5. $ Gross
+                // 4. $ Gross
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
                 
-                // 6. $ Net
+                // 5. $ Net
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 7. $ GST
+                // 6. $ GST
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 8. Send to Xero button
+                // 7. Send to Xero button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-success approvals-send-btn')
                     .attr('data-bill-pk', bill.bill_pk)
