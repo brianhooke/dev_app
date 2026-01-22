@@ -1102,12 +1102,55 @@ def delete_unallocated_invoice_allocation(request, allocation_pk):
 def allocate_bill(request, bill_pk):
     """
     Mark an invoice as allocated (bill_status = 1).
+    Validates that allocations exist and are fully allocated before processing.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
     
     try:
         invoice = Bills.objects.get(bill_pk=bill_pk)
+        
+        # Get all allocations for this bill
+        allocations = Bill_allocations.objects.filter(bill=invoice)
+        
+        # Validation 1: Must have at least one allocation
+        if not allocations.exists():
+            return JsonResponse({
+                'status': 'error', 
+                'message': 'No allocations found for this bill'
+            }, status=400)
+        
+        # Calculate allocation totals
+        total_allocated_net = sum(a.amount or 0 for a in allocations)
+        total_allocated_gst = sum(a.gst_amount or 0 for a in allocations)
+        
+        bill_total_net = float(invoice.total_net or 0)
+        bill_total_gst = float(invoice.total_gst or 0)
+        
+        # Validation 2: Net amounts must be fully allocated (within tolerance)
+        if abs(float(total_allocated_net) - bill_total_net) >= 0.01:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Net amount not fully allocated. Bill: ${bill_total_net:.2f}, Allocated: ${float(total_allocated_net):.2f}'
+            }, status=400)
+        
+        # Validation 3: GST amounts must be fully allocated (within tolerance)
+        # Only check if bill has GST
+        if bill_total_gst > 0 and abs(float(total_allocated_gst) - bill_total_gst) >= 0.01:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'GST amount not fully allocated. Bill: ${bill_total_gst:.2f}, Allocated: ${float(total_allocated_gst):.2f}'
+            }, status=400)
+        
+        # Validation 4: All allocations with amounts must have an item selected
+        for alloc in allocations:
+            if (alloc.amount or 0) > 0 and not alloc.item:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'All allocations with amounts must have a costing item selected'
+                }, status=400)
+        
+        # All validations passed - mark as allocated
         invoice.bill_status = 1
         invoice.save()
         

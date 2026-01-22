@@ -714,7 +714,10 @@ var AllocationsManager = (function() {
         if (st.isNewMode || st.editMode) {
             // Editable mode - show editable allocation rows
             if (!allocations || allocations.length === 0) {
-                addAllocationRow(sectionId);
+                // If customAddRowHandler is true, don't auto-create blank rows - let onAllocationsLoaded handle it
+                if (!cfg.features.customAddRowHandler) {
+                    addAllocationRow(sectionId);
+                }
             } else {
                 allocations.forEach(function(alloc) {
                     addAllocationRow(sectionId, alloc);
