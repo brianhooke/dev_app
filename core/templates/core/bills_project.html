@@ -177,22 +177,23 @@ $(document).ready(function() {
                     });
                 row.append($('<td>').append(gstInput));
                 
-                // 5. Allocate button
-                var allocateBtn = $('<button>')
-                    .addClass('btn btn-sm btn-secondary allocate-bill-btn')
-                    .text('Allocate')
+                // 5. Approve button
+                var approveBtn = $('<button>')
+                    .addClass('btn btn-sm btn-secondary approve-bill-btn')
+                    .text('Approve')
                     .css('font-size', '10px')
                     .attr('data-bill-pk', bill.bill_pk)
                     .prop('disabled', true)
-                    .attr('title', 'Allocate bill (enabled when fully allocated)');
-                row.append($('<td>').addClass('col-action-first').append(allocateBtn));
+                    .attr('title', 'Approve bill (enabled when fully allocated)');
+                row.append($('<td>').addClass('col-action-first').append(approveBtn));
                 
-                // 6. Delete button
-                var deleteBtn = $('<button>')
-                    .addClass('btn btn-sm btn-danger delete-bill-btn')
-                    .html('<i class="fas fa-trash"></i>')
-                    .attr('data-bill-pk', bill.bill_pk);
-                row.append($('<td>').addClass('col-action').append(deleteBtn));
+                // 6. Return to Inbox button
+                var returnBtn = $('<button>')
+                    .addClass('btn btn-sm btn-warning return-to-inbox-btn')
+                    .html('<i class="fas fa-undo"></i>')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .attr('title', 'Return to Inbox');
+                row.append($('<td>').addClass('col-action').append(returnBtn));
                 
                 return row;
             },
@@ -273,7 +274,7 @@ $(document).ready(function() {
     // - Shared AllocationsManager.selectRow() with onRowSelect callback
     // - Shared AllocationsManager.loadAllocations() with onAllocationsLoaded callback
     
-    // Update Allocate button state based on allocation totals (called by onUpdate callback)
+    // Update Approve button state based on allocation totals (called by onUpdate callback)
     function updateAllocateButtonState(totals) {
         if (!currentSelectedBill) return;
         
@@ -281,7 +282,7 @@ $(document).ready(function() {
         var selectedRow = $('#billMainTableBody tr.selected-row');
         if (!selectedRow.length) return;
         
-        var allocateBtn = selectedRow.find('.allocate-bill-btn');
+        var approveBtn = selectedRow.find('.approve-bill-btn');
         var isFullyAllocated = isConstruction 
             ? Math.abs(totals.remainingNet) < 0.01 
             : Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
@@ -294,11 +295,11 @@ $(document).ready(function() {
             if (netVal > 0 && !itemVal) { allItemsSelected = false; return false; }
         });
         
-        var canAllocate = isFullyAllocated && allItemsSelected;
-        if (canAllocate) {
-            allocateBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+        var canApprove = isFullyAllocated && allItemsSelected;
+        if (canApprove) {
+            approveBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
         } else {
-            allocateBtn.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+            approveBtn.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
         }
     }
     
@@ -444,8 +445,8 @@ $(document).ready(function() {
         return $.when.apply($, promises);
     }
     
-    // Allocate bill
-    function allocateBill(btn) {
+    // Approve bill from unallocated table (saves allocations first, then approves)
+    function approveBillFromUnallocated(btn) {
         var billPk = btn.attr('data-bill-pk');
         var row = btn.closest('tr');
         
@@ -469,8 +470,10 @@ $(document).ready(function() {
             
             $.when.apply($, deletePromises).always(function() {
                 $.ajax({
-                    url: '/core/allocate_bill/' + billPk + '/',
+                    url: '/core/approve_bill/' + billPk + '/',
                     type: 'POST',
+                    data: JSON.stringify({ current_status: 0 }),
+                    contentType: 'application/json',
                     success: function(response) {
                         if (response.status === 'success') {
                             AllocationsManager.showSuccessAndFadeRow(btn, row, function() {
@@ -482,7 +485,7 @@ $(document).ready(function() {
                                 if (firstRow.length && firstRow.attr('data-pk')) {
                                     AllocationsManager.selectRow('bill', firstRow);
                                 } else {
-                                    $('#billMainTableBody').html('<tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">No unallocated bills found for this project.</td></tr>');
+                                    $('#billMainTableBody').html('<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">No unallocated bills found for this project.</td></tr>');
                                     $('#billMainTableBody').removeClass('has-selection');
                                     $('#billPdfViewer').hide();
                                     $('#billViewerPlaceholder').show();
@@ -491,12 +494,12 @@ $(document).ready(function() {
                             });
                         } else {
                             btn.prop('disabled', false).text(originalText).addClass('btn-success');
-                            alert('Failed to allocate bill: ' + response.message);
+                            alert('Failed to approve bill: ' + response.message);
                         }
                     },
                     error: function() {
                         btn.prop('disabled', false).text(originalText).addClass('btn-success');
-                        alert('Failed to allocate bill. Please try again.');
+                        alert('Failed to approve bill. Please try again.');
                     }
                 });
             });
@@ -1046,9 +1049,55 @@ $(document).ready(function() {
         addNewAllocationRow();
     });
     
-    $(document).off('click', '.allocate-bill-btn').on('click', '.allocate-bill-btn', function(e) {
+    $(document).off('click', '.approve-bill-btn').on('click', '.approve-bill-btn', function(e) {
         e.stopPropagation();
-        allocateBill($(this));
+        approveBillFromUnallocated($(this));
+    });
+    
+    // Return to Inbox button handler
+    $(document).off('click', '.return-to-inbox-btn').on('click', '.return-to-inbox-btn', function(e) {
+        e.stopPropagation();
+        var btn = $(this);
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        
+        if (!confirm('Return this bill to the inbox?')) return;
+        
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/return_to_inbox/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({ bill_pk: billPk }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Fade out and remove the row
+                    row.fadeOut(300, function() {
+                        $(this).remove();
+                        // If this was the selected row, clear selection
+                        if (currentSelectedBill && currentSelectedBill.bill_pk == billPk) {
+                            currentSelectedBill = null;
+                            $('#billAllocationsTableBody').empty();
+                            $('#billPdfViewer').hide();
+                            $('#billViewerPlaceholder').show();
+                        }
+                        // Check if table is now empty
+                        if ($('#billMainTableBody tr').length === 0) {
+                            $('#billMainTableBody').html('<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">No unallocated bills found for this project.</td></tr>');
+                        }
+                    });
+                } else {
+                    alert('Error: ' + (response.message || 'Unknown error'));
+                    btn.prop('disabled', false).html('<i class="fas fa-undo"></i>');
+                }
+            },
+            error: function(xhr) {
+                alert('Failed to return bill to inbox: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                btn.prop('disabled', false).html('<i class="fas fa-undo"></i>');
+            }
+        });
     });
     
     $(document).on('input', '#billMainTable .net-input, #billMainTable .gst-input', function() {

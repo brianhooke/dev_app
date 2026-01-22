@@ -660,8 +660,8 @@ def bills_view(request):
                 {'header': '$ Gross', 'width': '14%', 'sortable': True},
                 {'header': '$ Net', 'width': '14%', 'sortable': True},
                 {'header': '$ GST', 'width': '14%', 'sortable': True},
-                {'header': 'Allocate', 'width': '12%', 'class': 'col-action-first'},
-                {'header': 'Del', 'width': '7%', 'class': 'col-action'},
+                {'header': 'Approve', 'width': '12%', 'class': 'col-action-first'},
+                {'header': 'Return', 'width': '7%', 'class': 'col-action'},
             ]
         
         # Allocations columns differ by project type AND allocated status
