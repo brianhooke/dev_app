@@ -38,6 +38,10 @@ from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
 from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
+from .views.staff_hours import (
+    staff_hours, get_employees, get_employee_detail, get_leave_balances,
+    get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays
+)
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
@@ -272,6 +276,16 @@ urlpatterns = [
     path('update_project_type_xero_instance/<int:project_type_pk>/', update_project_type_xero_instance, name='update_project_type_xero_instance'),
     path('update_project_type_rates_based/<int:project_type_pk>/', update_project_type_rates_based, name='update_project_type_rates_based'),
     path('toggle_project_type_archive/<int:project_type_pk>/', toggle_project_type_archive, name='toggle_project_type_archive'),
+    
+    # Staff Hours section
+    path('staff_hours/', staff_hours, name='staff_hours'),
+    path('staff_hours/employees/', get_employees, name='staff_hours_employees'),
+    path('staff_hours/employee/<str:employee_id>/', get_employee_detail, name='staff_hours_employee_detail'),
+    path('staff_hours/leave_balances/', get_leave_balances, name='staff_hours_leave_balances'),
+    path('staff_hours/pay_items/', get_pay_items, name='staff_hours_pay_items'),
+    path('staff_hours/payroll_calendars/', get_payroll_calendars, name='staff_hours_payroll_calendars'),
+    path('staff_hours/super_funds/', get_super_funds, name='staff_hours_super_funds'),
+    path('staff_hours/public_holidays/', get_public_holidays, name='staff_hours_public_holidays'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

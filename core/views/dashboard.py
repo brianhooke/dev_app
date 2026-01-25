@@ -91,7 +91,7 @@ def dashboard_view(request):
         {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'icon': 'fa-file-invoice-dollar'},
         {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects', 'icon': 'fa-project-diagram'},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True, 'icon': 'fa-boxes'},
-        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'disabled': True, 'icon': 'fa-user-clock'},
+        {'label': 'Staff Hours', 'url': '/core/staff_hours/', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'icon': 'fa-user-clock'},
         {'label': 'Rates', 'url': '#', 'id': 'ratesLink', 'page_id': 'rates', 'icon': 'fa-percentage'},
         {'divider': True},
         {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings', 'icon': 'fa-cog'},
