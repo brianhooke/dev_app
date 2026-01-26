@@ -267,19 +267,20 @@
                         <table id="settingsXeroTable" class="reusable-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 25%; text-align: left;" class="sortable">Xero Name</th>
-                                    <th style="width: 10%; text-align: center;" class="col-action-first">Test</th>
+                                    <th style="width: 20%; text-align: left;" class="sortable">Xero Name</th>
+                                    <th style="width: 8%; text-align: center;" class="col-action-first">Test</th>
                                     <th style="width: 10%; text-align: center;" class="col-action">Authorise</th>
+                                    <th style="width: 10%; text-align: center;" class="col-action">Staff Hours</th>
                                     <th style="width: 10%; text-align: center;" class="col-action">Contacts</th>
                                     <th style="width: 10%; text-align: center;" class="col-action">Accounts</th>
                                     <th style="width: 10%; text-align: center;" class="col-action">Tracking</th>
-                                    <th style="width: 10%; text-align: center;" class="col-action">Edit</th>
+                                    <th style="width: 8%; text-align: center;" class="col-action">Edit</th>
                                     <th style="width: 5%; text-align: center;" class="col-action">Delete</th>
                                 </tr>
                             </thead>
                             <tbody id="settingsXeroTableBody">
                                 <tr>
-                                    <td colspan="8" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                    <td colspan="9" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
                                         Loading...
                                     </td>
                                 </tr>
@@ -325,6 +326,9 @@ $(document).ready(function() {
         } else if (section === 'xero') {
             $('#settingsXeroSection').show().css('display', 'flex');
             loadSettingsXeroInstances();
+        } else if (section === 'holidays') {
+            $('#settingsHolidaysSection').show().css('display', 'flex');
+            loadHolidayCalendars();
         }
     });
     
@@ -346,17 +350,19 @@ $(document).ready(function() {
                 tbody.empty();
                 
                 if (instances.length === 0) {
-                    tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>');
+                    tbody.html('<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--color-text-muted);">No Xero instances found. Click "Add New" to create one.</td></tr>');
                     return;
                 }
                 
                 instances.forEach(function(instance) {
                     var row = $('<tr data-instance-pk="' + instance.xero_instance_pk + '"></tr>');
                     row.data('instance', instance);
+                    var staffHoursValue = instance.staff_hours_tracking || 0;
                     
                     row.append('<td>' + Utils.escapeHtml(instance.xero_name) + '</td>');
                     row.append('<td class="col-action-first"><button class="btn btn-sm btn-primary test-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Test</button></td>');
                     row.append('<td class="col-action"><button class="btn btn-sm btn-info authorize-xero-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Authorise</button></td>');
+                    row.append('<td class="col-action"><select class="form-control form-control-sm staff-hours-tracking-select" data-instance-pk="' + instance.xero_instance_pk + '" style="width: auto; display: inline-block;"><option value="1"' + (staffHoursValue === 1 ? ' selected' : '') + '>Yes</option><option value="0"' + (staffHoursValue === 0 ? ' selected' : '') + '>No</option></select></td>');
                     row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-contacts-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
                     row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-accounts-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
                     row.append('<td class="col-action"><button class="btn btn-sm btn-secondary pull-tracking-btn" data-instance-pk="' + instance.xero_instance_pk + '" data-instance-name="' + Utils.escapeHtml(instance.xero_name) + '">Pull</button></td>');
@@ -369,7 +375,7 @@ $(document).ready(function() {
                 Utils.initSortableTable('settingsXeroTable', { tbodyId: 'settingsXeroTableBody' });
             },
             error: function() {
-                tbody.html('<tr><td colspan="8" style="text-align: center; color: #dc3545; padding: 20px;">Error loading Xero instances</td></tr>');
+                tbody.html('<tr><td colspan="9" style="text-align: center; color: #dc3545; padding: 20px;">Error loading Xero instances</td></tr>');
             }
         });
     }
@@ -379,6 +385,7 @@ $(document).ready(function() {
         $('#xeroNameInput').val('');
         $('#xeroClientIdInput').val('');
         $('#xeroClientSecretInput').val('');
+        $('#xeroStaffHoursTrackingInput').val('');
         $('#addXeroInstanceModal').modal('show');
         setTimeout(function() {
             $('.modal-backdrop').last().css('z-index', 1055);

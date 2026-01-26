@@ -1,24 +1,9 @@
-{% extends "core/dashboard_master.html" %}
-{% load static %}
-
 <!--
-Template: Staff Hours Module
+Template: Staff Hours Module (Section)
 
 Purpose:
 Staff hours management interface that integrates with Xero Payroll API.
-Displays employee data including:
-- Active status
-- Leave balances
-- Pay templates (wages/earnings)
-- Superannuation details
-
-Xero Payroll AU API Data Available:
-- Employee status (ACTIVE/TERMINATED)
-- Leave balances (annual, sick, etc.)
-- Pay template (earnings rates, deductions)
-- Super memberships
-
-Note: Public holidays are NOT available from Xero API - hardcoded in backend.
+Included as a section in dashboard.html for SPA navigation.
 
 Backend Endpoints:
 - GET /core/staff_hours/employees/ - Fetch all employees
@@ -27,45 +12,385 @@ Backend Endpoints:
 - GET /core/staff_hours/pay_items/ - Get pay items (earnings rates, etc.)
 - GET /core/staff_hours/payroll_calendars/ - Get payroll calendars
 - GET /core/staff_hours/super_funds/ - Get super funds
-- GET /core/staff_hours/public_holidays/ - Get public holidays (hardcoded)
+- GET /core/staff_hours/public_holidays/ - Get public holidays from database
 -->
 
-{% block title %}Staff Hours{% endblock %}
+<!-- Staff Hours Section -->
+<div id="staffHoursSection" style="display: none; flex-direction: column; height: 100%;">
+<div class="container-fluid py-4" style="height: 100%; overflow-y: auto;">
+    <!-- Google Fonts for Manila Theme -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
 
-{% block content %}
-<div class="container-fluid py-4">
-    <!-- Page Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h2 class="mb-0">
-                    <i class="fas fa-user-clock me-2"></i>Staff Hours
-                </h2>
-                <div class="d-flex align-items-center gap-3">
-                    <!-- Xero Instance Selector -->
-                    <div class="d-flex align-items-center">
-                        <label for="xeroInstanceSelect" class="me-2 text-nowrap">Xero Instance:</label>
-                        <select id="xeroInstanceSelect" class="form-select form-select-sm" style="min-width: 200px;">
-                            <option value="">Select Xero Instance...</option>
-                            {% for instance in xero_instances %}
-                            <option value="{{ instance.xero_instance_pk }}">{{ instance.xero_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button id="refreshDataBtn" class="btn btn-outline-primary btn-sm" disabled>
-                        <i class="fas fa-sync-alt me-1"></i>Refresh
-                    </button>
-                </div>
-            </div>
-        </div>
+    <!-- Staff Hours Styles -->
+    <style>
+        /* Manila Folder Theme Colors */
+        :root {
+            --manila-dark: #b8a888;
+            --manila-mid: #d4c4a8;
+            --manila-light: #e8dcc8;
+            --manila-lighter: #f5efe5;
+            --manila-paper: #faf7f2;
+            --manila-text: #5c4a32;
+            --manila-text-muted: #8b7355;
+            --manila-border: #c4b494;
+        }
+        
+        /* Typography */
+        #staffHoursSection {
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #staffHoursSection h1,
+        #staffHoursSection h2,
+        #staffHoursSection h3,
+        #staffHoursSection h4,
+        #staffHoursSection h5,
+        #staffHoursSection h6,
+        #staffHoursSection .reusable-table-title {
+            font-family: 'Merriweather', Georgia, serif;
+        }
+        #staffTabs .nav-link {
+            font-family: 'Merriweather', Georgia, serif;
+        }
+        
+        /* Page Background */
+        #staffHoursSection > .container-fluid {
+            background: linear-gradient(135deg, var(--manila-lighter) 0%, var(--manila-paper) 100%);
+        }
+        
+        /* Xero Instance Selector */
+        .staff-hours-selector {
+            margin-bottom: 15px;
+            background: var(--manila-paper);
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--manila-border);
+            box-shadow: 0 2px 4px rgba(92, 74, 50, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .staff-hours-selector h5 {
+            margin: 0;
+            color: var(--manila-text);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .staff-hours-selector select {
+            width: 100%;
+            max-width: 300px;
+            padding: 8px;
+            font-size: 13px;
+            border: 1px solid var(--manila-border);
+            border-radius: 4px;
+            background: white;
+            color: var(--manila-text);
+        }
+        .staff-hours-selector .refresh-btn {
+            margin-top: 0;
+            background: var(--manila-mid);
+            border-color: var(--manila-border);
+            color: var(--manila-text);
+            height: 38px;
+            vertical-align: middle;
+        }
+        .staff-hours-selector .refresh-btn:hover {
+            background: var(--manila-dark);
+            border-color: var(--manila-dark);
+            color: white;
+        }
+        
+        /* Manila Folder Tabs */
+        #staffTabs {
+            border-bottom: none;
+            gap: 4px;
+            margin-bottom: 0 !important;
+            position: relative;
+        }
+        #staffTabs .nav-item {
+            margin-bottom: 0;
+            position: relative;
+            z-index: 1;
+        }
+        #staffTabs .nav-link {
+            border: 1px solid var(--manila-border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+            color: var(--manila-text);
+            transition: all 0.15s ease;
+            margin-bottom: -1px;
+        }
+        #staffTabs .nav-link:hover {
+            background: linear-gradient(to bottom, var(--manila-lighter) 0%, var(--manila-light) 100%);
+        }
+        #staffTabs .nav-link:focus,
+        #staffTabs .nav-link:focus-visible {
+            outline: none;
+            box-shadow: none;
+        }
+        #staffTabs .nav-link.active {
+            background: var(--manila-paper);
+            border-color: var(--manila-border);
+            border-bottom: none;
+            color: var(--manila-text);
+            position: relative;
+            z-index: 2;
+        }
+        #staffTabContent {
+            border: 1px solid var(--manila-border);
+            border-radius: 0 8px 8px 8px;
+            padding: 16px;
+            background: var(--manila-paper);
+            position: relative;
+            overflow: hidden;
+            height: calc(100vh - 175px);
+        }
+        
+        /* Table Overrides for Manila Theme */
+        #staffHoursSection .reusable-table-container {
+            border: 1px solid var(--manila-border);
+            border-radius: 6px;
+            overflow: hidden;
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+        }
+        #staffHoursSection .reusable-table thead {
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+        }
+        #staffHoursSection .reusable-table {
+            border: none !important;
+        }
+        #staffHoursSection .reusable-table thead th {
+            color: var(--manila-text);
+            border: none !important;
+            border-bottom: 1px solid var(--manila-border) !important;
+            border-top: none !important;
+            border-left: none !important;
+            border-right: none !important;
+            box-shadow: none !important;
+        }
+        #staffHoursSection .reusable-table thead tr {
+            border: none !important;
+        }
+        #staffHoursSection .reusable-table thead {
+            border: none !important;
+        }
+        #staffHoursSection .reusable-table tbody tr {
+            background: white;
+        }
+        #staffHoursSection .reusable-table tbody tr:nth-child(even) {
+            background: var(--manila-paper);
+        }
+        #staffHoursSection .reusable-table tbody tr:hover {
+            background: var(--manila-lighter);
+        }
+        #staffHoursSection .reusable-table tbody td {
+            border-bottom: 1px solid var(--manila-border);
+            color: var(--manila-text);
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #staffHoursSection .reusable-table thead th {
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 600;
+        }
+        #staffHoursSection .reusable-table-title {
+            color: var(--manila-text);
+        }
+        
+        /* Alert/Info boxes */
+        #staffHoursSection .alert-info {
+            background: var(--manila-lighter);
+            border-color: var(--manila-border);
+            color: var(--manila-text);
+        }
+        
+        /* Cards for Super Funds, etc. */
+        #staffHoursSection .card {
+            background: var(--manila-paper);
+            border: 1px solid var(--manila-border);
+            box-shadow: 0 2px 4px rgba(92, 74, 50, 0.08);
+        }
+        #staffHoursSection .card-header {
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+            border-bottom: 1px solid var(--manila-border);
+            color: var(--manila-text);
+        }
+        
+        /* Calendar Panel Overrides */
+        #staffHoursSection .calendar-header {
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+            color: var(--manila-text);
+        }
+        #staffHoursSection #dayDetailsPanel {
+            background: var(--manila-paper);
+            border: 1px solid var(--manila-border);
+        }
+        #staffHoursSection #dayDetailsPanel h6 {
+            color: var(--manila-text);
+        }
+        
+        /* Form Controls */
+        #staffHoursSection .form-select,
+        #staffHoursSection .form-control {
+            border-color: var(--manila-border);
+            background: white;
+            color: var(--manila-text);
+        }
+        #staffHoursSection .form-select:focus,
+        #staffHoursSection .form-control:focus {
+            border-color: var(--manila-dark);
+            box-shadow: 0 0 0 2px rgba(184, 168, 136, 0.25);
+        }
+        
+        /* Manila-styled dropdowns */
+        #staffHoursSection .manila-select {
+            border: 1px solid var(--manila-border);
+            border-radius: 4px;
+            background: white;
+            color: var(--manila-text);
+            font-size: 13px;
+        }
+        #staffHoursSection .manila-select:focus {
+            border-color: var(--manila-dark);
+            box-shadow: 0 0 0 2px rgba(184, 168, 136, 0.25);
+            outline: none;
+        }
+        
+        /* Buttons */
+        #staffHoursSection .btn-primary {
+            background: var(--manila-dark);
+            border-color: var(--manila-dark);
+            color: white;
+        }
+        #staffHoursSection .btn-primary:hover {
+            background: #a08868;
+            border-color: #a08868;
+        }
+        #staffHoursSection .btn-outline-primary {
+            color: var(--manila-text);
+            border-color: var(--manila-border);
+        }
+        #staffHoursSection .btn-outline-primary:hover {
+            background: var(--manila-mid);
+            border-color: var(--manila-dark);
+            color: var(--manila-text);
+        }
+        
+        /* Text colors */
+        #staffHoursSection .text-muted {
+            color: var(--manila-text-muted) !important;
+        }
+        
+        /* Public Holidays Tab Styling */
+        #holidays h5 {
+            color: var(--manila-text);
+            font-family: 'Merriweather', Georgia, serif;
+        }
+        #holidays .table-active {
+            background: var(--manila-lighter) !important;
+        }
+        
+        /* Sticky headers for holiday tables */
+        .holiday-table-wrapper {
+            position: relative;
+        }
+        .holiday-table-wrapper .reusable-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: visible !important;
+        }
+        .holiday-table-wrapper .reusable-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--manila-light);
+            box-shadow: 0 1px 0 var(--manila-border);
+        }
+        
+        /* Delete buttons - compact and subtle */
+        #staffHoursSection .btn-danger.delete-calendar-btn,
+        #staffHoursSection .btn-danger.delete-holiday-btn {
+            padding: 2px 6px;
+            font-size: 10px;
+            line-height: 1;
+            border-radius: 3px;
+            background: transparent;
+            border: 1px solid var(--manila-border);
+            color: var(--manila-text-muted);
+        }
+        #staffHoursSection .btn-danger.delete-calendar-btn:hover,
+        #staffHoursSection .btn-danger.delete-holiday-btn:hover {
+            background: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+        #staffHoursSection .btn-danger.delete-calendar-btn i,
+        #staffHoursSection .btn-danger.delete-holiday-btn i {
+            font-size: 10px;
+        }
+        
+        /* Set default button */
+        #staffHoursSection .set-default-btn {
+            padding: 2px 8px;
+            font-size: 10px;
+            line-height: 1;
+            border-radius: 3px;
+            background: var(--manila-light);
+            border: 1px solid var(--manila-border);
+            color: var(--manila-text);
+        }
+        #staffHoursSection .set-default-btn:hover {
+            background: var(--manila-mid);
+        }
+        
+        /* Success button for Add */
+        #staffHoursSection .btn-success {
+            background: var(--manila-dark);
+            border-color: var(--manila-dark);
+            color: white;
+            font-size: 12px;
+            padding: 4px 12px;
+        }
+        #staffHoursSection .btn-success:hover {
+            background: #a08868;
+            border-color: #a08868;
+        }
+    </style>
+
+    <!-- Xero Instance Selector -->
+    <div class="staff-hours-selector">
+        <h5>Xero Instance</h5>
+        <select id="staffHoursXeroSelect">
+            <option value="">Select Xero Instance...</option>
+        </select>
+        <button id="refreshDataBtn" class="btn btn-outline-primary btn-sm refresh-btn" disabled>
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
     </div>
 
-    <!-- Loading Indicator -->
+    <!-- Loading Indicator - Paper Shuffle -->
     <div id="loadingIndicator" class="text-center py-5 d-none">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+        <style>
+            .paper-loader { position: relative; width: 40px; height: 50px; margin: 0 auto; }
+            .paper-loader .paper { position: absolute; width: 35px; height: 45px; background: var(--manila-paper); border: 1px solid var(--manila-border); border-radius: 2px; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); }
+            .paper-loader .paper:nth-child(1) { animation: paperShuffle1 1.2s ease-in-out infinite; }
+            .paper-loader .paper:nth-child(2) { animation: paperShuffle2 1.2s ease-in-out infinite 0.1s; }
+            .paper-loader .paper:nth-child(3) { animation: paperShuffle3 1.2s ease-in-out infinite 0.2s; }
+            @keyframes paperShuffle1 { 0%, 100% { transform: rotate(-5deg) translateY(0); } 50% { transform: rotate(-5deg) translateY(-10px); } }
+            @keyframes paperShuffle2 { 0%, 100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(0deg) translateY(-15px); } }
+            @keyframes paperShuffle3 { 0%, 100% { transform: rotate(5deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-8px); } }
+        </style>
+        <div class="paper-loader">
+            <div class="paper"></div>
+            <div class="paper"></div>
+            <div class="paper"></div>
         </div>
-        <p class="mt-2 text-muted">Loading staff data from Xero...</p>
+        <p class="mt-3" style="color: var(--manila-text); font-family: 'Merriweather', serif; font-size: 14px;">Loading staff data...</p>
     </div>
 
     <!-- No Instance Selected Message -->
@@ -77,233 +402,114 @@ Backend Endpoints:
 
     <!-- Main Content (hidden until data loads) -->
     <div id="mainContent" class="d-none">
-        <!-- Stats Cards -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card bg-primary text-white">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-1 opacity-75">Active Employees</h6>
-                                <h3 class="card-title mb-0" id="activeEmployeeCount">0</h3>
-                            </div>
-                            <i class="fas fa-users fa-2x opacity-50"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-success text-white">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-1 opacity-75">On Leave</h6>
-                                <h3 class="card-title mb-0" id="onLeaveCount">0</h3>
-                            </div>
-                            <i class="fas fa-umbrella-beach fa-2x opacity-50"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-1 opacity-75">Total Leave Days</h6>
-                                <h3 class="card-title mb-0" id="totalLeaveDays">0</h3>
-                            </div>
-                            <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-warning text-dark">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-1 opacity-75">Public Holidays</h6>
-                                <h3 class="card-title mb-0" id="upcomingHolidays">0</h3>
-                            </div>
-                            <i class="fas fa-star fa-2x opacity-50"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Tabs -->
-        <ul class="nav nav-tabs mb-3" id="staffTabs" role="tablist">
+        <ul class="nav nav-tabs" id="staffTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="employees-tab" data-bs-toggle="tab" data-bs-target="#employees" type="button" role="tab">
-                    <i class="fas fa-users me-1"></i>Employees
-                </button>
+                <button class="nav-link active" id="calendar-tab" data-bs-toggle="tab" data-bs-target="#calendar" type="button" role="tab">Staff Hours</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="leave-tab" data-bs-toggle="tab" data-bs-target="#leave" type="button" role="tab">
-                    <i class="fas fa-calendar-check me-1"></i>Leave Balances
-                </button>
+                <button class="nav-link" id="employees-tab" data-bs-toggle="tab" data-bs-target="#employees" type="button" role="tab">Employees</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="payroll-tab" data-bs-toggle="tab" data-bs-target="#payroll" type="button" role="tab">
-                    <i class="fas fa-dollar-sign me-1"></i>Pay Items
-                </button>
+                <button class="nav-link" id="payroll-tab" data-bs-toggle="tab" data-bs-target="#payroll" type="button" role="tab">Pay Items</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="super-tab" data-bs-toggle="tab" data-bs-target="#super" type="button" role="tab">
-                    <i class="fas fa-piggy-bank me-1"></i>Super Funds
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="holidays-tab" data-bs-toggle="tab" data-bs-target="#holidays" type="button" role="tab">
-                    <i class="fas fa-star me-1"></i>Public Holidays
-                </button>
+                <button class="nav-link" id="holidays-tab" data-bs-toggle="tab" data-bs-target="#holidays" type="button" role="tab">Public Holidays</button>
             </li>
         </ul>
 
         <!-- Tab Content -->
         <div class="tab-content" id="staffTabContent">
             <!-- Employees Tab -->
-            <div class="tab-pane fade show active" id="employees" role="tabpanel">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Employee List</h5>
-                        <div class="d-flex gap-2">
-                            <select id="statusFilter" class="form-select form-select-sm" style="width: auto;">
-                                <option value="ACTIVE">Active Only</option>
-                                <option value="">All</option>
-                                <option value="TERMINATED">Terminated</option>
-                            </select>
-                            <input type="text" id="employeeSearch" class="form-control form-control-sm" placeholder="Search employees..." style="width: 200px;">
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0" id="employeesTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Job Title</th>
-                                        <th>Status</th>
-                                        <th>Start Date</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="employeesTableBody">
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">
-                                            No employees loaded
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+            <div class="tab-pane fade" id="employees" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="reusable-table-title">Employee List</div>
+                    <select id="statusFilter" class="form-select form-select-sm" style="width: auto; height: 24px; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--manila-border);">
+                        <option value="ACTIVE">Active Only</option>
+                        <option value="">All</option>
+                        <option value="TERMINATED">Terminated</option>
+                    </select>
                 </div>
-            </div>
-
-            <!-- Leave Balances Tab -->
-            <div class="tab-pane fade" id="leave" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Leave Balances</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0" id="leaveTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Employee</th>
-                                        <th>Leave Type</th>
-                                        <th>Balance (Hours)</th>
-                                        <th>Balance (Days)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="leaveTableBody">
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted py-4">
-                                            No leave data loaded
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="reusable-table-container">
+                    <table class="reusable-table" id="employeesTable">
+                        <colgroup>
+                            <col style="width: 15%;">
+                            <col style="width: 15%;">
+                            <col style="width: 12%;">
+                            <col style="width: 13%;">
+                            <col style="width: 45%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Job Title</th>
+                                <th>Status</th>
+                                <th>Start Date</th>
+                                <th>Leave Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employeesTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 20px; color: var(--color-text-muted);">
+                                    No employees loaded
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
             <!-- Pay Items Tab -->
             <div class="tab-pane fade" id="payroll" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Pay Items (Earnings Rates)</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0" id="payItemsTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Type</th>
-                                        <th>Rate Type</th>
-                                        <th>Rate Per Unit</th>
-                                        <th>Account Code</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="payItemsTableBody">
-                                    <tr>
-                                        <td colspan="5" class="text-center text-muted py-4">
-                                            No pay items loaded
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="reusable-table-title">Pay Items (Earnings Rates)</div>
+                </div>
+                <div class="alert alert-info py-1 px-2 mb-2" style="font-size: 11px;">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Timesheet-valid rates</strong> are highlighted. Only <em>Ordinary Time</em> and <em>Overtime</em> earnings types with per-unit rates can be used in timesheets.
+                </div>
+                <div class="reusable-table-container">
+                    <table class="reusable-table" id="payItemsTable">
+                        <colgroup>
+                            <col style="width: 30%;">
+                            <col style="width: 22%;">
+                            <col style="width: 15%;">
+                            <col style="width: 13%;">
+                            <col style="width: 10%;">
+                            <col style="width: 10%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Rate Type</th>
+                                <th>Rate/Unit</th>
+                                <th>Account</th>
+                                <th style="text-align: center;">Timesheet</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payItemsTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 20px; color: var(--color-text-muted);">
+                                    No pay items loaded
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Super Funds Tab -->
-            <div class="tab-pane fade" id="super" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Super Funds</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0" id="superFundsTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fund Name</th>
-                                        <th>Type</th>
-                                        <th>ABN</th>
-                                        <th>USI</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="superFundsTableBody">
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted py-4">
-                                            No super funds loaded
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Public Holidays Tab -->
-            <div class="tab-pane fade" id="holidays" role="tabpanel">
+            <!-- Employee Calendar Tab -->
+            <div class="tab-pane fade show active" id="calendar" role="tabpanel">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Public Holidays</h5>
-                        <div class="d-flex gap-2 align-items-center">
-                            <label class="mb-0 text-muted small">State:</label>
-                            <select id="stateFilter" class="form-select form-select-sm" style="width: auto;">
-                                <option value="">National Only</option>
+                        <h5 class="mb-0">Employee Calendar</h5>
+                        <div class="d-flex align-items-center">
+                            <label class="mb-0" style="color: var(--manila-text); font-size: 14px; font-weight: 500; margin-right: 8px;">Employee:</label>
+                            <select id="calendarEmployeeSelect" class="form-select manila-select" style="width: 220px; font-size: 14px; padding: 6px 10px; margin-right: 24px;">
+                            </select>
+                            <label class="mb-0" style="color: var(--manila-text); font-size: 14px; font-weight: 500; margin-right: 8px;">State:</label>
+                            <select id="calendarStateSelect" class="form-select manila-select" style="width: 110px; font-size: 14px; padding: 6px 10px;">
                                 <option value="NSW">NSW</option>
                                 <option value="VIC">VIC</option>
                                 <option value="QLD">QLD</option>
@@ -315,50 +521,229 @@ Backend Endpoints:
                             </select>
                         </div>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="alert alert-info m-3">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Note:</strong> Public holidays are not available from the Xero API. This data is hardcoded and may need manual updates.
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0" id="holidaysTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Day</th>
-                                        <th>Holiday</th>
-                                        <th>Days Until</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="holidaysTableBody">
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted py-4">
-                                            No holidays loaded
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                    <div class="card-body">
+                        <div class="d-flex gap-3">
+                            <!-- Calendar Grid (Left) -->
+                            <div class="calendar-left flex-grow-1" style="max-width: 75%;">
+                                <!-- Month Navigation - Centered above calendar -->
+                                <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
+                                    <button id="calendarPrevMonth" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                    <span id="calendarMonthYear" class="fw-bold" style="min-width: 140px; text-align: center; font-family: 'Merriweather', serif; color: var(--manila-text);">January 2026</span>
+                                    <button id="calendarNextMonth" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                                
+                                <div id="calendarContainer">
+                                    <div id="calendarNoEmployee" class="text-center py-5 text-muted d-none">
+                                        <i class="fas fa-user fa-3x mb-3"></i>
+                                        <p>Select an employee to view their calendar</p>
+                                    </div>
+                                    <div id="calendarGrid" class="">
+                                        <div class="calendar-header">
+                                            <div class="calendar-day-header">Mon</div>
+                                            <div class="calendar-day-header">Tue</div>
+                                            <div class="calendar-day-header">Wed</div>
+                                            <div class="calendar-day-header">Thu</div>
+                                            <div class="calendar-day-header">Fri</div>
+                                            <div class="calendar-day-header weekend">Sat</div>
+                                            <div class="calendar-day-header weekend">Sun</div>
+                                        </div>
+                                        <div id="calendarBody" class="calendar-body">
+                                            <!-- Calendar days populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Calendar Legend -->
+                                <div class="calendar-legend mt-3 d-flex gap-3 flex-wrap justify-content-center">
+                                    <span class="legend-item"><span class="legend-color bg-success"></span> Worked</span>
+                                    <span class="legend-item"><span class="legend-color bg-danger"></span> Sick Leave</span>
+                                    <span class="legend-item"><span class="legend-color bg-info"></span> Annual Leave</span>
+                                    <span class="legend-item"><span class="legend-color bg-warning"></span> Public Holiday</span>
+                                    <span class="legend-item"><span class="legend-color bg-secondary"></span> Weekend</span>
+                                </div>
+                                
+                                <!-- Calendar Summary -->
+                                <div id="calendarSummary" class="mt-2 d-none">
+                                    <div class="d-flex justify-content-around text-center" style="font-size: 11px;">
+                                        <div>
+                                            <div class="text-success fw-bold" id="summaryWorkedDays">0</div>
+                                            <div class="text-muted">Worked</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-danger fw-bold" id="summarySickDays">0</div>
+                                            <div class="text-muted">Sick</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-info fw-bold" id="summaryAnnualDays">0</div>
+                                            <div class="text-muted">Annual</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-warning fw-bold" id="summaryHolidays">0</div>
+                                            <div class="text-muted">Holidays</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Day Details Panel (Right) -->
+                            <div class="calendar-right" style="width: 28%; min-width: 200px; display: flex; flex-direction: column;">
+                                <div class="day-details-header" style="background: var(--manila-light); border-radius: 2px; padding: 6px 2px; text-align: center; font-weight: 600; font-size: 0.75rem; color: var(--manila-text); border-bottom: 2px solid var(--manila-border); margin-bottom: 0; margin-top: 47px;">Day Details</div>
+                                <div id="dayDetailsPanel" class="p-2 border rounded" style="background: var(--manila-paper); border-color: var(--manila-border); font-size: 15px; flex: 1; margin-top: 0;">
+                                    <div id="dayDetailsEmpty" class="text-center text-muted py-3">
+                                        <i class="fas fa-calendar-day mb-2"></i>
+                                        <div>Click a day to view/edit</div>
+                                    </div>
+                                    <div id="dayDetailsContent" class="d-none">
+                                        <div class="fw-bold mb-2" id="selectedDayTitle">-</div>
+                                        <div class="mb-2">
+                                            <label class="text-muted small">Status</label>
+                                            <div id="selectedDayStatus">-</div>
+                                        </div>
+                                        <div id="hoursInputSection" class="mb-2 d-none">
+                                            <label class="text-muted small">Earnings Rate</label>
+                                            <select id="earningsRateSelect" class="form-select form-select-sm mb-1" style="font-size: 11px;">
+                                                <option value="">Loading...</option>
+                                            </select>
+                                            <label class="text-muted small">Hours</label>
+                                            <div class="d-flex gap-1">
+                                                <input type="number" id="dayHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="8" style="width: 70px;">
+                                                <button id="saveDayHoursBtn" class="btn btn-sm btn-primary">Save</button>
+                                            </div>
+                                        </div>
+                                        <div id="hoursDisplaySection" class="mb-2 d-none">
+                                            <label class="text-muted small">Earnings Rate</label>
+                                            <div id="selectedDayRate" class="mb-1">-</div>
+                                            <label class="text-muted small">Hours Worked</label>
+                                            <div id="selectedDayHours" class="fw-bold">-</div>
+                                            <label class="text-muted small">Pay Rate</label>
+                                            <div id="selectedDayPayRate" class="mb-1">-</div>
+                                        </div>
+                                        <!-- Hours Allocation Section -->
+                                        <div id="hoursAllocationSection" class="d-none" style="border-top: 1px solid var(--manila-border); padding-top: 8px; margin-top: 8px;">
+                                            <label class="text-muted small fw-bold mb-1 d-block">Allocate Hours</label>
+                                            <div class="allocation-table-container" style="border: 1px solid var(--manila-border); border-radius: 4px; overflow: hidden;">
+                                                <table id="allocationTable" class="reusable-table w-100" style="font-size: 11px; margin-bottom: 0;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="padding: 4px 3px; text-align: left;">Project</th>
+                                                            <th style="padding: 4px 3px; text-align: left;">Costing</th>
+                                                            <th style="padding: 4px 3px; text-align: center; width: 50px;">Hrs</th>
+                                                            <th style="padding: 4px 3px; width: 20px;"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="allocationRows">
+                                                        <!-- Allocation rows inserted here -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div id="allocationEditControls">
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <button id="addAllocationRowBtn" class="btn btn-sm p-1 px-2" style="font-size: 11px; background: #28a745; color: white; border: none;">+ Add Row</button>
+                                                    <div class="small">
+                                                        <span id="allocatedHours" class="fw-bold">0</span>/<span id="totalDayHours">0</span>h
+                                                    </div>
+                                                </div>
+                                                <button id="saveAllocationsBtn" class="btn btn-sm w-100 mt-2" style="font-size: 12px; background: #6c757d; color: white; border: none;" disabled>Save Allocations</button>
+                                            </div>
+                                            <div id="allocationDisplayControls" class="d-none">
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <button id="updateAllocationsBtn" class="btn btn-sm p-1 px-2" style="font-size: 11px; background: #fd7e14; color: white; border: none;">Update</button>
+                                                    <div class="small">
+                                                        <span id="allocatedHoursDisplay" class="fw-bold">0</span>/<span id="totalDayHoursDisplay">0</span>h
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <!-- Daily Cost Display -->
+                                            <div id="dailyCostDisplay" class="mt-2 pt-2 d-none" style="border-top: 1px dashed var(--manila-border);">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="text-muted small">Daily Total:</span>
+                                                    <span id="dailyCostAmount" class="fw-bold" style="color: var(--manila-text);">$0.00</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
 
-<!-- Employee Detail Modal -->
-<div class="modal fade" id="employeeDetailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Employee Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="employeeDetailContent">
-                <!-- Content loaded dynamically -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <!-- Public Holidays Tab -->
+            <div class="tab-pane fade" id="holidays" role="tabpanel">
+                <div style="display: flex; gap: 16px; height: 100%;">
+                    <!-- Left: Calendars List (35%) -->
+                    <div style="width: 35%; display: flex; flex-direction: column;">
+                        <h5 style="margin: 0 0 8px 0; font-weight: 600;">Holiday Calendars</h5>
+                        <div class="reusable-table-container holiday-table-wrapper" style="flex: 1; overflow-y: auto;">
+                                <table id="holidayCalendarsTable" class="reusable-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50%; text-align: left;">Name</th>
+                                            <th style="width: 18%; text-align: left;">State</th>
+                                            <th style="width: 15%; text-align: center;">Default</th>
+                                            <th style="width: 17%; text-align: center;">Delete</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="holidayCalendarsTableBody">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">
+                                                Loading...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0;">
+                            <input type="text" id="newCalendarName" class="form-control form-control-sm" placeholder="Calendar name" style="flex: 1;">
+                            <select id="newCalendarState" class="form-control form-control-sm" style="width: 80px;">
+                                <option value="NAT">National</option>
+                                <option value="NSW">NSW</option>
+                                <option value="VIC">VIC</option>
+                                <option value="QLD">QLD</option>
+                                <option value="SA">SA</option>
+                                <option value="WA">WA</option>
+                                <option value="TAS">TAS</option>
+                                <option value="NT">NT</option>
+                                <option value="ACT">ACT</option>
+                            </select>
+                            <button id="addCalendarBtn" class="btn btn-sm btn-success">Add</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Holidays in Selected Calendar (65%) -->
+                    <div style="width: 65%; display: flex; flex-direction: column;">
+                        <h5 style="margin: 0 0 8px 0; font-weight: 600;">Holidays in: <span id="selectedCalendarName" style="color: var(--manila-dark);">Select a calendar</span></h5>
+                        <div class="reusable-table-container holiday-table-wrapper" style="flex: 1; overflow-y: auto;">
+                                <table id="holidaysTable" class="reusable-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50%; text-align: left;">Holiday Name</th>
+                                            <th style="width: 25%; text-align: left;">Date</th>
+                                            <th style="width: 15%; text-align: left;">Day</th>
+                                            <th style="width: 10%; text-align: center;">Delete</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="holidaysTableBody">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">
+                                                Select a calendar to view holidays
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                        </div>
+                        <div id="addHolidayRow" style="display: none; gap: 8px; margin-top: 8px; flex-shrink: 0;">
+                            <input type="text" id="newHolidayName" class="form-control form-control-sm" placeholder="Holiday name" style="flex: 1;">
+                            <input type="date" id="newHolidayDate" class="form-control form-control-sm" style="width: 150px;">
+                            <button id="addHolidayBtn" class="btn btn-sm btn-success">Add</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -377,21 +762,356 @@ Backend Endpoints:
     let holidaysData = [];
     
     // DOM Elements
-    const xeroInstanceSelect = document.getElementById('xeroInstanceSelect');
+    const xeroInstanceSelect = document.getElementById('staffHoursXeroSelect');
     const refreshDataBtn = document.getElementById('refreshDataBtn');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const noInstanceMessage = document.getElementById('noInstanceMessage');
     const mainContent = document.getElementById('mainContent');
     const statusFilter = document.getElementById('statusFilter');
-    const employeeSearch = document.getElementById('employeeSearch');
-    const stateFilter = document.getElementById('stateFilter');
     
-    // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-        setupEventListeners();
-    });
+    // Debug function for holidays tab layout
+    window.debugHolidaysLayout = function() {
+        console.log('=== HOLIDAYS TAB LAYOUT DEBUG ===');
+        console.log('Viewport height:', window.innerHeight);
+        
+        const holidaysTab = document.getElementById('holidays');
+        const holidaysContainer = holidaysTab?.querySelector('div[style*="display: flex"]');
+        const leftCol = holidaysContainer?.querySelector('div[style*="width: 35%"]');
+        const rightCol = holidaysContainer?.querySelector('div[style*="width: 65%"]');
+        const addCalendarRow = document.querySelector('#holidays div[style*="margin-top: 8px"]');
+        const addHolidayRow = document.getElementById('addHolidayRow');
+        
+        const elements = [
+            { name: 'holidaysTab', el: holidaysTab },
+            { name: 'holidaysContainer', el: holidaysContainer },
+            { name: 'leftCol', el: leftCol },
+            { name: 'rightCol', el: rightCol },
+            { name: 'addCalendarRow', el: addCalendarRow },
+            { name: 'addHolidayRow', el: addHolidayRow }
+        ];
+        
+        elements.forEach(({name, el}) => {
+            if (!el) { console.log(name + ': NOT FOUND'); return; }
+            const rect = el.getBoundingClientRect();
+            const s = window.getComputedStyle(el);
+            console.log('\n' + name + ':');
+            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
+            console.log('  height:', s.height, '| max-height:', s.maxHeight);
+        });
+        
+        // Check staffTabContent
+        const stc = document.getElementById('staffTabContent');
+        if (stc) {
+            const rect = stc.getBoundingClientRect();
+            console.log('\nstaffTabContent:');
+            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
+            console.log('  IDEAL holidaysContainer height: ' + (rect.height - 32) + 'px (minus padding)');
+        }
+        
+        // Check what value calc(100vh - 280px) resolves to
+        console.log('\n=== CALC VALUES ===');
+        console.log('100vh - 280px =', (window.innerHeight - 280) + 'px');
+        console.log('100vh - 220px =', (window.innerHeight - 220) + 'px');
+        console.log('100vh - 180px =', (window.innerHeight - 180) + 'px');
+        
+        if (holidaysContainer) {
+            const rect = holidaysContainer.getBoundingClientRect();
+            const stcRect = stc?.getBoundingClientRect();
+            if (stcRect) {
+                const gap = stcRect.bottom - rect.bottom - 16; // minus padding
+                console.log('\nGAP below holidaysContainer:', gap.toFixed(0) + 'px');
+                console.log('SUGGESTION: Change calc offset from 280 to', (280 - gap).toFixed(0));
+            }
+        }
+    };
+    
+    // Debug function for vertical layout - focus on staffTabContent
+    window.debugVerticalLayout = function() {
+        console.log('=== VERTICAL LAYOUT DEBUG v2 ===');
+        console.log('Viewport height:', window.innerHeight);
+        
+        // Walk the chain from staffTabContent up to body
+        const staffTabContent = document.getElementById('staffTabContent');
+        if (!staffTabContent) { console.log('staffTabContent NOT FOUND'); return; }
+        
+        console.log('\n=== ANCESTOR CHAIN (staffTabContent to body) ===');
+        let el = staffTabContent;
+        let depth = 0;
+        while (el && el !== document.body && depth < 10) {
+            const rect = el.getBoundingClientRect();
+            const s = window.getComputedStyle(el);
+            const id = el.id || '';
+            const cls = el.className ? el.className.toString().slice(0,30) : '';
+            const tag = el.tagName;
+            
+            console.log('\n[' + depth + '] ' + tag + (id ? '#' + id : '') + (cls ? '.' + cls.replace(/\s+/g, '.') : ''));
+            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
+            console.log('  height:', s.height, '| max-height:', s.maxHeight, '| min-height:', s.minHeight);
+            console.log('  display:', s.display, '| flex:', s.flex);
+            console.log('  overflow:', s.overflow, '| overflow-y:', s.overflowY);
+            
+            el = el.parentElement;
+            depth++;
+        }
+        
+        // Space analysis
+        const rect = staffTabContent.getBoundingClientRect();
+        const containerFluid = document.querySelector('#staffHoursSection > .container-fluid');
+        const cfRect = containerFluid ? containerFluid.getBoundingClientRect() : null;
+        
+        console.log('\n=== SPACE ANALYSIS ===');
+        console.log('staffTabContent: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0));
+        if (cfRect) {
+            console.log('container-fluid: top=' + cfRect.top.toFixed(0) + ' bottom=' + cfRect.bottom.toFixed(0));
+            console.log('GAP: container-fluid.bottom - staffTabContent.bottom = ' + (cfRect.bottom - rect.bottom).toFixed(0) + 'px');
+        }
+        console.log('UNUSED from viewport: ' + (window.innerHeight - rect.bottom).toFixed(0) + 'px');
+        
+        // Check what's constraining staffTabContent height
+        const stcStyle = window.getComputedStyle(staffTabContent);
+        console.log('\n=== staffTabContent CONSTRAINTS ===');
+        console.log('height:', stcStyle.height);
+        console.log('max-height:', stcStyle.maxHeight);
+        console.log('min-height:', stcStyle.minHeight);
+        console.log('flex:', stcStyle.flex);
+        console.log('flex-grow:', stcStyle.flexGrow);
+        console.log('flex-shrink:', stcStyle.flexShrink);
+        console.log('align-self:', stcStyle.alignSelf);
+    };
+    
+    // Debug function for tab border alignment
+    window.debugTabBorders = function() {
+        console.log('=== TAB BORDER DEBUG ===');
+        
+        const staffTabs = document.getElementById('staffTabs');
+        const staffTabContent = document.getElementById('staffTabContent');
+        const activeTab = document.querySelector('#staffTabs .nav-link.active');
+        const navItems = document.querySelectorAll('#staffTabs .nav-item');
+        
+        if (staffTabs) {
+            const rect = staffTabs.getBoundingClientRect();
+            const style = window.getComputedStyle(staffTabs);
+            console.log('\n#staffTabs:');
+            console.log('  RECT: top=' + rect.top.toFixed(1) + ' bottom=' + rect.bottom.toFixed(1) + ' height=' + rect.height.toFixed(1));
+            console.log('  border-bottom:', style.borderBottom);
+            console.log('  margin-bottom:', style.marginBottom);
+            console.log('  padding-bottom:', style.paddingBottom);
+        }
+        
+        if (activeTab) {
+            const rect = activeTab.getBoundingClientRect();
+            const style = window.getComputedStyle(activeTab);
+            console.log('\n.nav-link.active:');
+            console.log('  RECT: top=' + rect.top.toFixed(1) + ' bottom=' + rect.bottom.toFixed(1) + ' height=' + rect.height.toFixed(1));
+            console.log('  border:', style.border);
+            console.log('  border-bottom:', style.borderBottom);
+            console.log('  border-radius:', style.borderRadius);
+            console.log('  margin-bottom:', style.marginBottom);
+            console.log('  padding:', style.padding);
+        }
+        
+        navItems.forEach((item, i) => {
+            const rect = item.getBoundingClientRect();
+            const style = window.getComputedStyle(item);
+            console.log('\n.nav-item[' + i + ']:');
+            console.log('  RECT: bottom=' + rect.bottom.toFixed(1));
+            console.log('  margin-bottom:', style.marginBottom);
+            console.log('  z-index:', style.zIndex);
+        });
+        
+        if (staffTabContent) {
+            const rect = staffTabContent.getBoundingClientRect();
+            const style = window.getComputedStyle(staffTabContent);
+            console.log('\n#staffTabContent:');
+            console.log('  RECT: top=' + rect.top.toFixed(1));
+            console.log('  border-top:', style.borderTop);
+            console.log('  margin-top:', style.marginTop);
+            console.log('  border-radius:', style.borderRadius);
+        }
+        
+        // Calculate gap
+        if (activeTab && staffTabContent) {
+            const tabBottom = activeTab.getBoundingClientRect().bottom;
+            const contentTop = staffTabContent.getBoundingClientRect().top;
+            console.log('\n=== GAP ANALYSIS ===');
+            console.log('Tab bottom:', tabBottom.toFixed(1));
+            console.log('Content top:', contentTop.toFixed(1));
+            console.log('GAP (should be ~0):', (contentTop - tabBottom).toFixed(1) + 'px');
+        }
+    };
+    
+    // Debug function for employee/state selector spacing
+    window.debugSelectorSpacing = function() {
+        console.log('=== SELECTOR SPACING DEBUG ===');
+        
+        const container = document.getElementById('calendarEmployeeSelect')?.parentElement;
+        if (!container) {
+            console.log('Container NOT FOUND');
+            return;
+        }
+        
+        const containerStyle = window.getComputedStyle(container);
+        console.log('\nContainer (.d-flex.gap-3):');
+        console.log('  gap:', containerStyle.gap);
+        console.log('  column-gap:', containerStyle.columnGap);
+        console.log('  display:', containerStyle.display);
+        
+        const children = container.children;
+        console.log('\nChildren (' + children.length + ' elements):');
+        
+        Array.from(children).forEach((child, i) => {
+            const rect = child.getBoundingClientRect();
+            const style = window.getComputedStyle(child);
+            const tagName = child.tagName.toLowerCase();
+            const id = child.id || '';
+            const text = child.textContent?.trim().substring(0, 20) || '';
+            
+            console.log('\n[' + i + '] ' + tagName + (id ? '#' + id : '') + ' "' + text + '"');
+            console.log('  RECT: left=' + rect.left.toFixed(0) + ' right=' + rect.right.toFixed(0) + ' width=' + rect.width.toFixed(0));
+            console.log('  margin: ' + style.marginTop + ' ' + style.marginRight + ' ' + style.marginBottom + ' ' + style.marginLeft);
+            console.log('  padding: ' + style.paddingTop + ' ' + style.paddingRight + ' ' + style.paddingBottom + ' ' + style.paddingLeft);
+            console.log('  classes:', child.className);
+        });
+        
+        // Calculate gaps between elements
+        console.log('\n=== GAPS BETWEEN ELEMENTS ===');
+        for (let i = 0; i < children.length - 1; i++) {
+            const current = children[i].getBoundingClientRect();
+            const next = children[i + 1].getBoundingClientRect();
+            const gap = next.left - current.right;
+            console.log('Gap [' + i + '] to [' + (i+1) + ']: ' + gap.toFixed(1) + 'px');
+        }
+    };
+    
+    // Debug function for sticky header issue - comprehensive
+    window.debugStickyHeaders = function() {
+        console.log('=== STICKY HEADER DEBUG v2 ===');
+        
+        const tables = ['holidayCalendarsTable', 'holidaysTable'];
+        
+        tables.forEach(tableId => {
+            const table = document.getElementById(tableId);
+            if (!table) { console.log(tableId + ': NOT FOUND'); return; }
+            
+            const thead = table.querySelector('thead');
+            const th = table.querySelector('thead th');
+            
+            console.log('\n========== ' + tableId + ' ==========');
+            
+            // Log TH computed styles
+            if (th) {
+                const ths = window.getComputedStyle(th);
+                console.log('TH computed styles:');
+                console.log('  position:', ths.position);
+                console.log('  top:', ths.top);
+                console.log('  z-index:', ths.zIndex);
+                console.log('  background:', ths.backgroundColor);
+            }
+            
+            // Walk up ALL ancestors and log overflow
+            console.log('\nALL ANCESTORS (table to document):');
+            let el = table;
+            let depth = 0;
+            while (el && el !== document.body && depth < 15) {
+                const s = window.getComputedStyle(el);
+                const id = el.id || '';
+                const cls = el.className ? el.className.toString().slice(0,40) : '';
+                const tag = el.tagName;
+                console.log(
+                    '[' + depth + '] ' + tag + 
+                    (id ? '#' + id : '') + 
+                    (cls ? '.' + cls.replace(/\s+/g, '.') : '') +
+                    ' | overflow: ' + s.overflow + 
+                    ' | overflow-y: ' + s.overflowY +
+                    ' | position: ' + s.position +
+                    ' | height: ' + s.height
+                );
+                el = el.parentElement;
+                depth++;
+            }
+            
+            // Check if table container is the actual scroll container
+            const container = table.closest('.holiday-table-wrapper');
+            if (container) {
+                console.log('\nScroll container check:');
+                console.log('  scrollHeight:', container.scrollHeight);
+                console.log('  clientHeight:', container.clientHeight);
+                console.log('  scrollTop:', container.scrollTop);
+                console.log('  Is scrollable:', container.scrollHeight > container.clientHeight);
+            }
+        });
+        
+        console.log('\n=== CSS Rules Check ===');
+        // Check if the CSS rule is actually applied
+        const testTh = document.querySelector('.holiday-table-wrapper thead th');
+        if (testTh) {
+            const rules = window.getComputedStyle(testTh);
+            console.log('holiday-table-wrapper thead th:');
+            console.log('  position:', rules.position, '(should be sticky)');
+            console.log('  top:', rules.top, '(should be 0px)');
+        }
+    };
+    
+    // Initialize Staff Hours section - called when section is shown
+    window.initStaffHoursSection = function() {
+        // Apply manila theme to parent container
+        const dynamicContentArea = document.getElementById('dynamicContentArea');
+        if (dynamicContentArea) {
+            dynamicContentArea.style.background = 'linear-gradient(135deg, #f5efe5 0%, #faf7f2 100%)';
+        }
+        
+        // Populate xero instances dropdown from dashboard's global data
+        // Only show instances where staff_hours_tracking=1
+        if (window.xeroInstancesData && xeroInstanceSelect) {
+            // Clear existing options
+            xeroInstanceSelect.innerHTML = '';
+            
+            // Filter to only instances with staff_hours_tracking=1
+            const staffHoursInstances = window.xeroInstancesData.filter(
+                instance => instance.staff_hours_tracking === 1
+            );
+            
+            // Add filtered instances to dropdown
+            staffHoursInstances.forEach(function(instance) {
+                const option = document.createElement('option');
+                option.value = instance.xero_instance_pk;
+                option.textContent = instance.xero_name;
+                xeroInstanceSelect.appendChild(option);
+            });
+            
+            // Setup event listeners first
+            setupEventListeners();
+            
+            // Auto-select first instance and load its data
+            if (staffHoursInstances.length > 0) {
+                xeroInstanceSelect.value = staffHoursInstances[0].xero_instance_pk;
+                xeroInstanceSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    };
     
     function setupEventListeners() {
+        // Initialize Bootstrap tabs manually (needed for SPA context)
+        document.querySelectorAll('#staffTabs button[data-bs-toggle="tab"]').forEach(function(tabBtn) {
+            tabBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('data-bs-target');
+                
+                // Remove active from all tabs and panes
+                document.querySelectorAll('#staffTabs .nav-link').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('#staffTabContent .tab-pane').forEach(p => {
+                    p.classList.remove('show', 'active');
+                });
+                
+                // Add active to clicked tab and target pane
+                this.classList.add('active');
+                const targetPane = document.querySelector(targetId);
+                if (targetPane) {
+                    targetPane.classList.add('show', 'active');
+                }
+            });
+        });
+        
         // Xero instance change
         xeroInstanceSelect.addEventListener('change', function() {
             currentXeroInstanceId = this.value;
@@ -451,16 +1171,6 @@ Backend Endpoints:
         statusFilter.addEventListener('change', function() {
             loadEmployees();
         });
-        
-        // Employee search
-        employeeSearch.addEventListener('input', function() {
-            filterEmployeesTable();
-        });
-        
-        // State filter for holidays
-        stateFilter.addEventListener('change', function() {
-            loadPublicHolidays();
-        });
     }
     
     function showLoading() {
@@ -490,7 +1200,6 @@ Backend Endpoints:
             await Promise.all([
                 loadEmployees(),
                 loadPayItems(),
-                loadSuperFunds(),
                 loadPublicHolidays()
             ]);
             
@@ -513,16 +1222,39 @@ Backend Endpoints:
             
             if (data.status === 'success') {
                 employeesData = data.employees;
+                console.log('=== EMPLOYEE DATA FROM API ===');
+                console.log('First employee:', employeesData[0]);
+                console.log('Leave balances:', employeesData[0]?.leave_balances);
                 renderEmployeesTable();
                 updateEmployeeStats();
                 
                 // Also extract leave data
                 extractLeaveData();
+                
+                // Sync pay rates to local database
+                syncPayRates();
             } else {
                 console.error('Error loading employees:', data.message);
             }
         } catch (error) {
             console.error('Error loading employees:', error);
+        }
+    }
+    
+    async function syncPayRates() {
+        try {
+            const response = await fetch('/core/staff_hours/sync_pay_rates/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({ xero_instance_id: currentXeroInstanceId })
+            });
+            const data = await response.json();
+            console.log('Pay rates sync result:', data);
+        } catch (error) {
+            console.error('Error syncing pay rates:', error);
         }
     }
     
@@ -541,7 +1273,6 @@ Backend Endpoints:
                 });
             }
         });
-        renderLeaveTable();
     }
     
     function renderEmployeesTable() {
@@ -550,7 +1281,7 @@ Backend Endpoints:
         if (employeesData.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">
+                    <td colspan="5" style="text-align: center; padding: 20px; color: var(--color-text-muted);">
                         No employees found
                     </td>
                 </tr>
@@ -558,68 +1289,29 @@ Backend Endpoints:
             return;
         }
         
-        tbody.innerHTML = employeesData.map(emp => `
+        tbody.innerHTML = employeesData.map(emp => {
+            // Calculate total leave balance (sum all leave types)
+            let leaveDisplay = '-';
+            if (emp.leave_balances && emp.leave_balances.length > 0) {
+                const leaveItems = emp.leave_balances.map(leave => {
+                    const days = ((leave.NumberOfUnits || 0) / 7.6).toFixed(1);
+                    const name = (leave.LeaveName || leave.LeaveType || 'Leave').replace(/Leave/gi, '').trim();
+                    return `${name}: ${days}d`;
+                });
+                leaveDisplay = leaveItems.join(' | ');
+            }
+            
+            const statusColor = emp.status === 'ACTIVE' ? 'var(--color-success)' : 'var(--color-text-muted)';
+            
+            return `
             <tr data-employee-id="${emp.employee_id}">
-                <td>
-                    <strong>${emp.first_name || ''} ${emp.last_name || ''}</strong>
-                </td>
-                <td>${emp.email || '-'}</td>
+                <td>${emp.first_name || ''} ${emp.last_name || ''}</td>
                 <td>${emp.job_title || '-'}</td>
-                <td>
-                    <span class="badge ${emp.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">
-                        ${emp.status || 'Unknown'}
-                    </span>
-                </td>
+                <td style="color: ${statusColor};">${emp.status || 'Unknown'}</td>
                 <td>${formatDate(emp.start_date)}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary view-employee-btn" data-employee-id="${emp.employee_id}">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                </td>
+                <td>${leaveDisplay}</td>
             </tr>
-        `).join('');
-        
-        // Add click handlers for view buttons
-        tbody.querySelectorAll('.view-employee-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const employeeId = this.dataset.employeeId;
-                viewEmployeeDetail(employeeId);
-            });
-        });
-    }
-    
-    function filterEmployeesTable() {
-        const searchTerm = employeeSearch.value.toLowerCase();
-        const rows = document.querySelectorAll('#employeesTableBody tr');
-        
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
-        });
-    }
-    
-    function renderLeaveTable() {
-        const tbody = document.getElementById('leaveTableBody');
-        
-        if (leaveData.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="text-center text-muted py-4">
-                        No leave balances found
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        tbody.innerHTML = leaveData.map(leave => `
-            <tr>
-                <td>${leave.employee_name}</td>
-                <td>${leave.leave_type}</td>
-                <td>${leave.balance_hours.toFixed(2)}</td>
-                <td>${leave.balance_days.toFixed(1)}</td>
-            </tr>
-        `).join('');
+        `}).join('');
     }
     
     async function loadPayItems() {
@@ -651,7 +1343,7 @@ Backend Endpoints:
         if (earningsRates.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-4">
+                    <td colspan="6" style="text-align: center; padding: 20px; color: var(--color-text-muted);">
                         No pay items found
                     </td>
                 </tr>
@@ -659,15 +1351,40 @@ Backend Endpoints:
             return;
         }
         
-        tbody.innerHTML = earningsRates.map(item => `
-            <tr>
+        // Timesheet-valid types
+        const timesheetValidTypes = ['ORDINARYTIMEEARNINGS', 'OVERTIMEEARNINGS'];
+        
+        // Sort: timesheet-valid first, then alphabetically by name
+        const sortedRates = [...earningsRates].sort((a, b) => {
+            const aValid = (a.CurrentRecord !== false) && (a.RateType !== 'FIXEDAMOUNT') && timesheetValidTypes.includes(a.EarningsType);
+            const bValid = (b.CurrentRecord !== false) && (b.RateType !== 'FIXEDAMOUNT') && timesheetValidTypes.includes(b.EarningsType);
+            
+            if (aValid && !bValid) return -1;
+            if (!aValid && bValid) return 1;
+            return (a.Name || '').localeCompare(b.Name || '');
+        });
+        
+        tbody.innerHTML = sortedRates.map(item => {
+            const isActive = item.CurrentRecord !== false;
+            const isValidRateType = item.RateType !== 'FIXEDAMOUNT';
+            const isTimesheetType = timesheetValidTypes.includes(item.EarningsType);
+            const isTimesheetValid = isActive && isValidRateType && isTimesheetType;
+            
+            const rowStyle = isTimesheetValid ? 'background: rgba(25, 135, 84, 0.08);' : 'opacity: 0.6;';
+            const timesheetIcon = isTimesheetValid 
+                ? '<span style="color: var(--color-success);" title="Valid for timesheets"><i class="fas fa-check-circle"></i></span>'
+                : '<span style="color: var(--color-text-muted);" title="Not valid for timesheets"><i class="fas fa-minus-circle"></i></span>';
+            
+            return `
+            <tr style="${rowStyle}">
                 <td>${item.Name || '-'}</td>
                 <td>${item.EarningsType || '-'}</td>
                 <td>${item.RateType || '-'}</td>
                 <td>${item.RatePerUnit ? '$' + parseFloat(item.RatePerUnit).toFixed(2) : '-'}</td>
                 <td>${item.AccountCode || '-'}</td>
+                <td style="text-align: center;">${timesheetIcon}</td>
             </tr>
-        `).join('');
+        `}).join('');
     }
     
     async function loadSuperFunds() {
@@ -712,202 +1429,1251 @@ Backend Endpoints:
         `).join('');
     }
     
+    // ============================================
+    // PUBLIC HOLIDAYS / CALENDAR MANAGEMENT
+    // ============================================
+    let holidayCalendarsLoaded = false;
+    let selectedCalendarPk = null;
+    
     async function loadPublicHolidays() {
-        const state = stateFilter.value;
-        const url = `/core/staff_hours/public_holidays/?state=${state}`;
-        
-        try {
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                holidaysData = data.holidays || [];
-                renderHolidaysTable();
-                updateHolidayStats();
-            } else {
-                console.error('Error loading holidays:', data.message);
-            }
-        } catch (error) {
-            console.error('Error loading holidays:', error);
-        }
+        // Load holiday calendars instead of flat holiday list
+        loadHolidayCalendars();
     }
     
-    function renderHolidaysTable() {
-        const tbody = document.getElementById('holidaysTableBody');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    function loadHolidayCalendars() {
+        const tbody = document.getElementById('holidayCalendarsTableBody');
         
-        if (holidaysData.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="text-center text-muted py-4">
-                        No holidays found
-                    </td>
-                </tr>
-            `;
-            return;
+        fetch('/core/staff_hours/holiday_calendars/')
+            .then(response => response.json())
+            .then(response => {
+                holidayCalendarsLoaded = true;
+                tbody.innerHTML = '';
+                
+                if (!response.calendars || response.calendars.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No calendars. Add one below.</td></tr>';
+                    return;
+                }
+                
+                response.calendars.forEach(cal => {
+                    const row = document.createElement('tr');
+                    row.dataset.calendarPk = cal.calendar_pk;
+                    row.style.cursor = 'pointer';
+                    row.innerHTML = `
+                        <td>${escapeHtml(cal.name)} <span style="color: var(--manila-text-muted); font-size: 0.85em;">(${cal.holiday_count})</span></td>
+                        <td>${cal.state}</td>
+                        <td style="text-align: center;">${cal.is_default ? '<i class="fas fa-check text-success"></i>' : '<button class="btn btn-xs btn-outline-secondary set-default-btn" data-calendar-pk="' + cal.calendar_pk + '">Set</button>'}</td>
+                        <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-calendar-btn" data-calendar-pk="${cal.calendar_pk}" data-calendar-name="${escapeHtml(cal.name)}"><i class="fas fa-times"></i></button></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                // Select first calendar by default if none selected
+                if (!selectedCalendarPk && response.calendars.length > 0) {
+                    selectCalendar(response.calendars[0].calendar_pk, response.calendars[0].name);
+                }
+            })
+            .catch(() => {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading calendars</td></tr>';
+            });
+    }
+    
+    function selectCalendar(calendarPk, calendarName) {
+        selectedCalendarPk = calendarPk;
+        document.getElementById('selectedCalendarName').textContent = calendarName;
+        document.getElementById('addHolidayRow').style.display = 'flex';
+        
+        // Highlight selected row
+        document.querySelectorAll('#holidayCalendarsTableBody tr').forEach(r => r.classList.remove('table-active'));
+        const selectedRow = document.querySelector(`#holidayCalendarsTableBody tr[data-calendar-pk="${calendarPk}"]`);
+        if (selectedRow) selectedRow.classList.add('table-active');
+        
+        loadCalendarHolidays(calendarPk);
+    }
+    
+    function loadCalendarHolidays(calendarPk) {
+        const tbody = document.getElementById('holidaysTableBody');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>';
+        
+        fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/holidays/`)
+            .then(response => response.json())
+            .then(response => {
+                tbody.innerHTML = '';
+                
+                if (!response.holidays || response.holidays.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No holidays. Add one below.</td></tr>';
+                    return;
+                }
+                
+                response.holidays.forEach(h => {
+                    const date = new Date(h.date);
+                    const dayName = date.toLocaleDateString('en-AU', { weekday: 'long' });
+                    const dateFormatted = date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+                    
+                    const row = document.createElement('tr');
+                    row.dataset.holidayPk = h.holiday_pk;
+                    row.innerHTML = `
+                        <td>${escapeHtml(h.name)}</td>
+                        <td>${dateFormatted}</td>
+                        <td>${dayName}</td>
+                        <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-holiday-btn" data-holiday-pk="${h.holiday_pk}" data-holiday-name="${escapeHtml(h.name)}"><i class="fas fa-times"></i></button></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            })
+            .catch(() => {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading holidays</td></tr>';
+            });
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function getCSRFToken() {
+        const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+        return cookie ? cookie.split('=')[1] : '';
+    }
+    
+    // Calendar row click handler
+    document.addEventListener('click', function(e) {
+        const calendarRow = e.target.closest('#holidayCalendarsTableBody tr');
+        if (calendarRow && !e.target.closest('button')) {
+            const calendarPk = calendarRow.dataset.calendarPk;
+            const calendarName = calendarRow.querySelector('td:first-child').textContent.replace(/\s*\(\d+\)$/, '');
+            if (calendarPk) {
+                selectCalendar(calendarPk, calendarName);
+            }
         }
         
-        tbody.innerHTML = holidaysData.map(holiday => {
-            const holidayDate = new Date(holiday.date);
-            const dayName = holidayDate.toLocaleDateString('en-AU', { weekday: 'long' });
-            const daysUntil = Math.ceil((holidayDate - today) / (1000 * 60 * 60 * 24));
-            const isPast = daysUntil < 0;
+        // Set default button
+        if (e.target.closest('.set-default-btn')) {
+            const btn = e.target.closest('.set-default-btn');
+            const calendarPk = btn.dataset.calendarPk;
             
-            return `
-                <tr class="${isPast ? 'text-muted' : ''}">
-                    <td>${formatDate(holiday.date)}</td>
-                    <td>${dayName}</td>
-                    <td>${holiday.name}</td>
-                    <td>
-                        ${isPast 
-                            ? '<span class="text-muted">Past</span>' 
-                            : daysUntil === 0 
-                                ? '<span class="badge bg-success">Today!</span>'
-                                : `<span class="badge bg-info">${daysUntil} days</span>`
-                        }
-                    </td>
-                </tr>
-            `;
-        }).join('');
+            fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/update/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ is_default: 1 })
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    loadHolidayCalendars();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            });
+        }
+        
+        // Delete calendar button
+        if (e.target.closest('.delete-calendar-btn')) {
+            const btn = e.target.closest('.delete-calendar-btn');
+            const calendarPk = btn.dataset.calendarPk;
+            const calendarName = btn.dataset.calendarName;
+            
+            if (!confirm(`Delete calendar "${calendarName}" and all its holidays?`)) return;
+            
+            fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/delete/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCSRFToken() }
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    if (selectedCalendarPk == calendarPk) {
+                        selectedCalendarPk = null;
+                        document.getElementById('selectedCalendarName').textContent = 'Select a calendar';
+                        document.getElementById('addHolidayRow').style.display = 'none';
+                        document.getElementById('holidaysTableBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">Select a calendar to view holidays</td></tr>';
+                    }
+                    loadHolidayCalendars();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            });
+        }
+        
+        // Delete holiday button
+        if (e.target.closest('.delete-holiday-btn')) {
+            const btn = e.target.closest('.delete-holiday-btn');
+            const holidayPk = btn.dataset.holidayPk;
+            const holidayName = btn.dataset.holidayName;
+            
+            if (!confirm(`Delete holiday "${holidayName}"?`)) return;
+            
+            fetch(`/core/staff_hours/holidays/${holidayPk}/delete/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCSRFToken() }
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    loadCalendarHolidays(selectedCalendarPk);
+                    holidayCalendarsLoaded = false;
+                    loadHolidayCalendars();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            });
+        }
+    });
+    
+    // Add calendar button
+    const addCalendarBtn = document.getElementById('addCalendarBtn');
+    if (addCalendarBtn) {
+        addCalendarBtn.addEventListener('click', function() {
+            const name = document.getElementById('newCalendarName').value.trim();
+            const state = document.getElementById('newCalendarState').value;
+            
+            if (!name) {
+                alert('Please enter a calendar name');
+                return;
+            }
+            
+            fetch('/core/staff_hours/holiday_calendars/create/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ name: name, state: state })
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    document.getElementById('newCalendarName').value = '';
+                    loadHolidayCalendars();
+                    selectCalendar(response.calendar.calendar_pk, response.calendar.name);
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            });
+        });
+    }
+    
+    // Add holiday button
+    const addHolidayBtn = document.getElementById('addHolidayBtn');
+    if (addHolidayBtn) {
+        addHolidayBtn.addEventListener('click', function() {
+            if (!selectedCalendarPk) {
+                alert('Please select a calendar first');
+                return;
+            }
+            
+            const name = document.getElementById('newHolidayName').value.trim();
+            const date = document.getElementById('newHolidayDate').value;
+            
+            if (!name || !date) {
+                alert('Please enter holiday name and date');
+                return;
+            }
+            
+            fetch(`/core/staff_hours/holiday_calendars/${selectedCalendarPk}/holidays/create/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ name: name, date: date })
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    document.getElementById('newHolidayName').value = '';
+                    document.getElementById('newHolidayDate').value = '';
+                    loadCalendarHolidays(selectedCalendarPk);
+                    holidayCalendarsLoaded = false;
+                    loadHolidayCalendars();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            });
+        });
     }
     
     function updateEmployeeStats() {
-        const activeCount = employeesData.filter(e => e.status === 'ACTIVE').length;
-        document.getElementById('activeEmployeeCount').textContent = activeCount;
-        
-        // Calculate total leave days available
-        let totalLeaveDays = 0;
-        leaveData.forEach(leave => {
-            totalLeaveDays += leave.balance_days;
-        });
-        document.getElementById('totalLeaveDays').textContent = totalLeaveDays.toFixed(1);
-        
-        // On leave count would require additional API call for leave applications
-        document.getElementById('onLeaveCount').textContent = '-';
+        // Stats cards removed - function kept for compatibility
     }
     
     function updateHolidayStats() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const upcomingHolidays = holidaysData.filter(h => new Date(h.date) >= today).length;
-        document.getElementById('upcomingHolidays').textContent = upcomingHolidays;
-    }
-    
-    async function viewEmployeeDetail(employeeId) {
-        const url = `/core/staff_hours/employee/${employeeId}/?xero_instance_id=${currentXeroInstanceId}`;
-        
-        try {
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                const emp = data.employee;
-                renderEmployeeDetailModal(emp);
-                const modal = new bootstrap.Modal(document.getElementById('employeeDetailModal'));
-                modal.show();
-            } else {
-                alert('Error loading employee details: ' + data.message);
-            }
-        } catch (error) {
-            console.error('Error loading employee detail:', error);
-            alert('Error loading employee details');
-        }
-    }
-    
-    function renderEmployeeDetailModal(emp) {
-        const content = document.getElementById('employeeDetailContent');
-        
-        content.innerHTML = `
-            <div class="row">
-                <div class="col-md-6">
-                    <h6 class="text-muted mb-3">Personal Information</h6>
-                    <table class="table table-sm">
-                        <tr><th>Name</th><td>${emp.FirstName || ''} ${emp.LastName || ''}</td></tr>
-                        <tr><th>Email</th><td>${emp.Email || '-'}</td></tr>
-                        <tr><th>Phone</th><td>${emp.Phone || '-'}</td></tr>
-                        <tr><th>Mobile</th><td>${emp.Mobile || '-'}</td></tr>
-                        <tr><th>Date of Birth</th><td>${formatDate(emp.DateOfBirth)}</td></tr>
-                        <tr><th>Gender</th><td>${emp.Gender || '-'}</td></tr>
-                    </table>
-                </div>
-                <div class="col-md-6">
-                    <h6 class="text-muted mb-3">Employment Details</h6>
-                    <table class="table table-sm">
-                        <tr><th>Status</th><td><span class="badge ${emp.Status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${emp.Status || '-'}</span></td></tr>
-                        <tr><th>Job Title</th><td>${emp.JobTitle || '-'}</td></tr>
-                        <tr><th>Classification</th><td>${emp.Classification || '-'}</td></tr>
-                        <tr><th>Start Date</th><td>${formatDate(emp.StartDate)}</td></tr>
-                        <tr><th>Termination Date</th><td>${formatDate(emp.TerminationDate) || '-'}</td></tr>
-                    </table>
-                </div>
-            </div>
-            
-            ${emp.LeaveBalances && emp.LeaveBalances.length > 0 ? `
-                <hr>
-                <h6 class="text-muted mb-3">Leave Balances</h6>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Leave Type</th>
-                            <th>Balance (Hours)</th>
-                            <th>Balance (Days)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${emp.LeaveBalances.map(leave => `
-                            <tr>
-                                <td>${leave.LeaveName || leave.LeaveType || 'Unknown'}</td>
-                                <td>${(leave.NumberOfUnits || 0).toFixed(2)}</td>
-                                <td>${((leave.NumberOfUnits || 0) / 7.6).toFixed(1)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            ` : ''}
-            
-            ${emp.SuperMemberships && emp.SuperMemberships.length > 0 ? `
-                <hr>
-                <h6 class="text-muted mb-3">Superannuation</h6>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Super Fund</th>
-                            <th>Member Number</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${emp.SuperMemberships.map(s => `
-                            <tr>
-                                <td>${s.SuperFundID || '-'}</td>
-                                <td>${s.EmployeeNumber || '-'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            ` : ''}
-        `;
+        // Stats cards removed - function kept for compatibility
     }
     
     // Utility functions
     function formatDate(dateStr) {
         if (!dateStr) return '-';
         try {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            let date;
+            
             // Handle Xero date format /Date(timestamp)/
             if (dateStr.includes('/Date(')) {
                 const timestamp = parseInt(dateStr.match(/\d+/)[0]);
-                const date = new Date(timestamp);
-                return date.toLocaleDateString('en-AU');
+                date = new Date(timestamp);
+            } else {
+                date = new Date(dateStr);
             }
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-AU');
+            
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = months[date.getMonth()];
+            const year = String(date.getFullYear()).slice(-2);
+            return `${day}-${month}-${year}`;
         } catch (e) {
             return dateStr;
         }
     }
     
+    // ============================================
+    // EMPLOYEE CALENDAR FUNCTIONALITY
+    // ============================================
+    
+    let calendarYear = new Date().getFullYear();
+    let calendarMonth = new Date().getMonth() + 1; // 1-12
+    let calendarData = null;
+    let calendarLeaveTypes = {};
+    
+    const calendarEmployeeSelect = document.getElementById('calendarEmployeeSelect');
+    const calendarStateSelect = document.getElementById('calendarStateSelect');
+    const calendarPrevMonth = document.getElementById('calendarPrevMonth');
+    const calendarNextMonth = document.getElementById('calendarNextMonth');
+    const calendarMonthYear = document.getElementById('calendarMonthYear');
+    const calendarBody = document.getElementById('calendarBody');
+    const calendarGrid = document.getElementById('calendarGrid');
+    const calendarNoEmployee = document.getElementById('calendarNoEmployee');
+    const calendarSummary = document.getElementById('calendarSummary');
+    
+    // Setup calendar event listeners
+    function setupCalendarEventListeners() {
+        if (calendarEmployeeSelect) {
+            calendarEmployeeSelect.addEventListener('change', function() {
+                if (this.value) {
+                    loadCalendarData();
+                } else {
+                    showCalendarNoEmployee();
+                }
+            });
+        }
+        
+        if (calendarStateSelect) {
+            calendarStateSelect.addEventListener('change', function() {
+                if (calendarEmployeeSelect.value) {
+                    loadCalendarData();
+                }
+            });
+        }
+        
+        if (calendarPrevMonth) {
+            calendarPrevMonth.addEventListener('click', function() {
+                calendarMonth--;
+                if (calendarMonth < 1) {
+                    calendarMonth = 12;
+                    calendarYear--;
+                }
+                if (calendarEmployeeSelect.value) {
+                    loadCalendarData();
+                } else {
+                    updateCalendarMonthDisplay();
+                }
+            });
+        }
+        
+        if (calendarNextMonth) {
+            calendarNextMonth.addEventListener('click', function() {
+                calendarMonth++;
+                if (calendarMonth > 12) {
+                    calendarMonth = 1;
+                    calendarYear++;
+                }
+                if (calendarEmployeeSelect.value) {
+                    loadCalendarData();
+                } else {
+                    updateCalendarMonthDisplay();
+                }
+            });
+        }
+    }
+    
+    // Call setup after main event listeners and render empty calendar
+    setTimeout(function() {
+        setupCalendarEventListeners();
+        updateCalendarMonthDisplay();
+        renderCalendar();
+    }, 100);
+    
+    function updateCalendarMonthDisplay() {
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        if (calendarMonthYear) {
+            calendarMonthYear.textContent = `${monthNames[calendarMonth - 1]} ${calendarYear}`;
+        }
+    }
+    
+    function showCalendarNoEmployee() {
+        if (calendarNoEmployee) calendarNoEmployee.classList.remove('d-none');
+        if (calendarGrid) calendarGrid.classList.add('d-none');
+        if (calendarSummary) calendarSummary.classList.add('d-none');
+    }
+    
+    function showCalendarGrid() {
+        if (calendarNoEmployee) calendarNoEmployee.classList.add('d-none');
+        if (calendarGrid) calendarGrid.classList.remove('d-none');
+        if (calendarSummary) calendarSummary.classList.remove('d-none');
+    }
+    
+    // Populate calendar employee dropdown when employees data loads
+    function populateCalendarEmployeeDropdown() {
+        if (!calendarEmployeeSelect) return;
+        
+        calendarEmployeeSelect.innerHTML = '';
+        let firstEmployeeId = null;
+        employeesData.forEach(emp => {
+            if (emp.status === 'ACTIVE') {
+                const option = document.createElement('option');
+                option.value = emp.employee_id;
+                option.textContent = `${emp.first_name} ${emp.last_name}`;
+                calendarEmployeeSelect.appendChild(option);
+                if (!firstEmployeeId) firstEmployeeId = emp.employee_id;
+            }
+        });
+        
+        // Auto-select first employee and load calendar
+        if (firstEmployeeId) {
+            calendarEmployeeSelect.value = firstEmployeeId;
+            loadCalendarData();
+        }
+    }
+    
+    async function loadCalendarData() {
+        const employeeId = calendarEmployeeSelect.value;
+        const state = calendarStateSelect.value;
+        
+        if (!employeeId || !currentXeroInstanceId) return;
+        
+        updateCalendarMonthDisplay();
+        
+        const url = `/core/staff_hours/employee_calendar/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&year=${calendarYear}&month=${calendarMonth}&state=${state}`;
+        
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                calendarData = data;
+                calendarLeaveTypes = data.leave_types || {};
+                renderCalendar();
+                showCalendarGrid();
+                autoSelectToday();
+            } else {
+                console.error('Error loading calendar data:', data.message);
+                // Still render calendar with empty data
+                calendarData = { public_holidays: [], worked_days: [], leave_days: [] };
+                renderCalendar();
+                showCalendarGrid();
+                autoSelectToday();
+            }
+        } catch (error) {
+            console.error('Error loading calendar data:', error);
+            calendarData = { public_holidays: [], worked_days: [], leave_days: [] };
+            renderCalendar();
+            showCalendarGrid();
+            autoSelectToday();
+        }
+    }
+    
+    // Auto-select today's date if visible in current month
+    function autoSelectToday() {
+        const todayElement = document.querySelector('.calendar-day.today');
+        if (todayElement && todayElement.dataset.dayinfo) {
+            window.selectCalendarDay(todayElement);
+        }
+    }
+    
+    function renderCalendar() {
+        if (!calendarBody) return;
+        
+        // Get first day of month and number of days
+        const firstDay = new Date(calendarYear, calendarMonth - 1, 1);
+        const lastDay = new Date(calendarYear, calendarMonth, 0);
+        const daysInMonth = lastDay.getDate();
+        
+        // Monday = 0, Sunday = 6 (adjusted from JS default)
+        let startDayOfWeek = firstDay.getDay() - 1;
+        if (startDayOfWeek < 0) startDayOfWeek = 6;
+        
+        // Build lookup maps for quick access
+        const holidayMap = {};
+        const workedMap = {};
+        const leaveMap = {};
+        
+        if (calendarData) {
+            (calendarData.public_holidays || []).forEach(h => {
+                holidayMap[h.date] = h.name;
+            });
+            
+            (calendarData.worked_days || []).forEach(w => {
+                if (!workedMap[w.date]) {
+                    workedMap[w.date] = { hours: 0, earnings_rate_id: w.earnings_rate_id };
+                }
+                workedMap[w.date].hours += w.hours;
+            });
+            
+            (calendarData.leave_days || []).forEach(l => {
+                leaveMap[l.date] = l;
+            });
+        }
+        
+        // Summary counters
+        let workedCount = 0;
+        let sickCount = 0;
+        let annualCount = 0;
+        let holidayCount = Object.keys(holidayMap).length;
+        
+        // Build calendar HTML
+        let html = '';
+        let dayCounter = 1;
+        const totalCells = Math.ceil((daysInMonth + startDayOfWeek) / 7) * 7;
+        
+        for (let i = 0; i < totalCells; i++) {
+            if (i % 7 === 0) html += '<div class="calendar-week">';
+            
+            const isWeekend = (i % 7 === 5) || (i % 7 === 6);
+            
+            if (i < startDayOfWeek || dayCounter > daysInMonth) {
+                html += '<div class="calendar-day empty"></div>';
+            } else {
+                const dateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(dayCounter).padStart(2, '0')}`;
+                const isHoliday = holidayMap[dateStr];
+                const isWorked = workedMap[dateStr];
+                const isLeave = leaveMap[dateStr];
+                
+                let dayClass = 'calendar-day';
+                let tooltip = '';
+                let hoursDisplay = '';
+                
+                if (isHoliday) {
+                    dayClass += ' holiday';
+                    tooltip = isHoliday;
+                } else if (isLeave) {
+                    const leaveType = calendarLeaveTypes[isLeave.leave_type_id];
+                    const leaveName = leaveType?.name || isLeave.title || 'Leave';
+                    
+                    if (leaveName.toLowerCase().includes('sick') || leaveName.toLowerCase().includes('personal')) {
+                        dayClass += ' sick-leave';
+                        sickCount++;
+                    } else {
+                        dayClass += ' annual-leave';
+                        annualCount++;
+                    }
+                    tooltip = leaveName;
+                } else if (isWorked) {
+                    dayClass += ' worked';
+                    tooltip = `${isWorked.hours}h worked`;
+                    hoursDisplay = `<span class="hours">${isWorked.hours}h</span>`;
+                    workedCount++;
+                } else if (isWeekend) {
+                    dayClass += ' weekend';
+                }
+                
+                const isToday = (new Date().toISOString().split('T')[0] === dateStr);
+                if (isToday) dayClass += ' today';
+                
+                // Store day info for click handler
+                // Get earnings rate name and pay rate for worked days
+                let earningsRateName = '';
+                let ratePerUnit = null;
+                if (isWorked && isWorked.earnings_rate_id && payItemsData.earnings_rates) {
+                    const rate = payItemsData.earnings_rates.find(r => r.EarningsRateID === isWorked.earnings_rate_id);
+                    earningsRateName = rate ? rate.Name : '';
+                    ratePerUnit = rate ? rate.RatePerUnit : null;
+                }
+                
+                const dayInfo = JSON.stringify({
+                    date: dateStr,
+                    hours: isWorked ? isWorked.hours : 0,
+                    isHoliday: !!isHoliday,
+                    holidayName: isHoliday || '',
+                    isLeave: !!isLeave,
+                    leaveType: isLeave ? (calendarLeaveTypes[isLeave.leave_type_id]?.name || isLeave.title || 'Leave') : '',
+                    isWeekend: isWeekend,
+                    isWorked: !!isWorked,
+                    earningsRateId: isWorked ? isWorked.earnings_rate_id : '',
+                    earningsRateName: earningsRateName,
+                    ratePerUnit: ratePerUnit,
+                    canEdit: !isHoliday && !isLeave && !isWorked
+                }).replace(/"/g, '&quot;');
+                
+                html += `<div class="${dayClass} clickable" title="${tooltip || 'Click to view'}" data-dayinfo="${dayInfo}" onclick="selectCalendarDay(this)">
+                    <span class="day-number">${dayCounter}</span>
+                    ${hoursDisplay}
+                </div>`;
+                
+                dayCounter++;
+            }
+            
+            if (i % 7 === 6) html += '</div>';
+        }
+        
+        calendarBody.innerHTML = html;
+        
+        // Update summary
+        document.getElementById('summaryWorkedDays').textContent = workedCount;
+        document.getElementById('summarySickDays').textContent = sickCount;
+        document.getElementById('summaryAnnualDays').textContent = annualCount;
+        document.getElementById('summaryHolidays').textContent = holidayCount;
+    }
+    
+    // Day Details Side Panel Functions
+    let selectedDayData = null;
+    let earningsRatesLoaded = false;
+    const dayDetailsEmpty = document.getElementById('dayDetailsEmpty');
+    const dayDetailsContent = document.getElementById('dayDetailsContent');
+    const selectedDayTitle = document.getElementById('selectedDayTitle');
+    const selectedDayStatus = document.getElementById('selectedDayStatus');
+    const hoursInputSection = document.getElementById('hoursInputSection');
+    const hoursDisplaySection = document.getElementById('hoursDisplaySection');
+    const dayHoursInput = document.getElementById('dayHoursInput');
+    const selectedDayHours = document.getElementById('selectedDayHours');
+    const saveDayHoursBtn = document.getElementById('saveDayHoursBtn');
+    const earningsRateSelect = document.getElementById('earningsRateSelect');
+    
+    // Populate earnings rate dropdown
+    function populateEarningsRates() {
+        if (earningsRatesLoaded || !earningsRateSelect) return;
+        
+        // Use pay items data that's already loaded
+        if (payItemsData.earnings_rates && payItemsData.earnings_rates.length > 0) {
+            earningsRateSelect.innerHTML = '';
+            
+            // Filter to only timesheet-valid rates:
+            // - CurrentRecord must be true (active)
+            // - RateType must be RATEPERUNIT or MULTIPLE (not FIXEDAMOUNT)
+            // - EarningsType must be valid for timesheets (exclude ETP, allowances, leave loading, etc.)
+            const timesheetValidTypes = [
+                'ORDINARYTIMEEARNINGS',
+                'OVERTIMEEARNINGS'
+            ];
+            const validRates = payItemsData.earnings_rates.filter(rate => {
+                const isActive = rate.CurrentRecord !== false;
+                const isValidType = rate.RateType !== 'FIXEDAMOUNT';
+                const isTimesheetType = timesheetValidTypes.includes(rate.EarningsType);
+                return isActive && isValidType && isTimesheetType;
+            });
+            
+            validRates.forEach(rate => {
+                const option = document.createElement('option');
+                option.value = rate.EarningsRateID;
+                option.textContent = rate.Name;
+                // Mark ordinary time as default
+                if (rate.EarningsType === 'ORDINARYTIMEEARNINGS') {
+                    option.selected = true;
+                }
+                earningsRateSelect.appendChild(option);
+            });
+            earningsRatesLoaded = true;
+        } else {
+            earningsRateSelect.innerHTML = '<option value="">No rates available</option>';
+        }
+    }
+    
+    window.selectCalendarDay = function(element) {
+        // Remove selection from other days
+        document.querySelectorAll('.calendar-day.selected').forEach(d => d.classList.remove('selected'));
+        element.classList.add('selected');
+        
+        // Parse day info
+        const dayInfo = JSON.parse(element.dataset.dayinfo);
+        selectedDayData = dayInfo;
+        
+        // Format date for display
+        const date = new Date(dayInfo.date);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const formatted = `${days[date.getDay()]} ${date.getDate()}-${months[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`;
+        
+        // Update panel
+        dayDetailsEmpty.classList.add('d-none');
+        dayDetailsContent.classList.remove('d-none');
+        selectedDayTitle.textContent = formatted;
+        
+        // Set status
+        if (dayInfo.isHoliday) {
+            selectedDayStatus.innerHTML = `<span class="text-warning">${dayInfo.holidayName}</span>`;
+        } else if (dayInfo.isLeave) {
+            selectedDayStatus.innerHTML = `<span class="text-info">${dayInfo.leaveType}</span>`;
+        } else if (dayInfo.hours > 0) {
+            selectedDayStatus.innerHTML = `<span class="text-success">Worked</span>`;
+        } else if (dayInfo.isWeekend) {
+            selectedDayStatus.innerHTML = `<span class="text-muted">Weekend</span>`;
+        } else {
+            selectedDayStatus.innerHTML = `<span class="text-muted">No entry</span>`;
+        }
+        
+        // Show editable hours or display-only
+        const selectedDayRate = document.getElementById('selectedDayRate');
+        
+        if (dayInfo.canEdit) {
+            // Editable - show input form
+            hoursInputSection.classList.remove('d-none');
+            hoursDisplaySection.classList.add('d-none');
+            dayHoursInput.value = dayInfo.hours || 8;
+            // Populate earnings rates dropdown
+            populateEarningsRates();
+            // Hide allocation section for editable days (no hours logged yet)
+            hideAllocationSection();
+        } else if (dayInfo.isWorked && dayInfo.hours > 0) {
+            // Already worked - show read-only display with rate
+            hoursInputSection.classList.add('d-none');
+            hoursDisplaySection.classList.remove('d-none');
+            selectedDayRate.textContent = dayInfo.earningsRateName || 'Unknown rate';
+            selectedDayHours.textContent = `${dayInfo.hours}h`;
+            const selectedDayPayRate = document.getElementById('selectedDayPayRate');
+            if (selectedDayPayRate) {
+                selectedDayPayRate.textContent = dayInfo.ratePerUnit ? `$${parseFloat(dayInfo.ratePerUnit).toFixed(2)}/hr` : '-';
+            }
+            // Show allocation section for worked days
+            showAllocationSection(dayInfo);
+        } else {
+            // Holiday, leave, or empty weekend - hide both
+            hoursInputSection.classList.add('d-none');
+            hoursDisplaySection.classList.add('d-none');
+            hideAllocationSection();
+        }
+    };
+    
+    // Allocation handling - Table-based
+    let allocationProjects = [];
+    let allocationCostings = {};
+    let allocationRowCount = 0;
+    
+    async function loadAllocationProjects() {
+        try {
+            const response = await fetch(`/core/staff_hours/projects/?xero_instance_id=${currentXeroInstanceId}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                allocationProjects = data.projects;
+            }
+        } catch (e) {
+            console.error('Error loading projects:', e);
+        }
+    }
+    
+    async function loadCostingsForProject(projectId, selectElement) {
+        if (!projectId) {
+            selectElement.innerHTML = '<option value="">Costing...</option>';
+            selectElement.disabled = true;
+            return;
+        }
+        if (allocationCostings[projectId]) {
+            populateCostingSelect(selectElement, allocationCostings[projectId]);
+            return;
+        }
+        try {
+            const response = await fetch(`/core/staff_hours/costings/?project_id=${projectId}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                allocationCostings[projectId] = data.costings;
+                populateCostingSelect(selectElement, data.costings);
+            }
+        } catch (e) {
+            console.error('Error loading costings:', e);
+        }
+    }
+    
+    function populateCostingSelect(select, costings) {
+        select.innerHTML = '<option value="">Costing...</option>';
+        costings.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${c.item}</option>`;
+        });
+        select.disabled = false;
+    }
+    
+    function createAllocationRow(existingData = null) {
+        const rowId = allocationRowCount++;
+        const tr = document.createElement('tr');
+        tr.id = `alloc-row-${rowId}`;
+        tr.dataset.allocationId = existingData?.id || '';
+        
+        // Project select
+        let projectOptions = '<option value="">Project...</option>';
+        allocationProjects.forEach(p => {
+            const selected = existingData?.project_id == p.id ? 'selected' : '';
+            projectOptions += `<option value="${p.id}" ${selected}>${p.name}</option>`;
+        });
+        
+        // Costing select (will be populated on project change)
+        let costingOptions = '<option value="">Costing...</option>';
+        if (existingData?.costing_id && allocationCostings[existingData.project_id]) {
+            allocationCostings[existingData.project_id].forEach(c => {
+                const selected = existingData.costing_id == c.id ? 'selected' : '';
+                costingOptions += `<option value="${c.id}" ${selected}>${c.item}</option>`;
+            });
+        }
+        
+        tr.innerHTML = `
+            <td style="padding: 2px;">
+                <select class="form-select form-select-sm alloc-project" style="font-size: 11px; padding: 2px;" data-row="${rowId}">
+                    ${projectOptions}
+                </select>
+            </td>
+            <td style="padding: 2px;">
+                <select class="form-select form-select-sm alloc-costing" style="font-size: 11px; padding: 2px;" data-row="${rowId}" ${existingData ? '' : 'disabled'}>
+                    ${costingOptions}
+                </select>
+            </td>
+            <td style="padding: 2px;">
+                <input type="number" class="form-control form-control-sm alloc-hours" style="font-size: 11px; padding: 2px; text-align: center;" 
+                       min="0" max="24" step="0.5" value="${existingData?.hours || ''}" data-row="${rowId}">
+            </td>
+            <td style="padding: 2px; text-align: center;">
+                <button class="btn btn-sm p-0 alloc-remove" style="font-size: 12px; color: #dc3545; line-height: 1;" data-row="${rowId}">&times;</button>
+            </td>
+        `;
+        
+        // Wire up events
+        const projectSelect = tr.querySelector('.alloc-project');
+        const costingSelect = tr.querySelector('.alloc-costing');
+        const hoursInput = tr.querySelector('.alloc-hours');
+        const removeBtn = tr.querySelector('.alloc-remove');
+        
+        projectSelect.addEventListener('change', function() {
+            loadCostingsForProject(this.value, costingSelect);
+            validateAllocations();
+        });
+        costingSelect.addEventListener('change', validateAllocations);
+        hoursInput.addEventListener('input', validateAllocations);
+        removeBtn.addEventListener('click', function() {
+            tr.remove();
+            validateAllocations();
+        });
+        
+        return tr;
+    }
+    
+    function validateAllocations() {
+        const totalHours = parseFloat(selectedDayData?.hours) || 0;
+        const rows = document.querySelectorAll('#allocationRows tr');
+        let sum = 0;
+        let allValid = true;
+        
+        rows.forEach(row => {
+            const project = row.querySelector('.alloc-project')?.value;
+            const costing = row.querySelector('.alloc-costing')?.value;
+            const hours = parseFloat(row.querySelector('.alloc-hours')?.value) || 0;
+            sum += hours;
+            if (!project || !costing || hours <= 0) allValid = false;
+        });
+        
+        document.getElementById('allocatedHours').textContent = sum.toFixed(1);
+        document.getElementById('totalDayHours').textContent = totalHours;
+        
+        const saveBtn = document.getElementById('saveAllocationsBtn');
+        const isValid = allValid && rows.length > 0 && Math.abs(sum - totalHours) < 0.01;
+        
+        if (isValid) {
+            saveBtn.disabled = false;
+            saveBtn.style.background = '#28a745';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#6c757d';
+        }
+    }
+    
+    let allocationEditMode = true;
+    let savedAllocations = [];
+    
+    async function loadAllocations(employeeId, dateStr, hours = 0) {
+        console.log('loadAllocations called:', { employeeId, dateStr, hours, xeroInstanceId: currentXeroInstanceId });
+        try {
+            const url = `/core/staff_hours/allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}&hours=${hours}`;
+            console.log('Fetching allocations from:', url);
+            const response = await fetch(url);
+            const data = await response.json();
+            console.log('Allocations response:', data);
+            savedAllocations = data.allocations || [];
+            
+            // Update daily cost display
+            updateDailyCostDisplay(data.daily_cost);
+            
+            if (savedAllocations.length > 0) {
+                renderAllocationDisplayTable(savedAllocations);
+            } else {
+                renderAllocationEditTable([]);
+            }
+        } catch (e) {
+            console.error('Error loading allocations:', e);
+            renderAllocationEditTable([]);
+            updateDailyCostDisplay(null);
+        }
+    }
+    
+    function updateDailyCostDisplay(dailyCost) {
+        const costDisplay = document.getElementById('dailyCostDisplay');
+        const costAmount = document.getElementById('dailyCostAmount');
+        if (!costDisplay || !costAmount) return;
+        
+        if (dailyCost !== null && dailyCost !== undefined) {
+            costAmount.textContent = `$${dailyCost.toFixed(2)}`;
+            costDisplay.classList.remove('d-none');
+        } else {
+            costDisplay.classList.add('d-none');
+        }
+    }
+    
+    function createDisplayRow(allocation) {
+        const tr = document.createElement('tr');
+        const projectName = allocationProjects.find(p => p.id == allocation.project_id)?.name || allocation.project_name || '-';
+        const costingName = allocation.costing_item || '-';
+        
+        tr.innerHTML = `
+            <td style="padding: 4px 3px; font-size: 11px;">${projectName}</td>
+            <td style="padding: 4px 3px; font-size: 11px;">${costingName}</td>
+            <td style="padding: 4px 3px; font-size: 11px; text-align: center;">${allocation.hours}</td>
+            <td style="padding: 4px 3px;"></td>
+        `;
+        return tr;
+    }
+    
+    function renderAllocationDisplayTable(allocations) {
+        allocationEditMode = false;
+        const tbody = document.getElementById('allocationRows');
+        tbody.innerHTML = '';
+        
+        let totalAllocated = 0;
+        allocations.forEach(a => {
+            tbody.appendChild(createDisplayRow(a));
+            totalAllocated += parseFloat(a.hours) || 0;
+        });
+        
+        const totalHours = parseFloat(selectedDayData?.hours) || 0;
+        document.getElementById('allocatedHoursDisplay').textContent = totalAllocated.toFixed(1);
+        document.getElementById('totalDayHoursDisplay').textContent = totalHours;
+        
+        document.getElementById('allocationEditControls').classList.add('d-none');
+        document.getElementById('allocationDisplayControls').classList.remove('d-none');
+    }
+    
+    function renderAllocationEditTable(allocations) {
+        allocationEditMode = true;
+        const tbody = document.getElementById('allocationRows');
+        tbody.innerHTML = '';
+        allocationRowCount = 0;
+        
+        if (allocations.length === 0) {
+            tbody.appendChild(createAllocationRow());
+        } else {
+            allocations.forEach(a => {
+                tbody.appendChild(createAllocationRow(a));
+            });
+        }
+        
+        document.getElementById('allocationEditControls').classList.remove('d-none');
+        document.getElementById('allocationDisplayControls').classList.add('d-none');
+        validateAllocations();
+    }
+    
+    function switchToEditMode() {
+        renderAllocationEditTable(savedAllocations);
+    }
+    
+    function showAllocationSection(dayInfo) {
+        const section = document.getElementById('hoursAllocationSection');
+        if (!section) return;
+        
+        console.log('showAllocationSection called for:', dayInfo.date, 'employee:', calendarEmployeeSelect.value, 'hours:', dayInfo.hours);
+        section.classList.remove('d-none');
+        
+        // Clear existing data immediately
+        const tbody = document.getElementById('allocationRows');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>';
+        
+        loadAllocationProjects().then(() => {
+            loadAllocations(calendarEmployeeSelect.value, dayInfo.date, dayInfo.hours);
+        });
+    }
+    
+    function hideAllocationSection() {
+        const section = document.getElementById('hoursAllocationSection');
+        if (section) {
+            section.classList.add('d-none');
+            savedAllocations = [];
+        }
+    }
+    
+    async function saveAllAllocations() {
+        const rows = document.querySelectorAll('#allocationRows tr');
+        const allocations = [];
+        
+        rows.forEach(row => {
+            const projectSelect = row.querySelector('.alloc-project');
+            const costingSelect = row.querySelector('.alloc-costing');
+            const hoursInput = row.querySelector('.alloc-hours');
+            if (projectSelect && costingSelect && hoursInput) {
+                allocations.push({
+                    project_id: projectSelect.value,
+                    project_name: projectSelect.options[projectSelect.selectedIndex]?.text || '',
+                    costing_id: costingSelect.value,
+                    costing_item: costingSelect.options[costingSelect.selectedIndex]?.text || '',
+                    hours: parseFloat(hoursInput.value) || 0
+                });
+            }
+        });
+        
+        const saveBtn = document.getElementById('saveAllocationsBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            for (const alloc of allocations) {
+                await fetch('/core/staff_hours/allocations/save/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                    },
+                    body: JSON.stringify({
+                        xero_instance_id: currentXeroInstanceId,
+                        employee_id: calendarEmployeeSelect.value,
+                        date: selectedDayData.date,
+                        project_id: alloc.project_id,
+                        costing_id: alloc.costing_id,
+                        hours: alloc.hours
+                    })
+                });
+            }
+            savedAllocations = allocations;
+            saveBtn.textContent = 'Saved!';
+            setTimeout(() => {
+                saveBtn.textContent = 'Save Allocations';
+                renderAllocationDisplayTable(savedAllocations);
+            }, 1000);
+        } catch (e) {
+            console.error('Error saving allocations:', e);
+            saveBtn.textContent = 'Error';
+            setTimeout(() => {
+                saveBtn.textContent = 'Save Allocations';
+                validateAllocations();
+            }, 1500);
+        }
+    }
+    
+    // Wire up allocation UI events
+    document.getElementById('addAllocationRowBtn')?.addEventListener('click', function() {
+        document.getElementById('allocationRows').appendChild(createAllocationRow());
+        validateAllocations();
+    });
+    document.getElementById('saveAllocationsBtn')?.addEventListener('click', saveAllAllocations);
+    document.getElementById('updateAllocationsBtn')?.addEventListener('click', switchToEditMode)
+    
+    if (saveDayHoursBtn) {
+        saveDayHoursBtn.addEventListener('click', async function() {
+            if (!selectedDayData || !selectedDayData.canEdit) return;
+            
+            const employeeId = calendarEmployeeSelect.value;
+            const hours = parseFloat(dayHoursInput.value) || 0;
+            const earningsRateId = earningsRateSelect ? earningsRateSelect.value : '';
+            
+            if (!employeeId || !selectedDayData.date) {
+                alert('Missing employee or date');
+                return;
+            }
+            
+            saveDayHoursBtn.disabled = true;
+            saveDayHoursBtn.textContent = '...';
+            
+            try {
+                const response = await fetch('/core/staff_hours/timesheets/save/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                    },
+                    body: JSON.stringify({
+                        xero_instance_id: currentXeroInstanceId,
+                        employee_id: employeeId,
+                        date: selectedDayData.date,
+                        hours: hours,
+                        earnings_rate_id: earningsRateId || null
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('Timesheet save response:', data);
+                
+                if (data.status === 'success') {
+                    // Reload calendar data to show the update
+                    loadCalendarData();
+                    
+                    // Update selectedDayData to reflect saved state
+                    const savedDate = selectedDayData.date;
+                    selectedDayData.hours = hours;
+                    selectedDayData.isWorked = true;
+                    selectedDayData.canEdit = false;
+                    selectedDayData.earningsRateName = earningsRateSelect?.options[earningsRateSelect.selectedIndex]?.text || 'Ordinary Hours';
+                    
+                    // Switch to display mode showing the saved hours
+                    hoursInputSection.classList.add('d-none');
+                    hoursDisplaySection.classList.remove('d-none');
+                    selectedDayRate.textContent = selectedDayData.earningsRateName;
+                    selectedDayHours.textContent = `${hours}h`;
+                    selectedDayStatus.innerHTML = '<span class="text-success">Worked</span>';
+                    
+                    // Show allocation section for the newly saved day
+                    showAllocationSection(selectedDayData);
+                } else {
+                    console.error('Timesheet error details:', data.details);
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error saving timesheet:', error);
+                alert('Error saving timesheet');
+            } finally {
+                saveDayHoursBtn.disabled = false;
+                saveDayHoursBtn.textContent = 'Save';
+            }
+        });
+    }
+    
+    // Override renderEmployeesTable to also populate calendar dropdown
+    const originalRenderEmployeesTable = renderEmployeesTable;
+    renderEmployeesTable = function() {
+        originalRenderEmployeesTable();
+        populateCalendarEmployeeDropdown();
+    };
+    
 })();
+
+// Debug function for calendar card styling
+window.debugCalendarStyling = function() {
+    const elements = {
+        cardBody: document.querySelector('.card-body'),
+        calendarLeft: document.querySelector('.calendar-left'),
+        calendarRight: document.querySelector('.calendar-right'),
+        monthNav: document.querySelector('.calendar-left > .d-flex'),
+        calendarContainer: document.getElementById('calendarContainer'),
+        calendarGrid: document.getElementById('calendarGrid'),
+        calendarHeader: document.querySelector('.calendar-header'),
+        dayHeaders: document.querySelectorAll('.calendar-day-header'),
+        dayDetailsHeader: document.querySelector('.day-details-header'),
+        dayDetailsPanel: document.getElementById('dayDetailsPanel'),
+        calendarBody: document.querySelector('.calendar-body')
+    };
+    
+    console.log('=== CALENDAR CARD STYLING DEBUG ===\n');
+    
+    Object.entries(elements).forEach(([name, el]) => {
+        if (!el || (el.length !== undefined && el.length === 0)) {
+            console.log(`${name}: NOT FOUND`);
+            return;
+        }
+        
+        const target = el.length !== undefined ? el[0] : el;
+        const rect = target.getBoundingClientRect();
+        const styles = window.getComputedStyle(target);
+        
+        console.log(`=== ${name.toUpperCase()} ===`);
+        console.log('Position:', { top: rect.top.toFixed(1), bottom: rect.bottom.toFixed(1), height: rect.height.toFixed(1) });
+        console.log('Borders:', {
+            top: styles.borderTopWidth + ' ' + styles.borderTopStyle + ' ' + styles.borderTopColor,
+            bottom: styles.borderBottomWidth + ' ' + styles.borderBottomStyle + ' ' + styles.borderBottomColor,
+            left: styles.borderLeftWidth + ' ' + styles.borderLeftStyle,
+            right: styles.borderRightWidth + ' ' + styles.borderRightStyle
+        });
+        console.log('Box Shadow:', styles.boxShadow);
+        console.log('Margins:', { top: styles.marginTop, bottom: styles.marginBottom });
+        console.log('Padding:', { top: styles.paddingTop, bottom: styles.paddingBottom });
+        console.log('Background:', styles.background.substring(0, 80) + '...');
+        console.log('');
+    });
+    
+    // Check first row of calendar days
+    const firstCalendarRow = document.querySelector('.calendar-body .calendar-row');
+    if (firstCalendarRow) {
+        const rowStyles = window.getComputedStyle(firstCalendarRow);
+        const rowRect = firstCalendarRow.getBoundingClientRect();
+        console.log('=== FIRST CALENDAR ROW ===');
+        console.log('Position:', { top: rowRect.top.toFixed(1), bottom: rowRect.bottom.toFixed(1) });
+        console.log('Margins:', { top: rowStyles.marginTop, bottom: rowStyles.marginBottom });
+        console.log('Gap from header:', (rowRect.top - document.querySelector('.calendar-header').getBoundingClientRect().bottom).toFixed(1) + 'px');
+    }
+    
+    return 'Debug complete - check console output above';
+};
+
+// Debug function for header alignment
+window.debugHeaderAlignment = function() {
+    const dayDetailsHeader = document.querySelector('.day-details-header');
+    const calendarHeader = document.querySelector('.calendar-header');
+    
+    if (!dayDetailsHeader || !calendarHeader) {
+        console.log('Headers not found');
+        return;
+    }
+    
+    const ddRect = dayDetailsHeader.getBoundingClientRect();
+    const chRect = calendarHeader.getBoundingClientRect();
+    const ddStyles = window.getComputedStyle(dayDetailsHeader);
+    const chStyles = window.getComputedStyle(calendarHeader);
+    
+    console.log('=== DAY DETAILS HEADER ===');
+    console.log('Bounding rect:', { top: ddRect.top, bottom: ddRect.bottom, height: ddRect.height });
+    console.log('Styles:', {
+        marginTop: ddStyles.marginTop,
+        marginBottom: ddStyles.marginBottom,
+        paddingTop: ddStyles.paddingTop,
+        paddingBottom: ddStyles.paddingBottom,
+        height: ddStyles.height,
+        lineHeight: ddStyles.lineHeight,
+        fontSize: ddStyles.fontSize,
+        display: ddStyles.display,
+        position: ddStyles.position
+    });
+    
+    console.log('=== CALENDAR HEADER ===');
+    console.log('Bounding rect:', { top: chRect.top, bottom: chRect.bottom, height: chRect.height });
+    console.log('Styles:', {
+        marginTop: chStyles.marginTop,
+        marginBottom: chStyles.marginBottom,
+        paddingTop: chStyles.paddingTop,
+        paddingBottom: chStyles.paddingBottom,
+        height: chStyles.height,
+        lineHeight: chStyles.lineHeight,
+        fontSize: chStyles.fontSize,
+        display: chStyles.display,
+        position: chStyles.position
+    });
+    
+    // Check parents
+    console.log('=== PARENT CONTAINERS ===');
+    const ddParent = dayDetailsHeader.parentElement;
+    const chParent = calendarHeader.parentElement;
+    const ddParentStyles = window.getComputedStyle(ddParent);
+    const chParentStyles = window.getComputedStyle(chParent);
+    
+    console.log('Day Details parent:', ddParent.className || ddParent.id);
+    console.log('DD parent rect:', ddParent.getBoundingClientRect());
+    console.log('DD parent styles:', {
+        paddingTop: ddParentStyles.paddingTop,
+        marginTop: ddParentStyles.marginTop,
+        display: ddParentStyles.display,
+        flexDirection: ddParentStyles.flexDirection
+    });
+    
+    console.log('Calendar parent:', chParent.className || chParent.id);
+    console.log('CH parent rect:', chParent.getBoundingClientRect());
+    console.log('CH parent styles:', {
+        paddingTop: chParentStyles.paddingTop,
+        marginTop: chParentStyles.marginTop,
+        display: chParentStyles.display,
+        flexDirection: chParentStyles.flexDirection
+    });
+    
+    // Alignment difference
+    console.log('=== ALIGNMENT DIFFERENCE ===');
+    console.log('Top difference (DD - CH):', ddRect.top - chRect.top, 'px');
+    console.log('Bottom difference (DD - CH):', ddRect.bottom - chRect.bottom, 'px');
+    
+    return {
+        dayDetailsHeader: { rect: ddRect, marginTop: ddStyles.marginTop },
+        calendarHeader: { rect: chRect, marginTop: chStyles.marginTop },
+        topDiff: ddRect.top - chRect.top
+    };
+};
 </script>
 
 <style>
@@ -925,5 +2691,140 @@ Backend Endpoints:
 .badge {
     font-weight: 500;
 }
+
+/* Calendar Styles - Compact to fit screen */
+#calendar .card-body {
+    padding: 0.75rem;
+}
+.calendar-legend {
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem !important;
+    gap: 0.75rem !important;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.legend-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--manila-border);
+}
+.calendar-day-header {
+    text-align: center;
+    font-weight: 600;
+    padding: 6px 2px;
+    background: var(--manila-light);
+    border-radius: 2px 2px 0 0;
+    font-size: 0.75rem;
+    color: var(--manila-text);
+}
+.calendar-day-header.weekend {
+    color: var(--manila-text-muted);
+}
+
+.calendar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.calendar-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+}
+
+.calendar-day {
+    height: 80px;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    padding: 2px 4px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    cursor: default;
+}
+.calendar-day.clickable {
+    cursor: pointer;
+}
+.calendar-day.clickable:hover {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    border-color: var(--color-accent, #3b82f6);
+}
+.calendar-day.selected {
+    box-shadow: 0 0 0 2px var(--color-accent, #3b82f6);
+}
+.calendar-day:hover:not(.empty):not(.clickable) {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.calendar-day.empty {
+    background: #f8f9fa;
+    border-color: transparent;
+}
+.calendar-day .day-number {
+    font-weight: 600;
+    font-size: 0.7rem;
+    line-height: 1;
+}
+.calendar-day .hours {
+    font-size: 0.6rem;
+    color: #fff;
+    margin-top: auto;
+    line-height: 1;
+}
+
+/* Day type colors */
+.calendar-day.worked {
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: #fff;
+    border-color: #198754;
+}
+.calendar-day.sick-leave {
+    background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+    color: #fff;
+    border-color: #dc3545;
+}
+.calendar-day.annual-leave {
+    background: linear-gradient(135deg, #0dcaf0 0%, #6f42c1 100%);
+    color: #fff;
+    border-color: #0dcaf0;
+}
+.calendar-day.holiday {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    color: #212529;
+    border-color: #ffc107;
+}
+.calendar-day.weekend {
+    background: #f1f3f5;
+    color: #6c757d;
+}
+.calendar-day.today {
+    box-shadow: 0 0 0 2px #0d6efd;
+}
+
+/* Summary styles - compact */
+#calendarSummary {
+    margin-top: 0.5rem !important;
+}
+#calendarSummary hr {
+    margin: 0.5rem 0;
+}
+#calendarSummary h5 {
+    font-size: 1rem;
+    margin-bottom: 0 !important;
+}
+#calendarSummary small {
+    font-size: 0.65rem;
+}
 </style>
-{% endblock %}
+</div> <!-- End Staff Hours Section -->

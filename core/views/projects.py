@@ -157,10 +157,10 @@ def create_project(request):
         # Always create Internal/Margin category for all new projects
         internal_category = Categories.objects.create(
             project=project,
-            division=0,
+            division=-10,
             category='Internal',
             invoice_category='Internal',
-            order_in_list=0
+            order_in_list=-2
         )
         logger.info(f"Created Internal category for project {project.projects_pk}")
         
@@ -178,6 +178,16 @@ def create_project(request):
             sc_paid=0
         )
         logger.info(f"Created Margin item for project {project.projects_pk}")
+        
+        # Create Labour category for staff hours allocation
+        labour_category = Categories.objects.create(
+            project=project,
+            division=-5,
+            category='Labour',
+            invoice_category='Labour',
+            order_in_list=-1
+        )
+        logger.info(f"Created Labour category for project {project.projects_pk}")
         
         # Return project data
         return JsonResponse({

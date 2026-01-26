@@ -111,6 +111,24 @@ Column Behaviors:
         color: #6f2da8;
     }
     
+    /* Labour category styling - pink-purple */
+    .contractBudget-container .reusable-table tr.category-row.labour-category {
+        background-color: #fce4ec;
+        color: #c2185b;
+    }
+    
+    .contractBudget-container .reusable-table tr.category-row.labour-category:hover {
+        background-color: #f8bbd9;
+    }
+    
+    .contractBudget-container .reusable-table tr.item-row.labour-item {
+        color: #c2185b;
+    }
+    
+    .contractBudget-container .reusable-table tr.item-row.labour-item td {
+        color: #c2185b;
+    }
+    
     /* Item row indent */
     .contractBudget-container .reusable-table td.indent {
         padding-left: 30px;
@@ -399,9 +417,10 @@ Column Behaviors:
         // Render each category and its items
         categories.forEach(function(category) {
             var isInternal = category.category === 'Internal';
+            var isLabour = category.category === 'Labour';
             
             // Render category row
-            var categoryRow = renderCategoryRow(category, isInternal);
+            var categoryRow = renderCategoryRow(category, isInternal, isLabour);
             tbody.append(categoryRow);
             
             // Get items for this category
@@ -417,7 +436,7 @@ Column Behaviors:
                 var committedAmount = isConstruction ? 
                     (committedData ? committedData.amount : 0) : 
                     (committedData || 0);
-                var row = renderItemRow(item, committedData, isInternal, category.category);
+                var row = renderItemRow(item, committedData, isInternal, isLabour, category.category);
                 tbody.append(row);
                 
                 // Update totals (include all items including internal category)
@@ -446,10 +465,11 @@ Column Behaviors:
     }
     
     // Render a category row with collapsible subtotals
-    function renderCategoryRow(category, isInternal) {
+    function renderCategoryRow(category, isInternal, isLabour) {
         var row = $('<tr class="category-row"></tr>');
         row.attr('data-category', category.category);
         if (isInternal) row.addClass('internal-category');
+        if (isLabour) row.addClass('labour-category');
         
         // Category name with collapse icon
         row.append('<td><i class="fas fa-chevron-down collapse-icon"></i><strong>' + Utils.escapeHtml(category.category) + '</strong></td>');
@@ -498,7 +518,7 @@ Column Behaviors:
     }
     
     // Render an item row
-    function renderItemRow(item, committedData, isInternal, categoryName) {
+    function renderItemRow(item, committedData, isInternal, isLabour, categoryName) {
         // For construction types, committedData is {qty, rate, amount, has_multiple_rates}; for others, it's a number
         var committedAmount = isConstruction ? 
             (committedData ? committedData.amount : 0) : 
@@ -511,6 +531,9 @@ Column Behaviors:
         if (isInternal) {
             row.addClass('internal-item');
             row.attr('data-is-internal', 'true');
+        }
+        if (isLabour) {
+            row.addClass('labour-item');
         }
         row.attr('data-item-pk', item.costing_pk);
         row.attr('data-category', categoryName);
@@ -625,6 +648,12 @@ Column Behaviors:
                 row.append('<td></td>');  // Qty - blank
                 row.append('<td></td>');  // Rate - blank
                 row.append('<td></td>');  // Amount - blank
+            } else if (isLabour) {
+                // Labour items: blank Qty/Rate, show Amount from staff hours allocations
+                row.append('<td></td>');  // Qty - blank
+                row.append('<td></td>');  // Rate - blank
+                var amountTd = $('<td class="committed-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(committedAmount) + '</td>');
+                row.append(amountTd);
             } else {
                 // If multiple rates exist, show "multiple" for qty and rate
                 var qtyDisplay = hasMultipleRates ? 'multiple' : Utils.formatNumber(committedQty, 2);

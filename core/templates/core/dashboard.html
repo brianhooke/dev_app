@@ -528,6 +528,9 @@ Version: v174 (displayed in navbar bottom-left)
     
     <!-- Rates Section -->
     {% include 'core/rates.html' %}
+    
+    <!-- Staff Hours Section -->
+    {% include 'core/staff_hours.html' %}
     </div>
 </div>
 
@@ -542,6 +545,9 @@ Version: v174 (displayed in navbar bottom-left)
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
 
 <script>
+    // Global xero instances data for Staff Hours and other sections
+    window.xeroInstancesData = {{ xero_instances_json|safe }};
+    
     $(document).ready(function() {
         // Global variable to track current Bills modal type ('inbox' or 'direct')
         var currentBillsModalType = null;
@@ -556,6 +562,7 @@ Version: v174 (displayed in navbar bottom-left)
             $('#projectsSection').hide();
             $('#settingsSection').hide();
             $('#ratesSection').hide();
+            $('#staffHoursSection').hide();
             
             // Remove tender view background image and overlay
             $('#dynamicContentArea').css({
@@ -953,6 +960,35 @@ Version: v174 (displayed in navbar bottom-left)
             // Show rates section and add has-content class to hide background
             $('#ratesSection').css('display', 'flex').show();
             $('#dynamicContentArea').addClass('has-content');
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Staff Hours controller - shows inline in workspace
+        $('#staffHoursLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            window.hideAllSections();
+            
+            // Reset tender view state
+            if (typeof window.resetTenderViewState === 'function') {
+                window.resetTenderViewState();
+            }
+            
+            // Show staff hours section and add has-content class to hide background
+            $('#staffHoursSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Initialize staff hours section (populate dropdowns, etc.)
+            if (typeof window.initStaffHoursSection === 'function') {
+                window.initStaffHoursSection();
+            }
             
             // Scroll to top
             $('html, body').animate({ scrollTop: 0 }, 300);

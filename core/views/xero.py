@@ -191,7 +191,8 @@ def get_xero_instances(request):
     xero_instances = XeroInstances.objects.all().values(
         'xero_instance_pk',
         'xero_name',
-        'xero_client_id'
+        'xero_client_id',
+        'staff_hours_tracking'
     )
     return JsonResponse(list(xero_instances), safe=False)
 
@@ -214,10 +215,13 @@ def create_xero_instance(request):
                     'message': 'xero_name, xero_client_id, and xero_client_secret are all required'
                 }, status=400)
             
+            staff_hours_tracking = data.get('staff_hours_tracking', 0)
+            
             # Create instance
             xero_instance = XeroInstances(
                 xero_name=xero_name,
-                xero_client_id=xero_client_id
+                xero_client_id=xero_client_id,
+                staff_hours_tracking=staff_hours_tracking
             )
             
             # Encrypt and set the secret
@@ -231,8 +235,47 @@ def create_xero_instance(request):
                     'xero_instance_pk': xero_instance.xero_instance_pk,
                     'xero_name': xero_instance.xero_name,
                     'xero_client_id': xero_instance.xero_client_id,
+                    'staff_hours_tracking': xero_instance.staff_hours_tracking,
                     'has_secret': bool(xero_instance.xero_client_secret_encrypted)
                 }
+            })
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
+def update_staff_hours_tracking(request, instance_pk):
+    """
+    Update the staff_hours_tracking field for a Xero instance.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            staff_hours_tracking = data.get('staff_hours_tracking', 0)
+            
+            try:
+                xero_instance = XeroInstances.objects.get(pk=instance_pk)
+            except XeroInstances.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Xero instance not found'
+                }, status=404)
+            
+            xero_instance.staff_hours_tracking = staff_hours_tracking
+            xero_instance.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Staff hours tracking updated',
+                'staff_hours_tracking': xero_instance.staff_hours_tracking
             })
         except Exception as e:
             return JsonResponse({

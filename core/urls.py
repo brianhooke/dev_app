@@ -25,7 +25,7 @@ from .views.hc_variations import (
 from .views.pos import get_quotes_by_supplier, po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, download_folder, delete_file, move_file, move_folder
 from .views.xero import (
-    get_xero_instances, create_xero_instance, update_xero_instance, delete_xero_instance, 
+    get_xero_instances, create_xero_instance, update_xero_instance, update_staff_hours_tracking, delete_xero_instance, 
     test_xero_connection, migrate_xero_to_ssm,
     pull_xero_contacts, pull_xero_tracking_categories, create_contact, create_supplier,
     update_contact_details, update_contact_status
@@ -40,7 +40,12 @@ from .views.rates import get_rates_data, create_new_category_costing_unit_quanti
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
-    get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays
+    get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays,
+    sync_employee_pay_rates, get_projects_for_allocation, get_costings_for_project,
+    get_allocations, save_allocation, delete_allocation,
+    get_holiday_calendars, create_holiday_calendar, update_holiday_calendar,
+    delete_holiday_calendar, get_calendar_holidays, create_holiday, update_holiday, delete_holiday,
+    get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet
 )
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
@@ -129,6 +134,7 @@ urlpatterns = [
     path('get_xero_instances/', get_xero_instances, name='get_xero_instances'),
     path('create_xero_instance/', create_xero_instance, name='create_xero_instance'),
     path('update_xero_instance/<int:instance_pk>/', update_xero_instance, name='update_xero_instance'),
+    path('update_staff_hours_tracking/<int:instance_pk>/', update_staff_hours_tracking, name='update_staff_hours_tracking'),
     path('delete_xero_instance/<int:instance_pk>/', delete_xero_instance, name='delete_xero_instance'),
     path('test_xero_connection/<int:instance_pk>/', test_xero_connection, name='test_xero_connection'),
     path('migrate_xero_to_ssm/', migrate_xero_to_ssm, name='migrate_xero_to_ssm'),
@@ -286,6 +292,30 @@ urlpatterns = [
     path('staff_hours/payroll_calendars/', get_payroll_calendars, name='staff_hours_payroll_calendars'),
     path('staff_hours/super_funds/', get_super_funds, name='staff_hours_super_funds'),
     path('staff_hours/public_holidays/', get_public_holidays, name='staff_hours_public_holidays'),
+    
+    # Holiday Calendar Management
+    path('staff_hours/holiday_calendars/', get_holiday_calendars, name='holiday_calendars'),
+    path('staff_hours/holiday_calendars/create/', create_holiday_calendar, name='create_holiday_calendar'),
+    path('staff_hours/holiday_calendars/<int:calendar_pk>/update/', update_holiday_calendar, name='update_holiday_calendar'),
+    path('staff_hours/holiday_calendars/<int:calendar_pk>/delete/', delete_holiday_calendar, name='delete_holiday_calendar'),
+    path('staff_hours/holiday_calendars/<int:calendar_pk>/holidays/', get_calendar_holidays, name='get_calendar_holidays'),
+    path('staff_hours/holiday_calendars/<int:calendar_pk>/holidays/create/', create_holiday, name='create_holiday'),
+    path('staff_hours/holidays/<int:holiday_pk>/update/', update_holiday, name='update_holiday'),
+    path('staff_hours/holidays/<int:holiday_pk>/delete/', delete_holiday, name='delete_holiday'),
+    
+    # Timesheets and Leave Applications (Xero API)
+    path('staff_hours/timesheets/', get_timesheets, name='staff_hours_timesheets'),
+    path('staff_hours/timesheets/save/', save_timesheet, name='staff_hours_save_timesheet'),
+    path('staff_hours/leave_applications/', get_leave_applications, name='staff_hours_leave_applications'),
+    path('staff_hours/employee_calendar/', get_employee_calendar_data, name='staff_hours_employee_calendar'),
+    path('staff_hours/sync_pay_rates/', sync_employee_pay_rates, name='sync_employee_pay_rates'),
+    
+    # Staff Hours Allocations
+    path('staff_hours/projects/', get_projects_for_allocation, name='staff_hours_projects'),
+    path('staff_hours/costings/', get_costings_for_project, name='staff_hours_costings'),
+    path('staff_hours/allocations/', get_allocations, name='staff_hours_allocations'),
+    path('staff_hours/allocations/save/', save_allocation, name='staff_hours_save_allocation'),
+    path('staff_hours/allocations/<int:allocation_pk>/delete/', delete_allocation, name='staff_hours_delete_allocation'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

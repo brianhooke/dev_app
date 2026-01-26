@@ -5,7 +5,8 @@ from .models import (
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
-    Document_folders, Document_files
+    Document_folders, Document_files,
+    Employee, EmployeePayRate, StaffHours, StaffHoursAllocations
 )
 
 # Helper function to set nullable fields as not required
@@ -295,3 +296,31 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
 
 admin.site.register(ReceivedEmail, ReceivedEmailAdmin)
 admin.site.register(EmailAttachment, EmailAttachmentAdmin)
+
+# Staff Hours models
+class EmployeeAdmin(admin.ModelAdmin):
+    list_display = ('employee_pk', 'xero_instance', 'xero_employee_id', 'name', 'status', 'start_date', 'created_at')
+    list_filter = ('xero_instance', 'status')
+    search_fields = ('name', 'xero_employee_id')
+
+class EmployeePayRateAdmin(admin.ModelAdmin):
+    list_display = ('payrate_pk', 'employee', 'effective_date', 'earnings_rate_name', 'rate_per_unit', 'annual_salary', 'units_per_week', 'pay_basis', 'is_ordinary_rate', 'created_at')
+    list_filter = ('employee__xero_instance', 'pay_basis', 'is_ordinary_rate', 'effective_date')
+    search_fields = ('employee__name', 'earnings_rate_name')
+    date_hierarchy = 'effective_date'
+
+class StaffHoursAdmin(admin.ModelAdmin):
+    list_display = ('staff_hours_pk', 'employee', 'date', 'hours', 'payrate', 'created_at')
+    list_filter = ('employee__xero_instance', 'date')
+    search_fields = ('employee__name',)
+    date_hierarchy = 'date'
+
+class StaffHoursAllocationsAdmin(admin.ModelAdmin):
+    list_display = ('allocation_pk', 'staff_hours', 'project', 'costing', 'hours', 'created_at')
+    list_filter = ('project', 'staff_hours__employee__xero_instance')
+    search_fields = ('staff_hours__employee__name', 'project__project', 'costing__item')
+
+admin.site.register(Employee, EmployeeAdmin)
+admin.site.register(EmployeePayRate, EmployeePayRateAdmin)
+admin.site.register(StaffHours, StaffHoursAdmin)
+admin.site.register(StaffHoursAllocations, StaffHoursAllocationsAdmin)

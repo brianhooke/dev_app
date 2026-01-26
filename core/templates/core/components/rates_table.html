@@ -186,6 +186,15 @@
         background-color: #d9c5ed;
     }
     
+    .rates-flex-category.labour-category {
+        background-color: #fce4ec;
+        color: #c2185b;
+    }
+    
+    .rates-flex-category.labour-category:hover {
+        background-color: #f8bbd9;
+    }
+    
     .rates-flex-category .col-name {
         width: 170px;
         min-width: 170px;
@@ -266,6 +275,10 @@
     
     .rates-flex-item.internal-item {
         color: #6f2da8;
+    }
+    
+    .rates-flex-item.labour-item {
+        color: #c2185b;
     }
     
     .rates-flex-item .col-name {
@@ -1017,6 +1030,7 @@
             
             // Render category header row
             var isInternal = category.category === 'Internal';
+            var isLabour = category.category === 'Labour';
             var categoryRow = $('<div></div>')
                 .addClass('rates-flex-category')
                 .attr('data-category-pk', category.categories_pk)
@@ -1024,6 +1038,8 @@
             
             if (isInternal) {
                 categoryRow.addClass('internal-category');
+            } else if (isLabour) {
+                categoryRow.addClass('labour-category');
             } else if (allowDrag) {
                 categoryRow.addClass('draggable').attr('draggable', 'true');
             }
@@ -1037,8 +1053,8 @@
                 .text('▶');
             nameCell.append(collapseIndicator);
             
-            // Drag handle (only for non-internal and if drag allowed)
-            if (!isInternal && allowDrag) {
+            // Drag handle (only for non-internal/non-labour and if drag allowed)
+            if (!isInternal && !isLabour && allowDrag) {
                 nameCell.append('<span class="rates-drag-handle">⋮⋮</span>');
             }
             
@@ -1092,6 +1108,10 @@
                 
                 if (isInternal) {
                     itemRow.addClass('internal-item');
+                }
+                
+                if (isLabour) {
+                    itemRow.addClass('labour-item');
                 }
                 
                 // Item name cell - click to edit

@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +252,60 @@ def get_project_committed_amounts(request, project_pk):
                 }
             else:
                 committed_dict[item.costing_pk] = float(item.contract_budget or 0)
+        
+        # For Labour category items (division=-5), calculate committed from StaffHoursAllocations
+        # Sum of (hours * applicable pay rate) for each costing item
+        labour_items = Costing.objects.filter(
+            project=project,
+            category__division=-5,  # Labour category
+            tender_or_execution=tender_or_execution
+        )
+        
+        for item in labour_items:
+            # Get all staff hour allocations for this costing item
+            allocations = StaffHoursAllocations.objects.filter(
+                project=project,
+                costing=item
+            ).select_related('staff_hours__employee')
+            
+            total_amount = Decimal('0')
+            for alloc in allocations:
+                hours = alloc.hours or Decimal('0')
+                if hours > 0:
+                    # Get the pay rate for this employee as of the allocation date
+                    employee = alloc.staff_hours.employee
+                    target_date = alloc.staff_hours.date
+                    
+                    # Get applicable pay rate (most recent before or on target_date)
+                    pay_rate = EmployeePayRate.objects.filter(
+                        employee=employee,
+                        effective_date__lte=target_date,
+                        is_ordinary_rate=True
+                    ).order_by('-effective_date').first()
+                    
+                    if pay_rate:
+                        # Calculate hourly rate
+                        hourly_rate = None
+                        if pay_rate.rate_per_unit:
+                            hourly_rate = float(pay_rate.rate_per_unit)
+                        elif pay_rate.annual_salary and pay_rate.units_per_week:
+                            weekly_hours = float(pay_rate.units_per_week)
+                            if weekly_hours > 0:
+                                hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
+                        
+                        if hourly_rate:
+                            total_amount += Decimal(str(float(hours) * hourly_rate))
+            
+            # Set committed amount for Labour items (no qty/rate, just amount)
+            if is_construction:
+                committed_dict[item.costing_pk] = {
+                    'qty': None,
+                    'rate': None,
+                    'amount': float(total_amount),
+                    'is_labour': True
+                }
+            else:
+                committed_dict[item.costing_pk] = float(total_amount)
         
         return JsonResponse({
             'status': 'success',

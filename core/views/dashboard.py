@@ -91,7 +91,7 @@ def dashboard_view(request):
         {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'icon': 'fa-file-invoice-dollar'},
         {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects', 'icon': 'fa-project-diagram'},
         {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True, 'icon': 'fa-boxes'},
-        {'label': 'Staff Hours', 'url': '/core/staff_hours/', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'icon': 'fa-user-clock'},
+        {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'icon': 'fa-user-clock'},
         {'label': 'Rates', 'url': '#', 'id': 'ratesLink', 'page_id': 'rates', 'icon': 'fa-percentage'},
         {'divider': True},
         {'label': 'Settings', 'url': '#', 'id': 'settingsLink', 'page_id': 'settings', 'icon': 'fa-cog'},
@@ -100,12 +100,13 @@ def dashboard_view(request):
     # Get XeroInstances for dropdown
     xero_instances = XeroInstances.objects.all()
     
-    # Serialize xero_instances for JavaScript
+    # Serialize xero_instances for JavaScript (include staff_hours_tracking for Staff Hours section)
     import json
     xero_instances_json = json.dumps([
         {
             'xero_instance_pk': instance.xero_instance_pk,
-            'xero_name': instance.xero_name
+            'xero_name': instance.xero_name,
+            'staff_hours_tracking': instance.staff_hours_tracking
         }
         for instance in xero_instances
     ])

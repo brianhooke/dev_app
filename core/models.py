@@ -30,6 +30,7 @@ class XeroInstances(models.Model):
     oauth_refresh_token_encrypted = models.BinaryField(null=True, blank=True)
     oauth_token_expires_at = models.DateTimeField(null=True, blank=True)
     oauth_tenant_id = models.CharField(max_length=255, null=True, blank=True)
+    staff_hours_tracking = models.IntegerField(default=0)  # 0=no, 1=yes
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -285,6 +286,205 @@ class ProjectTypes(models.Model):
         return self.project_type
 
 
+# SERVICE: staff_hours
+class PublicHolidayCalendar(models.Model):
+    """
+    Holiday calendar/group (e.g., "NSW Public Holidays", "VIC Public Holidays").
+    Similar to Xero's holiday groups but stored locally since Xero doesn't expose via API.
+    """
+    STATE_CHOICES = [
+        ('NSW', 'New South Wales'),
+        ('VIC', 'Victoria'),
+        ('QLD', 'Queensland'),
+        ('SA', 'South Australia'),
+        ('WA', 'Western Australia'),
+        ('TAS', 'Tasmania'),
+        ('NT', 'Northern Territory'),
+        ('ACT', 'Australian Capital Territory'),
+        ('NAT', 'National'),
+    ]
+    
+    calendar_pk = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)  # e.g., "NSW Public Holidays"
+    state = models.CharField(max_length=3, choices=STATE_CHOICES, default='NAT')
+    is_default = models.IntegerField(default=0)  # 1 = default calendar for new employees
+    archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'public_holiday_calendars'
+        verbose_name = 'Public Holiday Calendar'
+        verbose_name_plural = 'Public Holiday Calendars'
+        ordering = ['state', 'name']
+    
+    def __str__(self):
+        return self.name
+
+
+# SERVICE: staff_hours
+class PublicHoliday(models.Model):
+    """
+    Individual public holiday within a calendar.
+    """
+    holiday_pk = models.AutoField(primary_key=True)
+    calendar = models.ForeignKey(
+        PublicHolidayCalendar, 
+        on_delete=models.CASCADE, 
+        related_name='holidays'
+    )
+    name = models.CharField(max_length=100)  # e.g., "Australia Day"
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'public_holidays'
+        verbose_name = 'Public Holiday'
+        verbose_name_plural = 'Public Holidays'
+        ordering = ['date']
+        unique_together = ['calendar', 'date']  # Prevent duplicate dates per calendar
+    
+    def __str__(self):
+        return f"{self.name} ({self.date})"
+
+
+# SERVICE: staff_hours
+class Employee(models.Model):
+    """
+    Employee synced from Xero Payroll API.
+    Updated each time staff hours page data is refreshed.
+    """
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active'),
+        ('TERMINATED', 'Terminated'),
+    ]
+    
+    employee_pk = models.AutoField(primary_key=True)
+    xero_instance = models.ForeignKey(
+        XeroInstances, on_delete=models.CASCADE, related_name='employees'
+    )
+    xero_employee_id = models.CharField(max_length=100)  # UUID from Xero
+    name = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    start_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'employees'
+        verbose_name = 'Employee'
+        verbose_name_plural = 'Employees'
+        unique_together = ['xero_instance', 'xero_employee_id']
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
+# SERVICE: staff_hours
+class EmployeePayRate(models.Model):
+    """
+    Historical pay rate records per employee.
+    New record created when rates change, max one per day if unchanged.
+    Used to recalculate historical timesheet/payslip values.
+    """
+    PAY_BASIS_CHOICES = [
+        ('HOURLY', 'Hourly'),
+        ('SALARY', 'Salary'),
+    ]
+    
+    payrate_pk = models.AutoField(primary_key=True)
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name='pay_rates'
+    )
+    effective_date = models.DateField()  # Date this rate became effective
+    
+    # From PayTemplate.EarningsLines
+    earnings_rate_id = models.CharField(max_length=100, null=True, blank=True)  # Xero EarningsRateID
+    earnings_rate_name = models.CharField(max_length=255, null=True, blank=True)  # e.g., "Ordinary Hours"
+    rate_per_unit = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)  # Hourly rate
+    units_per_week = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # Standard hours/week
+    annual_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)  # For salaried
+    pay_basis = models.CharField(max_length=10, choices=PAY_BASIS_CHOICES, default='HOURLY')
+    
+    # From OrdinaryEarningsRateID - marks primary rate
+    is_ordinary_rate = models.BooleanField(default=False)
+    
+    # Hash of rate data for change detection
+    rate_hash = models.CharField(max_length=64, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    
+    class Meta:
+        db_table = 'employee_pay_rates'
+        verbose_name = 'Employee Pay Rate'
+        verbose_name_plural = 'Employee Pay Rates'
+        ordering = ['employee', '-effective_date']
+        indexes = [
+            models.Index(fields=['employee', 'effective_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee.name} - ${self.rate_per_unit}/hr from {self.effective_date}"
+
+
+# SERVICE: staff_hours
+class StaffHours(models.Model):
+    """
+    Staff hours logged per employee per day.
+    """
+    staff_hours_pk = models.AutoField(primary_key=True)
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name='hours'
+    )
+    date = models.DateField()
+    hours = models.DecimalField(max_digits=5, decimal_places=2)  # e.g., 7.50
+    payrate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'staff_hours'
+        verbose_name = 'Staff Hours'
+        verbose_name_plural = 'Staff Hours'
+        unique_together = ['employee', 'date']
+        ordering = ['-date', 'employee']
+    
+    def __str__(self):
+        return f"{self.employee.name} - {self.date}: {self.hours}h"
+
+
+# SERVICE: staff_hours
+class StaffHoursAllocations(models.Model):
+    """
+    Allocation of staff hours to specific projects and costing items.
+    Links hours worked to project cost tracking.
+    """
+    allocation_pk = models.AutoField(primary_key=True)
+    staff_hours = models.ForeignKey(
+        StaffHours, on_delete=models.CASCADE, related_name='allocations'
+    )
+    project = models.ForeignKey(
+        'Projects', on_delete=models.CASCADE, related_name='staff_allocations'
+    )
+    costing = models.ForeignKey(
+        'Costing', on_delete=models.CASCADE, related_name='staff_allocations'
+    )
+    hours = models.DecimalField(max_digits=5, decimal_places=2)  # Hours allocated to this project/costing
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'staff_hours_allocations'
+        verbose_name = 'Staff Hours Allocation'
+        verbose_name_plural = 'Staff Hours Allocations'
+        ordering = ['staff_hours', 'project']
+    
+    def __str__(self):
+        return f"{self.staff_hours.employee.name} - {self.hours}h to {self.project.project}"
+
+
 class Projects(models.Model):
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
@@ -403,7 +603,7 @@ class Categories(models.Model):
         null=True,
         blank=True
     )
-    division = models.IntegerField(default=0)  # Legacy field required by database
+    division = models.IntegerField(default=0)  # Special values: -10='Internal' category, -5='Labour' category
     category = models.CharField(max_length=100)
     invoice_category = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
