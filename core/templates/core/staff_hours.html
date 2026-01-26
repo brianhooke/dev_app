@@ -1054,22 +1054,31 @@ Backend Endpoints:
     
     // Initialize Staff Hours section - called when section is shown
     window.initStaffHoursSection = function() {
+        console.log('=== STAFF HOURS INIT START ===');
+        
         // Apply manila theme to parent container
         const dynamicContentArea = document.getElementById('dynamicContentArea');
         if (dynamicContentArea) {
             dynamicContentArea.style.background = 'linear-gradient(135deg, #f5efe5 0%, #faf7f2 100%)';
         }
+        console.log('[INIT] Manila theme applied');
         
         // Populate xero instances dropdown from dashboard's global data
         // Only show instances where staff_hours_tracking=1
+        console.log('[INIT] window.xeroInstancesData:', window.xeroInstancesData);
+        console.log('[INIT] xeroInstanceSelect element:', xeroInstanceSelect);
+        
         if (window.xeroInstancesData && xeroInstanceSelect) {
             // Clear existing options
             xeroInstanceSelect.innerHTML = '';
+            console.log('[INIT] Cleared dropdown options');
             
             // Filter to only instances with staff_hours_tracking=1
             const staffHoursInstances = window.xeroInstancesData.filter(
                 instance => instance.staff_hours_tracking === 1
             );
+            console.log('[INIT] Staff hours instances (staff_hours_tracking=1):', staffHoursInstances);
+            console.log('[INIT] All instances staff_hours_tracking values:', window.xeroInstancesData.map(i => ({name: i.xero_name, tracking: i.staff_hours_tracking})));
             
             // Add filtered instances to dropdown
             staffHoursInstances.forEach(function(instance) {
@@ -1078,16 +1087,25 @@ Backend Endpoints:
                 option.textContent = instance.xero_name;
                 xeroInstanceSelect.appendChild(option);
             });
+            console.log('[INIT] Added', staffHoursInstances.length, 'instances to dropdown');
             
             // Setup event listeners first
+            console.log('[INIT] Setting up event listeners...');
             setupEventListeners();
+            console.log('[INIT] Event listeners setup complete');
             
             // Auto-select first instance and load its data
             if (staffHoursInstances.length > 0) {
+                console.log('[INIT] Auto-selecting first instance:', staffHoursInstances[0].xero_name);
                 xeroInstanceSelect.value = staffHoursInstances[0].xero_instance_pk;
                 xeroInstanceSelect.dispatchEvent(new Event('change'));
+            } else {
+                console.warn('[INIT] ⚠️ NO INSTANCES WITH staff_hours_tracking=1 FOUND');
             }
+        } else {
+            console.error('[INIT] ❌ MISSING: window.xeroInstancesData=', !!window.xeroInstancesData, 'xeroInstanceSelect=', !!xeroInstanceSelect);
         }
+        console.log('=== STAFF HOURS INIT END ===');
     };
     
     function setupEventListeners() {
@@ -1194,31 +1212,39 @@ Backend Endpoints:
     }
     
     async function loadAllData() {
+        console.log('[LOAD] loadAllData() called');
         showLoading();
         
         try {
+            console.log('[LOAD] Starting parallel data fetch...');
             await Promise.all([
                 loadEmployees(),
                 loadPayItems(),
                 loadPublicHolidays()
             ]);
+            console.log('[LOAD] All data fetched successfully');
             
             hideLoading();
             showMainContent();
+            console.log('[LOAD] Main content shown');
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('[LOAD] ❌ Error loading data:', error);
             hideLoading();
             alert('Error loading data from Xero. Please try again.');
         }
     }
     
     async function loadEmployees() {
+        console.log('[EMPLOYEES] loadEmployees() called');
         const status = statusFilter.value;
         const url = `/core/staff_hours/employees/?xero_instance_id=${currentXeroInstanceId}&status=${status}`;
+        console.log('[EMPLOYEES] Fetching:', url);
         
         try {
             const response = await fetch(url);
+            console.log('[EMPLOYEES] Response status:', response.status);
             const data = await response.json();
+            console.log('[EMPLOYEES] Response data status:', data.status);
             
             if (data.status === 'success') {
                 employeesData = data.employees;
@@ -1231,13 +1257,19 @@ Backend Endpoints:
                 // Also extract leave data
                 extractLeaveData();
                 
+                // Populate calendar employee dropdown
+                console.log('[EMPLOYEES] Populating calendar dropdown...');
+                populateCalendarEmployeeDropdown();
+                console.log('[EMPLOYEES] Calendar dropdown populated');
+                
                 // Sync pay rates to local database
                 syncPayRates();
             } else {
-                console.error('Error loading employees:', data.message);
+                console.error('[EMPLOYEES] ❌ Error:', data.message);
             }
         } catch (error) {
-            console.error('Error loading employees:', error);
+            console.error('[EMPLOYEES] ❌ Fetch error:', error);
+            throw error;
         }
     }
     
@@ -1315,11 +1347,15 @@ Backend Endpoints:
     }
     
     async function loadPayItems() {
+        console.log('[PAYITEMS] loadPayItems() called');
         const url = `/core/staff_hours/pay_items/?xero_instance_id=${currentXeroInstanceId}`;
+        console.log('[PAYITEMS] Fetching:', url);
         
         try {
             const response = await fetch(url);
+            console.log('[PAYITEMS] Response status:', response.status);
             const data = await response.json();
+            console.log('[PAYITEMS] Response data status:', data.status);
             
             if (data.status === 'success') {
                 payItemsData = {
@@ -1327,12 +1363,14 @@ Backend Endpoints:
                     deduction_types: data.deduction_types || [],
                     leave_types: data.leave_types || []
                 };
+                console.log('[PAYITEMS] Loaded', payItemsData.earnings_rates.length, 'earnings rates');
                 renderPayItemsTable();
             } else {
-                console.error('Error loading pay items:', data.message);
+                console.error('[PAYITEMS] ❌ Error:', data.message);
             }
         } catch (error) {
-            console.error('Error loading pay items:', error);
+            console.error('[PAYITEMS] ❌ Fetch error:', error);
+            throw error;
         }
     }
     
@@ -1436,6 +1474,7 @@ Backend Endpoints:
     let selectedCalendarPk = null;
     
     async function loadPublicHolidays() {
+        console.log('[HOLIDAYS] loadPublicHolidays() called');
         // Load holiday calendars instead of flat holiday list
         loadHolidayCalendars();
     }
