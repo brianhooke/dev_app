@@ -26,6 +26,9 @@ python manage.py dumpdata core --natural-foreign --natural-primary -o "$BACKUP_F
 echo "Running migrations..."
 python manage.py migrate --noinput || echo "Migrations failed, continuing..."
 
+echo "Seeding public holidays..."
+python manage.py seed_public_holidays || echo "Public holidays seeding failed, continuing..."
+
 echo "Creating admin superuser..."
 python manage.py create_admin || echo "Admin creation failed, continuing..."
 
