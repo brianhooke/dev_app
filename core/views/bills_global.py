@@ -621,6 +621,12 @@ def send_bill_to_xero(request):
         # Attach PDF to the Xero invoice if available
         attachment_status = None
         attachment_debug = {}
+        logger.info(f"")
+        logger.info(f"{'='*60}")
+        logger.info(f"=== ATTACHMENT PROCESSING for bill {bill_pk} ===")
+        logger.info(f"{'='*60}")
+        logger.info(f"Xero Invoice ID: {xero_invoice_id}")
+        
         if xero_invoice_id:
             pdf_url = None
             file_name = None
@@ -628,13 +634,19 @@ def send_bill_to_xero(request):
             # Log what we have for debugging
             attachment_debug['invoice_pdf'] = str(invoice.pdf) if invoice.pdf else None
             attachment_debug['invoice_pdf_name'] = invoice.pdf.name if invoice.pdf else None
+            attachment_debug['invoice_pdf_bool'] = bool(invoice.pdf)
             attachment_debug['email_attachment_id'] = invoice.email_attachment_id
             attachment_debug['email_attachment'] = str(invoice.email_attachment) if invoice.email_attachment else None
-            logger.info(f"=== ATTACHMENT DEBUG for bill {bill_pk} ===")
-            logger.info(f"invoice.pdf: {invoice.pdf}")
-            logger.info(f"invoice.pdf.name: {invoice.pdf.name if invoice.pdf else None}")
-            logger.info(f"invoice.email_attachment_id: {invoice.email_attachment_id}")
-            logger.info(f"invoice.email_attachment: {invoice.email_attachment}")
+            attachment_debug['email_attachment_bool'] = bool(invoice.email_attachment)
+            
+            logger.info(f"[PDF CHECK] invoice.pdf exists: {bool(invoice.pdf)}")
+            logger.info(f"[PDF CHECK] invoice.pdf value: {invoice.pdf}")
+            logger.info(f"[PDF CHECK] invoice.pdf.name: {invoice.pdf.name if invoice.pdf else 'N/A'}")
+            logger.info(f"[PDF CHECK] invoice.email_attachment_id: {invoice.email_attachment_id}")
+            logger.info(f"[PDF CHECK] invoice.email_attachment exists: {bool(invoice.email_attachment)}")
+            if invoice.email_attachment:
+                logger.info(f"[PDF CHECK] email_attachment.filename: {getattr(invoice.email_attachment, 'filename', 'N/A')}")
+                logger.info(f"[PDF CHECK] email_attachment type: {type(invoice.email_attachment)}")
             
             # Check for PDF - first try invoice.pdf (FileField), then email_attachment
             # Note: FileField can be truthy even when empty, so check .name
@@ -662,69 +674,140 @@ def send_bill_to_xero(request):
                     logger.error(f"Error getting email_attachment URL: {str(e)}")
                     attachment_debug['email_attachment_error'] = str(e)
             
-            if pdf_url and file_name:
+            logger.info(f"[PDF RESULT] pdf_url: {pdf_url}")
+            logger.info(f"[PDF RESULT] file_name: {file_name}")
+            
+            # Read file directly from storage instead of HTTP request
+            # (pdf_url is relative, requests.get won't work)
+            file_data = None
+            
+            if invoice.pdf and invoice.pdf.name:
                 try:
-                    # Download the PDF
-                    logger.info(f"Downloading PDF from: {pdf_url[:100]}...")
-                    pdf_response = requests.get(pdf_url, timeout=30)
-                    attachment_debug['download_status'] = pdf_response.status_code
-                    logger.info(f"Download response status: {pdf_response.status_code}")
-                    logger.info(f"Download response headers: {dict(pdf_response.headers)}")
-                    
-                    if pdf_response.status_code == 200:
-                        file_data = pdf_response.content
-                        attachment_debug['file_size'] = len(file_data)
-                        attachment_debug['content_type_received'] = pdf_response.headers.get('Content-Type', 'unknown')
-                        logger.info(f"Downloaded {len(file_data)} bytes, Content-Type: {pdf_response.headers.get('Content-Type')}")
-                        
-                        # Check if it's actually a PDF
-                        is_pdf = file_data[:4] == b'%PDF'
-                        attachment_debug['is_valid_pdf'] = is_pdf
-                        logger.info(f"File starts with: {file_data[:20]}, is_pdf: {is_pdf}")
-                        
-                        # Upload attachment to Xero
-                        # URL-encode the filename for the API endpoint
-                        encoded_filename = quote(file_name, safe='')
-                        attachment_debug['encoded_filename'] = encoded_filename
-                        xero_attach_url = f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}'
-                        attachment_debug['xero_attach_url'] = xero_attach_url
-                        logger.info(f"Uploading to Xero: {xero_attach_url}")
-                        
-                        attach_response = requests.post(
-                            xero_attach_url,
-                            headers={
-                                'Authorization': f'Bearer {access_token}',
-                                'Content-Type': 'application/pdf',
-                                'Xero-tenant-id': tenant_id
-                            },
-                            data=file_data,
-                            timeout=60
-                        )
-                        
-                        attachment_debug['xero_response_status'] = attach_response.status_code
-                        attachment_debug['xero_response_text'] = attach_response.text[:500] if attach_response.text else None
-                        logger.info(f"Xero attachment response: {attach_response.status_code}")
-                        logger.info(f"Xero attachment response body: {attach_response.text[:500] if attach_response.text else 'empty'}")
-                        
-                        if attach_response.status_code == 200:
-                            logger.info(f"Successfully attached PDF to Xero invoice {xero_invoice_id}")
-                            attachment_status = 'success'
-                        else:
-                            logger.error(f"Failed to attach PDF to Xero: {attach_response.status_code} - {attach_response.text}")
-                            attachment_status = 'failed'
-                            attachment_debug['error'] = f"Xero returned {attach_response.status_code}"
-                    else:
-                        logger.error(f"Failed to download PDF: {pdf_response.status_code} - {pdf_response.text[:200] if pdf_response.text else 'no body'}")
-                        attachment_status = 'download_failed'
-                        attachment_debug['error'] = f"Download failed with {pdf_response.status_code}"
+                    logger.info(f"")
+                    logger.info(f"--- READING PDF FROM invoice.pdf FileField ---")
+                    invoice.pdf.open('rb')
+                    file_data = invoice.pdf.read()
+                    invoice.pdf.close()
+                    file_name = invoice.pdf.name.split('/')[-1]
+                    attachment_debug['read_method'] = 'invoice.pdf.read()'
+                    attachment_debug['file_size'] = len(file_data)
+                    logger.info(f"Read {len(file_data)} bytes from invoice.pdf")
                 except Exception as e:
-                    logger.error(f"Error attaching PDF to Xero: {str(e)}", exc_info=True)
+                    logger.error(f"Error reading invoice.pdf: {str(e)}")
+                    attachment_debug['read_error'] = str(e)
+            
+            elif invoice.email_attachment:
+                try:
+                    logger.info(f"")
+                    logger.info(f"--- READING PDF FROM email_attachment (S3/local storage) ---")
+                    attachment = invoice.email_attachment
+                    file_name = attachment.filename or f"bill_{bill_pk}.pdf"
+                    
+                    # Log attachment details
+                    logger.info(f"EmailAttachment ID: {attachment.pk}")
+                    logger.info(f"Filename: {attachment.filename}")
+                    logger.info(f"Content-Type: {attachment.content_type}")
+                    logger.info(f"Size (stored): {attachment.size_bytes} bytes")
+                    logger.info(f"S3 Bucket: {attachment.s3_bucket}")
+                    logger.info(f"S3 Key: {attachment.s3_key}")
+                    
+                    attachment_debug['email_attachment_pk'] = attachment.pk
+                    attachment_debug['s3_bucket'] = attachment.s3_bucket
+                    attachment_debug['s3_key'] = attachment.s3_key
+                    
+                    # Read file based on storage type
+                    from django.conf import settings
+                    import os
+                    
+                    if settings.DEBUG and attachment.s3_bucket == 'local':
+                        # Local storage - read from MEDIA_ROOT
+                        local_path = os.path.join(settings.MEDIA_ROOT, attachment.s3_key)
+                        logger.info(f"Reading from local path: {local_path}")
+                        attachment_debug['local_path'] = local_path
+                        attachment_debug['file_exists'] = os.path.exists(local_path)
+                        
+                        if os.path.exists(local_path):
+                            with open(local_path, 'rb') as f:
+                                file_data = f.read()
+                            attachment_debug['read_method'] = 'local_file_read'
+                            attachment_debug['file_size'] = len(file_data)
+                            logger.info(f"Read {len(file_data)} bytes from local file")
+                        else:
+                            logger.error(f"Local file not found: {local_path}")
+                            attachment_debug['read_error'] = f"File not found: {local_path}"
+                    else:
+                        # S3 storage - download from S3
+                        import boto3
+                        logger.info(f"Downloading from S3: {attachment.s3_bucket}/{attachment.s3_key}")
+                        s3_client = boto3.client('s3')
+                        response = s3_client.get_object(
+                            Bucket=attachment.s3_bucket,
+                            Key=attachment.s3_key
+                        )
+                        file_data = response['Body'].read()
+                        attachment_debug['read_method'] = 's3_download'
+                        attachment_debug['file_size'] = len(file_data)
+                        logger.info(f"Downloaded {len(file_data)} bytes from S3")
+                        
+                except Exception as e:
+                    logger.error(f"Error reading email_attachment: {str(e)}", exc_info=True)
+                    attachment_debug['read_error'] = str(e)
+            
+            if file_data:
+                try:
+                    # Check if it's actually a PDF
+                    is_pdf = file_data[:4] == b'%PDF'
+                    attachment_debug['is_valid_pdf'] = is_pdf
+                    logger.info(f"File starts with: {file_data[:20]}, is_pdf: {is_pdf}")
+                    
+                    # Upload attachment to Xero
+                    # URL-encode the filename for the API endpoint
+                    encoded_filename = quote(file_name, safe='')
+                    attachment_debug['encoded_filename'] = encoded_filename
+                    xero_attach_url = f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}'
+                    attachment_debug['xero_attach_url'] = xero_attach_url
+                    logger.info(f"=== XERO ATTACHMENT UPLOAD ===")
+                    logger.info(f"URL: {xero_attach_url}")
+                    logger.info(f"Method: PUT")
+                    logger.info(f"Content-Type: application/octet-stream")
+                    logger.info(f"File size: {len(file_data)} bytes")
+                    logger.info(f"File starts with (hex): {file_data[:10].hex()}")
+                    logger.info(f"Tenant ID: {tenant_id}")
+                    
+                    # Use PUT method and application/octet-stream per Xero API requirements
+                    # (Xero docs say POST but PUT with octet-stream actually works)
+                    attach_response = requests.put(
+                        xero_attach_url,
+                        headers={
+                            'Authorization': f'Bearer {access_token}',
+                            'Content-Type': 'application/octet-stream',
+                            'Accept': 'application/json',
+                            'Xero-tenant-id': tenant_id
+                        },
+                        data=file_data,
+                        timeout=60
+                    )
+                    
+                    attachment_debug['xero_response_status'] = attach_response.status_code
+                    attachment_debug['xero_response_text'] = attach_response.text[:500] if attach_response.text else None
+                    logger.info(f"Xero attachment response: {attach_response.status_code}")
+                    logger.info(f"Xero attachment response body: {attach_response.text[:500] if attach_response.text else 'empty'}")
+                    
+                    if attach_response.status_code == 200:
+                        logger.info(f"Successfully attached PDF to Xero invoice {xero_invoice_id}")
+                        attachment_status = 'success'
+                    else:
+                        logger.error(f"Failed to attach PDF to Xero: {attach_response.status_code} - {attach_response.text}")
+                        attachment_status = 'failed'
+                        attachment_debug['error'] = f"Xero returned {attach_response.status_code}"
+                except Exception as e:
+                    logger.error(f"Error uploading PDF to Xero: {str(e)}", exc_info=True)
                     attachment_status = 'error'
                     attachment_debug['exception'] = str(e)
             else:
-                logger.info(f"No PDF found for bill {bill_pk} - pdf_url: {pdf_url}, file_name: {file_name}")
+                logger.info(f"No PDF file data found for bill {bill_pk}")
                 attachment_status = 'no_pdf'
-                attachment_debug['error'] = 'No PDF URL or filename found'
+                attachment_debug['error'] = 'Could not read PDF file data'
         
         # Update invoice status to "sent to Xero"
         if invoice.bill_status == 2:
