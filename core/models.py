@@ -458,20 +458,41 @@ class StaffHours(models.Model):
 # SERVICE: staff_hours
 class StaffHoursAllocations(models.Model):
     """
-    Allocation of staff hours to specific projects and costing items.
-    Links hours worked to project cost tracking.
+    Allocation of staff hours to specific projects, costing items, or special categories.
+    Links hours worked to project cost tracking or non-project categories.
     """
+    ALLOCATION_TYPE_PROJECT = 1
+    ALLOCATION_TYPE_UNCHARGEABLE = 2
+    ALLOCATION_TYPE_OTHER_CHARGEABLE = 3
+    
+    ALLOCATION_TYPE_CHOICES = [
+        (ALLOCATION_TYPE_PROJECT, 'Project'),
+        (ALLOCATION_TYPE_UNCHARGEABLE, 'Unchargeable'),
+        (ALLOCATION_TYPE_OTHER_CHARGEABLE, 'Other Chargeable'),
+    ]
+    
     allocation_pk = models.AutoField(primary_key=True)
     staff_hours = models.ForeignKey(
         StaffHours, on_delete=models.CASCADE, related_name='allocations'
     )
+    allocation_type = models.IntegerField(
+        choices=ALLOCATION_TYPE_CHOICES, 
+        default=ALLOCATION_TYPE_PROJECT,
+        help_text='1=Project, 2=Unchargeable, 3=Other Chargeable'
+    )
     project = models.ForeignKey(
-        'Projects', on_delete=models.CASCADE, related_name='staff_allocations'
+        'Projects', on_delete=models.CASCADE, related_name='staff_allocations',
+        null=True, blank=True
     )
     costing = models.ForeignKey(
-        'Costing', on_delete=models.CASCADE, related_name='staff_allocations'
+        'Costing', on_delete=models.CASCADE, related_name='staff_allocations',
+        null=True, blank=True
     )
-    hours = models.DecimalField(max_digits=5, decimal_places=2)  # Hours allocated to this project/costing
+    hours = models.DecimalField(max_digits=5, decimal_places=2)
+    note = models.CharField(
+        max_length=500, null=True, blank=True,
+        help_text='Required for Unchargeable and Other Chargeable allocations'
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -479,10 +500,21 @@ class StaffHoursAllocations(models.Model):
         db_table = 'staff_hours_allocations'
         verbose_name = 'Staff Hours Allocation'
         verbose_name_plural = 'Staff Hours Allocations'
-        ordering = ['staff_hours', 'project']
+        ordering = ['staff_hours', 'allocation_type', 'project']
     
     def __str__(self):
-        return f"{self.staff_hours.employee.name} - {self.hours}h to {self.project.project}"
+        if self.allocation_type == self.ALLOCATION_TYPE_PROJECT and self.project:
+            return f"{self.staff_hours.employee.name} - {self.hours}h to {self.project.project}"
+        return f"{self.staff_hours.employee.name} - {self.hours}h ({self.get_allocation_type_display()})"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.allocation_type == self.ALLOCATION_TYPE_PROJECT:
+            if not self.project or not self.costing:
+                raise ValidationError('Project and Costing are required for Project allocations.')
+        else:
+            if not self.note:
+                raise ValidationError('Note is required for Unchargeable and Other Chargeable allocations.')
 
 
 class Projects(models.Model):

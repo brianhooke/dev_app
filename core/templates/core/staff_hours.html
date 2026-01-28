@@ -524,7 +524,7 @@ Backend Endpoints:
                     <div class="card-body">
                         <div class="d-flex gap-3">
                             <!-- Calendar Grid (Left) -->
-                            <div class="calendar-left flex-grow-1" style="max-width: 75%;">
+                            <div class="calendar-left flex-grow-1" style="max-width: 70%;">
                                 <!-- Month Navigation - Centered above calendar -->
                                 <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
                                     <button id="calendarPrevMonth" class="btn btn-sm btn-outline-secondary">
@@ -590,7 +590,7 @@ Backend Endpoints:
                             </div>
                             
                             <!-- Day Details Panel (Right) -->
-                            <div class="calendar-right" style="width: 28%; min-width: 200px; display: flex; flex-direction: column;">
+                            <div class="calendar-right" style="width: 30%; min-width: 250px; display: flex; flex-direction: column;">
                                 <div class="day-details-header" style="background: var(--manila-light); border-radius: 2px; padding: 6px 2px; text-align: center; font-weight: 600; font-size: 0.75rem; color: var(--manila-text); border-bottom: 2px solid var(--manila-border); margin-bottom: 0; margin-top: 47px;">Day Details</div>
                                 <div id="dayDetailsPanel" class="p-2 border rounded" style="background: var(--manila-paper); border-color: var(--manila-border); font-size: 15px; flex: 1; margin-top: 0;">
                                     <div id="dayDetailsEmpty" class="text-center text-muted py-3">
@@ -603,24 +603,63 @@ Backend Endpoints:
                                             <label class="text-muted small">Status</label>
                                             <div id="selectedDayStatus">-</div>
                                         </div>
-                                        <div id="hoursInputSection" class="mb-2 d-none">
-                                            <label class="text-muted small">Earnings Rate</label>
-                                            <select id="earningsRateSelect" class="form-select form-select-sm mb-1" style="font-size: 11px;">
-                                                <option value="">Loading...</option>
-                                            </select>
-                                            <label class="text-muted small">Hours</label>
-                                            <div class="d-flex gap-1">
-                                                <input type="number" id="dayHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="8" style="width: 70px;">
-                                                <button id="saveDayHoursBtn" class="btn btn-sm btn-primary">Save</button>
+                                        
+                                        <!-- Combined Work + Leave Input Section -->
+                                        <div id="dayInputSection" class="d-none">
+                                            <!-- Work Hours Row -->
+                                            <div class="mb-2" style="background: #f8f9fa; padding: 8px; border-radius: 4px;">
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <label class="text-muted mb-0" style="width: 50px; font-size: 13px;">Work:</label>
+                                                    <select id="earningsRateSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1;">
+                                                        <option value="">Select rate...</option>
+                                                    </select>
+                                                    <input type="number" id="dayHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px;">
+                                                    <span class="text-muted" style="font-size: 13px;">hrs</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Leave Row -->
+                                            <div class="mb-2" style="background: #e8f4f8; padding: 8px; border-radius: 4px;">
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <label class="text-muted mb-0" style="width: 50px; font-size: 13px;">Leave:</label>
+                                                    <select id="leaveTypeSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1;">
+                                                        <option value="">Select leave...</option>
+                                                    </select>
+                                                    <input type="number" id="leaveHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px;">
+                                                    <span class="text-muted" style="font-size: 13px;">hrs</span>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <input type="text" id="leaveCommentInput" class="form-control form-control-sm" placeholder="Comment/reason..." style="font-size: 13px;">
+                                                </div>
+                                                <div class="text-end" style="font-size: 12px;">
+                                                    <span class="text-muted">Balance:</span>
+                                                    <span id="leaveBalanceDisplay">-</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Total & Save -->
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="small">
+                                                    <span class="text-muted">Total:</span>
+                                                    <span id="dayTotalHours" class="fw-bold">0</span>h
+                                                </div>
+                                                <button id="saveDayBtn" class="btn btn-sm btn-primary" style="font-size: 11px;">Save Day</button>
                                             </div>
                                         </div>
-                                        <div id="hoursDisplaySection" class="mb-2 d-none">
-                                            <label class="text-muted small">Earnings Rate</label>
-                                            <div id="selectedDayRate" class="mb-1">-</div>
-                                            <label class="text-muted small">Hours Worked</label>
-                                            <div id="selectedDayHours" class="fw-bold">-</div>
-                                            <label class="text-muted small">Pay Rate</label>
-                                            <div id="selectedDayPayRate" class="mb-1">-</div>
+                                        
+                                        <!-- Display Section (read-only for saved days) -->
+                                        <div id="dayDisplaySection" class="d-none">
+                                            <div id="workDisplayRow" class="mb-1 d-none">
+                                                <span class="text-muted small">Work:</span>
+                                                <span id="selectedDayRate" class="small">-</span> -
+                                                <span id="selectedDayHours" class="fw-bold">0</span>h
+                                                <span class="text-muted small">@ $<span id="selectedDayPayRate">0</span>/hr</span>
+                                            </div>
+                                            <div id="leaveDisplayRow" class="mb-1 d-none">
+                                                <span class="text-muted small">Leave:</span>
+                                                <span id="selectedLeaveType" class="small">-</span> -
+                                                <span id="selectedLeaveHours" class="fw-bold">0</span>h
+                                            </div>
                                         </div>
                                         <!-- Hours Allocation Section -->
                                         <div id="hoursAllocationSection" class="d-none" style="border-top: 1px solid var(--manila-border); padding-top: 8px; margin-top: 8px;">
@@ -629,9 +668,9 @@ Backend Endpoints:
                                                 <table id="allocationTable" class="reusable-table w-100" style="font-size: 11px; margin-bottom: 0;">
                                                     <thead>
                                                         <tr>
-                                                            <th style="padding: 4px 3px; text-align: left;">Project</th>
-                                                            <th style="padding: 4px 3px; text-align: left;">Costing</th>
-                                                            <th style="padding: 4px 3px; text-align: center; width: 50px;">Hrs</th>
+                                                            <th style="padding: 4px 3px; text-align: left; width: 85px;">Type</th>
+                                                            <th style="padding: 4px 3px; text-align: left;">Details</th>
+                                                            <th style="padding: 4px 3px; text-align: center; width: 45px;">Hrs</th>
                                                             <th style="padding: 4px 3px; width: 20px;"></th>
                                                         </tr>
                                                     </thead>
@@ -1985,12 +2024,30 @@ Backend Endpoints:
                 let tooltip = '';
                 let hoursDisplay = '';
                 
+                // Check for mixed day (both work AND leave)
+                const isMixed = isWorked && isLeave;
+                
                 if (isHoliday) {
                     dayClass += ' holiday';
                     tooltip = isHoliday;
+                } else if (isMixed) {
+                    // Mixed day: both work and leave
+                    dayClass += ' mixed-day';
+                    const leaveType = calendarLeaveTypes[isLeave.leave_type_id];
+                    const leaveName = leaveType?.name || isLeave.title || 'Leave';
+                    const leaveHrs = isLeave.hours || 0;
+                    tooltip = `${isWorked.hours}h work + ${leaveHrs}h ${leaveName}`;
+                    hoursDisplay = `<span class="hours">${isWorked.hours}h+${leaveHrs}h</span>`;
+                    workedCount++;
+                    if (leaveName.toLowerCase().includes('sick') || leaveName.toLowerCase().includes('personal')) {
+                        sickCount++;
+                    } else {
+                        annualCount++;
+                    }
                 } else if (isLeave) {
                     const leaveType = calendarLeaveTypes[isLeave.leave_type_id];
                     const leaveName = leaveType?.name || isLeave.title || 'Leave';
+                    const leaveHrs = isLeave.hours || 0;
                     
                     if (leaveName.toLowerCase().includes('sick') || leaveName.toLowerCase().includes('personal')) {
                         dayClass += ' sick-leave';
@@ -2000,6 +2057,7 @@ Backend Endpoints:
                         annualCount++;
                     }
                     tooltip = leaveName;
+                    if (leaveHrs > 0) hoursDisplay = `<span class="hours">${leaveHrs}h</span>`;
                 } else if (isWorked) {
                     dayClass += ' worked';
                     tooltip = `${isWorked.hours}h worked`;
@@ -2025,12 +2083,16 @@ Backend Endpoints:
                 const dayInfo = JSON.stringify({
                     date: dateStr,
                     hours: isWorked ? isWorked.hours : 0,
+                    workHours: isWorked ? isWorked.hours : 0,
+                    leaveHours: isLeave ? (isLeave.hours || 0) : 0,
                     isHoliday: !!isHoliday,
                     holidayName: isHoliday || '',
                     isLeave: !!isLeave,
                     leaveType: isLeave ? (calendarLeaveTypes[isLeave.leave_type_id]?.name || isLeave.title || 'Leave') : '',
+                    leaveTypeId: isLeave ? isLeave.leave_type_id : '',
                     isWeekend: isWeekend,
                     isWorked: !!isWorked,
+                    isMixed: !!(isWorked && isLeave),
                     earningsRateId: isWorked ? isWorked.earnings_rate_id : '',
                     earningsRateName: earningsRateName,
                     ratePerUnit: ratePerUnit,
@@ -2060,16 +2122,192 @@ Backend Endpoints:
     // Day Details Side Panel Functions
     let selectedDayData = null;
     let earningsRatesLoaded = false;
+    let leaveTypesLoaded = false;
     const dayDetailsEmpty = document.getElementById('dayDetailsEmpty');
     const dayDetailsContent = document.getElementById('dayDetailsContent');
     const selectedDayTitle = document.getElementById('selectedDayTitle');
     const selectedDayStatus = document.getElementById('selectedDayStatus');
-    const hoursInputSection = document.getElementById('hoursInputSection');
-    const hoursDisplaySection = document.getElementById('hoursDisplaySection');
+    const dayInputSection = document.getElementById('dayInputSection');
+    const dayDisplaySection = document.getElementById('dayDisplaySection');
     const dayHoursInput = document.getElementById('dayHoursInput');
     const selectedDayHours = document.getElementById('selectedDayHours');
-    const saveDayHoursBtn = document.getElementById('saveDayHoursBtn');
     const earningsRateSelect = document.getElementById('earningsRateSelect');
+    const leaveTypeSelect = document.getElementById('leaveTypeSelect');
+    const leaveHoursInput = document.getElementById('leaveHoursInput');
+    const leaveCommentInput = document.getElementById('leaveCommentInput');
+    const leaveBalanceDisplay = document.getElementById('leaveBalanceDisplay');
+    const dayTotalHours = document.getElementById('dayTotalHours');
+    const saveDayBtn = document.getElementById('saveDayBtn');
+    const selectedLeaveType = document.getElementById('selectedLeaveType');
+    const selectedLeaveHours = document.getElementById('selectedLeaveHours');
+    const selectedDayRate = document.getElementById('selectedDayRate');
+    const selectedDayPayRate = document.getElementById('selectedDayPayRate');
+    const workDisplayRow = document.getElementById('workDisplayRow');
+    const leaveDisplayRow = document.getElementById('leaveDisplayRow');
+    
+    // Update total hours display when inputs change
+    function updateDayTotalHours() {
+        const workHours = parseFloat(dayHoursInput?.value) || 0;
+        const leaveHours = parseFloat(leaveHoursInput?.value) || 0;
+        const total = workHours + leaveHours;
+        if (dayTotalHours) dayTotalHours.textContent = total;
+    }
+    
+    if (dayHoursInput) dayHoursInput.addEventListener('input', updateDayTotalHours);
+    if (leaveHoursInput) leaveHoursInput.addEventListener('input', updateDayTotalHours);
+    
+    // Populate leave type dropdown
+    function populateLeaveTypes() {
+        if (leaveTypesLoaded || !leaveTypeSelect) return;
+        
+        if (payItemsData.leave_types && payItemsData.leave_types.length > 0) {
+            leaveTypeSelect.innerHTML = '<option value="">Select leave...</option>';
+            
+            payItemsData.leave_types.forEach(lt => {
+                if (lt.CurrentRecord !== false) {
+                    const option = document.createElement('option');
+                    option.value = lt.LeaveTypeID;
+                    option.textContent = lt.Name;
+                    option.dataset.typeOfUnits = lt.TypeOfUnits || 'Hours';
+                    leaveTypeSelect.appendChild(option);
+                }
+            });
+            leaveTypesLoaded = true;
+        } else {
+            leaveTypeSelect.innerHTML = '<option value="">No leave types</option>';
+        }
+    }
+    
+    // Update leave balance display based on selected leave type
+    function updateLeaveBalanceDisplay() {
+        const currentEmployeeId = calendarEmployeeSelect?.value;
+        if (!leaveBalanceDisplay || !currentEmployeeId) {
+            if (leaveBalanceDisplay) leaveBalanceDisplay.textContent = '-';
+            return;
+        }
+        
+        const selectedLeaveTypeId = leaveTypeSelect?.value;
+        if (!selectedLeaveTypeId) {
+            leaveBalanceDisplay.textContent = '-';
+            return;
+        }
+        
+        const employee = employeesData.find(e => e.employee_id === currentEmployeeId);
+        if (employee && employee.leave_balances) {
+            const balance = employee.leave_balances.find(lb => lb.LeaveTypeID === selectedLeaveTypeId);
+            if (balance) {
+                leaveBalanceDisplay.textContent = `${balance.NumberOfUnits || 0}h`;
+                return;
+            }
+        }
+        leaveBalanceDisplay.textContent = '-';
+    }
+    
+    if (leaveTypeSelect) {
+        leaveTypeSelect.addEventListener('change', updateLeaveBalanceDisplay);
+    }
+    
+    // Save Day Button Handler - saves both work hours and leave
+    if (saveDayBtn) {
+        saveDayBtn.addEventListener('click', async function() {
+            const currentEmployeeId = calendarEmployeeSelect?.value;
+            if (!selectedDayData || !currentEmployeeId || !currentXeroInstanceId) {
+                alert('Please select an employee and day first');
+                return;
+            }
+            
+            const workHours = parseFloat(dayHoursInput?.value) || 0;
+            const leaveHours = parseFloat(leaveHoursInput?.value) || 0;
+            const earningsRateId = earningsRateSelect?.value;
+            const leaveTypeId = leaveTypeSelect?.value;
+            
+            // Validation
+            if (workHours > 0 && !earningsRateId) {
+                alert('Please select an earnings rate for work hours');
+                return;
+            }
+            if (leaveHours > 0 && !leaveTypeId) {
+                alert('Please select a leave type for leave hours');
+                return;
+            }
+            if (workHours <= 0 && leaveHours <= 0) {
+                alert('Please enter work hours or leave hours');
+                return;
+            }
+            
+            saveDayBtn.disabled = true;
+            saveDayBtn.textContent = 'Saving...';
+            
+            try {
+                const promises = [];
+                
+                // Save work hours to timesheet if > 0
+                if (workHours > 0 && earningsRateId) {
+                    promises.push(
+                        fetch('/core/staff_hours/timesheets/save/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                            },
+                            body: JSON.stringify({
+                                xero_instance_id: currentXeroInstanceId,
+                                employee_id: currentEmployeeId,
+                                date: selectedDayData.date,
+                                hours: workHours,
+                                earnings_rate_id: earningsRateId
+                            })
+                        }).then(r => r.json())
+                    );
+                }
+                
+                // Save leave application if > 0
+                if (leaveHours > 0 && leaveTypeId) {
+                    const leaveComment = leaveCommentInput?.value?.trim() || '';
+                    promises.push(
+                        fetch('/core/staff_hours/create_leave_application/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                            },
+                            body: JSON.stringify({
+                                xero_instance_id: currentXeroInstanceId,
+                                employee_id: currentEmployeeId,
+                                leave_type_id: leaveTypeId,
+                                date: selectedDayData.date,
+                                hours: leaveHours,
+                                description: leaveComment
+                            })
+                        }).then(r => r.json())
+                    );
+                }
+                
+                const results = await Promise.all(promises);
+                console.log('Save day results:', results);
+                const errors = results.filter(r => r.status !== 'success');
+                
+                if (errors.length > 0) {
+                    const errorMsg = 'Some entries failed to save: ' + errors.map(e => e.message).join(', ');
+                    console.error('Save day errors:', errors);
+                    console.error(errorMsg);
+                    alert(errorMsg);
+                } else {
+                    console.log('Save day success - refreshing calendar');
+                    // Refresh calendar
+                    if (typeof loadEmployeeCalendarData === 'function') {
+                        await loadEmployeeCalendarData(currentEmployeeId);
+                    }
+                }
+            } catch (e) {
+                console.error('Error saving day:', e);
+                alert('Error saving: ' + e.message);
+            } finally {
+                saveDayBtn.disabled = false;
+                saveDayBtn.textContent = 'Save Day';
+            }
+        });
+    }
     
     // Populate earnings rate dropdown
     function populateEarningsRates() {
@@ -2077,16 +2315,10 @@ Backend Endpoints:
         
         // Use pay items data that's already loaded
         if (payItemsData.earnings_rates && payItemsData.earnings_rates.length > 0) {
-            earningsRateSelect.innerHTML = '';
+            earningsRateSelect.innerHTML = '<option value="">Select rate...</option>';
             
-            // Filter to only timesheet-valid rates:
-            // - CurrentRecord must be true (active)
-            // - RateType must be RATEPERUNIT or MULTIPLE (not FIXEDAMOUNT)
-            // - EarningsType must be valid for timesheets (exclude ETP, allowances, leave loading, etc.)
-            const timesheetValidTypes = [
-                'ORDINARYTIMEEARNINGS',
-                'OVERTIMEEARNINGS'
-            ];
+            // Filter to only timesheet-valid rates
+            const timesheetValidTypes = ['ORDINARYTIMEEARNINGS', 'OVERTIMEEARNINGS'];
             const validRates = payItemsData.earnings_rates.filter(rate => {
                 const isActive = rate.CurrentRecord !== false;
                 const isValidType = rate.RateType !== 'FIXEDAMOUNT';
@@ -2098,10 +2330,6 @@ Backend Endpoints:
                 const option = document.createElement('option');
                 option.value = rate.EarningsRateID;
                 option.textContent = rate.Name;
-                // Mark ordinary time as default
-                if (rate.EarningsType === 'ORDINARYTIMEEARNINGS') {
-                    option.selected = true;
-                }
                 earningsRateSelect.appendChild(option);
             });
             earningsRatesLoaded = true;
@@ -2122,8 +2350,8 @@ Backend Endpoints:
         // Format date for display
         const date = new Date(dayInfo.date);
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const formatted = `${days[date.getDay()]} ${date.getDate()}-${months[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`;
+        const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const formatted = `${daysOfWeek[date.getDay()]} ${date.getDate()}-${months[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`;
         
         // Update panel
         dayDetailsEmpty.classList.add('d-none');
@@ -2131,46 +2359,85 @@ Backend Endpoints:
         selectedDayTitle.textContent = formatted;
         
         // Set status
+        let statusParts = [];
         if (dayInfo.isHoliday) {
-            selectedDayStatus.innerHTML = `<span class="text-warning">${dayInfo.holidayName}</span>`;
-        } else if (dayInfo.isLeave) {
-            selectedDayStatus.innerHTML = `<span class="text-info">${dayInfo.leaveType}</span>`;
-        } else if (dayInfo.hours > 0) {
-            selectedDayStatus.innerHTML = `<span class="text-success">Worked</span>`;
-        } else if (dayInfo.isWeekend) {
-            selectedDayStatus.innerHTML = `<span class="text-muted">Weekend</span>`;
-        } else {
-            selectedDayStatus.innerHTML = `<span class="text-muted">No entry</span>`;
+            statusParts.push(`<span class="text-warning">${dayInfo.holidayName}</span>`);
         }
-        
-        // Show editable hours or display-only
-        const selectedDayRate = document.getElementById('selectedDayRate');
-        
-        if (dayInfo.canEdit) {
-            // Editable - show input form
-            hoursInputSection.classList.remove('d-none');
-            hoursDisplaySection.classList.add('d-none');
-            dayHoursInput.value = dayInfo.hours || 8;
-            // Populate earnings rates dropdown
-            populateEarningsRates();
-            // Hide allocation section for editable days (no hours logged yet)
-            hideAllocationSection();
-        } else if (dayInfo.isWorked && dayInfo.hours > 0) {
-            // Already worked - show read-only display with rate
-            hoursInputSection.classList.add('d-none');
-            hoursDisplaySection.classList.remove('d-none');
-            selectedDayRate.textContent = dayInfo.earningsRateName || 'Unknown rate';
-            selectedDayHours.textContent = `${dayInfo.hours}h`;
-            const selectedDayPayRate = document.getElementById('selectedDayPayRate');
-            if (selectedDayPayRate) {
-                selectedDayPayRate.textContent = dayInfo.ratePerUnit ? `$${parseFloat(dayInfo.ratePerUnit).toFixed(2)}/hr` : '-';
+        if (dayInfo.isWorked) {
+            statusParts.push(`<span class="text-success">Worked</span>`);
+        }
+        if (dayInfo.isLeave) {
+            statusParts.push(`<span class="text-info">${dayInfo.leaveType}</span>`);
+        }
+        if (statusParts.length === 0) {
+            if (dayInfo.isWeekend) {
+                statusParts.push(`<span class="text-muted">Weekend</span>`);
+            } else {
+                statusParts.push(`<span class="text-muted">No entry</span>`);
             }
-            // Show allocation section for worked days
-            showAllocationSection(dayInfo);
+        }
+        selectedDayStatus.innerHTML = statusParts.join(' + ');
+        
+        // Determine if day can be edited (not a public holiday, not already submitted)
+        const canEdit = dayInfo.canEdit && !dayInfo.isHoliday;
+        
+        if (canEdit) {
+            // Show input section
+            if (dayInputSection) dayInputSection.classList.remove('d-none');
+            if (dayDisplaySection) dayDisplaySection.classList.add('d-none');
+            
+            // Populate dropdowns
+            populateEarningsRates();
+            populateLeaveTypes();
+            
+            // Set default values
+            if (dayHoursInput) dayHoursInput.value = dayInfo.workHours || 0;
+            if (leaveHoursInput) leaveHoursInput.value = dayInfo.leaveHours || 0;
+            
+            // Update total
+            updateDayTotalHours();
+            updateLeaveBalanceDisplay();
+            
+            // Hide allocation section until saved
+            hideAllocationSection();
+        } else if (dayInfo.isWorked || dayInfo.isLeave) {
+            // Already has data - show display section
+            if (dayInputSection) dayInputSection.classList.add('d-none');
+            if (dayDisplaySection) dayDisplaySection.classList.remove('d-none');
+            
+            // Show work row if worked
+            if (workDisplayRow) {
+                if (dayInfo.isWorked && dayInfo.workHours > 0) {
+                    workDisplayRow.classList.remove('d-none');
+                    if (selectedDayRate) selectedDayRate.textContent = dayInfo.earningsRateName || 'Unknown';
+                    if (selectedDayHours) selectedDayHours.textContent = dayInfo.workHours;
+                    if (selectedDayPayRate) selectedDayPayRate.textContent = dayInfo.ratePerUnit ? parseFloat(dayInfo.ratePerUnit).toFixed(2) : '0';
+                } else {
+                    workDisplayRow.classList.add('d-none');
+                }
+            }
+            
+            // Show leave row if on leave
+            if (leaveDisplayRow) {
+                if (dayInfo.isLeave) {
+                    leaveDisplayRow.classList.remove('d-none');
+                    if (selectedLeaveType) selectedLeaveType.textContent = dayInfo.leaveType || 'Leave';
+                    if (selectedLeaveHours) selectedLeaveHours.textContent = dayInfo.leaveHours || 0;
+                } else {
+                    leaveDisplayRow.classList.add('d-none');
+                }
+            }
+            
+            // Show allocation section for worked days (work hours only)
+            if (dayInfo.isWorked && dayInfo.workHours > 0) {
+                showAllocationSection(dayInfo);
+            } else {
+                hideAllocationSection();
+            }
         } else {
-            // Holiday, leave, or empty weekend - hide both
-            hoursInputSection.classList.add('d-none');
-            hoursDisplaySection.classList.add('d-none');
+            // Holiday or empty weekend - hide both sections
+            if (dayInputSection) dayInputSection.classList.add('d-none');
+            if (dayDisplaySection) dayDisplaySection.classList.add('d-none');
             hideAllocationSection();
         }
     };
@@ -2228,7 +2495,9 @@ Backend Endpoints:
         tr.id = `alloc-row-${rowId}`;
         tr.dataset.allocationId = existingData?.id || '';
         
-        // Project select
+        const allocType = existingData?.allocation_type || 1;
+        
+        // Project select options
         let projectOptions = '<option value="">Project...</option>';
         allocationProjects.forEach(p => {
             const selected = existingData?.project_id == p.id ? 'selected' : '';
@@ -2245,15 +2514,26 @@ Backend Endpoints:
         }
         
         tr.innerHTML = `
-            <td style="padding: 2px;">
-                <select class="form-select form-select-sm alloc-project" style="font-size: 11px; padding: 2px;" data-row="${rowId}">
-                    ${projectOptions}
+            <td style="padding: 2px; width: 85px;">
+                <select class="form-select form-select-sm alloc-type" style="font-size: 10px; padding: 2px; width: 100%; max-width: 81px;" data-row="${rowId}">
+                    <option value="1" ${allocType == 1 ? 'selected' : ''}>Project</option>
+                    <option value="2" ${allocType == 2 ? 'selected' : ''}>Unchargeable</option>
+                    <option value="3" ${allocType == 3 ? 'selected' : ''}>Other Chargeable</option>
                 </select>
             </td>
             <td style="padding: 2px;">
-                <select class="form-select form-select-sm alloc-costing" style="font-size: 11px; padding: 2px;" data-row="${rowId}" ${existingData ? '' : 'disabled'}>
-                    ${costingOptions}
-                </select>
+                <div class="alloc-project-fields" style="display: ${allocType == 1 ? 'flex' : 'none'}; gap: 2px;">
+                    <select class="form-select form-select-sm alloc-project" style="font-size: 10px; padding: 2px; width: 50%;" data-row="${rowId}">
+                        ${projectOptions}
+                    </select>
+                    <select class="form-select form-select-sm alloc-costing" style="font-size: 10px; padding: 2px; width: 50%;" data-row="${rowId}" ${existingData?.costing_id ? '' : 'disabled'}>
+                        ${costingOptions}
+                    </select>
+                </div>
+                <div class="alloc-note-field" style="${allocType != 1 ? '' : 'display:none;'}">
+                    <input type="text" class="form-control form-control-sm alloc-note" style="font-size: 10px; padding: 2px; width: 100%;" 
+                           placeholder="Note (required)..." value="${existingData?.note || ''}" data-row="${rowId}">
+                </div>
             </td>
             <td style="padding: 2px;">
                 <input type="number" class="form-control form-control-sm alloc-hours" style="font-size: 11px; padding: 2px; text-align: center;" 
@@ -2265,16 +2545,31 @@ Backend Endpoints:
         `;
         
         // Wire up events
+        const typeSelect = tr.querySelector('.alloc-type');
+        const projectFields = tr.querySelector('.alloc-project-fields');
+        const noteField = tr.querySelector('.alloc-note-field');
         const projectSelect = tr.querySelector('.alloc-project');
         const costingSelect = tr.querySelector('.alloc-costing');
+        const noteInput = tr.querySelector('.alloc-note');
         const hoursInput = tr.querySelector('.alloc-hours');
         const removeBtn = tr.querySelector('.alloc-remove');
         
+        typeSelect.addEventListener('change', function() {
+            if (this.value == '1') {
+                projectFields.style.display = 'flex';
+                noteField.style.display = 'none';
+            } else {
+                projectFields.style.display = 'none';
+                noteField.style.display = '';
+            }
+            validateAllocations();
+        });
         projectSelect.addEventListener('change', function() {
             loadCostingsForProject(this.value, costingSelect);
             validateAllocations();
         });
         costingSelect.addEventListener('change', validateAllocations);
+        noteInput.addEventListener('input', validateAllocations);
         hoursInput.addEventListener('input', validateAllocations);
         removeBtn.addEventListener('click', function() {
             tr.remove();
@@ -2291,11 +2586,22 @@ Backend Endpoints:
         let allValid = true;
         
         rows.forEach(row => {
-            const project = row.querySelector('.alloc-project')?.value;
-            const costing = row.querySelector('.alloc-costing')?.value;
+            const allocType = row.querySelector('.alloc-type')?.value || '1';
             const hours = parseFloat(row.querySelector('.alloc-hours')?.value) || 0;
             sum += hours;
-            if (!project || !costing || hours <= 0) allValid = false;
+            
+            if (hours <= 0) {
+                allValid = false;
+            } else if (allocType === '1') {
+                // Project type: need project and costing
+                const project = row.querySelector('.alloc-project')?.value;
+                const costing = row.querySelector('.alloc-costing')?.value;
+                if (!project || !costing) allValid = false;
+            } else {
+                // Unchargeable or Other Chargeable: need note
+                const note = row.querySelector('.alloc-note')?.value?.trim();
+                if (!note) allValid = false;
+            }
         });
         
         document.getElementById('allocatedHours').textContent = sum.toFixed(1);
@@ -2326,8 +2632,12 @@ Backend Endpoints:
             console.log('Allocations response:', data);
             savedAllocations = data.allocations || [];
             
-            // Update daily cost display
+            // Update daily cost display and pay rate
             updateDailyCostDisplay(data.daily_cost);
+            if (data.rate_per_unit) {
+                const payRateEl = document.getElementById('selectedDayPayRate');
+                if (payRateEl) payRateEl.textContent = parseFloat(data.rate_per_unit).toFixed(2);
+            }
             
             if (savedAllocations.length > 0) {
                 renderAllocationDisplayTable(savedAllocations);
@@ -2356,12 +2666,21 @@ Backend Endpoints:
     
     function createDisplayRow(allocation) {
         const tr = document.createElement('tr');
-        const projectName = allocationProjects.find(p => p.id == allocation.project_id)?.name || allocation.project_name || '-';
-        const costingName = allocation.costing_item || '-';
+        const allocType = allocation.allocation_type || 1;
+        const typeName = allocation.allocation_type_display || (allocType === 1 ? 'Project' : allocType === 2 ? 'Unchargeable' : 'Other Chargeable');
+        
+        let details = '';
+        if (allocType === 1) {
+            const projectName = allocationProjects.find(p => p.id == allocation.project_id)?.name || allocation.project_name || '-';
+            const costingName = allocation.costing_item || '-';
+            details = `${projectName} / ${costingName}`;
+        } else {
+            details = allocation.note || '-';
+        }
         
         tr.innerHTML = `
-            <td style="padding: 4px 3px; font-size: 11px;">${projectName}</td>
-            <td style="padding: 4px 3px; font-size: 11px;">${costingName}</td>
+            <td style="padding: 4px 3px; font-size: 11px;">${typeName}</td>
+            <td style="padding: 4px 3px; font-size: 11px;">${details}</td>
             <td style="padding: 4px 3px; font-size: 11px; text-align: center;">${allocation.hours}</td>
             <td style="padding: 4px 3px;"></td>
         `;
@@ -2439,18 +2758,35 @@ Backend Endpoints:
         const allocations = [];
         
         rows.forEach(row => {
+            const typeSelect = row.querySelector('.alloc-type');
             const projectSelect = row.querySelector('.alloc-project');
             const costingSelect = row.querySelector('.alloc-costing');
+            const noteInput = row.querySelector('.alloc-note');
             const hoursInput = row.querySelector('.alloc-hours');
-            if (projectSelect && costingSelect && hoursInput) {
-                allocations.push({
-                    project_id: projectSelect.value,
-                    project_name: projectSelect.options[projectSelect.selectedIndex]?.text || '',
-                    costing_id: costingSelect.value,
-                    costing_item: costingSelect.options[costingSelect.selectedIndex]?.text || '',
-                    hours: parseFloat(hoursInput.value) || 0
-                });
+            
+            const allocType = parseInt(typeSelect?.value) || 1;
+            const alloc = {
+                allocation_type: allocType,
+                hours: parseFloat(hoursInput?.value) || 0
+            };
+            
+            if (allocType === 1) {
+                // Project allocation
+                alloc.project_id = projectSelect?.value;
+                alloc.project_name = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
+                alloc.costing_id = costingSelect?.value;
+                alloc.costing_item = costingSelect?.options[costingSelect.selectedIndex]?.text || '';
+                alloc.note = '';
+            } else {
+                // Unchargeable or Other Chargeable
+                alloc.project_id = null;
+                alloc.project_name = null;
+                alloc.costing_id = null;
+                alloc.costing_item = null;
+                alloc.note = noteInput?.value?.trim() || '';
             }
+            alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
+            allocations.push(alloc);
         });
         
         const saveBtn = document.getElementById('saveAllocationsBtn');
@@ -2469,9 +2805,11 @@ Backend Endpoints:
                         xero_instance_id: currentXeroInstanceId,
                         employee_id: calendarEmployeeSelect.value,
                         date: selectedDayData.date,
+                        allocation_type: alloc.allocation_type,
                         project_id: alloc.project_id,
                         costing_id: alloc.costing_id,
-                        hours: alloc.hours
+                        hours: alloc.hours,
+                        note: alloc.note
                     })
                 });
             }
@@ -2498,75 +2836,6 @@ Backend Endpoints:
     });
     document.getElementById('saveAllocationsBtn')?.addEventListener('click', saveAllAllocations);
     document.getElementById('updateAllocationsBtn')?.addEventListener('click', switchToEditMode)
-    
-    if (saveDayHoursBtn) {
-        saveDayHoursBtn.addEventListener('click', async function() {
-            if (!selectedDayData || !selectedDayData.canEdit) return;
-            
-            const employeeId = calendarEmployeeSelect.value;
-            const hours = parseFloat(dayHoursInput.value) || 0;
-            const earningsRateId = earningsRateSelect ? earningsRateSelect.value : '';
-            
-            if (!employeeId || !selectedDayData.date) {
-                alert('Missing employee or date');
-                return;
-            }
-            
-            saveDayHoursBtn.disabled = true;
-            saveDayHoursBtn.textContent = '...';
-            
-            try {
-                const response = await fetch('/core/staff_hours/timesheets/save/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                    },
-                    body: JSON.stringify({
-                        xero_instance_id: currentXeroInstanceId,
-                        employee_id: employeeId,
-                        date: selectedDayData.date,
-                        hours: hours,
-                        earnings_rate_id: earningsRateId || null
-                    })
-                });
-                
-                const data = await response.json();
-                console.log('Timesheet save response:', data);
-                
-                if (data.status === 'success') {
-                    // Reload calendar data to show the update
-                    loadCalendarData();
-                    
-                    // Update selectedDayData to reflect saved state
-                    const savedDate = selectedDayData.date;
-                    selectedDayData.hours = hours;
-                    selectedDayData.isWorked = true;
-                    selectedDayData.canEdit = false;
-                    selectedDayData.earningsRateName = earningsRateSelect?.options[earningsRateSelect.selectedIndex]?.text || 'Ordinary Hours';
-                    
-                    // Switch to display mode showing the saved hours
-                    hoursInputSection.classList.add('d-none');
-                    hoursDisplaySection.classList.remove('d-none');
-                    selectedDayRate.textContent = selectedDayData.earningsRateName;
-                    selectedDayHours.textContent = `${hours}h`;
-                    selectedDayStatus.innerHTML = '<span class="text-success">Worked</span>';
-                    
-                    // Show allocation section for the newly saved day
-                    showAllocationSection(selectedDayData);
-                } else {
-                    console.error('Timesheet error details:', data.details);
-                    alert('Error: ' + (data.message || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error saving timesheet:', error);
-                alert('Error saving timesheet');
-            } finally {
-                saveDayHoursBtn.disabled = false;
-                saveDayHoursBtn.textContent = 'Save';
-            }
-        });
-    }
     
     // Override renderEmployeesTable to also populate calendar dropdown
     const originalRenderEmployeesTable = renderEmployeesTable;
@@ -2849,6 +3118,12 @@ window.debugHeaderAlignment = function() {
 }
 .calendar-day.today {
     box-shadow: 0 0 0 2px #0d6efd;
+}
+/* Mixed day: work + leave split diagonally (green/blue) */
+.calendar-day.mixed-day {
+    background: linear-gradient(135deg, #198754 0%, #198754 50%, #0dcaf0 50%, #0dcaf0 100%);
+    color: #fff;
+    border-color: #198754;
 }
 
 /* Summary styles - compact */

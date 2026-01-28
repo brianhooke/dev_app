@@ -42,7 +42,7 @@ from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
     get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays,
     sync_employee_pay_rates, get_projects_for_allocation, get_costings_for_project,
-    get_allocations, save_allocation, delete_allocation,
+    get_allocations, save_allocation, delete_allocation, create_leave_application,
     get_holiday_calendars, create_holiday_calendar, update_holiday_calendar,
     delete_holiday_calendar, get_calendar_holidays, create_holiday, update_holiday, delete_holiday,
     get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet
@@ -307,6 +307,7 @@ urlpatterns = [
     path('staff_hours/timesheets/', get_timesheets, name='staff_hours_timesheets'),
     path('staff_hours/timesheets/save/', save_timesheet, name='staff_hours_save_timesheet'),
     path('staff_hours/leave_applications/', get_leave_applications, name='staff_hours_leave_applications'),
+    path('staff_hours/create_leave_application/', create_leave_application, name='staff_hours_create_leave_application'),
     path('staff_hours/employee_calendar/', get_employee_calendar_data, name='staff_hours_employee_calendar'),
     path('staff_hours/sync_pay_rates/', sync_employee_pay_rates, name='sync_employee_pay_rates'),
     

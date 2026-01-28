@@ -1408,10 +1408,28 @@ def get_employee_calendar_data(request):
                 la_end = _parse_xero_date(la.get('EndDate', ''))
                 leave_type_id = la.get('LeaveTypeID', '')
                 title = la.get('Title', '')
+                leave_periods = la.get('LeavePeriods', [])
+                
+                logger.info(f"Leave application: start={la_start}, end={la_end}, title={title}, periods={leave_periods}")
                 
                 if la_start and la_end:
                     la_start_date = datetime.strptime(la_start, '%Y-%m-%d').date()
                     la_end_date = datetime.strptime(la_end, '%Y-%m-%d').date()
+                    
+                    # Calculate total leave hours from periods
+                    total_leave_hours = sum(p.get('NumberOfUnits', 0) for p in leave_periods)
+                    
+                    # Fallback: try to parse hours from title (format: "X hours leave")
+                    if total_leave_hours == 0 and title:
+                        import re
+                        match = re.search(r'([\d.]+)\s*hours?', title, re.IGNORECASE)
+                        if match:
+                            total_leave_hours = float(match.group(1))
+                            logger.info(f"Parsed {total_leave_hours} hours from title: {title}")
+                    
+                    # If single day leave, use total hours; otherwise estimate per day
+                    days_count = (la_end_date - la_start_date).days + 1
+                    hours_per_day = total_leave_hours / days_count if days_count > 0 else total_leave_hours
                     
                     # Generate each day of leave
                     current_date = la_start_date
@@ -1420,7 +1438,8 @@ def get_employee_calendar_data(request):
                             leave_days.append({
                                 'date': current_date.isoformat(),
                                 'leave_type_id': leave_type_id,
-                                'title': title
+                                'title': title,
+                                'hours': hours_per_day
                             })
                         current_date += timedelta(days=1)
         
@@ -1885,14 +1904,25 @@ def get_allocations(request):
         allocations_list = []
         if staff_hours:
             allocations = StaffHoursAllocations.objects.filter(staff_hours=staff_hours)
-            allocations_list = [{
-                'id': a.allocation_pk,
-                'project_id': a.project_id,
-                'project_name': a.project.project,
-                'costing_id': a.costing_id,
-                'costing_item': a.costing.item,
-                'hours': float(a.hours)
-            } for a in allocations]
+            for a in allocations:
+                alloc_data = {
+                    'id': a.allocation_pk,
+                    'allocation_type': a.allocation_type,
+                    'allocation_type_display': a.get_allocation_type_display(),
+                    'hours': float(a.hours),
+                    'note': a.note or ''
+                }
+                if a.allocation_type == 1 and a.project and a.costing:  # Project
+                    alloc_data['project_id'] = a.project_id
+                    alloc_data['project_name'] = a.project.project
+                    alloc_data['costing_id'] = a.costing_id
+                    alloc_data['costing_item'] = a.costing.item
+                else:
+                    alloc_data['project_id'] = None
+                    alloc_data['project_name'] = None
+                    alloc_data['costing_id'] = None
+                    alloc_data['costing_item'] = None
+                allocations_list.append(alloc_data)
         
         total_allocated = sum(a['hours'] for a in allocations_list)
         
@@ -1921,18 +1951,28 @@ def get_allocations(request):
 def save_allocation(request):
     """
     Save or update an hour allocation.
+    Supports: Project (type=1), Unchargeable (type=2), Other Chargeable (type=3)
     """
     try:
         data = json.loads(request.body)
         xero_instance_id = data.get('xero_instance_id')
         employee_id = data.get('employee_id')
         date_str = data.get('date')
+        allocation_type = int(data.get('allocation_type', 1))  # Default to Project
         project_id = data.get('project_id')
         costing_id = data.get('costing_id')
         hours = data.get('hours')
+        note = data.get('note', '')
         
-        if not all([xero_instance_id, employee_id, date_str, project_id, costing_id, hours is not None]):
-            return JsonResponse({'status': 'error', 'message': 'Missing required fields'}, status=400)
+        # Validate based on allocation type
+        if allocation_type == 1:  # Project
+            if not all([xero_instance_id, employee_id, date_str, project_id, costing_id, hours is not None]):
+                return JsonResponse({'status': 'error', 'message': 'Missing required fields for Project allocation'}, status=400)
+        else:  # Unchargeable or Other Chargeable
+            if not all([xero_instance_id, employee_id, date_str, hours is not None]):
+                return JsonResponse({'status': 'error', 'message': 'Missing required fields'}, status=400)
+            if not note:
+                return JsonResponse({'status': 'error', 'message': 'Note is required for Unchargeable/Other Chargeable allocations'}, status=400)
         
         # Find employee
         employee = Employee.objects.filter(
@@ -1952,13 +1992,21 @@ def save_allocation(request):
             defaults={'hours': 0}
         )
         
-        # Create or update allocation
-        allocation, created = StaffHoursAllocations.objects.update_or_create(
-            staff_hours=staff_hours,
-            project_id=project_id,
-            costing_id=costing_id,
-            defaults={'hours': hours}
-        )
+        # Create or update allocation based on type
+        if allocation_type == 1:  # Project allocation
+            allocation, created = StaffHoursAllocations.objects.update_or_create(
+                staff_hours=staff_hours,
+                allocation_type=allocation_type,
+                project_id=project_id,
+                costing_id=costing_id,
+                defaults={'hours': hours, 'note': note}
+            )
+        else:  # Unchargeable or Other Chargeable
+            allocation, created = StaffHoursAllocations.objects.update_or_create(
+                staff_hours=staff_hours,
+                allocation_type=allocation_type,
+                defaults={'hours': hours, 'note': note, 'project': None, 'costing': None}
+            )
         
         return JsonResponse({
             'status': 'success',
@@ -1987,3 +2035,114 @@ def delete_allocation(request, allocation_pk):
     except Exception as e:
         logger.error(f"Error deleting allocation: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@login_required
+def create_leave_application(request):
+    """
+    Create a leave application in Xero Payroll AU.
+    
+    POST body (JSON):
+    - xero_instance_id: ID of the Xero instance
+    - employee_id: Xero Employee ID
+    - leave_type_id: Xero Leave Type ID
+    - date: Date for the leave (YYYY-MM-DD)
+    - hours: Number of hours (supports partial days)
+    - description: Optional comment/reason for leave
+    """
+    try:
+        import json
+        from datetime import datetime
+        
+        data = json.loads(request.body)
+        xero_instance_id = data.get('xero_instance_id')
+        employee_id = data.get('employee_id')
+        leave_type_id = data.get('leave_type_id')
+        date_str = data.get('date')
+        hours = float(data.get('hours', 8))
+        description = data.get('description', '')
+        
+        if not all([xero_instance_id, employee_id, leave_type_id, date_str]):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'xero_instance_id, employee_id, leave_type_id, and date are required'
+            }, status=400)
+        
+        # Parse date
+        leave_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        # Get Xero authentication
+        xero_instance, access_token, tenant_id = get_xero_auth(xero_instance_id)
+        if not xero_instance:
+            return access_token
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Xero-tenant-id': tenant_id,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        # Build leave application payload for Xero AU
+        # Format date as Xero expects: /Date(milliseconds+timezone)/
+        import time
+        import calendar
+        # Use UTC timestamp to avoid timezone issues
+        date_ms = int(calendar.timegm(leave_date.timetuple()) * 1000)
+        
+        # For partial day leave, we need to specify units
+        # Use Title to specify hours for partial leave
+        leave_payload = {
+            'EmployeeID': employee_id,
+            'LeaveTypeID': leave_type_id,
+            'Title': f'{hours} hours leave',
+            'Description': description or '',
+            'StartDate': f'/Date({date_ms}+0000)/',
+            'EndDate': f'/Date({date_ms}+0000)/',
+        }
+        
+        # Only add LeavePeriods if partial day (less than standard day)
+        if hours < 7.6:
+            leave_payload['LeavePeriods'] = [{
+                'NumberOfUnits': hours,
+                'LeavePeriodStatus': 'SCHEDULED'
+            }]
+        
+        logger.info(f"Creating leave application for employee {employee_id}: {leave_payload}")
+        
+        # POST to Xero - Xero AU expects array directly, not wrapped in object
+        url = f'{XERO_PAYROLL_AU_URL}/LeaveApplications'
+        response = requests.post(url, headers=headers, json=[leave_payload], timeout=30)
+        
+        if response.status_code not in [200, 201]:
+            logger.error(f"Xero leave application error: {response.status_code} - {response.text}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Xero API error: {response.text}'
+            }, status=response.status_code)
+        
+        result = response.json()
+        leave_applications = result.get('LeaveApplications', [])
+        
+        if leave_applications:
+            created_la = leave_applications[0]
+            logger.info(f"Leave application created: {created_la.get('LeaveApplicationID')}")
+            return JsonResponse({
+                'status': 'success',
+                'leave_application_id': created_la.get('LeaveApplicationID'),
+                'message': 'Leave application created successfully'
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No leave application returned from Xero'
+            }, status=500)
+        
+    except Exception as e:
+        logger.error(f"Error creating leave application: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
