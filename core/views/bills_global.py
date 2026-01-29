@@ -135,12 +135,450 @@ def bills_global_approvals_view(request):
     return render(request, 'core/bills_global_approvals.html', context)
 
 
+def _send_bill_to_xero_core(invoice, workflow='approvals'):
+    """
+    Shared helper that sends a bill to Xero and attaches the PDF.
+    
+    Args:
+        invoice: Bills model instance with supplier (contact_pk), xero_instance, and allocations set
+        workflow: 'approvals' or 'direct' - determines status transitions
+    
+    Returns:
+        JsonResponse with success/error status
+    """
+    bill_pk = invoice.bill_pk
+    
+    # ========== EXTENSIVE DEBUG LOGGING ==========
+    logger.info(f"")
+    logger.info(f"{'#'*80}")
+    logger.info(f"### SEND BILL TO XERO - START (workflow={workflow}) ###")
+    logger.info(f"{'#'*80}")
+    logger.info(f"")
+    
+    # Log all bill details
+    logger.info(f"=== BILL DETAILS ===")
+    logger.info(f"  bill_pk: {invoice.bill_pk}")
+    logger.info(f"  bill_status: {invoice.bill_status}")
+    logger.info(f"  supplier_bill_number: {invoice.supplier_bill_number}")
+    logger.info(f"  bill_date: {invoice.bill_date}")
+    logger.info(f"  bill_due_date: {invoice.bill_due_date}")
+    logger.info(f"  bill_xero_id: {invoice.bill_xero_id}")
+    logger.info(f"  contact_pk_id: {invoice.contact_pk_id}")
+    logger.info(f"  project_id: {invoice.project_id}")
+    logger.info(f"  xero_instance_id: {invoice.xero_instance_id}")
+    logger.info(f"  email_attachment_id: {invoice.email_attachment_id}")
+    logger.info(f"  pdf field: {invoice.pdf}")
+    logger.info(f"  pdf.name: {invoice.pdf.name if invoice.pdf else 'None'}")
+    
+    # Get supplier
+    supplier = invoice.contact_pk
+    if not supplier:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invoice has no supplier assigned'
+        }, status=400)
+    
+    logger.info(f"=== SUPPLIER DETAILS ===")
+    logger.info(f"  contact_pk: {supplier.contact_pk}")
+    logger.info(f"  contact_name: {supplier.contact_name}")
+    logger.info(f"  xero_contact_id: {supplier.xero_contact_id}")
+    
+    if not supplier.xero_contact_id:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
+        }, status=400)
+    
+    # Get Xero instance (from invoice or project)
+    xero_instance = invoice.xero_instance
+    if not xero_instance and invoice.project:
+        xero_instance = invoice.project.xero_instance
+    
+    if not xero_instance:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'No Xero instance found for this invoice'
+        }, status=400)
+    
+    logger.info(f"=== XERO INSTANCE DETAILS ===")
+    logger.info(f"  xero_instance_pk: {xero_instance.xero_instance_pk}")
+    logger.info(f"  xero_name: {xero_instance.xero_name}")
+    logger.info(f"  xero_client_id: {xero_instance.xero_client_id[:20]}..." if xero_instance.xero_client_id else "  xero_client_id: None")
+    
+    # Get allocations
+    allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
+        'xero_account', 'tracking_category', 'item'
+    )
+    
+    logger.info(f"=== ALLOCATIONS ({allocations.count()}) ===")
+    for i, alloc in enumerate(allocations):
+        logger.info(f"  [{i}] pk={alloc.bill_allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, account={alloc.xero_account.account_code if alloc.xero_account else 'None'}")
+    
+    if not allocations.exists():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'No allocations found for this invoice'
+        }, status=400)
+    
+    # Check all allocations have Xero accounts
+    for allocation in allocations:
+        if not allocation.xero_account:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'All allocations must have a Xero Account selected'
+            }, status=400)
+    
+    # Get Xero authentication
+    xero_inst, access_token, tenant_id = get_xero_auth(xero_instance.xero_instance_pk)
+    if not xero_inst:
+        return access_token  # This is the error response
+    
+    logger.info(f"=== XERO AUTH ===")
+    logger.info(f"  tenant_id: {tenant_id}")
+    logger.info(f"  access_token (first 20 chars): {access_token[:20]}..." if access_token else "  access_token: None")
+    
+    # Check Xero connection scopes by calling the connections endpoint
+    logger.info(f"=== CHECKING XERO CONNECTION SCOPES ===")
+    try:
+        connections_response = requests.get(
+            'https://api.xero.com/connections',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            },
+            timeout=10
+        )
+        logger.info(f"  Connections API status: {connections_response.status_code}")
+        if connections_response.status_code == 200:
+            connections_data = connections_response.json()
+            logger.info(f"  Connections response: {json.dumps(connections_data, indent=2)}")
+            # Find the connection for our tenant
+            for conn in connections_data:
+                if conn.get('tenantId') == tenant_id:
+                    logger.info(f"  === MATCHED TENANT CONNECTION ===")
+                    logger.info(f"    tenantId: {conn.get('tenantId')}")
+                    logger.info(f"    tenantName: {conn.get('tenantName')}")
+                    logger.info(f"    tenantType: {conn.get('tenantType')}")
+                    # Note: Scopes are not returned in connections endpoint, but auth status is
+                    logger.info(f"    authEventId: {conn.get('authEventId')}")
+                    logger.info(f"    updatedDateUtc: {conn.get('updatedDateUtc')}")
+        else:
+            logger.warning(f"  Failed to get connections: {connections_response.status_code} - {connections_response.text}")
+    except Exception as e:
+        logger.warning(f"  Error checking connections: {str(e)}")
+    
+    # Required scopes for attachments (for reference in logs)
+    logger.info(f"  NOTE: Required scope for attachments is 'accounting.attachments'")
+    logger.info(f"  If attachments fail, user needs to re-authorize with updated scopes")
+    
+    logger.info(f"")
+    logger.info(f"[_send_bill_to_xero_core] Sending bill {bill_pk} to Xero ({workflow}) for instance: {xero_instance.xero_name}")
+    
+    # Build line items from allocations
+    line_items = []
+    for allocation in allocations:
+        # Use qty if available (approvals workflow), otherwise default to 1
+        qty = float(allocation.qty) if allocation.qty else 1
+        unit_amount = float(allocation.amount) / qty if allocation.amount else 0
+        
+        line_item = {
+            "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
+            "Quantity": qty,
+            "UnitAmount": unit_amount,
+            "AccountCode": allocation.xero_account.account_code,
+            "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
+            "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
+        }
+        
+        # Add tracking category if set
+        if allocation.tracking_category:
+            line_item["Tracking"] = [{
+                "Name": allocation.tracking_category.name,
+                "Option": allocation.tracking_category.option_name
+            }]
+        
+        line_items.append(line_item)
+    
+    # Build invoice payload for Xero
+    invoice_payload = {
+        "Type": "ACCPAY",
+        "Contact": {
+            "ContactID": supplier.xero_contact_id
+        },
+        "Date": invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else date.today().strftime('%Y-%m-%d'),
+        "DueDate": invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else date.today().strftime('%Y-%m-%d'),
+        "InvoiceNumber": invoice.supplier_bill_number or '',
+        "LineItems": line_items,
+        "Status": "DRAFT"
+    }
+    
+    # Send to Xero API
+    logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
+    
+    response = requests.post(
+        'https://api.xero.com/api.xro/2.0/Invoices',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Xero-tenant-id': tenant_id
+        },
+        json={"Invoices": [invoice_payload]},
+        timeout=30
+    )
+    
+    # Check response
+    if response.status_code != 200:
+        error_msg = parse_xero_validation_errors(response)
+        if not error_msg:
+            error_msg = f'Xero API error: {response.status_code} - {response.text}'
+        logger.error(f"Xero API error: {error_msg}")
+        return JsonResponse({
+            'status': 'error',
+            'message': error_msg
+        }, status=response.status_code)
+    
+    # Success - parse response
+    xero_response = response.json()
+    logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
+    
+    # Extract Xero Invoice ID
+    xero_invoice_id = None
+    if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
+        xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
+    
+    # Attach PDF to the Xero invoice if available
+    attachment_status = None
+    attachment_debug = {}
+    logger.info(f"")
+    logger.info(f"{'='*60}")
+    logger.info(f"=== ATTACHMENT PROCESSING for bill {bill_pk} ({workflow}) ===")
+    logger.info(f"{'='*60}")
+    logger.info(f"Xero Invoice ID: {xero_invoice_id}")
+    
+    if xero_invoice_id:
+        pdf_url = None
+        file_name = None
+        
+        # Log what we have for debugging
+        attachment_debug['invoice_pdf'] = str(invoice.pdf) if invoice.pdf else None
+        attachment_debug['invoice_pdf_name'] = invoice.pdf.name if invoice.pdf else None
+        attachment_debug['invoice_pdf_bool'] = bool(invoice.pdf)
+        attachment_debug['email_attachment_id'] = invoice.email_attachment_id
+        attachment_debug['email_attachment'] = str(invoice.email_attachment) if invoice.email_attachment else None
+        attachment_debug['email_attachment_bool'] = bool(invoice.email_attachment)
+        
+        logger.info(f"[PDF CHECK] invoice.pdf exists: {bool(invoice.pdf)}")
+        logger.info(f"[PDF CHECK] invoice.pdf.name: {invoice.pdf.name if invoice.pdf else 'N/A'}")
+        logger.info(f"[PDF CHECK] invoice.email_attachment_id: {invoice.email_attachment_id}")
+        logger.info(f"[PDF CHECK] invoice.email_attachment exists: {bool(invoice.email_attachment)}")
+        
+        # Check for PDF - first try invoice.pdf (FileField), then email_attachment
+        if invoice.pdf and invoice.pdf.name:
+            try:
+                pdf_url = invoice.pdf.url
+                file_name = pdf_url.split('/')[-1]
+                attachment_debug['pdf_source'] = 'invoice.pdf'
+                attachment_debug['pdf_url'] = pdf_url
+                logger.info(f"Found invoice.pdf URL: {pdf_url}")
+            except Exception as e:
+                logger.error(f"Error getting invoice.pdf URL: {str(e)}")
+                attachment_debug['invoice_pdf_error'] = str(e)
+        
+        if not pdf_url and invoice.email_attachment:
+            try:
+                pdf_url = invoice.email_attachment.get_download_url()
+                file_name = invoice.email_attachment.filename or f"bill_{bill_pk}.pdf"
+                attachment_debug['pdf_source'] = 'email_attachment'
+                attachment_debug['pdf_url'] = pdf_url[:200] + '...' if len(pdf_url) > 200 else pdf_url
+                attachment_debug['filename'] = file_name
+                logger.info(f"Found email_attachment URL: {pdf_url[:100]}...")
+            except Exception as e:
+                logger.error(f"Error getting email_attachment URL: {str(e)}")
+                attachment_debug['email_attachment_error'] = str(e)
+        
+        # Read file directly from storage
+        file_data = None
+        
+        if invoice.pdf and invoice.pdf.name:
+            try:
+                logger.info(f"--- READING PDF FROM invoice.pdf FileField ---")
+                invoice.pdf.open('rb')
+                file_data = invoice.pdf.read()
+                invoice.pdf.close()
+                file_name = invoice.pdf.name.split('/')[-1]
+                attachment_debug['read_method'] = 'invoice.pdf.read()'
+                attachment_debug['file_size'] = len(file_data)
+                logger.info(f"Read {len(file_data)} bytes from invoice.pdf")
+            except Exception as e:
+                logger.error(f"Error reading invoice.pdf: {str(e)}")
+                attachment_debug['read_error'] = str(e)
+        
+        elif invoice.email_attachment:
+            try:
+                logger.info(f"--- READING PDF FROM email_attachment (S3/local storage) ---")
+                attachment = invoice.email_attachment
+                file_name = attachment.filename or f"bill_{bill_pk}.pdf"
+                
+                logger.info(f"EmailAttachment ID: {attachment.pk}, Filename: {attachment.filename}")
+                logger.info(f"S3 Bucket: {attachment.s3_bucket}, S3 Key: {attachment.s3_key}")
+                
+                attachment_debug['email_attachment_pk'] = attachment.pk
+                attachment_debug['s3_bucket'] = attachment.s3_bucket
+                attachment_debug['s3_key'] = attachment.s3_key
+                
+                # Read file based on storage type
+                from django.conf import settings
+                import os
+                
+                if settings.DEBUG and attachment.s3_bucket == 'local':
+                    # Local storage - read from MEDIA_ROOT
+                    local_path = os.path.join(settings.MEDIA_ROOT, attachment.s3_key)
+                    logger.info(f"Reading from local path: {local_path}")
+                    attachment_debug['local_path'] = local_path
+                    attachment_debug['file_exists'] = os.path.exists(local_path)
+                    
+                    if os.path.exists(local_path):
+                        with open(local_path, 'rb') as f:
+                            file_data = f.read()
+                        attachment_debug['read_method'] = 'local_file_read'
+                        attachment_debug['file_size'] = len(file_data)
+                        logger.info(f"Read {len(file_data)} bytes from local file")
+                    else:
+                        logger.error(f"Local file not found: {local_path}")
+                        attachment_debug['read_error'] = f"File not found: {local_path}"
+                else:
+                    # S3 storage - download from S3
+                    import boto3
+                    logger.info(f"Downloading from S3: {attachment.s3_bucket}/{attachment.s3_key}")
+                    s3_client = boto3.client('s3')
+                    s3_response = s3_client.get_object(
+                        Bucket=attachment.s3_bucket,
+                        Key=attachment.s3_key
+                    )
+                    file_data = s3_response['Body'].read()
+                    attachment_debug['read_method'] = 's3_download'
+                    attachment_debug['file_size'] = len(file_data)
+                    logger.info(f"Downloaded {len(file_data)} bytes from S3")
+                    
+            except Exception as e:
+                logger.error(f"Error reading email_attachment: {str(e)}", exc_info=True)
+                attachment_debug['read_error'] = str(e)
+        
+        if file_data:
+            try:
+                # Check if it's actually a PDF
+                is_pdf = file_data[:4] == b'%PDF'
+                attachment_debug['is_valid_pdf'] = is_pdf
+                logger.info(f"File is_pdf: {is_pdf}, size: {len(file_data)} bytes")
+                
+                # Upload attachment to Xero
+                encoded_filename = quote(file_name, safe='')
+                attachment_debug['encoded_filename'] = encoded_filename
+                xero_attach_url = f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}'
+                attachment_debug['xero_attach_url'] = xero_attach_url
+                logger.info(f"=== XERO ATTACHMENT UPLOAD === URL: {xero_attach_url}")
+                
+                attach_response = requests.put(
+                    xero_attach_url,
+                    headers={
+                        'Authorization': f'Bearer {access_token}',
+                        'Content-Type': 'application/octet-stream',
+                        'Accept': 'application/json',
+                        'Xero-tenant-id': tenant_id
+                    },
+                    data=file_data,
+                    timeout=60
+                )
+                
+                attachment_debug['xero_response_status'] = attach_response.status_code
+                attachment_debug['xero_response_text'] = attach_response.text[:500] if attach_response.text else None
+                attachment_debug['xero_response_headers'] = dict(attach_response.headers)
+                
+                logger.info(f"")
+                logger.info(f"=== XERO ATTACHMENT RESPONSE ===")
+                logger.info(f"  Status Code: {attach_response.status_code}")
+                logger.info(f"  Response Headers: {dict(attach_response.headers)}")
+                logger.info(f"  Response Body: {attach_response.text[:1000] if attach_response.text else 'empty'}")
+                
+                if attach_response.status_code == 200:
+                    logger.info(f"  *** SUCCESS - PDF attached to Xero invoice {xero_invoice_id} ***")
+                    attachment_status = 'success'
+                elif attach_response.status_code == 401:
+                    logger.error(f"  *** 401 UNAUTHORIZED - Token may be expired or scope missing ***")
+                    logger.error(f"  This likely means 'accounting.attachments' scope was not authorized")
+                    logger.error(f"  User needs to re-authorize Xero connection with updated scopes")
+                    attachment_status = 'unauthorized'
+                    attachment_debug['error'] = 'Unauthorized - missing accounting.attachments scope?'
+                    attachment_debug['fix'] = 'Re-authorize Xero connection'
+                elif attach_response.status_code == 403:
+                    logger.error(f"  *** 403 FORBIDDEN - Insufficient permissions ***")
+                    logger.error(f"  The token does not have permission for attachments")
+                    logger.error(f"  Scope 'accounting.attachments' must be included in authorization")
+                    attachment_status = 'forbidden'
+                    attachment_debug['error'] = 'Forbidden - accounting.attachments scope not authorized'
+                    attachment_debug['fix'] = 'Re-authorize Xero connection with accounting.attachments scope'
+                else:
+                    logger.error(f"  *** FAILED - Xero returned {attach_response.status_code} ***")
+                    logger.error(f"  Full response: {attach_response.text}")
+                    attachment_status = 'failed'
+                    attachment_debug['error'] = f"Xero returned {attach_response.status_code}"
+                    
+            except Exception as e:
+                logger.error(f"Error uploading PDF to Xero: {str(e)}", exc_info=True)
+                attachment_status = 'error'
+                attachment_debug['exception'] = str(e)
+        else:
+            logger.info(f"No PDF file data found for bill {bill_pk}")
+            attachment_status = 'no_pdf'
+            attachment_debug['error'] = 'Could not read PDF file data'
+    
+    # Log final summary
+    logger.info(f"")
+    logger.info(f"{'#'*80}")
+    logger.info(f"### SEND BILL TO XERO - COMPLETE ###")
+    logger.info(f"  Bill PK: {bill_pk}")
+    logger.info(f"  Xero Invoice ID: {xero_invoice_id}")
+    logger.info(f"  Attachment Status: {attachment_status}")
+    logger.info(f"  Attachment Debug: {json.dumps(attachment_debug, indent=2, default=str)}")
+    logger.info(f"{'#'*80}")
+    logger.info(f"")
+    
+    # Update invoice status based on workflow
+    if workflow == 'direct':
+        # Direct: status 0 -> 2 (sent to Xero)
+        invoice.bill_status = 2
+    else:
+        # Approvals: status 2 -> 3, status 103 -> 104
+        if invoice.bill_status == 2:
+            invoice.bill_status = 3
+        elif invoice.bill_status == 103:
+            invoice.bill_status = 104
+    
+    invoice.bill_xero_id = xero_invoice_id
+    invoice.save()
+    
+    logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id}, attachment: {attachment_status})")
+    
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Bill sent to Xero successfully' + ('' if attachment_status == 'success' else ' (PDF attachment may have failed)'),
+        'bill_pk': invoice.bill_pk,
+        'xero_invoice_id': xero_invoice_id,
+        'attachment_status': attachment_status,
+        'attachment_debug': attachment_debug
+    })
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @handle_xero_request_errors
 def send_bill_direct(request):
     """
     Send bill to Xero from Bills - Direct workflow.
+    
+    This endpoint validates Direct-specific fields (supplier, xero_instance from frontend),
+    saves them to the invoice, then delegates to the shared _send_bill_to_xero_core helper.
     
     Expected POST data:
     - bill_pk: int
@@ -149,6 +587,7 @@ def send_bill_direct(request):
     - bill_number: str
     - total_net: decimal
     - total_gst: decimal
+    - allocations: list (for validation)
     """
     try:
         data = json.loads(request.body)
@@ -170,7 +609,7 @@ def send_bill_direct(request):
         
         # Get the invoice
         try:
-            invoice = Bills.objects.get(bill_pk=bill_pk)
+            invoice = Bills.objects.select_related('email_attachment').get(bill_pk=bill_pk)
         except Bills.DoesNotExist:
             return JsonResponse({
                 'status': 'error',
@@ -187,72 +626,25 @@ def send_bill_direct(request):
             }, status=404)
         
         # Parse xero_instance_or_project
-        xero_instance = None
-        instance_pk = None
-        
-        if xero_instance_or_project.startswith('xero_'):
-            xero_instance_id = int(xero_instance_or_project.replace('xero_', ''))
-            try:
-                xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_id)
-                instance_pk = xero_instance.xero_instance_pk
-            except XeroInstances.DoesNotExist:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Xero Instance not found'
-                }, status=404)
-        else:
+        if not xero_instance_or_project.startswith('xero_'):
             return JsonResponse({
                 'status': 'error',
                 'message': 'Invalid xero_instance_or_project format'
             }, status=400)
         
-        # Get allocations for this invoice
-        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account', 'tracking_category')
-        
-        # Log what we received from frontend vs what's in database
-        frontend_allocations = data.get('allocations', [])
-        logger.info(f"[send_bill_direct] Bill PK: {bill_pk}")
-        logger.info(f"[send_bill_direct] Frontend allocations received: {json.dumps(frontend_allocations, indent=2)}")
-        logger.info(f"[send_bill_direct] Database allocations count: {allocations.count()}")
-        
-        for db_alloc in allocations:
-            logger.info(f"[send_bill_direct] DB Allocation PK={db_alloc.bill_allocation_pk}:")
-            logger.info(f"  - amount: {db_alloc.amount}")
-            logger.info(f"  - gst_amount: {db_alloc.gst_amount}")
-            logger.info(f"  - xero_account_id: {db_alloc.xero_account_id}")
-            logger.info(f"  - xero_account: {db_alloc.xero_account}")
-            if db_alloc.xero_account:
-                logger.info(f"  - account_code: {db_alloc.xero_account.account_code}")
-            logger.info(f"  - notes: {db_alloc.notes}")
-        
-        if not allocations.exists():
+        xero_instance_id = int(xero_instance_or_project.replace('xero_', ''))
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_id)
+        except XeroInstances.DoesNotExist:
             return JsonResponse({
                 'status': 'error',
-                'message': 'No allocations found. Please add allocations before sending to Xero.'
-            }, status=400)
-        
-        # Check supplier has Xero contact ID
-        if not supplier.xero_contact_id:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
-            }, status=400)
-        
-        # Check all allocations have Xero accounts and valid amounts
-        for allocation in allocations:
-            if not allocation.xero_account:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'All allocations must have a Xero Account selected'
-                }, status=400)
-            if not allocation.amount or float(allocation.amount) <= 0:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Allocation has invalid amount (${allocation.amount}). Please ensure all amounts are saved.'
-                }, status=400)
+                'message': 'Xero Instance not found'
+            }, status=404)
         
         # Validate frontend amounts match database amounts (detect unsaved changes)
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account', 'tracking_category')
         frontend_allocations = data.get('allocations', [])
+        
         if frontend_allocations:
             db_total_net = sum(float(a.amount) for a in allocations)
             db_total_gst = sum(float(a.gst_amount or 0) for a in allocations)
@@ -269,108 +661,17 @@ def send_bill_direct(request):
                     'message': f'Allocation amounts not saved correctly. Database shows ${db_total_net:.2f} but UI shows ${frontend_total_net:.2f}. Please refresh and re-enter allocations.'
                 }, status=400)
         
-        # Get Xero authentication
-        xero_inst, access_token, tenant_id = get_xero_auth(instance_pk)
-        if not xero_inst:
-            return access_token  # This is the error response
-        
-        logger.info(f"Sending bill {bill_pk} to Xero for instance: {xero_instance.xero_name}")
-        
-        # Build line items from allocations
-        line_items = []
-        for allocation in allocations:
-            # Log each allocation being processed
-            logger.info(f"[send_bill_direct] Processing allocation {allocation.bill_allocation_pk}:")
-            logger.info(f"  - Building line item with amount={allocation.amount}, gst={allocation.gst_amount}")
-            
-            # Check for missing xero_account
-            if not allocation.xero_account:
-                logger.error(f"[send_bill_direct] MISSING xero_account for allocation {allocation.bill_allocation_pk}!")
-                continue
-            
-            line_item = {
-                "Description": allocation.notes or "No description",
-                "Quantity": 1,
-                "UnitAmount": float(allocation.amount) if allocation.amount else 0,
-                "AccountCode": allocation.xero_account.account_code,
-                "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
-                "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
-            }
-            
-            logger.info(f"  - Line item built: {json.dumps(line_item)}")
-            
-            # Add tracking category if set
-            if allocation.tracking_category:
-                line_item["Tracking"] = [{
-                    "Name": allocation.tracking_category.name,
-                    "Option": allocation.tracking_category.option_name
-                }]
-            
-            line_items.append(line_item)
-        
-        logger.info(f"[send_bill_direct] Total line items built: {len(line_items)}")
-        logger.info(f"[send_bill_direct] Line items: {json.dumps(line_items, indent=2)}")
-        
-        # Build invoice payload for Xero
-        invoice_payload = {
-            "Type": "ACCPAY",
-            "Contact": {
-                "ContactID": supplier.xero_contact_id
-            },
-            "Date": date.today().strftime('%Y-%m-%d'),
-            "DueDate": date.today().strftime('%Y-%m-%d'),
-            "InvoiceNumber": bill_number or '',
-            "LineItems": line_items,
-            "Status": "DRAFT"
-        }
-        
-        # Send to Xero API
-        logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
-        
-        response = requests.post(
-            'https://api.xero.com/api.xro/2.0/Invoices',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            json={"Invoices": [invoice_payload]},
-            timeout=30
-        )
-        
-        # Check response
-        if response.status_code != 200:
-            error_msg = parse_xero_validation_errors(response)
-            if not error_msg:
-                error_msg = f'Xero API error: {response.status_code} - {response.text}'
-            logger.error(f"Xero API error: {error_msg}")
-            return JsonResponse({
-                'status': 'error',
-                'message': error_msg
-            }, status=response.status_code)
-        
-        # Success - parse response
-        xero_response = response.json()
-        logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
-        
-        # Extract Xero Invoice ID
-        xero_invoice_id = None
-        if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
-            xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
-        
-        # Update invoice status
-        invoice.bill_status = 2  # Sent to Xero
+        # Save supplier, xero_instance, and bill_number to invoice so shared helper can use them
+        invoice.contact_pk = supplier
+        invoice.xero_instance = xero_instance
+        if bill_number:
+            invoice.supplier_bill_number = bill_number
         invoice.save()
         
-        logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id})")
+        logger.info(f"[send_bill_direct] Saved supplier={supplier_pk}, xero_instance={xero_instance_id} to invoice {bill_pk}")
         
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Bill sent to Xero successfully',
-            'bill_pk': invoice.bill_pk,
-            'xero_invoice_id': xero_invoice_id
-        })
+        # Delegate to shared helper (workflow='direct' for status handling)
+        return _send_bill_to_xero_core(invoice, workflow='direct')
         
     except json.JSONDecodeError:
         return JsonResponse({
@@ -464,11 +765,11 @@ def send_bill_to_xero(request):
     """
     Send an approved bill to Xero from Bills - Approvals workflow.
     
+    This is a thin wrapper that validates the bill is approved,
+    then delegates to the shared _send_bill_to_xero_core helper.
+    
     Expected POST data:
     - bill_pk: int
-    
-    The bill already has all required data (supplier, allocations, etc.)
-    since it was approved through the project workflow.
     """
     try:
         data = json.loads(request.body)
@@ -480,7 +781,7 @@ def send_bill_to_xero(request):
                 'message': 'Missing bill_pk'
             }, status=400)
         
-        # Get the invoice
+        # Get the invoice with all related data
         try:
             invoice = Bills.objects.select_related(
                 'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
@@ -498,337 +799,8 @@ def send_bill_to_xero(request):
                 'message': f'Invoice status {invoice.bill_status} is not approved'
             }, status=400)
         
-        # Get supplier
-        supplier = invoice.contact_pk
-        if not supplier:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Invoice has no supplier assigned'
-            }, status=400)
-        
-        if not supplier.xero_contact_id:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
-            }, status=400)
-        
-        # Get Xero instance (from invoice or project)
-        xero_instance = invoice.xero_instance
-        if not xero_instance and invoice.project:
-            xero_instance = invoice.project.xero_instance
-        
-        if not xero_instance:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'No Xero instance found for this invoice'
-            }, status=400)
-        
-        # Get allocations
-        allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
-            'xero_account', 'tracking_category', 'item'
-        )
-        
-        if not allocations.exists():
-            return JsonResponse({
-                'status': 'error',
-                'message': 'No allocations found for this invoice'
-            }, status=400)
-        
-        # Check all allocations have Xero accounts
-        for allocation in allocations:
-            if not allocation.xero_account:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'All allocations must have a Xero Account selected'
-                }, status=400)
-        
-        # Get Xero authentication
-        xero_inst, access_token, tenant_id = get_xero_auth(xero_instance.xero_instance_pk)
-        if not xero_inst:
-            return access_token  # This is the error response
-        
-        logger.info(f"Sending approved bill {bill_pk} to Xero for instance: {xero_instance.xero_name}")
-        
-        # Build line items from allocations
-        line_items = []
-        for allocation in allocations:
-            line_item = {
-                "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
-                "Quantity": float(allocation.qty) if allocation.qty else 1,
-                "UnitAmount": float(allocation.amount) / (float(allocation.qty) if allocation.qty else 1),
-                "AccountCode": allocation.xero_account.account_code,
-                "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
-                "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
-            }
-            
-            # Add tracking category if set
-            if allocation.tracking_category:
-                line_item["Tracking"] = [{
-                    "Name": allocation.tracking_category.name,
-                    "Option": allocation.tracking_category.option_name
-                }]
-            
-            line_items.append(line_item)
-        
-        # Build invoice payload for Xero
-        invoice_payload = {
-            "Type": "ACCPAY",
-            "Contact": {
-                "ContactID": supplier.xero_contact_id
-            },
-            "Date": invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else date.today().strftime('%Y-%m-%d'),
-            "DueDate": invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else date.today().strftime('%Y-%m-%d'),
-            "InvoiceNumber": invoice.supplier_bill_number or '',
-            "LineItems": line_items,
-            "Status": "DRAFT"
-        }
-        
-        # Send to Xero API
-        logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
-        
-        response = requests.post(
-            'https://api.xero.com/api.xro/2.0/Invoices',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            json={"Invoices": [invoice_payload]},
-            timeout=30
-        )
-        
-        # Check response
-        if response.status_code != 200:
-            error_msg = parse_xero_validation_errors(response)
-            if not error_msg:
-                error_msg = f'Xero API error: {response.status_code} - {response.text}'
-            logger.error(f"Xero API error: {error_msg}")
-            return JsonResponse({
-                'status': 'error',
-                'message': error_msg
-            }, status=response.status_code)
-        
-        # Success - parse response
-        xero_response = response.json()
-        logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
-        
-        # Extract Xero Invoice ID
-        xero_invoice_id = None
-        if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
-            xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
-        
-        # Attach PDF to the Xero invoice if available
-        attachment_status = None
-        attachment_debug = {}
-        logger.info(f"")
-        logger.info(f"{'='*60}")
-        logger.info(f"=== ATTACHMENT PROCESSING for bill {bill_pk} ===")
-        logger.info(f"{'='*60}")
-        logger.info(f"Xero Invoice ID: {xero_invoice_id}")
-        
-        if xero_invoice_id:
-            pdf_url = None
-            file_name = None
-            
-            # Log what we have for debugging
-            attachment_debug['invoice_pdf'] = str(invoice.pdf) if invoice.pdf else None
-            attachment_debug['invoice_pdf_name'] = invoice.pdf.name if invoice.pdf else None
-            attachment_debug['invoice_pdf_bool'] = bool(invoice.pdf)
-            attachment_debug['email_attachment_id'] = invoice.email_attachment_id
-            attachment_debug['email_attachment'] = str(invoice.email_attachment) if invoice.email_attachment else None
-            attachment_debug['email_attachment_bool'] = bool(invoice.email_attachment)
-            
-            logger.info(f"[PDF CHECK] invoice.pdf exists: {bool(invoice.pdf)}")
-            logger.info(f"[PDF CHECK] invoice.pdf value: {invoice.pdf}")
-            logger.info(f"[PDF CHECK] invoice.pdf.name: {invoice.pdf.name if invoice.pdf else 'N/A'}")
-            logger.info(f"[PDF CHECK] invoice.email_attachment_id: {invoice.email_attachment_id}")
-            logger.info(f"[PDF CHECK] invoice.email_attachment exists: {bool(invoice.email_attachment)}")
-            if invoice.email_attachment:
-                logger.info(f"[PDF CHECK] email_attachment.filename: {getattr(invoice.email_attachment, 'filename', 'N/A')}")
-                logger.info(f"[PDF CHECK] email_attachment type: {type(invoice.email_attachment)}")
-            
-            # Check for PDF - first try invoice.pdf (FileField), then email_attachment
-            # Note: FileField can be truthy even when empty, so check .name
-            if invoice.pdf and invoice.pdf.name:
-                try:
-                    pdf_url = invoice.pdf.url
-                    file_name = pdf_url.split('/')[-1]
-                    attachment_debug['pdf_source'] = 'invoice.pdf'
-                    attachment_debug['pdf_url'] = pdf_url
-                    logger.info(f"Found invoice.pdf URL: {pdf_url}")
-                except Exception as e:
-                    logger.error(f"Error getting invoice.pdf URL: {str(e)}")
-                    attachment_debug['invoice_pdf_error'] = str(e)
-            
-            if not pdf_url and invoice.email_attachment:
-                try:
-                    pdf_url = invoice.email_attachment.get_download_url()
-                    file_name = invoice.email_attachment.filename or f"bill_{bill_pk}.pdf"
-                    attachment_debug['pdf_source'] = 'email_attachment'
-                    attachment_debug['pdf_url'] = pdf_url[:200] + '...' if len(pdf_url) > 200 else pdf_url
-                    attachment_debug['filename'] = file_name
-                    logger.info(f"Found email_attachment URL: {pdf_url[:100]}...")
-                    logger.info(f"Filename: {file_name}")
-                except Exception as e:
-                    logger.error(f"Error getting email_attachment URL: {str(e)}")
-                    attachment_debug['email_attachment_error'] = str(e)
-            
-            logger.info(f"[PDF RESULT] pdf_url: {pdf_url}")
-            logger.info(f"[PDF RESULT] file_name: {file_name}")
-            
-            # Read file directly from storage instead of HTTP request
-            # (pdf_url is relative, requests.get won't work)
-            file_data = None
-            
-            if invoice.pdf and invoice.pdf.name:
-                try:
-                    logger.info(f"")
-                    logger.info(f"--- READING PDF FROM invoice.pdf FileField ---")
-                    invoice.pdf.open('rb')
-                    file_data = invoice.pdf.read()
-                    invoice.pdf.close()
-                    file_name = invoice.pdf.name.split('/')[-1]
-                    attachment_debug['read_method'] = 'invoice.pdf.read()'
-                    attachment_debug['file_size'] = len(file_data)
-                    logger.info(f"Read {len(file_data)} bytes from invoice.pdf")
-                except Exception as e:
-                    logger.error(f"Error reading invoice.pdf: {str(e)}")
-                    attachment_debug['read_error'] = str(e)
-            
-            elif invoice.email_attachment:
-                try:
-                    logger.info(f"")
-                    logger.info(f"--- READING PDF FROM email_attachment (S3/local storage) ---")
-                    attachment = invoice.email_attachment
-                    file_name = attachment.filename or f"bill_{bill_pk}.pdf"
-                    
-                    # Log attachment details
-                    logger.info(f"EmailAttachment ID: {attachment.pk}")
-                    logger.info(f"Filename: {attachment.filename}")
-                    logger.info(f"Content-Type: {attachment.content_type}")
-                    logger.info(f"Size (stored): {attachment.size_bytes} bytes")
-                    logger.info(f"S3 Bucket: {attachment.s3_bucket}")
-                    logger.info(f"S3 Key: {attachment.s3_key}")
-                    
-                    attachment_debug['email_attachment_pk'] = attachment.pk
-                    attachment_debug['s3_bucket'] = attachment.s3_bucket
-                    attachment_debug['s3_key'] = attachment.s3_key
-                    
-                    # Read file based on storage type
-                    from django.conf import settings
-                    import os
-                    
-                    if settings.DEBUG and attachment.s3_bucket == 'local':
-                        # Local storage - read from MEDIA_ROOT
-                        local_path = os.path.join(settings.MEDIA_ROOT, attachment.s3_key)
-                        logger.info(f"Reading from local path: {local_path}")
-                        attachment_debug['local_path'] = local_path
-                        attachment_debug['file_exists'] = os.path.exists(local_path)
-                        
-                        if os.path.exists(local_path):
-                            with open(local_path, 'rb') as f:
-                                file_data = f.read()
-                            attachment_debug['read_method'] = 'local_file_read'
-                            attachment_debug['file_size'] = len(file_data)
-                            logger.info(f"Read {len(file_data)} bytes from local file")
-                        else:
-                            logger.error(f"Local file not found: {local_path}")
-                            attachment_debug['read_error'] = f"File not found: {local_path}"
-                    else:
-                        # S3 storage - download from S3
-                        import boto3
-                        logger.info(f"Downloading from S3: {attachment.s3_bucket}/{attachment.s3_key}")
-                        s3_client = boto3.client('s3')
-                        response = s3_client.get_object(
-                            Bucket=attachment.s3_bucket,
-                            Key=attachment.s3_key
-                        )
-                        file_data = response['Body'].read()
-                        attachment_debug['read_method'] = 's3_download'
-                        attachment_debug['file_size'] = len(file_data)
-                        logger.info(f"Downloaded {len(file_data)} bytes from S3")
-                        
-                except Exception as e:
-                    logger.error(f"Error reading email_attachment: {str(e)}", exc_info=True)
-                    attachment_debug['read_error'] = str(e)
-            
-            if file_data:
-                try:
-                    # Check if it's actually a PDF
-                    is_pdf = file_data[:4] == b'%PDF'
-                    attachment_debug['is_valid_pdf'] = is_pdf
-                    logger.info(f"File starts with: {file_data[:20]}, is_pdf: {is_pdf}")
-                    
-                    # Upload attachment to Xero
-                    # URL-encode the filename for the API endpoint
-                    encoded_filename = quote(file_name, safe='')
-                    attachment_debug['encoded_filename'] = encoded_filename
-                    xero_attach_url = f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}'
-                    attachment_debug['xero_attach_url'] = xero_attach_url
-                    logger.info(f"=== XERO ATTACHMENT UPLOAD ===")
-                    logger.info(f"URL: {xero_attach_url}")
-                    logger.info(f"Method: PUT")
-                    logger.info(f"Content-Type: application/octet-stream")
-                    logger.info(f"File size: {len(file_data)} bytes")
-                    logger.info(f"File starts with (hex): {file_data[:10].hex()}")
-                    logger.info(f"Tenant ID: {tenant_id}")
-                    
-                    # Use PUT method and application/octet-stream per Xero API requirements
-                    # (Xero docs say POST but PUT with octet-stream actually works)
-                    attach_response = requests.put(
-                        xero_attach_url,
-                        headers={
-                            'Authorization': f'Bearer {access_token}',
-                            'Content-Type': 'application/octet-stream',
-                            'Accept': 'application/json',
-                            'Xero-tenant-id': tenant_id
-                        },
-                        data=file_data,
-                        timeout=60
-                    )
-                    
-                    attachment_debug['xero_response_status'] = attach_response.status_code
-                    attachment_debug['xero_response_text'] = attach_response.text[:500] if attach_response.text else None
-                    logger.info(f"Xero attachment response: {attach_response.status_code}")
-                    logger.info(f"Xero attachment response body: {attach_response.text[:500] if attach_response.text else 'empty'}")
-                    
-                    if attach_response.status_code == 200:
-                        logger.info(f"Successfully attached PDF to Xero invoice {xero_invoice_id}")
-                        attachment_status = 'success'
-                    else:
-                        logger.error(f"Failed to attach PDF to Xero: {attach_response.status_code} - {attach_response.text}")
-                        attachment_status = 'failed'
-                        attachment_debug['error'] = f"Xero returned {attach_response.status_code}"
-                except Exception as e:
-                    logger.error(f"Error uploading PDF to Xero: {str(e)}", exc_info=True)
-                    attachment_status = 'error'
-                    attachment_debug['exception'] = str(e)
-            else:
-                logger.info(f"No PDF file data found for bill {bill_pk}")
-                attachment_status = 'no_pdf'
-                attachment_debug['error'] = 'Could not read PDF file data'
-        
-        # Update invoice status to "sent to Xero"
-        if invoice.bill_status == 2:
-            invoice.bill_status = 3  # Sent to Xero
-        elif invoice.bill_status == 103:
-            invoice.bill_status = 104  # PO sent to Xero
-        
-        invoice.bill_xero_id = xero_invoice_id
-        invoice.save()
-        
-        logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id}, attachment: {attachment_status})")
-        logger.info(f"Attachment debug info: {json.dumps(attachment_debug, indent=2, default=str)}")
-        
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Bill sent to Xero successfully' + ('' if attachment_status == 'success' else ' (PDF attachment may have failed)'),
-            'bill_pk': invoice.bill_pk,
-            'xero_invoice_id': xero_invoice_id,
-            'attachment_status': attachment_status,
-            'attachment_debug': attachment_debug
-        })
+        # Delegate to shared helper
+        return _send_bill_to_xero_core(invoice, workflow='approvals')
         
     except json.JSONDecodeError:
         return JsonResponse({
