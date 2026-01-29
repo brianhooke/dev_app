@@ -90,7 +90,7 @@ def dashboard_view(request):
         {'divider': True},
         {'label': 'Bills', 'url': '#', 'id': 'billsLink', 'page_id': 'bills', 'icon': 'fa-file-invoice-dollar'},
         {'label': 'Projects', 'url': '#', 'id': 'projectsLink', 'page_id': 'projects', 'icon': 'fa-project-diagram'},
-        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'disabled': True, 'icon': 'fa-boxes'},
+        {'label': 'Stocktake', 'url': '#', 'id': 'stocktakeLink', 'page_id': 'stocktake', 'icon': 'fa-boxes'},
         {'label': 'Staff Hours', 'url': '#', 'id': 'staffHoursLink', 'page_id': 'staff_hours', 'icon': 'fa-user-clock'},
         {'label': 'Rates', 'url': '#', 'id': 'ratesLink', 'page_id': 'rates', 'icon': 'fa-percentage'},
         {'divider': True},
@@ -111,6 +111,27 @@ def dashboard_view(request):
         for instance in xero_instances
     ])
     
+    # Stocktake table columns
+    stocktake_main_columns = [
+        {'header': 'Supplier', 'width': '20%'},
+        {'header': 'Bill #', 'width': '15%'},
+        {'header': '$ Gross', 'width': '15%'},
+        {'header': '$ Net', 'width': '15%'},
+        {'header': '$ GST', 'width': '15%'},
+        {'header': '', 'width': '10%', 'class': 'col-action'},
+    ]
+    stocktake_alloc_columns = [
+        {'header': 'Project Type', 'width': '15%'},
+        {'header': 'Item', 'width': '20%'},
+        {'header': 'Unit', 'width': '8%'},
+        {'header': 'Qty', 'width': '10%'},
+        {'header': 'Rate', 'width': '10%'},
+        {'header': 'Amount', 'width': '10%', 'still_to_allocate_id': 'StillToAllocateNet'},
+        {'header': 'GST', 'width': '10%', 'still_to_allocate_id': 'StillToAllocateGst'},
+        {'header': 'Notes', 'width': '12%'},
+        {'header': '', 'width': '5%', 'class': 'col-action'},
+    ]
+    
     context = {
         "current_page": "dashboard",
         "project_name": settings.PROJECT_NAME,
@@ -119,6 +140,8 @@ def dashboard_view(request):
         "xero_instances": xero_instances,
         "xero_instances_json": xero_instances_json,
         "settings": settings,  # Add settings to context for environment indicator
+        "stocktake_main_columns": stocktake_main_columns,
+        "stocktake_alloc_columns": stocktake_alloc_columns,
     }
     
     return render(request, "core/dashboard.html", context)
@@ -188,6 +211,7 @@ def send_bill(request):
         project = None
         instance_pk = None
         
+        is_stocktake = False
         if xero_instance_or_project.startswith('xero_'):
             xero_instance_id = int(xero_instance_or_project.replace('xero_', ''))
             try:
@@ -214,6 +238,17 @@ def send_bill(request):
                     'status': 'error',
                     'message': 'Project not found'
                 }, status=404)
+        elif xero_instance_or_project.startswith('stocktake_'):
+            # Stocktake bill - use first available Xero instance
+            is_stocktake = True
+            project = None
+            xero_instance = XeroInstances.objects.first()
+            if not xero_instance:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No Xero Instance available for Stocktake'
+                }, status=400)
+            instance_pk = xero_instance.xero_instance_pk
         else:
             return JsonResponse({
                 'status': 'error',
@@ -314,6 +349,7 @@ def send_bill(request):
             # Update invoice in database - only now that Xero succeeded
             invoice.xero_instance = xero_instance
             invoice.project = project
+            invoice.is_stocktake = is_stocktake
             invoice.contact_pk = supplier
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
@@ -337,11 +373,12 @@ def send_bill(request):
             # Update invoice in database
             invoice.xero_instance = xero_instance
             invoice.project = project
+            invoice.is_stocktake = is_stocktake
             invoice.contact_pk = supplier
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
             invoice.total_gst = Decimal(str(total_gst))
-            invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct)
+            invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct or Stocktake)
             
             invoice.save()
             
@@ -468,6 +505,69 @@ def get_project_items(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting items: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_categories_and_items_by_type(request):
+    """
+    Get all categories and items (costings) for a project_type (template level).
+    Used by Stocktake Setup to show items that can be included in stocktake.
+    
+    Query params:
+    - project_type: str (e.g., 'Construction', 'Development')
+    """
+    try:
+        from core.models import Categories, Costing
+        
+        project_type = request.GET.get('project_type', '')
+        if not project_type:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'project_type parameter is required'
+            }, status=400)
+        
+        # Get categories for this project type (template level - no project_id)
+        # Try exact match first, then case-insensitive match
+        categories = Categories.objects.filter(
+            project__isnull=True,
+            project_type__iexact=project_type
+        ).order_by('order_in_list').values('categories_pk', 'category', 'order_in_list')
+        
+        categories_list = list(categories)
+        
+        # Get costings for this project type (template level - no project_id)
+        items = Costing.objects.filter(
+            project__isnull=True,
+            project_type__iexact=project_type
+        ).select_related('category', 'unit').order_by('category__order_in_list', 'order_in_list')
+        
+        items_list = []
+        for item in items:
+            items_list.append({
+                'costing_pk': item.costing_pk,
+                'item': item.item,
+                'category': item.category.category if item.category else None,
+                'category__category': item.category.category if item.category else None,
+                'order_in_list': item.order_in_list,
+                'unit_name': item.unit.unit_name if item.unit else None,
+                'unit__unit_name': item.unit.unit_name if item.unit else None,
+                'stocktake': item.stocktake or 0,
+            })
+        
+        logger.info(f"Retrieved {len(categories_list)} categories and {len(items_list)} items for project_type {project_type}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'categories': categories_list,
+            'items': items_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting categories and items by type: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error: {str(e)}'
         }, status=500)
 
 

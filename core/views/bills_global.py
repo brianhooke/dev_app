@@ -1035,6 +1035,7 @@ def get_bills_list(request):
             bill = {
                 'bill_pk': invoice.bill_pk,
                 'bill_status': invoice.bill_status,
+                'is_stocktake': getattr(invoice, 'is_stocktake', False),
                 'xero_instance_id': xero_instance_id,
                 'xero_instance_pk': xero_instance_id,  # Add this for frontend compatibility
                 'contact_pk': invoice.contact_pk.contact_pk if invoice.contact_pk else None,

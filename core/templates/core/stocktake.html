@@ -1,0 +1,1196 @@
+<!--
+Template: Stocktake Module (Section)
+
+Purpose:
+Stocktake management interface for tracking inventory and materials.
+Included as a section in dashboard.html for SPA navigation.
+
+Tabs:
+- Allocations: Main stocktake allocations using allocations_layout.html
+- Snap: Quick stocktake capture (future)
+- Setup: Configuration settings (future)
+-->
+
+<!-- Stocktake Section -->
+<div id="stocktakeSection" style="display: none; flex-direction: column; height: calc(100% + 40px); width: calc(100% + 40px); margin: -20px; background: linear-gradient(135deg, var(--manila-lighter) 0%, var(--manila-paper) 100%);">
+<div class="container-fluid" style="height: 100%; display: flex; flex-direction: column; padding: 16px; overflow: hidden;">
+    <!-- Google Fonts for Manila Theme -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Stocktake Styles -->
+    <style>
+        /* Manila Folder Theme Colors */
+        :root {
+            --manila-dark: #b8a888;
+            --manila-mid: #d4c4a8;
+            --manila-light: #e8dcc8;
+            --manila-lighter: #f5efe5;
+            --manila-paper: #faf7f2;
+            --manila-text: #5c4a32;
+            --manila-text-muted: #8b7355;
+            --manila-border: #c4b494;
+        }
+        
+        /* Typography */
+        #stocktakeSection {
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #stocktakeSection h1,
+        #stocktakeSection h2,
+        #stocktakeSection h3,
+        #stocktakeSection h4,
+        #stocktakeSection h5,
+        #stocktakeSection h6,
+        #stocktakeSection .reusable-table-title {
+            font-family: 'Merriweather', Georgia, serif;
+        }
+        #stocktakeTabs .nav-link {
+            font-family: 'Merriweather', Georgia, serif;
+        }
+        
+        /* Page Background - applied to parent #stocktakeSection via inline style */
+        
+        /* Manila Folder Tabs */
+        #stocktakeTabs {
+            border-bottom: none;
+            gap: 4px;
+            margin-bottom: 0 !important;
+            position: relative;
+        }
+        #stocktakeTabs .nav-item {
+            margin-bottom: 0;
+            position: relative;
+            z-index: 1;
+        }
+        #stocktakeTabs .nav-link {
+            border: 1px solid var(--manila-border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+            color: var(--manila-text);
+            transition: all 0.15s ease;
+            margin-bottom: -1px;
+        }
+        #stocktakeTabs .nav-link:hover {
+            background: linear-gradient(to bottom, var(--manila-lighter) 0%, var(--manila-light) 100%);
+        }
+        #stocktakeTabs .nav-link:focus,
+        #stocktakeTabs .nav-link:focus-visible {
+            outline: none;
+            box-shadow: none;
+        }
+        #stocktakeTabs .nav-link.active {
+            background: var(--manila-paper);
+            border-color: var(--manila-border);
+            border-bottom: none;
+            color: var(--manila-text);
+            position: relative;
+            z-index: 2;
+        }
+        #stocktakeTabContent {
+            border: 1px solid var(--manila-border);
+            border-radius: 0 8px 8px 8px;
+            padding: 16px;
+            background: var(--manila-paper);
+            position: relative;
+            overflow: hidden;
+            height: calc(100vh - 140px);
+        }
+        
+        /* Table Overrides for Manila Theme */
+        #stocktakeSection .reusable-table-container {
+            border: 1px solid var(--manila-border);
+            border-radius: 6px;
+            overflow: hidden;
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+        }
+        #stocktakeSection .reusable-table thead {
+            background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+        }
+        #stocktakeSection .reusable-table {
+            border: none !important;
+        }
+        #stocktakeSection .reusable-table thead th {
+            color: var(--manila-text);
+            border: none !important;
+            border-bottom: 1px solid var(--manila-border) !important;
+            border-top: none !important;
+            border-left: none !important;
+            border-right: none !important;
+            box-shadow: none !important;
+        }
+        #stocktakeSection .reusable-table thead tr {
+            border: none !important;
+        }
+        #stocktakeSection .reusable-table thead {
+            border: none !important;
+        }
+        #stocktakeSection .reusable-table tbody tr {
+            background: white;
+        }
+        #stocktakeSection .reusable-table tbody tr:nth-child(even) {
+            background: var(--manila-paper);
+        }
+        #stocktakeSection .reusable-table tbody tr:hover {
+            background: var(--manila-lighter);
+        }
+        #stocktakeSection .reusable-table tbody td {
+            border-bottom: 1px solid var(--manila-border);
+            color: var(--manila-text);
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #stocktakeSection .reusable-table thead th {
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 600;
+        }
+        #stocktakeSection .reusable-table-title {
+            color: var(--manila-text);
+        }
+        
+        /* Alert/Info boxes */
+        #stocktakeSection .alert-info {
+            background: var(--manila-lighter);
+            border-color: var(--manila-border);
+            color: var(--manila-text);
+        }
+        
+        /* Form Controls */
+        #stocktakeSection .form-select,
+        #stocktakeSection .form-control {
+            border-color: var(--manila-border);
+            background: white;
+            color: var(--manila-text);
+        }
+        #stocktakeSection .form-select:focus,
+        #stocktakeSection .form-control:focus {
+            border-color: var(--manila-dark);
+            box-shadow: 0 0 0 2px rgba(184, 168, 136, 0.25);
+        }
+        
+        /* Buttons */
+        #stocktakeSection .btn-primary {
+            background: var(--manila-dark);
+            border-color: var(--manila-dark);
+            color: white;
+        }
+        #stocktakeSection .btn-primary:hover {
+            background: #a08868;
+            border-color: #a08868;
+        }
+        #stocktakeSection .btn-outline-primary {
+            color: var(--manila-text);
+            border-color: var(--manila-border);
+        }
+        #stocktakeSection .btn-outline-primary:hover {
+            background: var(--manila-mid);
+            border-color: var(--manila-dark);
+            color: var(--manila-text);
+        }
+        
+        /* Text colors */
+        #stocktakeSection .text-muted {
+            color: var(--manila-text-muted) !important;
+        }
+        
+        /* Placeholder content styling */
+        .stocktake-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--manila-text-muted);
+        }
+        .stocktake-placeholder i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        .stocktake-placeholder h5 {
+            margin-bottom: 8px;
+        }
+        
+        /* Setup tab styling */
+        #stocktakeSetup .reusable-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--manila-light);
+        }
+        #stocktakeSetup .reusable-table thead th {
+            border-bottom: 1px solid var(--manila-border);
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--manila-text);
+        }
+        #stocktakeSetup .reusable-table tbody td {
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--manila-border);
+            font-size: 13px;
+        }
+        #stocktakeSetup .reusable-table tbody tr:hover {
+            background: var(--manila-lighter);
+        }
+        #stocktakeSetup .reusable-table tbody tr.selected {
+            background: var(--manila-mid);
+        }
+        #stocktakeSetup .reusable-table tbody tr.project-type-row {
+            cursor: pointer;
+        }
+        
+        /* Category row styling */
+        #stocktakeSetup .category-row {
+            background: var(--manila-light);
+            font-weight: 600;
+        }
+        #stocktakeSetup .category-row td {
+            padding: 8px 12px;
+            color: var(--manila-text);
+        }
+        #stocktakeSetup .category-row.internal-category {
+            background-color: #e6d5f5;
+            color: #6f2da8;
+        }
+        #stocktakeSetup .category-row.internal-category td {
+            color: #6f2da8;
+        }
+        #stocktakeSetup .category-row.labour-category {
+            background-color: #fce4ec;
+            color: #c2185b;
+        }
+        #stocktakeSetup .category-row.labour-category td {
+            color: #c2185b;
+        }
+        
+        /* Item row indentation */
+        #stocktakeSetup .item-row td:first-child {
+            padding-left: 24px;
+        }
+        
+        /* Checkbox styling */
+        #stocktakeSetup input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--manila-dark);
+        }
+        
+        /* Project Type row states */
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-included,
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-included td {
+            background-color: #d4edda !important;
+        }
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-included:hover,
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-included:hover td {
+            background-color: #c3e6cb !important;
+        }
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-excluded,
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-excluded td {
+            background-color: #f8d7da !important;
+        }
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-excluded:hover,
+        #stocktakeSetup #stocktakeProjectTypesTable .project-type-row.stocktake-excluded:hover td {
+            background-color: #f1c1c6 !important;
+        }
+        
+        /* Item row states */
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-included,
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-included td {
+            background-color: #d4edda !important;
+        }
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-included:hover,
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-included:hover td {
+            background-color: #c3e6cb !important;
+        }
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-excluded,
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-excluded td {
+            background-color: #f8d7da !important;
+        }
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-excluded:hover,
+        #stocktakeSetup #stocktakeCostingsTable .item-row.stocktake-excluded:hover td {
+            background-color: #f1c1c6 !important;
+        }
+        
+        /* Disabled state for items when project type is excluded */
+        #stocktakeSetup .item-row.stocktake-disabled {
+            background-color: #e9ecef;
+            opacity: 0.6;
+        }
+        #stocktakeSetup .item-row.stocktake-disabled td {
+            color: #6c757d;
+        }
+        #stocktakeSetup .item-row.stocktake-disabled input[type="checkbox"] {
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        /* Category row when project type excluded */
+        #stocktakeSetup .category-row.stocktake-disabled {
+            opacity: 0.6;
+        }
+        
+        /* Fix tab-pane height - ensure active panes fill container */
+        #stocktakeTabContent > .tab-pane.active.show {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+        }
+        /* Setup tab uses row layout */
+        #stocktakeSetup.active.show {
+            flex-direction: row;
+        }
+    </style>
+
+    <!-- Main Content -->
+    <div id="stocktakeMainContent" style="display: flex; flex-direction: column; height: 100%; min-height: 0;">
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" id="stocktakeTabs" role="tablist" style="flex-shrink: 0;">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="stocktake-allocations-tab" data-bs-toggle="tab" data-bs-target="#stocktakeAllocations" type="button" role="tab">Allocations</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="stocktake-snap-tab" data-bs-toggle="tab" data-bs-target="#stocktakeSnap" type="button" role="tab">Snap</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="stocktake-setup-tab" data-bs-toggle="tab" data-bs-target="#stocktakeSetup" type="button" role="tab">Setup</button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="stocktakeTabContent" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+            <!-- Allocations Tab -->
+            <div class="tab-pane fade show active" id="stocktakeAllocations" role="tabpanel">
+                {% include 'core/components/allocations_layout.html' with section_id='stocktakeAlloc' main_table_columns=stocktake_main_columns allocations_columns=stocktake_alloc_columns allocations_title='Bill Allocations' viewer_placeholder_text='Select a bill to view the PDF' viewer_placeholder_icon='fas fa-file-pdf' %}
+            </div>
+
+            <!-- Snap Tab -->
+            <div class="tab-pane fade" id="stocktakeSnap" role="tabpanel">
+                <div class="stocktake-placeholder">
+                    <i class="fas fa-camera"></i>
+                    <h5>Quick Stocktake</h5>
+                    <p class="text-muted">Snap feature coming soon - quickly capture stocktake data</p>
+                </div>
+            </div>
+
+            <!-- Setup Tab -->
+            <div class="tab-pane fade" id="stocktakeSetup" role="tabpanel" style="flex-direction: row !important; gap: 16px; padding: 12px 0;">
+                <!-- LHS: Project Types List -->
+                <div class="stocktake-setup-left" style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;">
+                    <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
+                        Project Types
+                    </div>
+                    <div class="setup-panel-body" style="flex: 1; overflow-y: auto; border: 1px solid var(--manila-border); border-radius: 0 0 6px 6px; background: white;">
+                        <table class="reusable-table" id="stocktakeProjectTypesTable" style="margin: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60%;">Type</th>
+                                    <th style="width: 40%; text-align: center;">Included</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stocktakeProjectTypesBody">
+                                <tr><td colspan="2" class="text-muted text-center py-3">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- RHS: Costings List by Category -->
+                <div class="stocktake-setup-right" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                    <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
+                        <span id="stocktakeCostingsTitle">Items</span>
+                        <span id="stocktakeCostingsSubtitle" class="text-muted" style="font-weight: normal; font-size: 12px; margin-left: 8px;">Select a project type</span>
+                    </div>
+                    <div class="setup-panel-body" style="flex: 1; overflow-y: auto; border: 1px solid var(--manila-border); border-radius: 0 0 6px 6px; background: white;">
+                        <table class="reusable-table" id="stocktakeCostingsTable" style="margin: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%;">Item</th>
+                                    <th style="width: 25%;">Unit</th>
+                                    <th style="width: 25%; text-align: center;">Included</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stocktakeCostingsBody">
+                                <tr><td colspan="3" class="text-muted text-center py-3"><i class="fas fa-arrow-left me-2"></i>Select a project type</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var stocktakeInitialized = false;
+    
+    // Load allocations for selected bill
+    function loadStocktakeAllocations(billPk) {
+        var tbody = $('#stocktakeAllocAllocationsTableBody');
+        tbody.empty();
+        
+        $.ajax({
+            url: '/core/get_stocktake_allocations/' + billPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    var allocations = response.allocations || [];
+                    if (allocations.length === 0) {
+                        addNewStocktakeAllocationRow();
+                    } else {
+                        allocations.forEach(function(alloc) {
+                            var row = createStocktakeAllocationRow(alloc);
+                            tbody.append(row);
+                        });
+                    }
+                    updateStocktakeStillToAllocate();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake] Failed to load allocations:', error);
+            }
+        });
+    }
+    
+    // Initialize AllocationsManager (called from initStocktakeSection)
+    function initAllocationsManager() {
+        if (stocktakeInitialized) return;
+        if (typeof AllocationsManager === 'undefined') {
+            console.error('[Stocktake] AllocationsManager not loaded');
+            return;
+        }
+        
+        AllocationsManager.init({
+            sectionId: 'stocktakeAlloc',
+            features: {
+                saveRowBtn: true,
+                deleteRowBtn: true,
+                constructionMode: false,
+                gstField: true,
+                confirmDelete: true,
+                reloadAfterDelete: false,
+                showSaveButton: true,
+                alwaysShowAddButton: true
+            },
+            data: {
+                pkField: 'bill_pk'
+            },
+            mainTable: {
+                emptyMessage: 'No stocktake bills found.',
+                showFooter: true,
+                footerTotals: [
+                    { colIndex: 3, valueKey: 'total_gross' },
+                    { colIndex: 4, valueKey: 'total_net' },
+                    { colIndex: 5, valueKey: 'total_gst' }
+                ],
+                renderRow: function(bill, index, cfg) {
+                    var pdfUrl = bill.pdf_url || bill.attachment_url || '';
+                    var netVal = bill.total_net !== null ? parseFloat(bill.total_net) : 0;
+                    var gstVal = bill.total_gst !== null ? parseFloat(bill.total_gst) : 0;
+                    var row = $('<tr>')
+                        .attr('data-pk', bill.bill_pk)
+                        .attr('data-bill-pk', bill.bill_pk)
+                        .attr('data-pdf-url', pdfUrl)
+                        .attr('data-total-net', netVal)
+                        .attr('data-total-gst', gstVal);
+                    
+                    row.append($('<td>').text(bill.supplier_name || 'Unknown'));
+                    row.append($('<td>').text(bill.supplier_bill_number || ''));
+                    
+                    var grossVal = netVal + gstVal;
+                    row.append($('<td>').addClass('gross-cell').text(grossVal ? Utils.formatCurrency(grossVal) : ''));
+                    row.append($('<td>').addClass('net-cell').text(bill.total_net !== null ? Utils.formatCurrency(bill.total_net) : ''));
+                    row.append($('<td>').addClass('gst-cell').text(bill.total_gst !== null ? Utils.formatCurrency(bill.total_gst) : ''));
+                    
+                    // Approve button
+                    var approveBtn = $('<button>')
+                        .addClass('btn btn-sm btn-secondary approve-stocktake-btn')
+                        .text('Approve')
+                        .css('font-size', '10px')
+                        .attr('data-bill-pk', bill.bill_pk)
+                        .prop('disabled', true)
+                        .attr('title', 'Approve bill (enabled when fully allocated)');
+                    row.append($('<td>').addClass('col-action').append(approveBtn));
+                    
+                    return row;
+                },
+                onRowSelect: function(row, pk, cfg) {
+                    window.currentSelectedBillPk = pk;
+                    // Read net/gst from row data attributes (set in renderRow)
+                    window.currentSelectedBill = {
+                        bill_pk: pk,
+                        total_net: parseFloat(row.attr('data-total-net')) || 0,
+                        total_gst: parseFloat(row.attr('data-total-gst')) || 0
+                    };
+                    cfg.data.currentItem = window.currentSelectedBill;
+                    AllocationsManager.setEditMode('stocktakeAlloc', true);
+                    loadStocktakeAllocations(pk);
+                },
+                onAllocationsLoaded: function(sectionId, allocations) {
+                    if (!allocations || allocations.length === 0) {
+                        addNewStocktakeAllocationRow();
+                    }
+                    updateStocktakeStillToAllocate();
+                }
+            },
+            allocations: {
+                emptyMessage: 'No allocations for this bill',
+                editable: true,
+                columnWidths: ['15%', '20%', '8%', '10%', '10%', '10%', '10%', '12%', '5%'],
+                renderEditableRow: function(allocation, cfg, onChange) {
+                    return createStocktakeAllocationRow(allocation);
+                },
+                onUpdate: function(sectionId, totals) {
+                    updateApproveButtonState(totals);
+                }
+            },
+            api: {
+                loadAllocations: '/core/get_stocktake_allocations/{pk}/',
+                createAllocation: '/core/create_stocktake_allocation/',
+                saveAllocation: '/core/update_stocktake_allocation/{pk}/',
+                deleteAllocation: '/core/delete_stocktake_allocation/{pk}/'
+            },
+            callbacks: {
+                onAddRow: function() {
+                    addNewStocktakeAllocationRow();
+                }
+            }
+        });
+        
+        stocktakeInitialized = true;
+    }
+    
+    // Store stocktake data globally
+    var stocktakeData = { bills: [], projectTypes: [], costingsByType: {} };
+    
+    // Get project types that are included in stocktake (from Setup tab)
+    function getIncludedProjectTypes() {
+        return setupData.projectTypes.filter(function(pt) { return pt.stocktake === 1; });
+    }
+    
+    // Get items for a project type that are included in stocktake
+    function getIncludedItemsForType(projectType) {
+        var items = stocktakeData.costingsByType[projectType] || [];
+        return items.filter(function(item) { return item.stocktake === 1; });
+    }
+    
+    // Load items for a project type (cached)
+    function loadItemsForProjectType(projectType, callback) {
+        if (stocktakeData.costingsByType[projectType]) {
+            callback(stocktakeData.costingsByType[projectType]);
+            return;
+        }
+        $.ajax({
+            url: '/core/get_categories_and_items/',
+            type: 'GET',
+            data: { project_type: projectType },
+            success: function(response) {
+                if (response.status === 'success') {
+                    stocktakeData.costingsByType[projectType] = response.items || [];
+                    callback(stocktakeData.costingsByType[projectType]);
+                }
+            }
+        });
+    }
+    
+    // Create a stocktake allocation row with all columns
+    function createStocktakeAllocationRow(allocation) {
+        var row = $('<tr>').attr('data-allocation-pk', allocation.allocation_pk || '');
+        var cls = 'stocktake-alloc';
+        
+        // 1. Project Type dropdown
+        var projectTypeSelect = $('<select>').addClass('form-control form-control-sm ' + cls + '-project-type-select');
+        projectTypeSelect.append($('<option>').val('').text('Select Type...'));
+        getIncludedProjectTypes().forEach(function(pt) {
+            var option = $('<option>').val(pt.project_type).text(pt.project_type);
+            if (allocation.project_type === pt.project_type) option.prop('selected', true);
+            projectTypeSelect.append(option);
+        });
+        projectTypeSelect.on('change', function() {
+            var selectedType = $(this).val();
+            var itemSelect = row.find('.' + cls + '-item-select');
+            populateItemDropdown(itemSelect, selectedType);
+            row.find('.' + cls + '-unit-input').val('');
+            saveStocktakeAllocationRow(row);
+        });
+        row.append($('<td>').append(projectTypeSelect));
+        
+        // 2. Item dropdown (with category headers)
+        var itemSelect = $('<select>').addClass('form-control form-control-sm ' + cls + '-item-select');
+        itemSelect.append($('<option>').val('').text('Select Item...'));
+        if (allocation.project_type) {
+            populateItemDropdown(itemSelect, allocation.project_type, allocation.item_pk);
+        }
+        itemSelect.on('change', function() {
+            var selectedPk = $(this).val();
+            var projectType = row.find('.' + cls + '-project-type-select').val();
+            var items = stocktakeData.costingsByType[projectType] || [];
+            var item = items.find(function(i) { return i.costing_pk == selectedPk; });
+            if (item) {
+                row.find('.' + cls + '-unit-input').val(item.unit_name || item.unit__unit_name || '');
+            }
+            saveStocktakeAllocationRow(row);
+        });
+        row.append($('<td>').append(itemSelect));
+        
+        // 3. Unit (fixed display)
+        var unitInput = $('<input>').attr('type', 'text').addClass('form-control form-control-sm ' + cls + '-unit-input')
+            .val(allocation.unit || '').prop('readonly', true).css('background', '#f8f9fa');
+        row.append($('<td>').append(unitInput));
+        
+        // 4. Qty (number input)
+        var qtyInput = $('<input>').attr('type', 'number').attr('step', 'any').addClass('form-control form-control-sm ' + cls + '-qty-input')
+            .val(allocation.qty !== null ? allocation.qty : '').attr('placeholder', '0');
+        qtyInput.on('input', function() {
+            calculateAmountAndGst(row);
+            saveStocktakeAllocationRow(row);
+        });
+        row.append($('<td>').append(qtyInput));
+        
+        // 5. Rate (number input)
+        var rateInput = $('<input>').attr('type', 'number').attr('step', 'any').addClass('form-control form-control-sm ' + cls + '-rate-input')
+            .val(allocation.rate !== null ? allocation.rate : '').attr('placeholder', '0.00');
+        rateInput.on('input', function() {
+            calculateAmountAndGst(row);
+            saveStocktakeAllocationRow(row);
+        });
+        row.append($('<td>').append(rateInput));
+        
+        // 6. Amount (calculated: Qty * Rate)
+        var amountInput = $('<input>').attr('type', 'number').attr('step', '0.01').addClass('form-control form-control-sm ' + cls + '-amount-input')
+            .val(allocation.amount !== null ? allocation.amount : '').prop('readonly', true).css('background', '#f8f9fa');
+        row.append($('<td>').append(amountInput));
+        
+        // 7. GST (10% of amount, can override)
+        var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').addClass('form-control form-control-sm ' + cls + '-gst-input')
+            .val(allocation.gst_amount !== null ? allocation.gst_amount : '').attr('placeholder', '0.00');
+        gstInput.on('focus', function() { $(this).data('manually-edited', true); });
+        gstInput.on('input', function() { saveStocktakeAllocationRow(row); });
+        row.append($('<td>').append(gstInput));
+        
+        // 8. Notes (text input)
+        var notesInput = $('<input>').attr('type', 'text').addClass('form-control form-control-sm ' + cls + '-notes-input')
+            .val(allocation.notes || '').attr('placeholder', 'Notes...');
+        notesInput.on('change', function() { saveStocktakeAllocationRow(row); });
+        row.append($('<td>').append(notesInput));
+        
+        // 9. Delete button
+        var deleteBtn = $('<button>').addClass('btn btn-sm btn-link text-danger ' + cls + '-delete-btn')
+            .html('<i class="fas fa-times"></i>').attr('title', 'Delete row');
+        deleteBtn.on('click', function() { deleteStocktakeAllocationRow(row); });
+        row.append($('<td>').addClass('col-action').append(deleteBtn));
+        
+        return row;
+    }
+    
+    // Populate item dropdown with category headers
+    function populateItemDropdown(selectEl, projectType, selectedPk) {
+        selectEl.empty().append($('<option>').val('').text('Select Item...'));
+        if (!projectType) return;
+        
+        loadItemsForProjectType(projectType, function(items) {
+            var includedItems = items.filter(function(i) { return i.stocktake === 1; });
+            var categories = {};
+            includedItems.forEach(function(item) {
+                var cat = item.category || item.category__category || 'Other';
+                if (!categories[cat]) categories[cat] = [];
+                categories[cat].push(item);
+            });
+            
+            Object.keys(categories).sort().forEach(function(catName) {
+                var optgroup = $('<optgroup>').attr('label', catName);
+                categories[catName].forEach(function(item) {
+                    var option = $('<option>').val(item.costing_pk).text(item.item);
+                    if (item.costing_pk == selectedPk) option.prop('selected', true);
+                    optgroup.append(option);
+                });
+                selectEl.append(optgroup);
+            });
+        });
+    }
+    
+    // Calculate Amount and GST
+    function calculateAmountAndGst(row) {
+        var cls = 'stocktake-alloc';
+        var qty = parseFloat(row.find('.' + cls + '-qty-input').val()) || 0;
+        var rate = parseFloat(row.find('.' + cls + '-rate-input').val()) || 0;
+        var amount = qty * rate;
+        row.find('.' + cls + '-amount-input').val(amount.toFixed(2));
+        
+        var gstInput = row.find('.' + cls + '-gst-input');
+        if (!gstInput.data('manually-edited')) {
+            gstInput.val((amount * 0.1).toFixed(2));
+        }
+        updateStocktakeStillToAllocate();
+    }
+    
+    // Debounced save for allocation row
+    var saveTimeouts = {};
+    function saveStocktakeAllocationRow(row) {
+        var pk = row.attr('data-allocation-pk');
+        if (!pk) return;
+        
+        clearTimeout(saveTimeouts[pk]);
+        saveTimeouts[pk] = setTimeout(function() {
+            var cls = 'stocktake-alloc';
+            var data = {
+                project_type: row.find('.' + cls + '-project-type-select').val() || null,
+                item_pk: row.find('.' + cls + '-item-select').val() || null,
+                unit: row.find('.' + cls + '-unit-input').val() || '',
+                qty: parseFloat(row.find('.' + cls + '-qty-input').val()) || 0,
+                rate: parseFloat(row.find('.' + cls + '-rate-input').val()) || 0,
+                amount: parseFloat(row.find('.' + cls + '-amount-input').val()) || 0,
+                gst_amount: parseFloat(row.find('.' + cls + '-gst-input').val()) || 0,
+                notes: row.find('.' + cls + '-notes-input').val() || ''
+            };
+            
+            $.ajax({
+                url: '/core/update_stocktake_allocation/' + pk + '/',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        updateStocktakeStillToAllocate();
+                    }
+                }
+            });
+        }, 500);
+    }
+    
+    // Add new allocation row
+    function addNewStocktakeAllocationRow() {
+        if (!window.currentSelectedBill) return;
+        
+        $.ajax({
+            url: '/core/create_stocktake_allocation/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ bill_pk: window.currentSelectedBill.bill_pk }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    var row = createStocktakeAllocationRow({
+                        allocation_pk: response.allocation_pk,
+                        project_type: null, item_pk: null, unit: '',
+                        qty: null, rate: null, amount: 0, gst_amount: 0, notes: ''
+                    });
+                    $('#stocktakeAllocAllocationsTableBody').append(row);
+                    updateStocktakeStillToAllocate();
+                }
+            }
+        });
+    }
+    
+    // Delete allocation row
+    function deleteStocktakeAllocationRow(row) {
+        var pk = row.attr('data-allocation-pk');
+        if (!pk) { row.remove(); return; }
+        
+        $.ajax({
+            url: '/core/delete_stocktake_allocation/' + pk + '/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            success: function(response) {
+                if (response.status === 'success') {
+                    row.fadeOut(200, function() { 
+                        row.remove(); 
+                        updateStocktakeStillToAllocate();
+                    });
+                }
+            }
+        });
+    }
+    
+    // Update still to allocate display
+    function updateStocktakeStillToAllocate() {
+        if (!window.currentSelectedBill) return;
+        
+        var cls = 'stocktake-alloc';
+        var totalNet = 0, totalGst = 0;
+        $('#stocktakeAllocAllocationsTableBody tr').each(function() {
+            totalNet += parseFloat($(this).find('.' + cls + '-amount-input').val()) || 0;
+            totalGst += parseFloat($(this).find('.' + cls + '-gst-input').val()) || 0;
+        });
+        
+        var remainingNet = window.currentSelectedBill.total_net - totalNet;
+        var remainingGst = window.currentSelectedBill.total_gst - totalGst;
+        
+        // Update footer display (IDs from still_to_allocate_id in dashboard.py)
+        var footerNet = $('#stocktakeAllocStillToAllocateNet');
+        var footerGst = $('#stocktakeAllocStillToAllocateGst');
+        footerNet.text(Utils.formatCurrency(remainingNet));
+        footerGst.text(Utils.formatCurrency(remainingGst));
+        
+        // Update styling based on remaining values
+        footerNet.toggleClass('remaining', Math.abs(remainingNet) >= 0.01);
+        footerGst.toggleClass('remaining', Math.abs(remainingGst) >= 0.01);
+        
+        // Update approve button state
+        updateApproveButtonState({ remainingNet: remainingNet, remainingGst: remainingGst });
+    }
+    
+    // Update approve button state
+    function updateApproveButtonState(totals) {
+        var selectedRow = $('#stocktakeAllocMainTableBody tr.selected-row');
+        if (!selectedRow.length) return;
+        
+        var approveBtn = selectedRow.find('.approve-stocktake-btn');
+        var isFullyAllocated = Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
+        
+        // Check all rows with amounts have an item selected
+        var allItemsSelected = true;
+        var cls = 'stocktake-alloc';
+        $('#stocktakeAllocAllocationsTableBody tr').each(function() {
+            var itemVal = $(this).find('.' + cls + '-item-select').val();
+            var amountVal = parseFloat($(this).find('.' + cls + '-amount-input').val()) || 0;
+            if (amountVal > 0 && !itemVal) { allItemsSelected = false; return false; }
+        });
+        
+        var canApprove = isFullyAllocated && allItemsSelected;
+        if (canApprove) {
+            approveBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+        } else {
+            approveBtn.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+        }
+    }
+    
+    // Approve stocktake bill
+    $(document).on('click', '.approve-stocktake-btn', function() {
+        var btn = $(this);
+        if (btn.prop('disabled')) return;
+        
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        var originalText = btn.text();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/approve_stocktake_bill/' + billPk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            success: function(response) {
+                if (response.status === 'success') {
+                    btn.html('<i class="fas fa-check"></i>').addClass('btn-success');
+                    setTimeout(function() {
+                        row.fadeOut(300, function() {
+                            row.remove();
+                            $('#stocktakeAllocAllocationsTableBody').empty();
+                            window.currentSelectedBill = null;
+                            // Recalculate footer totals after row removal
+                            AllocationsManager.recalculateFooterTotals('stocktakeAlloc');
+                            var firstRow = $('#stocktakeAllocMainTableBody tr').first();
+                            if (firstRow.length && firstRow.attr('data-pk')) {
+                                AllocationsManager.selectRow('stocktakeAlloc', firstRow);
+                            }
+                        });
+                    }, 500);
+                } else {
+                    btn.prop('disabled', false).text(originalText).addClass('btn-success');
+                    alert('Failed to approve: ' + response.message);
+                }
+            },
+            error: function() {
+                btn.prop('disabled', false).text(originalText).addClass('btn-success');
+                alert('Failed to approve bill. Please try again.');
+            }
+        });
+    });
+    
+    // Add Row button handler
+    $(document).on('click', '#stocktakeAllocAddRowBtn, .stocktakeAlloc-add-btn', function() {
+        addNewStocktakeAllocationRow();
+    });
+    
+    // Load Stocktake bills
+    window.loadStocktakeBills = function() {
+        if (!$('#stocktakeAllocMainTableBody').length) return;
+        
+        $.ajax({
+            url: '{% url "core:get_bills_list" %}',
+            type: 'GET',
+            success: function(response) {
+                window.stocktakeData = response;
+                
+                var stocktakeBills = response.bills.filter(function(bill) {
+                    return bill.is_stocktake === true && bill.bill_status === 0;
+                });
+                
+                stocktakeBills.forEach(function(bill) {
+                    if (bill.contact_pk && response.suppliers) {
+                        var supplier = response.suppliers.find(function(s) { return s.contact_pk === bill.contact_pk; });
+                        if (supplier) bill.supplier_name = supplier.name;
+                    }
+                });
+                
+                AllocationsManager.populateMainTable('stocktakeAlloc', stocktakeBills);
+                Utils.addTruncationTooltips('stocktakeAllocMainTable');
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake] Failed to load bills:', error);
+            }
+        });
+    };
+    
+    // Initialize Stocktake Section (called when user clicks Stocktake nav link)
+    window.initStocktakeSection = function() {
+        console.log('[Stocktake] Initializing stocktake section');
+        initAllocationsManager();
+        // Load project types first for allocation dropdowns
+        loadProjectTypes(function() {
+            window.loadStocktakeBills();
+        });
+        initSetupTab();
+        console.log('[Stocktake] Section initialized');
+    };
+    
+    // ========== SETUP TAB FUNCTIONS ==========
+    
+    var setupData = {
+        projectTypes: [],
+        categories: [],
+        costings: [],
+        selectedProjectType: null
+    };
+    
+    function initSetupTab() {
+        // Re-initialize Bootstrap tabs since they may not auto-init in hidden sections
+        $('#stocktakeTabs button[data-bs-toggle="tab"]').each(function() {
+            $(this).off('click.bs.tab'); // Remove any existing handlers
+            $(this).on('click', function(e) {
+                e.preventDefault();
+                // Manually toggle tab panes
+                var target = $(this).data('bs-target');
+                $('#stocktakeTabContent > .tab-pane').removeClass('show active');
+                $(target).addClass('show active');
+                $('#stocktakeTabs .nav-link').removeClass('active');
+                $(this).addClass('active');
+                
+                // Load project types when setup tab is clicked
+                if (target === '#stocktakeSetup' && setupData.projectTypes.length === 0) {
+                    loadProjectTypes();
+                }
+            });
+        });
+    }
+    
+    function loadProjectTypes(callback) {
+        $.ajax({
+            url: '/core/get_project_types/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' || response.project_types) {
+                    setupData.projectTypes = response.project_types || response;
+                    renderProjectTypes();
+                    if (callback) callback();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake Setup] Failed to load project types:', error);
+                $('#stocktakeProjectTypesBody').html('<tr><td colspan="2" class="text-danger text-center py-3">Failed to load</td></tr>');
+                if (callback) callback();
+            }
+        });
+    }
+    
+    function renderProjectTypes() {
+        var tbody = $('#stocktakeProjectTypesBody');
+        tbody.empty();
+        
+        if (setupData.projectTypes.length === 0) {
+            tbody.html('<tr><td colspan="2" class="text-muted text-center py-3">No project types found</td></tr>');
+            return;
+        }
+        
+        setupData.projectTypes.forEach(function(pt) {
+            var isIncluded = pt.stocktake === 1;
+            var row = $('<tr class="project-type-row"></tr>');
+            row.attr('data-project-type-pk', pt.project_type_pk);
+            row.attr('data-project-type', pt.project_type);
+            row.addClass(isIncluded ? 'stocktake-included' : 'stocktake-excluded');
+            
+            // Type name cell
+            row.append($('<td>').text(pt.project_type));
+            
+            // Checkbox cell
+            var checkboxCell = $('<td>').css('text-align', 'center');
+            var checkbox = $('<input type="checkbox">')
+                .addClass('project-type-stocktake-checkbox')
+                .attr('data-project-type-pk', pt.project_type_pk)
+                .prop('checked', isIncluded);
+            checkbox.on('click', function(e) {
+                e.stopPropagation(); // Don't trigger row click
+                var checked = $(this).prop('checked');
+                toggleStocktakeInclusion('project_type', pt.project_type_pk, checked);
+                // Update row styling
+                row.removeClass('stocktake-included stocktake-excluded');
+                row.addClass(checked ? 'stocktake-included' : 'stocktake-excluded');
+                // Update local data
+                pt.stocktake = checked ? 1 : 0;
+                // Re-render costings if this project type is selected
+                if (setupData.selectedProjectType === pt.project_type) {
+                    setupData.selectedProjectTypeIncluded = checked;
+                    renderCostingsTable();
+                }
+            });
+            checkboxCell.append(checkbox);
+            row.append(checkboxCell);
+            
+            // Row click to select and load costings
+            row.on('click', function() {
+                $('#stocktakeProjectTypesBody tr').removeClass('selected');
+                $(this).addClass('selected');
+                setupData.selectedProjectType = pt.project_type;
+                setupData.selectedProjectTypeIncluded = pt.stocktake === 1;
+                loadCostingsForProjectType(pt.project_type);
+            });
+            
+            tbody.append(row);
+        });
+    }
+    
+    function loadCostingsForProjectType(projectType) {
+        $('#stocktakeCostingsSubtitle').text(projectType);
+        $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-muted text-center py-3">Loading...</td></tr>');
+        
+        $.ajax({
+            url: '/core/get_categories_and_items/',
+            type: 'GET',
+            data: { project_type: projectType },
+            success: function(response) {
+                if (response.status === 'success') {
+                    setupData.categories = response.categories || [];
+                    setupData.costings = response.items || [];
+                    renderCostingsTable();
+                } else {
+                    $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake Setup] Failed to load costings:', error);
+                $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+            }
+        });
+    }
+    
+    function renderCostingsTable() {
+        var tbody = $('#stocktakeCostingsBody');
+        tbody.empty();
+        
+        if (setupData.categories.length === 0) {
+            tbody.html('<tr><td colspan="3" class="text-muted text-center py-3">No items found for this project type</td></tr>');
+            return;
+        }
+        
+        // Sort categories by order_in_list
+        var sortedCategories = setupData.categories.slice().sort(function(a, b) {
+            return (a.order_in_list || 0) - (b.order_in_list || 0);
+        });
+        
+        // Check if project type is included in stocktake
+        var projectTypeIncluded = setupData.selectedProjectTypeIncluded;
+        
+        sortedCategories.forEach(function(category) {
+            var categoryName = category.category;
+            var isInternal = categoryName.toLowerCase() === 'internal';
+            var isLabour = categoryName.toLowerCase() === 'labour' || categoryName.toLowerCase() === 'labor';
+            
+            // Category header row
+            var categoryRow = $('<tr class="category-row"></tr>');
+            if (isInternal) categoryRow.addClass('internal-category');
+            if (isLabour) categoryRow.addClass('labour-category');
+            if (!projectTypeIncluded) categoryRow.addClass('stocktake-disabled');
+            categoryRow.append($('<td colspan="3">').text(categoryName));
+            tbody.append(categoryRow);
+            
+            // Get items for this category
+            var categoryItems = setupData.costings.filter(function(item) {
+                return item.category__category === categoryName || item.category === categoryName;
+            });
+            
+            // Sort items by order_in_list
+            categoryItems.sort(function(a, b) {
+                return (a.order_in_list || 0) - (b.order_in_list || 0);
+            });
+            
+            categoryItems.forEach(function(item) {
+                var isItemIncluded = item.stocktake === 1;
+                var itemRow = $('<tr class="item-row"></tr>');
+                itemRow.attr('data-costing-pk', item.costing_pk);
+                
+                // Apply styling based on project type and item inclusion
+                if (!projectTypeIncluded) {
+                    itemRow.addClass('stocktake-disabled');
+                } else {
+                    itemRow.addClass(isItemIncluded ? 'stocktake-included' : 'stocktake-excluded');
+                }
+                
+                // Item name
+                itemRow.append($('<td>').text(item.item));
+                
+                // Unit
+                var unitName = item.unit__unit_name || item.unit_name || '-';
+                itemRow.append($('<td>').text(unitName));
+                
+                // Checkbox
+                var checkboxCell = $('<td>').css('text-align', 'center');
+                var checkbox = $('<input type="checkbox">')
+                    .addClass('costing-stocktake-checkbox')
+                    .attr('data-costing-pk', item.costing_pk)
+                    .prop('checked', isItemIncluded)
+                    .prop('disabled', !projectTypeIncluded);
+                checkbox.on('change', function() {
+                    var checked = $(this).prop('checked');
+                    toggleStocktakeInclusion('costing', item.costing_pk, checked);
+                    // Update row styling
+                    itemRow.removeClass('stocktake-included stocktake-excluded');
+                    itemRow.addClass(checked ? 'stocktake-included' : 'stocktake-excluded');
+                    // Update local data
+                    item.stocktake = checked ? 1 : 0;
+                });
+                checkboxCell.append(checkbox);
+                itemRow.append(checkboxCell);
+                
+                tbody.append(itemRow);
+            });
+        });
+    }
+    
+    // Toggle stocktake inclusion via AJAX
+    function toggleStocktakeInclusion(type, pk, included) {
+        $.ajax({
+            url: '/core/toggle_stocktake_inclusion/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                type: type,
+                pk: pk,
+                included: included
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('[Stocktake Setup] Updated ' + type + ' ' + pk + ' to ' + included);
+                } else {
+                    console.error('[Stocktake Setup] Failed to update:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake Setup] Failed to toggle stocktake:', error);
+            }
+        });
+    }
+    
+})();
+</script>

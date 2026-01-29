@@ -38,6 +38,11 @@ from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
 from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
+from .views.stocktake import (
+    toggle_stocktake_inclusion, get_stocktake_allocations,
+    create_stocktake_allocation, update_stocktake_allocation,
+    delete_stocktake_allocation, approve_stocktake_bill
+)
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
     get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays,
@@ -50,7 +55,8 @@ from .views.staff_hours import (
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
     dashboard_view, send_bill,
-    get_project_categories, get_project_items, create_category as dashboard_create_category,
+    get_project_categories, get_project_items, get_categories_and_items_by_type,
+    create_category as dashboard_create_category,
     create_item as dashboard_create_item, reorder_category, reorder_item,
     generate_po_html, get_po_status,
     preview_po, send_po_email as dashboard_send_po_email, download_po_pdf,
@@ -245,6 +251,13 @@ urlpatterns = [
     path('get_po_status/<int:project_pk>/', get_po_status, name='get_po_status'),
     path('get_project_categories/<int:project_pk>/', get_project_categories, name='get_project_categories'),
     path('get_project_items/<int:project_pk>/', get_project_items, name='get_project_items'),
+    path('get_categories_and_items/', get_categories_and_items_by_type, name='get_categories_and_items'),
+    path('toggle_stocktake_inclusion/', toggle_stocktake_inclusion, name='toggle_stocktake_inclusion'),
+    path('get_stocktake_allocations/<int:bill_pk>/', get_stocktake_allocations, name='get_stocktake_allocations'),
+    path('create_stocktake_allocation/', create_stocktake_allocation, name='create_stocktake_allocation'),
+    path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),
+    path('delete_stocktake_allocation/<int:allocation_pk>/', delete_stocktake_allocation, name='delete_stocktake_allocation'),
+    path('approve_stocktake_bill/<int:bill_pk>/', approve_stocktake_bill, name='approve_stocktake_bill'),
     path('dashboard_create_category/<int:project_pk>/', dashboard_create_category, name='dashboard_create_category'),
     path('dashboard_create_item/<int:project_pk>/', dashboard_create_item, name='dashboard_create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', reorder_category, name='reorder_category'),

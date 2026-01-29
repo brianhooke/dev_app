@@ -274,6 +274,7 @@ class ProjectTypes(models.Model):
     )
     rates_based = models.IntegerField(default=0)  # 0 = not rates-based, 1 = rates-based
     archived = models.IntegerField(default=0)
+    stocktake = models.IntegerField(null=True, blank=True)  # null/0 = not included, 1 = included in stocktake
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -696,6 +697,7 @@ class Costing(models.Model):
     sc_invoiced= models.DecimalField(max_digits=10, decimal_places=2)
     sc_paid= models.DecimalField(max_digits=10, decimal_places=2)
     tender_or_execution = models.IntegerField(default=1)  # 1=tender, 2=execution
+    stocktake = models.IntegerField(null=True, blank=True)  # null/0 = not included, 1 = included in stocktake
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -781,8 +783,9 @@ class Document_files(models.Model):
 # SERVICE: bills
 class Bills(models.Model):
     bill_pk = models.AutoField(primary_key=True)
-    # Replaced invoice_division with FK to Projects
+    # Replaced invoice_division with FK to Projects. project=None with is_stocktake=True means Stocktake bill
     project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    is_stocktake = models.BooleanField(default=False)  # True for Stocktake bills (project=None, is_stocktake=True)
     xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
     bill_status = models.IntegerField(default=0)  # -2 for unprocessed email bill, -1 for archived, 0 when bill created, 1 when allocated, 2 when approved, 3 when sent to Xero, 4 when paid, 99 for PO progress claim rejected, 100 for PO progress claim submitted awaiting approval, 101 is approved in PO URL but no bill uploaded, 102 is approved in PO URL and bill uploaded, 103 is PO approved, bill uploaded & approved for payment, 104 if sent to xero
     bill_xero_id = models.CharField(max_length=255, null=True, blank=True)
@@ -846,6 +849,37 @@ class Bill_allocations(models.Model):
     
     def __str__(self):
         return f"Bill Allocation - PK: {self.bill_allocation_pk}, Bill PK: {self.bill.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
+
+
+# SERVICE: stocktake
+class StocktakeAllocations(models.Model):
+    """
+    Stocktake-specific allocations for bills marked as is_stocktake=True.
+    Stores project_type, item, unit, qty, rate, amount, gst, notes.
+    """
+    allocation_pk = models.AutoField(primary_key=True)
+    bill = models.ForeignKey(Bills, on_delete=models.CASCADE, related_name='stocktake_allocations')
+    project_type = models.CharField(max_length=50, null=True, blank=True)
+    item = models.ForeignKey(Costing, on_delete=models.SET_NULL, null=True, blank=True, related_name='stocktake_allocations')
+    unit = models.CharField(max_length=50, null=True, blank=True)
+    qty = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
+    rate = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes = models.CharField(max_length=1000, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'stocktake_allocations'
+        indexes = [
+            models.Index(fields=['bill']),
+            models.Index(fields=['item']),
+        ]
+    
+    def __str__(self):
+        return f"Stocktake Allocation {self.allocation_pk} - Bill: {self.bill_id}, Item: {self.item_id}"
+
 
 # SERVICE: invoices (claims)
 class HC_claims(models.Model):

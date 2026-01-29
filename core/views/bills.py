@@ -362,8 +362,8 @@ def get_bill_allocations(request, invoice_id):
         try:
             # OPTIMIZED: Added select_related to avoid N+1 on item
             allocations = Bill_allocations.objects.filter(
-                bill_pk=invoice
-            ).select_related('item')
+                bill=invoice
+            ).select_related('item', 'xero_account')
             logger.debug(f"Found {allocations.count()} allocations for invoice {invoice_id}")
         except Exception as e:
             logger.error(f"Failed to query allocations: {str(e)}")
@@ -371,19 +371,20 @@ def get_bill_allocations(request, invoice_id):
         formatted_allocations = []
         for alloc in allocations:
             try:
-                item = alloc.item  
-                if not item:
-                    logger.warning(f"Allocation {alloc.bill_allocations_pk} has no item relationship")
-                    continue
-                formatted_allocations.append({
-                    'allocation_id': alloc.bill_allocations_pk,  
-                    'item_pk': item.costing_pk,  
-                    'item': item.item,  
-                    'amount': float(alloc.amount),  
-                    'gst_amount': float(alloc.gst_amount),
-                    'notes': alloc.notes or "",  
-                    'allocation_type': alloc.allocation_type
-                })
+                item = alloc.item
+                alloc_data = {
+                    'allocation_id': alloc.bill_allocations_pk,
+                    'allocation_pk': alloc.bill_allocation_pk,
+                    'amount': float(alloc.amount) if alloc.amount else 0,
+                    'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
+                    'notes': alloc.notes or "",
+                    'allocation_type': alloc.allocation_type,
+                    'xero_account_pk': alloc.xero_account_id if alloc.xero_account else None,
+                }
+                if item:
+                    alloc_data['item_pk'] = item.costing_pk
+                    alloc_data['item'] = item.item
+                formatted_allocations.append(alloc_data)
             except Exception as e:
                 logger.error(f"Failed to process allocation {alloc.bill_allocations_pk}: {str(e)}")
                 continue
@@ -424,6 +425,7 @@ def get_bill_allocations(request, invoice_id):
                 logger.error(f"Failed to query other invoices: {str(e)}")
         
         response_data = {
+            'status': 'success',
             'allocations': formatted_allocations,
             'contact_pk': contact_pk,
             'bill_type': invoice.bill_type,

@@ -44,6 +44,7 @@ def get_project_types(request):
                 'xero_instance_name': pt.xero_instance.xero_name if pt.xero_instance else None,
                 'rates_based': pt.rates_based,
                 'archived': pt.archived,
+                'stocktake': pt.stocktake or 0,
             })
         
         return JsonResponse({

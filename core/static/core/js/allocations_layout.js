@@ -1845,6 +1845,8 @@ var AllocationsManager = (function() {
         createEditableAllocationRow: createEditableAllocationRow,
         // Success animation
         showSuccessAndFadeRow: showSuccessAndFadeRow,
+        // Footer recalculation
+        recalculateFooterTotals: recalculateFooterTotals,
         // Utility functions are now in utils.js (Utils.isConstructionProject, etc.)
         _initialized: true
     };

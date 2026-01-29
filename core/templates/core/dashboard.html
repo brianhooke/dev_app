@@ -96,7 +96,7 @@ Data Structures:
 - Contact verified status: 0=not verified, 1=verified+matches, 2=verified+changed
 - Global variables: window.billsData, currentBillData, currentSelectedBillPk
 
-Version: v180 (displayed in navbar bottom-left)
+Version: v181 (displayed in navbar bottom-left)
 -->
 
 {% block title %}
@@ -531,6 +531,9 @@ Version: v180 (displayed in navbar bottom-left)
     
     <!-- Staff Hours Section -->
     {% include 'core/staff_hours.html' %}
+    
+    <!-- Stocktake Section -->
+    {% include 'core/stocktake.html' %}
     </div>
 </div>
 
@@ -563,6 +566,7 @@ Version: v180 (displayed in navbar bottom-left)
             $('#settingsSection').hide();
             $('#ratesSection').hide();
             $('#staffHoursSection').hide();
+            $('#stocktakeSection').hide();
             
             // Remove tender view background image and overlay
             $('#dynamicContentArea').css({
@@ -988,6 +992,35 @@ Version: v180 (displayed in navbar bottom-left)
             // Initialize staff hours section (populate dropdowns, etc.)
             if (typeof window.initStaffHoursSection === 'function') {
                 window.initStaffHoursSection();
+            }
+            
+            // Scroll to top
+            $('html, body').animate({ scrollTop: 0 }, 300);
+        });
+        
+        // Stocktake controller - shows inline in workspace
+        $('#stocktakeLink').click(function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all nav items and set this one
+            $('.reusable-navbar a').removeClass('active');
+            $(this).addClass('active');
+            
+            // Hide all sections using universal function
+            window.hideAllSections();
+            
+            // Reset tender view state
+            if (typeof window.resetTenderViewState === 'function') {
+                window.resetTenderViewState();
+            }
+            
+            // Show stocktake section and add has-content class to hide background
+            $('#stocktakeSection').css('display', 'flex').show();
+            $('#dynamicContentArea').addClass('has-content');
+            
+            // Initialize stocktake section
+            if (typeof window.initStocktakeSection === 'function') {
+                window.initStocktakeSection();
             }
             
             // Scroll to top

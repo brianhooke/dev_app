@@ -79,6 +79,18 @@
                         combinedSelect.append(option);
                     });
                 }
+                
+                // Add Stocktake
+                var stocktakeHeader = $('<option>').val('').text('─── Stocktake ───').prop('disabled', true);
+                combinedSelect.append(stocktakeHeader);
+                var stocktakeOption = $('<option>')
+                    .val('stocktake_-1')
+                    .text('  Stocktake');
+                if (bill.project_pk === -1) {
+                    stocktakeOption.prop('selected', true);
+                }
+                combinedSelect.append(stocktakeOption);
+                
                 row.append($('<td>').append(combinedSelect));
                 
                 // 2. Supplier dropdown with inline new supplier form
@@ -340,6 +352,11 @@
                 return p.projects_pk === projectPk;
             });
             if (project) xeroInstanceId = project.xero_instance_id;
+        } else if (selectedValue && selectedValue.startsWith('stocktake_')) {
+            // Stocktake uses the first available Xero instance
+            if (window.billsInboxData && window.billsInboxData.xero_instances && window.billsInboxData.xero_instances.length > 0) {
+                xeroInstanceId = window.billsInboxData.xero_instances[0].xero_instance_pk;
+            }
         }
         
         // Store xeroInstanceId on the row for later use
@@ -449,6 +466,11 @@
                     return p.projects_pk === projectPk;
                 });
                 if (project) xeroInstanceId = project.xero_instance_id;
+            } else if (xeroProjectVal && xeroProjectVal.startsWith('stocktake_')) {
+                // Stocktake uses first Xero instance
+                if (window.billsInboxData && window.billsInboxData.xero_instances && window.billsInboxData.xero_instances.length > 0) {
+                    xeroInstanceId = window.billsInboxData.xero_instances[0].xero_instance_pk;
+                }
             }
         }
         
