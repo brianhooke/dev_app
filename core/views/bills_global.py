@@ -180,7 +180,7 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
     
     logger.info(f"=== SUPPLIER DETAILS ===")
     logger.info(f"  contact_pk: {supplier.contact_pk}")
-    logger.info(f"  contact_name: {supplier.contact_name}")
+    logger.info(f"  name: {supplier.name}")
     logger.info(f"  xero_contact_id: {supplier.xero_contact_id}")
     
     if not supplier.xero_contact_id:
