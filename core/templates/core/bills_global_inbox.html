@@ -245,6 +245,10 @@
             url: '{% url "core:get_bills_list" %}',
             type: 'GET',
             success: function(response) {
+                // Guard: ensure table still exists (user may have navigated away)
+                if (!$('#billsInboxMainTableBody').length) {
+                    return;
+                }
                 
                 // Store data globally
                 window.billsInboxData = response;

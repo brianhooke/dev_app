@@ -76,7 +76,7 @@ def bills_global_direct_view(request):
         {'header': '$ Net', 'width': '9%'},
         {'header': '$ GST', 'width': '9%'},
         {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Send to Xero', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Approve', 'width': '10%', 'class': 'col-action'},
         {'header': 'Return', 'width': '7%', 'class': 'col-action'},
     ]
     
@@ -133,6 +133,50 @@ def bills_global_approvals_view(request):
         'readonly': True,
     }
     return render(request, 'core/bills_global_approvals.html', context)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def approve_bill_direct(request):
+    """
+    Approve a bill from Direct mode - sets bill_status to 2 (approved).
+    Bill will then appear in Approvals section.
+    """
+    try:
+        data = json.loads(request.body)
+        bill_pk = data.get('bill_pk')
+        
+        if not bill_pk:
+            return JsonResponse({'status': 'error', 'message': 'bill_pk required'}, status=400)
+        
+        bill = Bills.objects.get(bill_pk=bill_pk)
+        
+        # Validate bill is in correct status (0 = ready for allocation)
+        if bill.bill_status != 0:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Bill status {bill.bill_status} cannot be approved from Direct mode'
+            }, status=400)
+        
+        # Update status to approved
+        bill.bill_status = 2
+        bill.save()
+        
+        logger.info(f"Bill {bill_pk} approved from Direct mode (status -> 2)")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Bill approved successfully',
+            'new_status': 2
+        })
+        
+    except Bills.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Bill not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error approving bill: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 def _send_bill_to_xero_core(invoice, workflow='approvals'):

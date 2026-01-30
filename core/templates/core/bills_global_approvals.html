@@ -156,6 +156,11 @@
             url: '{% url "core:get_approved_bills" %}',
             type: 'GET',
             success: function(response) {
+                // Guard: ensure table still exists (user may have navigated away)
+                if (!$('#billsApprovalsMainTableBody').length) {
+                    return;
+                }
+                
                 console.log('Approvals - API response:', response);
                 console.log('Approvals - Bills count:', response.bills ? response.bills.length : 0);
                 if (response.bills) {

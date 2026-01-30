@@ -2122,7 +2122,6 @@ Backend Endpoints:
     // Day Details Side Panel Functions
     let selectedDayData = null;
     let earningsRatesLoaded = false;
-    let leaveTypesLoaded = false;
     const dayDetailsEmpty = document.getElementById('dayDetailsEmpty');
     const dayDetailsContent = document.getElementById('dayDetailsContent');
     const selectedDayTitle = document.getElementById('selectedDayTitle');
@@ -2156,15 +2155,27 @@ Backend Endpoints:
     if (dayHoursInput) dayHoursInput.addEventListener('input', updateDayTotalHours);
     if (leaveHoursInput) leaveHoursInput.addEventListener('input', updateDayTotalHours);
     
-    // Populate leave type dropdown
+    // Populate leave type dropdown - filtered to only show leave types assigned to the employee
     function populateLeaveTypes() {
-        if (leaveTypesLoaded || !leaveTypeSelect) return;
+        if (!leaveTypeSelect) return;
         
-        if (payItemsData.leave_types && payItemsData.leave_types.length > 0) {
+        const currentEmployeeId = calendarEmployeeSelect?.value;
+        const employee = employeesData.find(e => e.employee_id === currentEmployeeId);
+        
+        // Get leave type IDs assigned to this employee
+        const assignedLeaveTypeIds = new Set();
+        if (employee && employee.leave_balances) {
+            employee.leave_balances.forEach(lb => {
+                if (lb.LeaveTypeID) assignedLeaveTypeIds.add(lb.LeaveTypeID);
+            });
+        }
+        
+        if (payItemsData.leave_types && payItemsData.leave_types.length > 0 && assignedLeaveTypeIds.size > 0) {
             leaveTypeSelect.innerHTML = '<option value="">Select leave...</option>';
             
+            // Only show leave types that are assigned to this employee
             payItemsData.leave_types.forEach(lt => {
-                if (lt.CurrentRecord !== false) {
+                if (lt.CurrentRecord !== false && assignedLeaveTypeIds.has(lt.LeaveTypeID)) {
                     const option = document.createElement('option');
                     option.value = lt.LeaveTypeID;
                     option.textContent = lt.Name;
@@ -2172,9 +2183,8 @@ Backend Endpoints:
                     leaveTypeSelect.appendChild(option);
                 }
             });
-            leaveTypesLoaded = true;
         } else {
-            leaveTypeSelect.innerHTML = '<option value="">No leave types</option>';
+            leaveTypeSelect.innerHTML = '<option value="">No leave types assigned</option>';
         }
     }
     
@@ -2294,9 +2304,14 @@ Backend Endpoints:
                     alert(errorMsg);
                 } else {
                     console.log('Save day success - refreshing calendar');
-                    // Refresh calendar
-                    if (typeof loadEmployeeCalendarData === 'function') {
-                        await loadEmployeeCalendarData(currentEmployeeId);
+                    // Store the saved date before refreshing
+                    const savedDate = selectedDayData.date;
+                    // Refresh calendar to update visual styling and data
+                    await loadCalendarData();
+                    // Re-select the saved day to refresh the day details panel
+                    const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
+                    if (savedDayElement) {
+                        window.selectCalendarDay(savedDayElement);
                     }
                 }
             } catch (e) {

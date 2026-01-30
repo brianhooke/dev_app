@@ -41,6 +41,9 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': db_path,
+            'OPTIONS': {
+                'timeout': 20,  # Wait up to 20 seconds for database lock
+            }
         }
     }
 

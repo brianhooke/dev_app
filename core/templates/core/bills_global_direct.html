@@ -97,10 +97,10 @@
                     .attr('title', bill.email_subject + ' from ' + bill.email_from);
                 row.append($('<td>').addClass('col-action-first').append(emailLink));
                 
-                // 7. Send to Xero button
+                // 7. Approve button
                 var sendBtn = $('<button>')
-                    .addClass('btn btn-sm btn-secondary send-to-xero-btn')
-                    .text('Send to Xero')
+                    .addClass('btn btn-sm btn-secondary approve-btn')
+                    .text('Approve')
                     .attr('data-bill-pk', bill.bill_pk)
                     .prop('disabled', true);
                 row.append($('<td>').addClass('col-action').append(sendBtn));
@@ -349,7 +349,7 @@
     
     // Validate bill on page load (checks bill data directly, not allocations table)
     function validateBillOnLoad(bill) {
-        var button = $('button[data-bill-pk="' + bill.bill_pk + '"].send-to-xero-btn');
+        var button = $('button[data-bill-pk="' + bill.bill_pk + '"].approve-btn');
         if (button.length === 0) {
             return;
         }
@@ -402,9 +402,9 @@
         }
     }
     
-    // Validate Send to Xero button (checks allocations table - used after row selection)
+    // Validate Approve button (checks allocations table - used after row selection)
     function validateDirectSendButton(billPk) {
-        var button = $('button[data-bill-pk="' + billPk + '"].send-to-xero-btn');
+        var button = $('button[data-bill-pk="' + billPk + '"].approve-btn');
         if (button.length === 0) return;
         
         var isValid = true;
@@ -444,6 +444,10 @@
             url: '{% url "core:get_bills_list" %}',
             type: 'GET',
             success: function(response) {
+                // Guard: ensure table still exists (user may have navigated away)
+                if (!$('#billsDirectMainTableBody').length) {
+                    return;
+                }
                 
                 // Store data globally
                 window.billsDirectData = response;
@@ -796,8 +800,8 @@
         }
     });
     
-    // Send to Xero button - show confirmation modal first
-    $(document).on('click.pdfConfirmDirect', '.send-to-xero-btn', function(e) {
+    // Approve button - approve bill and move to Approvals section
+    $(document).on('click.approveDirect', '.approve-btn', function(e) {
         e.preventDefault();
         e.stopPropagation();
         
@@ -805,145 +809,20 @@
         var billPk = button.attr('data-bill-pk');
         var row = button.closest('tr');
         
-        console.log('[Direct PDF Modal] Click handler fired for bill:', billPk);
-        console.log('[Direct PDF Modal] pdfConfirmModalDirect:', pdfConfirmModalDirect);
-        
-        // Store for later
-        pendingBillPk = billPk;
-        pendingButton = button;
-        pendingRow = row;
-        
-        // Fetch PDF info from backend
+        // Disable button and show spinner
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
         
-        console.log('[Direct PDF Modal] Fetching PDF info...');
-        
         $.ajax({
-            url: '/core/get_bill_pdf_info/',
+            url: '{% url "core:approve_bill_direct" %}',
             type: 'POST',
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             contentType: 'application/json',
             data: JSON.stringify({ bill_pk: billPk }),
             success: function(response) {
-                console.log('[Direct PDF Modal] AJAX success, response:', response);
-                button.prop('disabled', false).text('Send to Xero');
-                
                 if (response.status === 'success') {
-                    // Show PDF info in modal
-                    $('#pdfSourceInfoDirect').text(response.source || 'Unknown');
-                    $('#pdfUrlTextDirect').text(response.pdf_url || 'No URL');
-                    
-                    // Load PDF in iframe
-                    var pdfUrl = response.pdf_url;
-                    if (pdfUrl) {
-                        $('#pdfPreviewFrameDirect').attr('src', pdfUrl).show();
-                        $('#pdfPreviewErrorDirect').hide();
-                        $('#pdfUrlDisplayDirect').removeClass('alert-danger').addClass('alert-warning');
-                    } else {
-                        $('#pdfPreviewFrameDirect').hide();
-                        $('#pdfPreviewErrorDirect').show();
-                        $('#pdfUrlDisplayDirect').removeClass('alert-warning').addClass('alert-danger');
-                        $('#pdfSourceInfoDirect').text('NO PDF FOUND - ' + (response.source || 'Unknown'));
-                    }
-                    
-                    // Show modal
-                    console.log('[Direct PDF Modal] About to show modal, pdfConfirmModalDirect:', pdfConfirmModalDirect);
-                    if (pdfConfirmModalDirect) {
-                        pdfConfirmModalDirect.show();
-                    } else {
-                        console.error('[Direct PDF Modal] Modal is null! Trying to reinitialize...');
-                        var modalEl = document.getElementById('pdfConfirmModalDirect');
-                        if (modalEl) {
-                            pdfConfirmModalDirect = new bootstrap.Modal(modalEl);
-                            pdfConfirmModalDirect.show();
-                        } else {
-                            alert('Error: Modal element not found');
-                        }
-                    }
-                } else {
-                    alert('Error getting PDF info: ' + response.message);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Direct PDF Modal] AJAX error:', status, error, xhr);
-                button.prop('disabled', false).text('Send to Xero');
-                alert('Failed to get PDF info: ' + (xhr.responseJSON?.message || 'Unknown error'));
-            }
-        });
-    });
-    
-    // Confirm send button
-    $(document).on('click', '#confirmDirectSendToXeroBtn', function() {
-        if (!pendingBillPk || !pendingButton || !pendingRow) return;
-        
-        var confirmBtn = $(this);
-        confirmBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
-        
-        // Get bill data from row attributes
-        var xeroInstanceId = pendingRow.attr('data-xero-instance-id');
-        var supplierPk = pendingRow.attr('data-supplier-pk');
-        var billNumber = pendingRow.attr('data-bill-number') || '';
-        var totalNet = parseFloat(pendingRow.attr('data-total-net')) || 0;
-        var totalGst = parseFloat(pendingRow.attr('data-total-gst')) || 0;
-        
-        console.log('[Send to Xero] === Starting send_bill_direct ===');
-        console.log('[Send to Xero] Bill PK:', pendingBillPk);
-        console.log('[Send to Xero] Xero Instance ID:', xeroInstanceId);
-        
-        if (!xeroInstanceId || !supplierPk) {
-            alert('Missing required data (Xero Instance or Supplier)');
-            confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
-            return;
-        }
-        
-        // Collect allocations data
-        var allocations = [];
-        $('#billsDirectAllocationsTableBody tr').each(function(index) {
-            allocations.push({
-                allocation_pk: $(this).attr('data-allocation-pk'),
-                xero_account_pk: $(this).find('.xero-account-select').val(),
-                tracking_category_pk: $(this).find('.tracking-category-select').val(),
-                amount: parseFloat($(this).find('.allocation-net-input').val()) || 0,
-                gst_amount: parseFloat($(this).find('.allocation-gst-input').val()) || 0,
-                notes: $(this).find('.allocation-notes-input').val()
-            });
-        });
-        
-        var requestPayload = {
-            bill_pk: pendingBillPk,
-            xero_instance_or_project: 'xero_' + xeroInstanceId,
-            supplier_pk: supplierPk,
-            bill_number: billNumber,
-            total_net: totalNet,
-            total_gst: totalGst,
-            allocations: allocations
-        };
-        
-        // Send to Xero API endpoint
-        $.ajax({
-            url: '{% url "core:send_bill_direct" %}',
-            type: 'POST',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            contentType: 'application/json',
-            data: JSON.stringify(requestPayload),
-            success: function(response) {
-                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
-                
-                console.log('=== SEND TO XERO RESPONSE ===');
-                console.log('Full response:', response);
-                
-                if (response.status === 'success') {
-                    pdfConfirmModalDirect.hide();
-                    
-                    // Show attachment status
-                    var msg = 'Bill sent to Xero!';
-                    if (response.attachment_status) {
-                        msg += '\nAttachment status: ' + response.attachment_status;
-                    }
-                    alert(msg);
-                    
-                    AllocationsManager.showSuccessAndFadeRow(pendingButton, pendingRow, function() {
-                        if (window.currentSelectedBillPk == pendingBillPk) {
+                    // Show success and fade out row
+                    AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                        if (window.currentSelectedBillPk == billPk) {
                             $('#billsDirectAllocationsTableBody').empty();
                             $('#billsDirectPdfViewer').hide();
                             $('#billsDirectViewerPlaceholder').show();
@@ -952,20 +831,16 @@
                         }
                     });
                 } else {
-                    // Keep modal open on error so user can retry or cancel
+                    button.prop('disabled', false).text('Approve');
                     alert('Error: ' + response.message);
                 }
             },
             error: function(xhr, status, error) {
-                // Keep modal open on error so user can retry or cancel
-                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
-                var errMsg = 'Failed to send to Xero.';
+                button.prop('disabled', false).text('Approve');
+                var errMsg = 'Failed to approve bill.';
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     errMsg += '\n' + xhr.responseJSON.message;
-                } else if (xhr.status) {
-                    errMsg += '\nStatus: ' + xhr.status + ' ' + error;
                 }
-                console.error('Send to Xero error:', xhr, status, error);
                 alert(errMsg);
             }
         });
