@@ -6,7 +6,8 @@ from .models import (
     SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
     Document_folders, Document_files,
-    Employee, EmployeePayRate, StaffHours, StaffHoursAllocations
+    Employee, EmployeePayRate, StaffHours, StaffHoursAllocations,
+    StocktakeAllocations, StocktakeOpeningBalance, StocktakeSnap, StocktakeSnapItem, StocktakeSnapAllocation
 )
 
 # Helper function to set nullable fields as not required
@@ -324,3 +325,43 @@ admin.site.register(Employee, EmployeeAdmin)
 admin.site.register(EmployeePayRate, EmployeePayRateAdmin)
 admin.site.register(StaffHours, StaffHoursAdmin)
 admin.site.register(StaffHoursAllocations, StaffHoursAllocationsAdmin)
+
+# Stocktake models
+class StocktakeAllocationsAdmin(admin.ModelAdmin):
+    list_display = ('allocation_pk', 'bill', 'project_type', 'item', 'unit', 'qty', 'rate', 'amount', 'gst_amount', 'notes', 'created_at')
+    list_filter = ('project_type', 'bill__bill_status')
+    search_fields = ('item__item', 'notes', 'bill__supplier_bill_number')
+
+class StocktakeOpeningBalanceAdmin(admin.ModelAdmin):
+    list_display = ('opening_balance_pk', 'item', 'date', 'qty', 'rate', 'notes', 'created_at')
+    list_filter = ('date', 'item__project_type')
+    search_fields = ('item__item', 'notes')
+    date_hierarchy = 'date'
+
+class StocktakeSnapItemInline(admin.TabularInline):
+    model = StocktakeSnapItem
+    extra = 0
+    readonly_fields = ('item', 'book_qty', 'counted_qty', 'variance_qty')
+
+class StocktakeSnapAdmin(admin.ModelAdmin):
+    list_display = ('snap_pk', 'date', 'costing_method', 'status', 'xero_journal_id', 'notes', 'created_at')
+    list_filter = ('status', 'costing_method', 'date')
+    search_fields = ('notes', 'xero_journal_id')
+    date_hierarchy = 'date'
+    inlines = [StocktakeSnapItemInline]
+
+class StocktakeSnapItemAdmin(admin.ModelAdmin):
+    list_display = ('snap_item_pk', 'snap', 'item', 'book_qty', 'counted_qty', 'variance_qty', 'created_at')
+    list_filter = ('snap__date', 'snap__status', 'item__project_type')
+    search_fields = ('item__item',)
+
+class StocktakeSnapAllocationAdmin(admin.ModelAdmin):
+    list_display = ('snap_allocation_pk', 'snap_item', 'project', 'qty', 'rate', 'amount', 'created_at')
+    list_filter = ('project', 'snap_item__snap__date')
+    search_fields = ('project__project', 'snap_item__item__item')
+
+admin.site.register(StocktakeAllocations, StocktakeAllocationsAdmin)
+admin.site.register(StocktakeOpeningBalance, StocktakeOpeningBalanceAdmin)
+admin.site.register(StocktakeSnap, StocktakeSnapAdmin)
+admin.site.register(StocktakeSnapItem, StocktakeSnapItemAdmin)
+admin.site.register(StocktakeSnapAllocation, StocktakeSnapAllocationAdmin)

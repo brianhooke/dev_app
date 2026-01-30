@@ -881,6 +881,139 @@ class StocktakeAllocations(models.Model):
         return f"Stocktake Allocation {self.allocation_pk} - Bill: {self.bill_id}, Item: {self.item_id}"
 
 
+# SERVICE: stocktake - Opening Balances
+class StocktakeOpeningBalance(models.Model):
+    """
+    Opening balance for a stocktake item at a specific date.
+    Used to establish initial qty and rate before tracking begins.
+    """
+    opening_balance_pk = models.AutoField(primary_key=True)
+    item = models.ForeignKey(Costing, on_delete=models.CASCADE, related_name='stocktake_opening_balances')
+    date = models.DateField()
+    qty = models.DecimalField(max_digits=15, decimal_places=5)
+    rate = models.DecimalField(max_digits=15, decimal_places=5)
+    notes = models.CharField(max_length=500, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'stocktake_opening_balances'
+        indexes = [
+            models.Index(fields=['item']),
+            models.Index(fields=['date']),
+        ]
+    
+    def __str__(self):
+        return f"Opening Balance - Item: {self.item_id}, Date: {self.date}, Qty: {self.qty}, Rate: {self.rate}"
+
+
+# SERVICE: stocktake - Snap Events
+class StocktakeSnap(models.Model):
+    """
+    A stocktake snap event - a physical count session at a point in time.
+    Captures the date, costing method, and status of the snap.
+    """
+    COSTING_METHOD_CHOICES = [
+        ('FIFO', 'First In First Out'),
+        ('LIFO', 'Last In First Out'),
+        ('AVG', 'Weighted Average'),
+    ]
+    STATUS_DRAFT = 0
+    STATUS_FINALISED = 1
+    STATUS_SENT_TO_XERO = 2
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_FINALISED, 'Finalised'),
+        (STATUS_SENT_TO_XERO, 'Sent to Xero'),
+    ]
+    
+    snap_pk = models.AutoField(primary_key=True)
+    date = models.DateField()
+    costing_method = models.CharField(max_length=10, choices=COSTING_METHOD_CHOICES, default='FIFO')
+    status = models.IntegerField(choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    xero_journal_id = models.CharField(max_length=255, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'stocktake_snaps'
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"Stocktake Snap {self.snap_pk} - Date: {self.date}, Status: {self.get_status_display()}"
+
+
+# SERVICE: stocktake - Snap Item Counts
+class StocktakeSnapItem(models.Model):
+    """
+    Individual item count within a stocktake snap.
+    Records book qty (calculated), counted qty (user input), and variance.
+    """
+    snap_item_pk = models.AutoField(primary_key=True)
+    snap = models.ForeignKey(StocktakeSnap, on_delete=models.CASCADE, related_name='snap_items')
+    item = models.ForeignKey(Costing, on_delete=models.CASCADE, related_name='stocktake_snap_items')
+    book_qty = models.DecimalField(max_digits=15, decimal_places=5)  # Calculated at snap time
+    counted_qty = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)  # User input
+    variance_qty = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)  # counted - book
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'stocktake_snap_items'
+        unique_together = ['snap', 'item']
+        indexes = [
+            models.Index(fields=['snap']),
+            models.Index(fields=['item']),
+        ]
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate variance when counted_qty is set
+        if self.counted_qty is not None and self.book_qty is not None:
+            self.variance_qty = self.counted_qty - self.book_qty
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Snap Item {self.snap_item_pk} - Snap: {self.snap_id}, Item: {self.item_id}, Variance: {self.variance_qty}"
+
+
+# SERVICE: stocktake - Snap Allocations to Projects
+class StocktakeSnapAllocation(models.Model):
+    """
+    Allocation of stock variance (consumption) to a project.
+    When stock is consumed (negative variance), user allocates qty to projects.
+    Rate is calculated based on snap's costing method (FIFO/LIFO/AVG).
+    """
+    snap_allocation_pk = models.AutoField(primary_key=True)
+    snap_item = models.ForeignKey(StocktakeSnapItem, on_delete=models.CASCADE, related_name='allocations')
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, related_name='stocktake_snap_allocations')
+    qty = models.DecimalField(max_digits=15, decimal_places=5)
+    rate = models.DecimalField(max_digits=15, decimal_places=5)  # Calculated by FIFO/LIFO/AVG
+    amount = models.DecimalField(max_digits=10, decimal_places=2)  # qty * rate
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    
+    class Meta:
+        db_table = 'stocktake_snap_allocations'
+        indexes = [
+            models.Index(fields=['snap_item']),
+            models.Index(fields=['project']),
+        ]
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate amount
+        if self.qty is not None and self.rate is not None:
+            self.amount = self.qty * self.rate
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Snap Allocation {self.snap_allocation_pk} - Project: {self.project_id}, Qty: {self.qty}, Amount: {self.amount}"
+
+
 # SERVICE: invoices (claims)
 class HC_claims(models.Model):
     hc_claim_pk = models.AutoField(primary_key=True)

@@ -346,6 +346,167 @@ Tabs:
         #stocktakeSetup.active.show {
             flex-direction: row;
         }
+        /* Snap tab uses row layout */
+        #stocktakeSnap.active.show {
+            flex-direction: row;
+        }
+        
+        /* Snap Tab Panel Styling */
+        .snap-panel {
+            border: 1px solid var(--manila-border);
+            border-radius: 6px;
+            background: white;
+            overflow: hidden;
+        }
+        .snap-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--manila-light);
+            border-bottom: 1px solid var(--manila-border);
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--manila-text);
+        }
+        .snap-panel-body {
+            background: white;
+        }
+        
+        /* Stock Ledger Table */
+        #stockLedgerTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--manila-light);
+        }
+        #stockLedgerTable thead th {
+            padding: 6px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid var(--manila-border);
+        }
+        #stockLedgerTable tbody td {
+            padding: 6px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid var(--manila-border);
+        }
+        .stock-ledger-row {
+            cursor: pointer;
+        }
+        .stock-ledger-row:hover {
+            background: var(--manila-lighter);
+        }
+        .stock-ledger-row.selected {
+            background: var(--manila-mid);
+        }
+        
+        /* Snap History Table */
+        #snapHistoryTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--manila-light);
+        }
+        #snapHistoryTable thead th {
+            padding: 6px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid var(--manila-border);
+        }
+        #snapHistoryTable tbody td {
+            padding: 6px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid var(--manila-border);
+        }
+        .snap-history-row {
+            cursor: pointer;
+        }
+        .snap-history-row:hover {
+            background: var(--manila-lighter);
+        }
+        .snap-history-row.selected {
+            background: var(--manila-mid);
+        }
+        
+        /* Snap Items Table */
+        #snapItemsTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--manila-light);
+        }
+        #snapItemsTable thead th {
+            padding: 8px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid var(--manila-border);
+            color: var(--manila-text);
+            text-align: left;
+        }
+        #snapItemsTable tbody td {
+            padding: 8px 10px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--manila-border);
+            vertical-align: top;
+            text-align: left;
+        }
+        .snap-item-row:hover {
+            background: var(--manila-lighter);
+        }
+        
+        /* Snap allocation mini rows */
+        .snap-allocations-mini {
+            max-width: 100%;
+        }
+        .snap-alloc-row {
+            align-items: center;
+            margin-bottom: 2px !important;
+        }
+        .snap-alloc-row .form-select,
+        .snap-alloc-row .form-control {
+            padding: 1px 4px;
+            height: 22px;
+        }
+        
+        /* Tighter snap items table rows */
+        #snapItemsTable td {
+            padding: 2px 4px !important;
+            vertical-align: middle;
+        }
+        #snapItemsTable .snap-items-group-header td {
+            padding: 4px 6px !important;
+        }
+        .snap-allocations-mini {
+            padding: 2px 0;
+        }
+        
+        /* Counted input styling */
+        .snap-counted-input {
+            border: 1px solid var(--manila-border);
+        }
+        .snap-counted-input:focus {
+            border-color: var(--manila-dark);
+            box-shadow: 0 0 0 2px rgba(184, 168, 136, 0.25);
+        }
+        
+        /* Add Row button styling (matches quote-action-btn) */
+        .snap-add-alloc-btn {
+            background-color: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .snap-add-alloc-btn:hover {
+            background-color: #16a34a;
+        }
+        .snap-add-alloc-btn i {
+            font-size: 10px;
+        }
     </style>
 
     <!-- Main Content -->
@@ -371,11 +532,256 @@ Tabs:
             </div>
 
             <!-- Snap Tab -->
-            <div class="tab-pane fade" id="stocktakeSnap" role="tabpanel">
-                <div class="stocktake-placeholder">
-                    <i class="fas fa-camera"></i>
-                    <h5>Quick Stocktake</h5>
-                    <p class="text-muted">Snap feature coming soon - quickly capture stocktake data</p>
+            <div class="tab-pane fade" id="stocktakeSnap" role="tabpanel" style="flex-direction: row !important; gap: 16px; padding: 12px 0; height: 100%;">
+                <!-- LHS: Stock Ledger & Snap History -->
+                <div class="snap-left-panel" style="width: 480px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0;">
+                    <!-- Stock Ledger Panel -->
+                    <div class="snap-panel" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                        <div class="snap-panel-header">
+                            <span>Stock Ledger</span>
+                            <button class="btn btn-sm btn-outline-secondary" id="openingBalancesBtn" style="padding: 2px 8px; font-size: 11px;">
+                                Opening Balances
+                            </button>
+                        </div>
+                        <div class="snap-panel-body" style="flex: 1; overflow-y: auto; position: relative;">
+                            <table class="reusable-table" id="stockLedgerTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35%;">Item</th>
+                                        <th style="width: 12%;">Unit</th>
+                                        <th style="width: 13%; text-align: right;">Qty</th>
+                                        <th style="width: 18%; text-align: right;">Avg Rate</th>
+                                        <th style="width: 22%; text-align: right;">$ Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockLedgerBody">
+                                    <tr><td colspan="5" class="text-muted text-center py-3">Loading...</td></tr>
+                                </tbody>
+                                <tfoot id="stockLedgerFoot" style="position: sticky; bottom: 0; background: var(--manila-light); font-weight: 600;">
+                                    <tr>
+                                        <td colspan="4" style="text-align: right;">Grand Total:</td>
+                                        <td id="stockLedgerGrandTotal" style="text-align: right;">$0.00</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Snap History Panel -->
+                    <div class="snap-panel" style="height: 200px; flex-shrink: 0; display: flex; flex-direction: column;">
+                        <div class="snap-panel-header">
+                            <span>Snap History</span>
+                            <button class="btn btn-sm btn-primary" id="newSnapBtn" style="padding: 2px 8px; font-size: 11px;">
+                                New Snap
+                            </button>
+                        </div>
+                        <div class="snap-panel-body" style="flex: 1; overflow-y: auto;">
+                            <table class="reusable-table" id="snapHistoryTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40%;">Date</th>
+                                        <th style="width: 35%;">Items</th>
+                                        <th style="width: 25%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="snapHistoryBody">
+                                    <tr><td colspan="3" class="text-muted text-center py-3">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RHS: Snap Details (toggles with Opening Balances) -->
+                <div class="snap-right-panel" id="snapDetailsView" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                    <!-- Snap Header -->
+                    <div class="snap-detail-header" style="display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: var(--manila-light); border: 1px solid var(--manila-border); border-radius: 6px 6px 0 0;">
+                        <div style="flex: 1;">
+                            <h5 style="margin: 0; color: var(--manila-text); font-family: 'Merriweather', serif;">
+                                Stocktake Snap
+                            </h5>
+                            <span class="text-muted" style="font-size: 12px;">Count physical stock and allocate variance to projects</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div>
+                                <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Date</label>
+                                <input type="date" class="form-control form-control-sm" id="snapDate" value="" style="width: 140px;">
+                            </div>
+                            <div>
+                                <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Costing Method</label>
+                                <select class="form-select form-select-sm" id="snapCostingMethod" style="width: 100px;">
+                                    <option value="FIFO" selected>FIFO</option>
+                                    <option value="LIFO">LIFO</option>
+                                    <option value="AVG">Average</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Status</label>
+                                <span class="badge bg-warning text-dark" style="font-size: 12px; padding: 6px 10px;">Draft</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Snap Items Table -->
+                    <div class="snap-items-container" style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--manila-border); border-top: none; background: white; min-height: 0; overflow: hidden;">
+                        <div style="padding: 8px 12px; background: var(--manila-lighter); border-bottom: 1px solid var(--manila-border); font-weight: 600; color: var(--manila-text); font-size: 13px;">
+                            Item Counts
+                        </div>
+                        <div style="flex: 1; overflow-y: auto;">
+                            <table class="reusable-table" id="snapItemsTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 18%;">Item</th>
+                                        <th style="width: 6%;">Unit</th>
+                                        <th style="width: 10%;">Book Qty</th>
+                                        <th style="width: 10%;">Counted</th>
+                                        <th style="width: 10%;">Variance</th>
+                                        <th style="width: 46%;">Project Allocations</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="snapItemsBody">
+                                    <tr><td colspan="6" class="text-muted text-center py-4">Click "New Snap" to start a stocktake</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Snap Footer Actions -->
+                    <div class="snap-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--manila-lighter); border: 1px solid var(--manila-border); border-top: none; border-radius: 0 0 6px 6px;">
+                        <div>
+                            <span id="snapSummaryText" style="font-size: 12px; color: var(--manila-text-muted);">
+                                <strong>Summary:</strong> No snap selected
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button class="btn btn-outline-primary btn-sm" id="editSnapBtn" style="display: none;">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" id="deleteSnapBtn">
+                                Delete
+                            </button>
+                            <button class="btn btn-warning btn-sm" id="finaliseSnapBtn">
+                                Finalise
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="sendSnapToXeroBtn" style="display: none;">
+                                Send to Xero
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RHS: Opening Balances View (hidden by default) -->
+                <div class="snap-right-panel" id="openingBalancesView" style="flex: 1; display: none; flex-direction: column; min-height: 0;">
+                    <!-- Opening Balances Header -->
+                    <div class="snap-detail-header" style="display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: var(--manila-light); border: 1px solid var(--manila-border); border-radius: 6px 6px 0 0;">
+                        <div style="flex: 1;">
+                            <h5 style="margin: 0; color: var(--manila-text); font-family: 'Merriweather', serif;">
+                                Opening Balances
+                            </h5>
+                            <span class="text-muted" style="font-size: 12px;">Enter initial stock quantities and rates</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div>
+                                <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Opening Date</label>
+                                <input type="date" class="form-control form-control-sm" id="openingBalanceDate" style="width: 140px;">
+                            </div>
+                            <button class="btn btn-outline-secondary btn-sm" id="backToSnapBtn">
+                                Back to Snap
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Opening Balances Table -->
+                    <div class="snap-items-container" style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--manila-border); border-top: none; background: white; min-height: 0; overflow: hidden;">
+                        <div style="padding: 8px 12px; background: var(--manila-lighter); border-bottom: 1px solid var(--manila-border); font-weight: 600; color: var(--manila-text); font-size: 13px;">
+                            Item Balances
+                        </div>
+                        <div style="flex: 1; overflow-y: auto;">
+                            <table class="reusable-table" id="openingBalancesTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 28%;">Item</th>
+                                        <th style="width: 10%;">Unit</th>
+                                        <th style="width: 12%;">Date</th>
+                                        <th style="width: 12%; text-align: right;">Qty</th>
+                                        <th style="width: 14%; text-align: right;">Rate</th>
+                                        <th style="width: 14%; text-align: right;">Total</th>
+                                        <th style="width: 5%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="openingBalancesBody">
+                                    <tr><td colspan="7" class="text-muted text-center py-3">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Opening Balances Footer -->
+                    <div class="snap-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--manila-lighter); border: 1px solid var(--manila-border); border-top: none; border-radius: 0 0 6px 6px;">
+                        <div>
+                            <span id="openingBalancesTotal" style="font-size: 12px; color: var(--manila-text);">
+                                <strong>Total Value:</strong> $0.00
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-primary btn-sm" id="saveAllOpeningBalancesBtn">
+                                Save All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RHS: Item History View (hidden by default) -->
+                <div class="snap-right-panel" id="itemHistoryView" style="flex: 1; display: none; flex-direction: column; min-height: 0;">
+                    <!-- Item History Header -->
+                    <div class="snap-detail-header" style="display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: var(--manila-light); border: 1px solid var(--manila-border); border-radius: 6px 6px 0 0;">
+                        <div style="flex: 1;">
+                            <h5 id="itemHistoryTitle" style="margin: 0; color: var(--manila-text); font-family: 'Merriweather', serif;">
+                                Item History
+                            </h5>
+                            <span id="itemHistorySubtitle" class="text-muted" style="font-size: 12px;">Stock movement chronology</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div id="itemHistorySummary" style="text-align: right; font-size: 12px;">
+                                <div><strong>Qty:</strong> <span id="itemHistoryQty">0</span></div>
+                                <div><strong>Avg Rate:</strong> <span id="itemHistoryRate">$0.00</span></div>
+                            </div>
+                            <button class="btn btn-outline-secondary btn-sm" id="backFromHistoryBtn">
+                                Back
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Item History Table -->
+                    <div class="snap-items-container" style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--manila-border); border-top: none; background: white; min-height: 0; overflow: hidden;">
+                        <div style="flex: 1; overflow-y: auto;">
+                            <table class="reusable-table" id="itemHistoryTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 12%;">Date</th>
+                                        <th style="width: 28%;">Description</th>
+                                        <th style="width: 10%; text-align: right;">Qty</th>
+                                        <th style="width: 12%; text-align: right;">Rate</th>
+                                        <th style="width: 12%; text-align: right;">Amount</th>
+                                        <th style="width: 13%; text-align: right;">Run. Qty</th>
+                                        <th style="width: 13%; text-align: right;">Run. Avg</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="itemHistoryBody">
+                                    <tr><td colspan="7" class="text-muted text-center py-4">Select an item to view history</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Item History Footer -->
+                    <div class="snap-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--manila-lighter); border: 1px solid var(--manila-border); border-top: none; border-radius: 0 0 6px 6px;">
+                        <div>
+                            <span id="itemHistoryTotalText" style="font-size: 12px; color: var(--manila-text);">
+                                <strong>Total Value:</strong> $0.00
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -417,7 +823,7 @@ Tabs:
                                 </tr>
                             </thead>
                             <tbody id="stocktakeCostingsBody">
-                                <tr><td colspan="3" class="text-muted text-center py-3"><i class="fas fa-arrow-left me-2"></i>Select a project type</td></tr>
+                                <tr><td colspan="3" class="text-muted text-center py-3">Select a project type</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1191,6 +1597,1477 @@ Tabs:
             }
         });
     }
+    
+    // =============================================================================
+    // SNAP TAB FUNCTIONALITY
+    // =============================================================================
+    
+    var snapData = {
+        ledger: [],
+        snaps: [],
+        currentSnap: null,
+        projects: []
+    };
+    
+    // Initialize Snap tab
+    var snapDataLoaded = false;
+    
+    // Load all snap data
+    function loadSnapData() {
+        console.log('[Snap] Loading data...');
+        snapDataLoaded = true;
+        
+        loadStockLedger().catch(function(err) {
+            console.error('[Snap] Failed to load ledger:', err);
+            $('#stockLedgerBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+        });
+        
+        loadSnapList().catch(function(err) {
+            console.error('[Snap] Failed to load snap list:', err);
+            $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+        });
+        
+        loadProjects().catch(function(err) {
+            console.error('[Snap] Failed to load projects:', err);
+        });
+    }
+    
+    // Load stock ledger
+    function loadStockLedger() {
+        console.log('[Snap] Loading stock ledger...');
+        return $.ajax({
+            url: '/core/stocktake/ledger/',
+            type: 'GET',
+            success: function(response) {
+                console.log('[Snap] Stock ledger response:', response);
+                if (response.status === 'success') {
+                    snapData.ledger = response.ledger || [];
+                    renderStockLedger();
+                } else {
+                    console.error('[Snap] Ledger error:', response.message);
+                    $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Error loading</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to load stock ledger:', error);
+                $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Failed to load</td></tr>');
+            }
+        });
+    }
+    
+    // Render stock ledger table grouped by ProjectType
+    function renderStockLedger() {
+        var tbody = $('#stockLedgerBody');
+        tbody.empty();
+        
+        if (snapData.ledger.length === 0) {
+            tbody.append('<tr><td colspan="5" class="text-muted text-center py-3">No stocktake items</td></tr>');
+            $('#stockLedgerGrandTotal').text('$0.00');
+            return;
+        }
+        
+        // Group items by project_type
+        var grouped = {};
+        var grandTotal = 0;
+        
+        snapData.ledger.forEach(function(item) {
+            var pt = item.project_type || 'Uncategorised';
+            if (!grouped[pt]) {
+                grouped[pt] = { items: [], total: 0 };
+            }
+            var itemTotal = (item.qty || 0) * (item.avg_rate || 0);
+            item.total_value = itemTotal;
+            grouped[pt].items.push(item);
+            grouped[pt].total += itemTotal;
+            grandTotal += itemTotal;
+        });
+        
+        // Render grouped items
+        Object.keys(grouped).sort().forEach(function(projectType) {
+            var group = grouped[projectType];
+            
+            // Project Type header row (clickable to collapse) - styled like rates.html
+            var headerRow = $('<tr class="stock-ledger-group-header">');
+            headerRow.attr('data-project-type', projectType);
+            headerRow.css({
+                'background': '#f8f9fa',
+                'cursor': 'pointer',
+                'font-size': '13px',
+                'font-weight': '600',
+                'line-height': '1',
+                'border-bottom': '1px solid #dee2e6'
+            });
+            
+            var headerCell = $('<td colspan="4">');
+            headerCell.css({'padding': '6px'});
+            headerCell.html(
+                '<span class="ledger-collapse-indicator" style="display: inline-block; width: 14px; font-size: 10px; color: #6c757d; transform: rotate(90deg); transition: transform 0.2s;">▶</span>' +
+                '<span style="color: #6c757d; cursor: grab; margin: 0 6px;">⋮⋮</span>' +
+                '<span>' + projectType + '</span>'
+            );
+            headerRow.append(headerCell);
+            
+            // Total cell - hidden when expanded, shown when collapsed
+            var totalCell = $('<td>').css({'text-align': 'right', 'padding': '6px', 'font-weight': '600', 'color': '#6c757d'});
+            totalCell.addClass('group-total-cell').text('');  // Empty when expanded
+            headerRow.append(totalCell);
+            
+            // Toggle collapse on click
+            headerRow.on('click', function() {
+                var pt = $(this).data('project-type');
+                var itemRows = tbody.find('tr.stock-ledger-row[data-project-type="' + pt + '"]');
+                var indicator = $(this).find('.ledger-collapse-indicator');
+                var totalCell = $(this).find('.group-total-cell');
+                
+                if (itemRows.first().is(':visible')) {
+                    itemRows.hide();
+                    indicator.css('transform', 'rotate(0deg)');
+                    totalCell.text(formatCurrency(group.total));  // Show total when collapsed
+                } else {
+                    itemRows.show();
+                    indicator.css('transform', 'rotate(90deg)');
+                    totalCell.text('');  // Hide total when expanded
+                }
+            });
+            
+            tbody.append(headerRow);
+            
+            // Item rows (indented) - styled like rates.html items
+            group.items.forEach(function(item) {
+                var row = $('<tr class="stock-ledger-row">');
+                row.attr('data-item-pk', item.item_pk);
+                row.attr('data-project-type', projectType);
+                row.css({
+                    'font-size': '12px',
+                    'font-weight': '400',
+                    'line-height': '1',
+                    'border-bottom': '1px solid #dee2e6'
+                });
+                
+                // Indented item name (like rates items - 30px indent) with future stock indicator
+                var nameCell = $('<td>').css({'padding': '2px 6px 2px 30px'});
+                nameCell.text(item.item_name);
+                if (item.future_qty > 0) {
+                    nameCell.append($('<span>').css({
+                        'margin-left': '6px',
+                        'color': '#0d6efd',
+                        'font-size': '10px',
+                        'cursor': 'help'
+                    }).attr('title', '+' + formatNumber(item.future_qty) + ' incoming (future dated bills)').html('<i class="fas fa-truck"></i>'));
+                }
+                row.append(nameCell);
+                
+                // Unit
+                row.append($('<td>').addClass('text-muted').css('font-size', '12px').text(item.unit || '-'));
+                
+                // Qty
+                var qtyDisplay = (item.qty === 0 || item.qty === null) ? '-' : formatNumber(item.qty);
+                row.append($('<td>').css('text-align', 'right').text(qtyDisplay));
+                
+                // Avg Rate
+                var rateDisplay = (item.qty === 0 || item.qty === null) ? '-' : formatCurrency(item.avg_rate);
+                row.append($('<td>').css('text-align', 'right').text(rateDisplay));
+                
+                // $ Total
+                var totalDisplay = (item.qty === 0 || item.qty === null) ? '-' : formatCurrency(item.total_value);
+                row.append($('<td>').css('text-align', 'right').text(totalDisplay));
+                
+                // Click handler to show item history
+                row.css('cursor', 'pointer');
+                row.on('click', function() {
+                    var itemPk = $(this).data('item-pk');
+                    showItemHistory(itemPk);
+                });
+                row.hover(
+                    function() { $(this).css('background', '#f8f9fa'); },
+                    function() { $(this).css('background', ''); }
+                );
+                
+                tbody.append(row);
+            });
+        });
+        
+        // Update grand total
+        $('#stockLedgerGrandTotal').text(formatCurrency(grandTotal));
+    }
+    
+    // Show item history view
+    function showItemHistory(itemPk) {
+        // Hide other views, show history view
+        $('#snapDetailsView').hide();
+        $('#openingBalancesView').hide();
+        $('#itemHistoryView').css('display', 'flex');
+        
+        // Load item history
+        $('#itemHistoryBody').html('<tr><td colspan="7" class="text-muted text-center py-4">Loading...</td></tr>');
+        
+        $.ajax({
+            url: '/core/stocktake/item/' + itemPk + '/history/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    renderItemHistory(response);
+                } else {
+                    $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Error: ' + response.message + '</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Failed to load history</td></tr>');
+            }
+        });
+    }
+    
+    // Render item history table
+    function renderItemHistory(data) {
+        var item = data.item;
+        var history = data.history;
+        var summary = data.summary;
+        
+        // Update header
+        $('#itemHistoryTitle').text(item.item_name);
+        $('#itemHistorySubtitle').text(item.project_type + ' • ' + (item.unit || 'No unit'));
+        $('#itemHistoryQty').text(formatNumber(summary.total_qty));
+        $('#itemHistoryRate').text(formatCurrency(summary.avg_rate));
+        $('#itemHistoryTotalText').html('<strong>Total Value:</strong> ' + formatCurrency(summary.total_value));
+        
+        var tbody = $('#itemHistoryBody');
+        tbody.empty();
+        
+        if (history.length === 0) {
+            tbody.append('<tr><td colspan="7" class="text-muted text-center py-4">No history found for this item</td></tr>');
+            return;
+        }
+        
+        history.forEach(function(entry) {
+            var row = $('<tr>');
+            
+            // Style based on type
+            if (entry.type === 'opening_balance') {
+                row.css({'background': '#e8f5e9', 'font-weight': '500'});
+            }
+            
+            // Date
+            row.append($('<td>').text(entry.date_display));
+            
+            // Description (with bill details for stock_in)
+            var descCell = $('<td>');
+            descCell.append($('<div>').text(entry.description));
+            if (entry.bill_number) {
+                descCell.append($('<div>').css({'font-size': '11px', 'color': '#6c757d'}).text(entry.bill_number));
+            }
+            if (entry.notes) {
+                descCell.append($('<div>').css({'font-size': '11px', 'color': '#6c757d', 'font-style': 'italic'}).text(entry.notes));
+            }
+            row.append(descCell);
+            
+            // Qty
+            var qtyText = entry.type === 'opening_balance' ? formatNumber(entry.qty) : '+' + formatNumber(entry.qty);
+            row.append($('<td>').css('text-align', 'right').text(qtyText));
+            
+            // Rate
+            row.append($('<td>').css('text-align', 'right').text(formatCurrency(entry.rate)));
+            
+            // Amount
+            row.append($('<td>').css('text-align', 'right').text(formatCurrency(entry.amount)));
+            
+            // Running Qty
+            row.append($('<td>').css({'text-align': 'right', 'font-weight': '500'}).text(formatNumber(entry.running_qty)));
+            
+            // Running Avg Rate
+            row.append($('<td>').css({'text-align': 'right', 'font-weight': '500'}).text(formatCurrency(entry.running_avg_rate)));
+            
+            tbody.append(row);
+        });
+    }
+    
+    // Back from history view
+    $('#backFromHistoryBtn').on('click', function() {
+        $('#itemHistoryView').hide();
+        $('#snapDetailsView').css('display', 'flex');
+    });
+    
+    // Load snap list
+    function loadSnapList() {
+        console.log('[Snap] Loading snap list...');
+        return $.ajax({
+            url: '/core/stocktake/snaps/',
+            type: 'GET',
+            success: function(response) {
+                console.log('[Snap] Snap list response:', response);
+                if (response.status === 'success') {
+                    snapData.snaps = response.snaps || [];
+                    renderSnapList();
+                    // Load the first draft snap if available
+                    var draftSnap = snapData.snaps.find(function(s) { return s.status === 0; });
+                    if (draftSnap) {
+                        loadSnap(draftSnap.snap_pk);
+                    } else if (snapData.snaps.length > 0) {
+                        loadSnap(snapData.snaps[0].snap_pk);
+                    } else {
+                        renderEmptySnapDetail();
+                    }
+                } else {
+                    console.error('[Snap] Snap list error:', response.message);
+                    $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Error loading</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to load snap list:', error);
+                $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+            }
+        });
+    }
+    
+    // Render snap history list
+    function renderSnapList() {
+        var tbody = $('#snapHistoryBody');
+        tbody.empty();
+        
+        if (snapData.snaps.length === 0) {
+            tbody.append('<tr><td colspan="3" class="text-muted text-center py-3">No snaps yet</td></tr>');
+            return;
+        }
+        
+        snapData.snaps.forEach(function(snap) {
+            var row = $('<tr class="snap-history-row">');
+            row.attr('data-snap-pk', snap.snap_pk);
+            if (snapData.currentSnap && snapData.currentSnap.snap_pk === snap.snap_pk) {
+                row.addClass('selected');
+            }
+            row.append($('<td>').text(snap.date_display));
+            row.append($('<td>').text(snap.item_count + ' items'));
+            
+            var statusBadge = getStatusBadge(snap.status);
+            row.append($('<td>').html(statusBadge));
+            
+            row.on('click', function() {
+                loadSnap(snap.snap_pk);
+            });
+            
+            tbody.append(row);
+        });
+    }
+    
+    // Get status badge HTML
+    function getStatusBadge(status) {
+        switch(status) {
+            case 0: return '<span class="badge bg-warning text-dark">Draft</span>';
+            case 1: return '<span class="badge bg-info">Finalised</span>';
+            case 2: return '<span class="badge bg-success">Sent</span>';
+            default: return '<span class="badge bg-secondary">Unknown</span>';
+        }
+    }
+    
+    // Load projects for allocation dropdown
+    function loadProjects() {
+        return $.ajax({
+            url: '/core/stocktake/projects/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    snapData.projects = response.projects;
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to load projects:', error);
+            }
+        });
+    }
+    
+    // Load a specific snap
+    function loadSnap(snapPk) {
+        // Hide other views, show snap details
+        $('#itemHistoryView').hide();
+        $('#openingBalancesView').hide();
+        $('#snapDetailsView').css('display', 'flex');
+        
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    snapData.currentSnap = response.snap;
+                    renderSnapDetail();
+                    // Update selected row in history
+                    $('.snap-history-row').removeClass('selected');
+                    $('.snap-history-row[data-snap-pk="' + snapPk + '"]').addClass('selected');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to load snap:', error);
+            }
+        });
+    }
+    
+    // Render snap detail panel
+    function renderSnapDetail() {
+        var snap = snapData.currentSnap;
+        if (!snap) {
+            renderEmptySnapDetail();
+            return;
+        }
+        
+        var isEditable = snap.status === 0 && snap.is_most_recent; // Draft and most recent
+        
+        // Update header
+        $('#snapDate').val(snap.date).prop('disabled', !isEditable);
+        $('#snapCostingMethod').val(snap.costing_method).prop('disabled', !isEditable);
+        $('.snap-detail-header .badge').replaceWith(getStatusBadge(snap.status));
+        
+        // Render items table grouped by project type
+        var tbody = $('#snapItemsBody');
+        tbody.empty();
+        
+        // Group items by project type
+        var groupedItems = {};
+        snap.items.forEach(function(item) {
+            var pt = item.project_type || 'Uncategorized';
+            if (!groupedItems[pt]) {
+                groupedItems[pt] = [];
+            }
+            groupedItems[pt].push(item);
+        });
+        
+        // Render each group
+        Object.keys(groupedItems).sort().forEach(function(projectType) {
+            var items = groupedItems[projectType];
+            
+            // Group header row
+            var headerRow = $('<tr class="snap-items-group-header">');
+            headerRow.attr('data-project-type', projectType);
+            headerRow.css({
+                'background': '#f8f9fa',
+                'cursor': 'pointer',
+                'font-size': '13px',
+                'font-weight': '600',
+                'line-height': '1',
+                'border-bottom': '1px solid #dee2e6'
+            });
+            
+            var headerCell = $('<td colspan="6">').css('padding', '6px');
+            var collapseIndicator = $('<span class="snap-collapse-indicator">')
+                .css({
+                    'display': 'inline-block',
+                    'width': '14px',
+                    'font-size': '10px',
+                    'color': '#6c757d',
+                    'transform': 'rotate(90deg)',
+                    'transition': 'transform 0.2s'
+                })
+                .text('▶');
+            var dragHandle = $('<span>').css({
+                'color': '#6c757d',
+                'cursor': 'grab',
+                'margin': '0 6px'
+            }).text('⋮⋮');
+            
+            headerCell.append(collapseIndicator, dragHandle, $('<span>').text(projectType));
+            headerRow.append(headerCell);
+            tbody.append(headerRow);
+            
+            // Add click to collapse
+            headerRow.on('click', function() {
+                var $header = $(this);
+                var pt = $header.data('project-type');
+                var $indicator = $header.find('.snap-collapse-indicator');
+                var isCollapsed = $indicator.css('transform') === 'none' || $indicator.css('transform') === 'matrix(1, 0, 0, 1, 0, 0)';
+                
+                if (isCollapsed) {
+                    // Expand
+                    $indicator.css('transform', 'rotate(90deg)');
+                    $header.nextUntil('.snap-items-group-header').show();
+                } else {
+                    // Collapse
+                    $indicator.css('transform', 'rotate(0deg)');
+                    $header.nextUntil('.snap-items-group-header').hide();
+                }
+            });
+            
+            // Item rows
+            items.forEach(function(item) {
+                var row = createSnapItemRow(item, isEditable);
+                row.attr('data-project-type', projectType);
+                tbody.append(row);
+            });
+        });
+        
+        // Update summary
+        updateSnapSummary();
+        
+        // Update button states
+        updateSnapButtons();
+    }
+    
+    // Create a snap item row
+    function createSnapItemRow(item, isEditable) {
+        var row = $('<tr class="snap-item-row">');
+        row.attr('data-snap-item-pk', item.snap_item_pk);
+        row.attr('data-item-pk', item.item_pk);
+        row.css({
+            'font-size': '12px',
+            'font-weight': '400',
+            'line-height': '1',
+            'border-bottom': '1px solid #dee2e6'
+        });
+        
+        // Item name (indented like Stock Ledger) with future stock indicator
+        var nameCell = $('<td>').css('padding', '2px 6px 2px 30px').text(item.item_name);
+        if (item.future_qty > 0) {
+            nameCell.append($('<span>').css({
+                'margin-left': '6px',
+                'color': '#0d6efd',
+                'font-size': '10px',
+                'cursor': 'help'
+            }).attr('title', '+' + formatNumber(item.future_qty) + ' incoming (future dated bills)').html('<i class="fas fa-truck"></i>'));
+        }
+        row.append(nameCell);
+        
+        // Unit (separate column)
+        row.append($('<td>').addClass('text-muted').css('font-size', '12px').text(item.unit || '-'));
+        
+        // Book qty
+        row.append($('<td>').css('text-align', 'right').text(formatNumber(item.book_qty)));
+        
+        // Counted qty input
+        var countedCell = $('<td>').css('text-align', 'right');
+        var countedInput = $('<input type="number">')
+            .addClass('form-control form-control-sm snap-counted-input')
+            .css({'width': '70px', 'text-align': 'right'})
+            .val(item.counted_qty !== null ? item.counted_qty : '')
+            .attr('placeholder', 'no change')
+            .prop('disabled', !isEditable);
+        
+        countedInput.on('change', function() {
+            var val = $(this).val();
+            updateSnapItemCount(item.snap_item_pk, val !== '' ? parseFloat(val) : null, row);
+        });
+        countedCell.append(countedInput);
+        row.append(countedCell);
+        
+        // Variance
+        var varianceCell = $('<td>').css('text-align', 'right');
+        if (item.variance_qty !== null) {
+            var varianceSpan = $('<span>');
+            if (item.variance_qty < 0) {
+                varianceSpan.addClass('text-danger').text(formatNumber(item.variance_qty));
+            } else if (item.variance_qty > 0) {
+                varianceSpan.addClass('text-success').text('+' + formatNumber(item.variance_qty));
+            } else {
+                varianceSpan.addClass('text-muted').text('0');
+            }
+            varianceCell.append(varianceSpan);
+        } else {
+            varianceCell.append($('<span class="text-muted">').text('—'));
+        }
+        row.append(varianceCell);
+        
+        // Allocations
+        var allocCell = $('<td>');
+        if (item.variance_qty !== null && item.variance_qty < 0) {
+            allocCell.append(createAllocationsUI(item, isEditable));
+            
+            // Calculate still to allocate for row highlighting
+            var totalAllocated = 0;
+            item.allocations.forEach(function(alloc) {
+                totalAllocated += parseFloat(alloc.qty) || 0;
+            });
+            var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
+            if (stillToAllocate > 0.001) {
+                row.css('background-color', '#fff5f5');
+            }
+        } else if (item.variance_qty === null) {
+            allocCell.append($('<span class="text-muted" style="font-size: 11px;">').text('Enter count'));
+        } else {
+            allocCell.append($('<span class="text-muted" style="font-size: 11px;">').text('No variance'));
+        }
+        row.append(allocCell);
+        
+        return row;
+    }
+    
+    // Create allocations UI for a snap item
+    function createAllocationsUI(item, isEditable) {
+        var container = $('<div class="snap-allocations-mini">');
+        
+        item.allocations.forEach(function(alloc) {
+            container.append(createAllocationRow(item, alloc, isEditable));
+        });
+        
+        // Calculate still to allocate
+        var totalAllocated = 0;
+        item.allocations.forEach(function(alloc) {
+            totalAllocated += parseFloat(alloc.qty) || 0;
+        });
+        var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
+        
+        // Footer row with Add button and Still to Allocate
+        var footerRow = $('<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">');
+        
+        if (isEditable) {
+            var addBtn = $('<button type="button" class="snap-add-alloc-btn">')
+                .html('<i class="fas fa-plus"></i> Add Row');
+            addBtn.on('click', function() {
+                createNewAllocation(item, container);
+            });
+            footerRow.append(addBtn);
+        } else {
+            footerRow.append($('<span>'));
+        }
+        
+        // Still to Allocate text
+        var stillText = $('<span class="still-to-allocate" style="font-size: 11px;">');
+        stillText.attr('data-snap-item-pk', item.snap_item_pk);
+        if (stillToAllocate > 0.001) {
+            stillText.css('color', '#dc3545').css('font-weight', '600');
+            stillText.text('Still to Allocate: ' + formatNumber(stillToAllocate));
+        } else {
+            stillText.css('color', '#6c757d');
+            stillText.text('Fully Allocated');
+        }
+        footerRow.append(stillText);
+        
+        container.append(footerRow);
+        
+        return container;
+    }
+    
+    // Create allocation row
+    function createAllocationRow(item, alloc, isEditable) {
+        var row = $('<div class="snap-alloc-row" style="display: flex; gap: 6px; margin-bottom: 4px;">');
+        row.attr('data-allocation-pk', alloc.allocation_pk);
+        
+        // Project select - use item's valid_projects (projects that have this item)
+        var projectSelect = $('<select class="form-select form-select-sm" style="flex: 1; font-size: 11px;">');
+        var validProjects = item.valid_projects || [];
+        validProjects.forEach(function(p) {
+            var opt = $('<option>').val(p.project_pk).text(p.project_name);
+            if (parseInt(p.project_pk) === parseInt(alloc.project_pk)) opt.prop('selected', true);
+            projectSelect.append(opt);
+        });
+        projectSelect.prop('disabled', !isEditable);
+        projectSelect.on('change', function() {
+            updateAllocation(alloc.allocation_pk, { project_pk: $(this).val() });
+        });
+        row.append(projectSelect);
+        
+        // Qty input
+        var qtyInput = $('<input type="number" class="form-control form-control-sm" style="width: 50px; font-size: 11px;">')
+            .val(alloc.qty)
+            .prop('disabled', !isEditable);
+        qtyInput.on('change', function() {
+            updateAllocation(alloc.allocation_pk, { qty: parseFloat($(this).val()) || 0 });
+        });
+        row.append(qtyInput);
+        
+        // Rate display
+        row.append($('<span style="font-size: 11px; color: var(--manila-text-muted); line-height: 28px;">').text('@ ' + formatCurrency(alloc.rate)));
+        
+        // Delete button
+        if (isEditable) {
+            var delBtn = $('<button class="btn btn-sm btn-link text-danger p-0">').html('<i class="fas fa-times"></i>');
+            delBtn.on('click', function() {
+                deleteAllocation(alloc.allocation_pk, row);
+            });
+            row.append(delBtn);
+        }
+        
+        return row;
+    }
+    
+    // Update snap item count
+    function updateSnapItemCount(snapItemPk, countedQty, row) {
+        $.ajax({
+            url: '/core/stocktake/snap-items/' + snapItemPk + '/update/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ counted_qty: countedQty }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    var variance = response.variance_qty;
+                    // If variance is non-zero (negative = stock consumed), auto-add one allocation
+                    if (variance !== null && variance < 0) {
+                        // Check if this item already has allocations
+                        var currentItem = snapData.currentSnap.items.find(function(i) {
+                            return i.snap_item_pk === snapItemPk;
+                        });
+                        if (currentItem && currentItem.allocations.length === 0) {
+                            // Auto-create first allocation (pass the item for valid_projects)
+                            autoCreateFirstAllocation(currentItem);
+                            return;
+                        }
+                    }
+                    // Reload the snap to update variance and allocations UI
+                    loadSnap(snapData.currentSnap.snap_pk);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to update count:', error);
+            }
+        });
+    }
+    
+    // Auto-create first allocation when variance becomes non-zero
+    function autoCreateFirstAllocation(item) {
+        var validProjects = item.valid_projects || [];
+        if (validProjects.length === 0) {
+            loadSnap(snapData.currentSnap.snap_pk);
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/stocktake/snap-allocations/create/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                snap_item_pk: item.snap_item_pk,
+                project_pk: validProjects[0].project_pk,
+                qty: 1
+            }),
+            success: function(response) {
+                loadSnap(snapData.currentSnap.snap_pk);
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to auto-create allocation:', error);
+                loadSnap(snapData.currentSnap.snap_pk);
+            }
+        });
+    }
+    
+    // Create new allocation
+    function createNewAllocation(item, container) {
+        var validProjects = item.valid_projects || [];
+        if (validProjects.length === 0) {
+            alert('No projects have this item');
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/stocktake/snap-allocations/create/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                snap_item_pk: item.snap_item_pk,
+                project_pk: validProjects[0].project_pk,
+                qty: 1
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Reload snap to show new allocation
+                    loadSnap(snapData.currentSnap.snap_pk);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to create allocation:', error);
+            }
+        });
+    }
+    
+    // Update allocation
+    function updateAllocation(allocationPk, data) {
+        $.ajax({
+            url: '/core/stocktake/snap-allocations/' + allocationPk + '/update/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Reload to update rates
+                    loadSnap(snapData.currentSnap.snap_pk);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to update allocation:', error);
+            }
+        });
+    }
+    
+    // Delete allocation
+    function deleteAllocation(allocationPk, row) {
+        $.ajax({
+            url: '/core/stocktake/snap-allocations/' + allocationPk + '/delete/',
+            type: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    row.remove();
+                    updateSnapSummary();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to delete allocation:', error);
+            }
+        });
+    }
+    
+    // Update snap summary
+    function updateSnapSummary() {
+        if (!snapData.currentSnap) return;
+        
+        var itemCount = snapData.currentSnap.items.length;
+        var varianceCount = 0;
+        var totalAmount = 0;
+        
+        snapData.currentSnap.items.forEach(function(item) {
+            if (item.variance_qty !== null && item.variance_qty !== 0) {
+                varianceCount++;
+            }
+            item.allocations.forEach(function(alloc) {
+                totalAmount += alloc.amount;
+            });
+        });
+        
+        var summaryHtml = '<strong>Summary:</strong> ' + itemCount + ' items | ' + 
+            varianceCount + ' with variance | Total: <span class="text-danger">-' + 
+            formatCurrency(totalAmount) + '</span>';
+        $('#snapSummaryText').html(summaryHtml);
+    }
+    
+    // Update button states based on snap status
+    function updateSnapButtons() {
+        var snap = snapData.currentSnap;
+        if (!snap) {
+            $('#editSnapBtn, #deleteSnapBtn, #finaliseSnapBtn, #sendSnapToXeroBtn').prop('disabled', true).hide();
+            return;
+        }
+        
+        var isDraft = snap.status === 0;
+        var isFinalised = snap.status === 1;
+        var isSentToXero = snap.status === 2;
+        var isMostRecent = snap.is_most_recent;
+        
+        // Check if all items with variance are fully allocated
+        var canFinalise = isDraft && isMostRecent && isSnapFullyAllocated();
+        
+        // Edit button: show for most recent snap that is finalised (to unfinalise)
+        var canEdit = isMostRecent && isFinalised;
+        $('#editSnapBtn').toggle(canEdit);
+        
+        // Draft + most recent: can delete, finalise (only if fully allocated)
+        var canDelete = isDraft && isMostRecent;
+        $('#deleteSnapBtn').prop('disabled', !canDelete).toggle(canDelete);
+        $('#finaliseSnapBtn').prop('disabled', !canFinalise).toggle(isDraft && isMostRecent);
+        if (isDraft && isMostRecent && !canFinalise) {
+            $('#finaliseSnapBtn').addClass('btn-secondary').removeClass('btn-warning');
+        } else {
+            $('#finaliseSnapBtn').addClass('btn-warning').removeClass('btn-secondary');
+        }
+        
+        // Finalised: can send to Xero
+        $('#sendSnapToXeroBtn').prop('disabled', isSentToXero).toggle(isFinalised || isSentToXero);
+        if (isSentToXero) {
+            $('#sendSnapToXeroBtn').html('Sent to Xero');
+        } else {
+            $('#sendSnapToXeroBtn').html('Send to Xero');
+        }
+    }
+    
+    // Check if all items with variance are fully allocated
+    function isSnapFullyAllocated() {
+        var snap = snapData.currentSnap;
+        if (!snap || !snap.items) return true;
+        
+        for (var i = 0; i < snap.items.length; i++) {
+            var item = snap.items[i];
+            if (item.variance_qty !== null && item.variance_qty < 0) {
+                var totalAllocated = 0;
+                item.allocations.forEach(function(alloc) {
+                    totalAllocated += parseFloat(alloc.qty) || 0;
+                });
+                var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
+                if (stillToAllocate > 0.001) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    // Render empty snap detail
+    function renderEmptySnapDetail() {
+        $('#snapItemsBody').html('<tr><td colspan="6" class="text-muted text-center py-4">Click "New Snap" to start a stocktake</td></tr>');
+        $('#snapSummaryText').html('<strong>Summary:</strong> No snap selected');
+        updateSnapButtons();
+    }
+    
+    // New Snap button
+    $('#newSnapBtn').on('click', function() {
+        $.ajax({
+            url: '/core/stocktake/snaps/create/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                date: new Date().toISOString().split('T')[0],
+                costing_method: 'FIFO'
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadSnapList().then(function() {
+                        loadSnap(response.snap_pk);
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to create snap:', error);
+                alert('Failed to create snap: ' + error);
+            }
+        });
+    });
+    
+    // Delete Snap button
+    $('#deleteSnapBtn').on('click', function() {
+        if (!snapData.currentSnap) return;
+        if (!confirm('Delete this draft snap?')) return;
+        
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/delete/',
+            type: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    snapData.currentSnap = null;
+                    loadSnapList();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to delete snap:', error);
+                alert('Failed to delete snap');
+            }
+        });
+    });
+    
+    // Auto-save snap date on change
+    $('#snapDate').on('change', function() {
+        if (!snapData.currentSnap || snapData.currentSnap.status !== 0) return;
+        autoSaveSnap();
+    });
+    
+    // Auto-save costing method on change
+    $('#snapCostingMethod').on('change', function() {
+        if (!snapData.currentSnap || snapData.currentSnap.status !== 0) return;
+        autoSaveSnap();
+    });
+    
+    // Auto-save snap function
+    function autoSaveSnap() {
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/update/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                date: $('#snapDate').val(),
+                costing_method: $('#snapCostingMethod').val()
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Update local data
+                    snapData.currentSnap.date = $('#snapDate').val();
+                    snapData.currentSnap.costing_method = $('#snapCostingMethod').val();
+                    // Refresh snap list to show updated date
+                    loadSnapList();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to auto-save snap:', error);
+            }
+        });
+    }
+    
+    // Edit button (unfinalise)
+    $('#editSnapBtn').on('click', function() {
+        if (!snapData.currentSnap) return;
+        if (!confirm('This will unfinalise the snap and allow editing. Continue?')) return;
+        
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/unfinalise/',
+            type: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadSnapList();
+                    loadSnap(snapData.currentSnap.snap_pk);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to unfinalise:', error);
+                var msg = 'Failed to unfinalise snap';
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp.message) msg = resp.message;
+                } catch(e) {}
+                alert(msg);
+            }
+        });
+    });
+    
+    // Finalise button
+    $('#finaliseSnapBtn').on('click', function() {
+        if (!snapData.currentSnap) return;
+        if (!confirm('Finalise this snap? This will lock it from editing.')) return;
+        
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/finalise/',
+            type: 'POST',
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadSnapList();
+                    loadSnap(snapData.currentSnap.snap_pk);
+                    alert('Snap finalised. You can now send it to Xero.');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to finalise:', error);
+                var msg = 'Failed to finalise snap';
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp.message) msg = resp.message;
+                } catch(e) {}
+                alert(msg);
+            }
+        });
+    });
+    
+    // Send to Xero button
+    $('#sendSnapToXeroBtn').on('click', function() {
+        if (!snapData.currentSnap) return;
+        if (snapData.currentSnap.status < 1) {
+            alert('Please finalise the snap first');
+            return;
+        }
+        
+        // Prompt for Xero instance and stock account
+        // For now, use defaults - in production, show a modal to select these
+        var xeroInstancePk = prompt('Enter Xero Instance PK:', '1');
+        if (!xeroInstancePk) return;
+        
+        var stockAccountCode = prompt('Enter Stock Account Code (credit account for reducing inventory):', '630');
+        if (!stockAccountCode) return;
+        
+        if (!confirm('Send this snap to Xero as a manual journal?')) return;
+        
+        $.ajax({
+            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/send-to-xero/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                xero_instance_pk: parseInt(xeroInstancePk),
+                stock_account_code: stockAccountCode
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    loadSnapList();
+                    loadSnap(snapData.currentSnap.snap_pk);
+                    loadStockLedger(); // Refresh ledger as stock has changed
+                    alert('Snap sent to Xero successfully!\nJournal ID: ' + response.xero_journal_id);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Snap] Failed to send to Xero:', error);
+                var msg = 'Failed to send to Xero';
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp.message) msg = resp.message;
+                } catch(e) {}
+                alert(msg);
+            }
+        });
+    });
+    
+    // =============================================================================
+    // OPENING BALANCES FUNCTIONALITY (Inline View)
+    // =============================================================================
+    
+    var openingBalancesData = {
+        items: [],  // All stocktake items
+        balances: {}  // Existing balances keyed by item_pk
+    };
+    
+    // Show Opening Balances view
+    $('#openingBalancesBtn').on('click', function() {
+        // Set default date to today
+        $('#openingBalanceDate').val(new Date().toISOString().split('T')[0]);
+        
+        // Toggle views
+        $('#snapDetailsView').hide();
+        $('#openingBalancesView').css('display', 'flex');
+        
+        loadOpeningBalancesData();
+    });
+    
+    // Back to Snap view
+    $('#backToSnapBtn').on('click', function() {
+        $('#openingBalancesView').hide();
+        $('#snapDetailsView').css('display', 'flex');
+        loadStockLedger(); // Refresh ledger with any new balances
+    });
+    
+    // Load data for Opening Balances view
+    function loadOpeningBalancesData() {
+        var tbody = $('#openingBalancesBody');
+        tbody.html('<tr><td colspan="6" class="text-muted text-center py-3">Loading...</td></tr>');
+        
+        // Load both stocktake items and existing balances
+        Promise.all([
+            $.ajax({ url: '/core/stocktake/ledger/', type: 'GET' }),
+            $.ajax({ url: '/core/stocktake/opening-balances/', type: 'GET' })
+        ]).then(function(results) {
+            var ledgerResponse = results[0];
+            var balancesResponse = results[1];
+            
+            // Store ledger items
+            if (ledgerResponse.status === 'success') {
+                openingBalancesData.items = ledgerResponse.ledger;
+            }
+            
+            // Key balances by item_pk
+            openingBalancesData.balances = {};
+            if (balancesResponse.status === 'success') {
+                balancesResponse.balances.forEach(function(bal) {
+                    openingBalancesData.balances[bal.item_pk] = bal;
+                });
+            }
+            
+            // Render table
+            renderOpeningBalancesTable();
+        }).catch(function() {
+            tbody.html('<tr><td colspan="6" class="text-danger text-center py-3">Failed to load data</td></tr>');
+        });
+    }
+    
+    // Render opening balances table using loaded items
+    function renderOpeningBalancesTable() {
+        var tbody = $('#openingBalancesBody');
+        tbody.empty();
+        
+        var items = openingBalancesData.items;
+        if (!items || items.length === 0) {
+            tbody.append('<tr><td colspan="7" class="text-muted text-center py-3">No stocktake items. Go to Setup tab to include items.</td></tr>');
+            return;
+        }
+        
+        items.forEach(function(item) {
+            var existingBal = openingBalancesData.balances[item.item_pk];
+            var hasExisting = existingBal && (existingBal.qty || existingBal.rate);
+            var isLocked = existingBal && existingBal.is_locked;
+            var qty = existingBal ? existingBal.qty : '';
+            var rate = existingBal ? existingBal.rate : '';
+            var total = (qty && rate) ? (parseFloat(qty) * parseFloat(rate)) : 0;
+            var balancePk = existingBal ? existingBal.opening_balance_pk : null;
+            var dateDisplay = existingBal && existingBal.date_display ? existingBal.date_display : '-';
+            
+            var row = $('<tr class="opening-balance-row">');
+            row.attr('data-item-pk', item.item_pk);
+            row.attr('data-balance-pk', balancePk || '');
+            row.attr('data-is-locked', isLocked ? '1' : '0');
+            
+            // Item name
+            row.append($('<td>').text(item.item_name));
+            
+            // Unit
+            row.append($('<td>').text(item.unit || '-'));
+            
+            // Date
+            row.append($('<td>').text(dateDisplay));
+            
+            // Qty cell - fixed text if existing, input if new or editing
+            var qtyCell = $('<td>').css('text-align', 'right');
+            if (hasExisting) {
+                qtyCell.addClass('opening-qty-display').text(formatNumber(qty));
+            } else {
+                var qtyInput = $('<input type="number" step="0.01">')
+                    .addClass('form-control form-control-sm opening-qty-input')
+                    .css({'width': '80px', 'text-align': 'right', 'display': 'inline-block'})
+                    .attr('data-item-pk', item.item_pk)
+                    .val(qty)
+                    .on('input', updateOpeningBalanceRowTotal);
+                qtyCell.append(qtyInput);
+            }
+            row.append(qtyCell);
+            
+            // Rate cell - fixed text if existing, input if new or editing
+            var rateCell = $('<td>').css('text-align', 'right');
+            if (hasExisting) {
+                rateCell.addClass('opening-rate-display').text(formatCurrency(rate));
+            } else {
+                var rateInput = $('<input type="number" step="0.01">')
+                    .addClass('form-control form-control-sm opening-rate-input')
+                    .css({'width': '80px', 'text-align': 'right', 'display': 'inline-block'})
+                    .attr('data-item-pk', item.item_pk)
+                    .val(rate)
+                    .on('input', updateOpeningBalanceRowTotal);
+                rateCell.append(rateInput);
+            }
+            row.append(rateCell);
+            
+            // Total display
+            var totalCell = $('<td class="opening-total">').css('text-align', 'right');
+            totalCell.text(formatCurrency(total));
+            row.append(totalCell);
+            
+            // Action cell - Edit button for unlocked existing, Clear for new
+            var actionCell = $('<td>').css('text-align', 'center');
+            if (hasExisting) {
+                if (!isLocked) {
+                    var editBtn = $('<button class="btn btn-sm btn-link text-primary p-0">')
+                        .html('<i class="fas fa-edit"></i>')
+                        .attr('title', 'Edit')
+                        .on('click', function() {
+                            enterEditMode(row, item, existingBal);
+                        });
+                    actionCell.append(editBtn);
+                } else {
+                    // Locked - show lock icon
+                    actionCell.html('<i class="fas fa-lock text-muted" title="Locked: used in stocktake snap"></i>');
+                }
+            } else {
+                // No existing balance - show clear button for inputs
+                var clearBtn = $('<button class="btn btn-sm btn-link text-danger p-0">')
+                    .html('<i class="fas fa-times"></i>')
+                    .attr('title', 'Clear')
+                    .on('click', function() {
+                        row.find('.opening-qty-input').val('');
+                        row.find('.opening-rate-input').val('');
+                        totalCell.text('$0.00');
+                        updateOpeningBalancesTotal();
+                    });
+                actionCell.append(clearBtn);
+            }
+            row.append(actionCell);
+            
+            tbody.append(row);
+        });
+        
+        updateOpeningBalancesTotal();
+    }
+    
+    // Enter edit mode for an existing opening balance row
+    function enterEditMode(row, item, existingBal) {
+        var qtyCell = row.find('.opening-qty-display').parent();
+        var rateCell = row.find('.opening-rate-display').parent();
+        var actionCell = row.find('td:last');
+        var totalCell = row.find('.opening-total');
+        
+        // Replace qty display with input
+        qtyCell.empty().css('text-align', 'right');
+        var qtyInput = $('<input type="number" step="0.01">')
+            .addClass('form-control form-control-sm opening-qty-input')
+            .css({'width': '80px', 'text-align': 'right', 'display': 'inline-block'})
+            .attr('data-item-pk', item.item_pk)
+            .val(existingBal.qty)
+            .on('input', function() {
+                var qty = parseFloat($(this).val()) || 0;
+                var rate = parseFloat(row.find('.opening-rate-input').val()) || 0;
+                totalCell.text(formatCurrency(qty * rate));
+            });
+        qtyCell.append(qtyInput);
+        
+        // Replace rate display with input
+        rateCell.empty().css('text-align', 'right');
+        var rateInput = $('<input type="number" step="0.01">')
+            .addClass('form-control form-control-sm opening-rate-input')
+            .css({'width': '80px', 'text-align': 'right', 'display': 'inline-block'})
+            .attr('data-item-pk', item.item_pk)
+            .val(existingBal.rate)
+            .on('input', function() {
+                var qty = parseFloat(row.find('.opening-qty-input').val()) || 0;
+                var rate = parseFloat($(this).val()) || 0;
+                totalCell.text(formatCurrency(qty * rate));
+            });
+        rateCell.append(rateInput);
+        
+        // Replace action cell with save/cancel buttons
+        actionCell.empty().css('text-align', 'center');
+        var saveBtn = $('<button class="btn btn-sm btn-link text-success p-0 me-1">')
+            .html('<i class="fas fa-check"></i>')
+            .attr('title', 'Save')
+            .on('click', function() {
+                saveOpeningBalanceUpdate(row, existingBal.opening_balance_pk);
+            });
+        var cancelBtn = $('<button class="btn btn-sm btn-link text-secondary p-0">')
+            .html('<i class="fas fa-times"></i>')
+            .attr('title', 'Cancel')
+            .on('click', function() {
+                // Re-render the table to cancel edit
+                renderOpeningBalancesTable();
+            });
+        actionCell.append(saveBtn).append(cancelBtn);
+        
+        qtyInput.focus().select();
+    }
+    
+    // Save updated opening balance
+    function saveOpeningBalanceUpdate(row, balancePk) {
+        var qty = parseFloat(row.find('.opening-qty-input').val());
+        var rate = parseFloat(row.find('.opening-rate-input').val());
+        
+        if (isNaN(qty) || isNaN(rate)) {
+            alert('Please enter valid qty and rate values');
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/stocktake/opening-balances/' + balancePk + '/update/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                qty: qty,
+                rate: rate
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // Update local data and re-render
+                    var itemPk = row.data('item-pk');
+                    if (openingBalancesData.balances[itemPk]) {
+                        openingBalancesData.balances[itemPk].qty = qty;
+                        openingBalancesData.balances[itemPk].rate = rate;
+                    }
+                    renderOpeningBalancesTable();
+                    // Refresh stock ledger
+                    getStockLedger();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Failed to update opening balance';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg = xhr.responseJSON.message;
+                }
+                alert(msg);
+            }
+        });
+    }
+    
+    // Update row total when qty or rate changes
+    function updateOpeningBalanceRowTotal() {
+        var row = $(this).closest('tr');
+        var qty = parseFloat(row.find('.opening-qty-input').val()) || 0;
+        var rate = parseFloat(row.find('.opening-rate-input').val()) || 0;
+        var total = qty * rate;
+        row.find('.opening-total').text(formatCurrency(total));
+        updateOpeningBalancesTotal();
+    }
+    
+    // Update grand total
+    function updateOpeningBalancesTotal() {
+        var grandTotal = 0;
+        $('#openingBalancesBody tr.opening-balance-row').each(function() {
+            // Get total from the total cell (handles both fixed and editable rows)
+            var totalText = $(this).find('.opening-total').text();
+            var total = parseFloat(totalText.replace(/[$,]/g, '')) || 0;
+            grandTotal += total;
+        });
+        $('#openingBalancesTotal').html('<strong>Total Value:</strong> ' + formatCurrency(grandTotal));
+    }
+    
+    // Save all opening balances
+    $('#saveAllOpeningBalancesBtn').on('click', function() {
+        var balanceDate = $('#openingBalanceDate').val();
+        if (!balanceDate) {
+            alert('Please select a date');
+            return;
+        }
+        
+        var toSave = [];
+        $('#openingBalancesBody tr.opening-balance-row').each(function() {
+            var itemPk = $(this).data('item-pk');
+            var qty = parseFloat($(this).find('.opening-qty-input').val());
+            var rate = parseFloat($(this).find('.opening-rate-input').val());
+            
+            // Only save if both qty and rate are entered
+            if (!isNaN(qty) && !isNaN(rate) && (qty > 0 || rate > 0)) {
+                toSave.push({
+                    item_pk: itemPk,
+                    date: balanceDate,
+                    qty: qty,
+                    rate: rate
+                });
+            }
+        });
+        
+        if (toSave.length === 0) {
+            alert('No balances to save');
+            return;
+        }
+        
+        // Save each balance sequentially to avoid race conditions
+        var saved = 0;
+        var errors = [];
+        
+        function saveNext(idx) {
+            if (idx >= toSave.length) {
+                // All done
+                if (errors.length === 0) {
+                    alert('Saved ' + saved + ' opening balance(s)');
+                    $('#openingBalancesView').hide();
+                    $('#snapDetailsView').css('display', 'flex');
+                    loadStockLedger();
+                } else {
+                    alert('Saved ' + saved + ' balances. Errors: ' + errors.join(', '));
+                }
+                return;
+            }
+            
+            var bal = toSave[idx];
+            $.ajax({
+                url: '/core/stocktake/opening-balances/save/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(bal),
+                success: function(response) {
+                    saved++;
+                    saveNext(idx + 1);
+                },
+                error: function(xhr) {
+                    var errMsg = 'Item ' + bal.item_pk;
+                    try {
+                        var resp = JSON.parse(xhr.responseText);
+                        if (resp.message) errMsg += ': ' + resp.message;
+                    } catch(e) {}
+                    errors.push(errMsg);
+                    saveNext(idx + 1);
+                }
+            });
+        }
+        
+        saveNext(0);
+    });
+    
+    // Utility functions
+    function formatNumber(num) {
+        if (num === null || num === undefined) return '-';
+        return parseFloat(num).toLocaleString('en-AU', { maximumFractionDigits: 2 });
+    }
+    
+    function formatCurrency(num) {
+        if (num === null || num === undefined) return '-';
+        return '$' + parseFloat(num).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    // Load snap data on page load
+    loadSnapData();
+    
+    // Debug function to extract rates table styling (call getRatesStyles() in console)
+    window.getRatesStyles = function() {
+        var results = {};
+        var category = document.querySelector('.rates-flex-category');
+        if (category) {
+            var catStyles = window.getComputedStyle(category);
+            results.category = { fontSize: catStyles.fontSize, fontWeight: catStyles.fontWeight, backgroundColor: catStyles.backgroundColor, padding: catStyles.padding };
+            var indicator = category.querySelector('.rates-collapse-indicator');
+            if (indicator) { var s = window.getComputedStyle(indicator); results.collapseIndicator = { fontSize: s.fontSize, width: s.width, color: s.color, marginRight: s.marginRight }; }
+            var dragHandle = category.querySelector('.rates-drag-handle');
+            if (dragHandle) { var s = window.getComputedStyle(dragHandle); results.dragHandle = { content: dragHandle.textContent, fontSize: s.fontSize, color: s.color, marginRight: s.marginRight }; }
+            var catName = category.querySelector('.name-display');
+            if (catName) { var s = window.getComputedStyle(catName); results.categoryName = { fontSize: s.fontSize, fontWeight: s.fontWeight }; }
+        }
+        var item = document.querySelector('.rates-flex-item');
+        if (item) {
+            var itemStyles = window.getComputedStyle(item);
+            results.item = { fontSize: itemStyles.fontSize, fontWeight: itemStyles.fontWeight, padding: itemStyles.padding, paddingLeft: itemStyles.paddingLeft };
+            var colName = item.querySelector('.col-name');
+            if (colName) { var s = window.getComputedStyle(colName); results.itemColName = { paddingLeft: s.paddingLeft }; }
+        }
+        console.log(JSON.stringify(results, null, 2));
+        return results;
+    };
     
 })();
 </script>

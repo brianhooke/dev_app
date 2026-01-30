@@ -5,7 +5,7 @@ from .views import commit_data, update_quote, create_contacts, delete_quote, del
 from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
-    bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
+    bills_global_view, bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
     send_bill_direct, send_bill_to_xero, get_bill_pdf_info, return_bill_to_project, approve_bill_direct,
     # Moved from bills.py:
     get_bills_list, archive_bill, return_to_inbox, 
@@ -41,7 +41,16 @@ from .views.settings import get_project_types, get_xero_instances_list, update_p
 from .views.stocktake import (
     toggle_stocktake_inclusion, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
-    delete_stocktake_allocation, approve_stocktake_bill
+    delete_stocktake_allocation, approve_stocktake_bill,
+    # Snap APIs
+    get_stock_ledger, get_snap_list, create_snap, get_snap,
+    update_snap, delete_snap, update_snap_item, create_snap_allocation,
+    update_snap_allocation, delete_snap_allocation, finalise_snap, unfinalise_snap,
+    get_projects_for_allocation as get_snap_projects, send_snap_to_xero,
+    # Opening Balance APIs
+    get_opening_balances, save_opening_balance, update_opening_balance, delete_opening_balance,
+    # Item History API
+    get_item_history
 )
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
@@ -177,9 +186,10 @@ urlpatterns = [
     
     # Bills section
     path('bills/', bills_view, name='bills'),
-    path('bills/inbox/', bills_global_inbox_view, name='bills_global_inbox'),
-    path('bills/direct/', bills_global_direct_view, name='bills_global_direct'),
-    path('bills/approvals/', bills_global_approvals_view, name='bills_global_approvals'),
+    path('bills/global/', bills_global_view, name='bills_global'),  # Consolidated view
+    path('bills/inbox/', bills_global_inbox_view, name='bills_global_inbox'),  # Deprecated
+    path('bills/direct/', bills_global_direct_view, name='bills_global_direct'),  # Deprecated
+    path('bills/approvals/', bills_global_approvals_view, name='bills_global_approvals'),  # Deprecated
     path('get_project_bills/<int:project_pk>/', get_project_bills, name='get_project_bills'),
     path('get_allocated_bills/<int:project_pk>/', get_allocated_bills, name='get_allocated_bills'),
     path('get_unallocated_bill_allocations/<int:bill_pk>/', get_unallocated_bill_allocations, name='get_unallocated_bill_allocations'),
@@ -259,6 +269,27 @@ urlpatterns = [
     path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),
     path('delete_stocktake_allocation/<int:allocation_pk>/', delete_stocktake_allocation, name='delete_stocktake_allocation'),
     path('approve_stocktake_bill/<int:bill_pk>/', approve_stocktake_bill, name='approve_stocktake_bill'),
+    # Stocktake Snap APIs
+    path('stocktake/ledger/', get_stock_ledger, name='get_stock_ledger'),
+    path('stocktake/snaps/', get_snap_list, name='get_snap_list'),
+    path('stocktake/snaps/create/', create_snap, name='create_snap'),
+    path('stocktake/snaps/<int:snap_pk>/', get_snap, name='get_snap'),
+    path('stocktake/snaps/<int:snap_pk>/update/', update_snap, name='update_snap'),
+    path('stocktake/snaps/<int:snap_pk>/delete/', delete_snap, name='delete_snap'),
+    path('stocktake/snaps/<int:snap_pk>/finalise/', finalise_snap, name='finalise_snap'),
+    path('stocktake/snaps/<int:snap_pk>/unfinalise/', unfinalise_snap, name='unfinalise_snap'),
+    path('stocktake/snaps/<int:snap_pk>/send-to-xero/', send_snap_to_xero, name='send_snap_to_xero'),
+    path('stocktake/snap-items/<int:snap_item_pk>/update/', update_snap_item, name='update_snap_item'),
+    path('stocktake/snap-allocations/create/', create_snap_allocation, name='create_snap_allocation'),
+    path('stocktake/snap-allocations/<int:allocation_pk>/update/', update_snap_allocation, name='update_snap_allocation'),
+    path('stocktake/snap-allocations/<int:allocation_pk>/delete/', delete_snap_allocation, name='delete_snap_allocation'),
+    path('stocktake/projects/', get_snap_projects, name='get_snap_projects'),
+    # Opening Balance APIs
+    path('stocktake/opening-balances/', get_opening_balances, name='get_opening_balances'),
+    path('stocktake/opening-balances/save/', save_opening_balance, name='save_opening_balance'),
+    path('stocktake/opening-balances/<int:balance_pk>/update/', update_opening_balance, name='update_opening_balance'),
+    path('stocktake/opening-balances/<int:balance_pk>/delete/', delete_opening_balance, name='delete_opening_balance'),
+    path('stocktake/item/<int:item_pk>/history/', get_item_history, name='get_item_history'),
     path('dashboard_create_category/<int:project_pk>/', dashboard_create_category, name='dashboard_create_category'),
     path('dashboard_create_item/<int:project_pk>/', dashboard_create_item, name='dashboard_create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', reorder_category, name='reorder_category'),

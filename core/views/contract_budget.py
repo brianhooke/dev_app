@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +307,59 @@ def get_project_committed_amounts(request, project_pk):
             else:
                 committed_dict[item.costing_pk] = float(total_amount)
         
+        # Add stocktake snap allocations to committed amounts
+        # Only include finalised snaps (status >= 1) allocated to this project
+        snap_allocations = StocktakeSnapAllocation.objects.filter(
+            project=project,
+            snap_item__snap__status__gte=1  # Finalised or sent to Xero
+        ).select_related('snap_item__snap', 'snap_item__item')
+        
+        # Build a map of item names to project costing_pk for matching
+        # (snap items link to global items, need to find project-specific costing)
+        project_costings = Costing.objects.filter(
+            project=project,
+            tender_or_execution=tender_or_execution
+        )
+        item_name_to_costing = {c.item: c.costing_pk for c in project_costings}
+        
+        for snap_alloc in snap_allocations:
+            snap_item = snap_alloc.snap_item.item
+            if not snap_item:
+                continue
+            
+            # Match by item name to find the project's costing_pk
+            costing_pk = item_name_to_costing.get(snap_item.item)
+            if not costing_pk:
+                continue
+            
+            alloc_qty = float(snap_alloc.qty or 0)
+            alloc_rate = float(snap_alloc.rate or 0)
+            alloc_amount = float(snap_alloc.amount or 0)
+            
+            if is_construction:
+                if costing_pk in committed_dict:
+                    # Add to existing committed data
+                    existing = committed_dict[costing_pk]
+                    existing['qty'] = (existing.get('qty') or 0) + alloc_qty
+                    existing['amount'] = (existing.get('amount') or 0) + alloc_amount
+                    # Check if rates differ
+                    if existing.get('rate') and existing['rate'] != alloc_rate:
+                        existing['has_multiple_rates'] = True
+                    elif not existing.get('has_multiple_rates'):
+                        existing['rate'] = alloc_rate
+                else:
+                    committed_dict[costing_pk] = {
+                        'qty': alloc_qty,
+                        'rate': alloc_rate,
+                        'amount': alloc_amount,
+                        'has_multiple_rates': False
+                    }
+            else:
+                if costing_pk in committed_dict:
+                    committed_dict[costing_pk] += alloc_amount
+                else:
+                    committed_dict[costing_pk] = alloc_amount
+        
         return JsonResponse({
             'status': 'success',
             'committed_amounts': committed_dict,
@@ -324,8 +377,8 @@ def get_project_committed_amounts(request, project_pk):
 @require_http_methods(["GET"])
 def get_item_quote_allocations(request, item_pk):
     """
-    Get individual quote allocations for a specific item with quote/contact details.
-    Returns list of allocations with associated quote and contact information.
+    Get individual quote allocations and stocktake snap allocations for a specific item.
+    Returns list of allocations with associated quote/contact or snap information.
     """
     try:
         costing = get_object_or_404(Costing, pk=item_pk)
@@ -351,7 +404,38 @@ def get_item_quote_allocations(request, item_pk):
                 'supplier_quote_number': quote.supplier_quote_number if quote else '',
                 'contact_name': contact.name if contact else 'Unknown',
                 'contact_pk': contact.contact_pk if contact else None,
+                'type': 'quote',
             })
+        
+        # Get stocktake snap allocations for this item (finalised snaps only)
+        # Match by item name and project since snap items link to global items
+        item_name = costing.item
+        project = costing.project
+        
+        if item_name and project:
+            snap_allocations = StocktakeSnapAllocation.objects.filter(
+                snap_item__item__item=item_name,  # Match by item name
+                project=project,  # Match by project
+                snap_item__snap__status__gte=1  # Finalised or sent to Xero
+            ).select_related('snap_item__snap', 'project')
+            
+            for snap_alloc in snap_allocations:
+                snap = snap_alloc.snap_item.snap
+                snap_date = snap.date.strftime('%d-%b-%y') if snap.date else 'Unknown Date'
+                
+                allocations_list.append({
+                    'allocation_pk': snap_alloc.snap_allocation_pk,
+                    'qty': float(snap_alloc.qty) if snap_alloc.qty else 0,
+                    'rate': float(snap_alloc.rate) if snap_alloc.rate else 0,
+                    'amount': float(snap_alloc.amount) if snap_alloc.amount else 0,
+                    'unit': '',
+                    'notes': '',
+                    'snap_pk': snap.snap_pk,
+                    'snap_date': snap_date,
+                    'contact_name': f'Stocktake {snap_date}',
+                    'supplier_quote_number': f'Snap {snap.snap_pk}',
+                    'type': 'snap',
+                })
         
         return JsonResponse({
             'status': 'success',

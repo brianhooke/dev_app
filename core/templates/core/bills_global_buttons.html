@@ -1,71 +1,193 @@
 <!-- Bills Global Buttons and Layout -->
-<!-- Contains navigation buttons and content containers - uses allocations_layout for content -->
+<!-- Contains navigation tabs and consolidated content - all sections loaded at once -->
+
+<!-- Manila Folder Theme Styles for Bills -->
+<style>
+    /* Manila Folder Theme Colors */
+    #billsGlobalSection {
+        --manila-dark: #b8a888;
+        --manila-mid: #d4c4a8;
+        --manila-light: #e8dcc8;
+        --manila-lighter: #f5efe5;
+        --manila-paper: #faf7f2;
+        --manila-text: #5c4a32;
+        --manila-text-muted: #8b7355;
+        --manila-border: #c4b494;
+    }
+    
+    /* Apply manila background to entire dynamic content area when Bills is active */
+    #dynamicContentArea.bills-active {
+        background: linear-gradient(135deg, #f5efe5 0%, #faf7f2 100%) !important;
+    }
+    
+    /* Typography */
+    #billsGlobalSection {
+        font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    #billsTabs .nav-link {
+        font-family: 'Merriweather', Georgia, serif;
+    }
+    
+    /* Manila Folder Tabs */
+    #billsTabs {
+        border-bottom: none;
+        gap: 4px;
+        margin-bottom: 0 !important;
+        position: relative;
+    }
+    #billsTabs .nav-item {
+        margin-bottom: 0;
+        position: relative;
+        z-index: 1;
+    }
+    #billsTabs .nav-link {
+        border: 1px solid var(--manila-border);
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+        color: var(--manila-text);
+        transition: all 0.15s ease;
+        margin-bottom: -1px;
+    }
+    #billsTabs .nav-link:hover {
+        background: linear-gradient(to bottom, var(--manila-lighter) 0%, var(--manila-light) 100%);
+    }
+    #billsTabs .nav-link:focus,
+    #billsTabs .nav-link:focus-visible {
+        outline: none;
+        box-shadow: none;
+    }
+    #billsTabs .nav-link.active {
+        background: var(--manila-paper);
+        border-color: var(--manila-border);
+        border-bottom: none;
+        color: var(--manila-text);
+        position: relative;
+        z-index: 2;
+    }
+    
+    /* Tab Content Area */
+    #billsTabContent {
+        border: 1px solid var(--manila-border);
+        border-radius: 0 8px 8px 8px;
+        background: var(--manila-paper);
+        position: relative;
+        overflow: hidden;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Table Overrides for Manila Theme */
+    #billsGlobalSection .reusable-table-container {
+        border: 1px solid var(--manila-border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    #billsGlobalSection .reusable-table thead {
+        background: linear-gradient(to bottom, var(--manila-light) 0%, var(--manila-mid) 100%);
+    }
+    #billsGlobalSection .reusable-table {
+        border: none !important;
+    }
+    #billsGlobalSection .reusable-table thead th {
+        color: var(--manila-text);
+        border: none !important;
+        border-bottom: 1px solid var(--manila-border) !important;
+        border-top: none !important;
+        border-left: none !important;
+        border-right: none !important;
+        box-shadow: none !important;
+        font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 600;
+    }
+    #billsGlobalSection .reusable-table thead tr {
+        border: none !important;
+    }
+    #billsGlobalSection .reusable-table tbody tr {
+        background: white;
+    }
+    #billsGlobalSection .reusable-table tbody tr:nth-child(even) {
+        background: var(--manila-paper);
+    }
+    #billsGlobalSection .reusable-table tbody tr:hover {
+        background: var(--manila-lighter);
+    }
+    #billsGlobalSection .reusable-table tbody tr.selected {
+        background: var(--manila-light) !important;
+    }
+    #billsGlobalSection .reusable-table tbody td {
+        border-bottom: 1px solid var(--manila-border);
+        color: var(--manila-text);
+        font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+</style>
 
 <!-- Bills Section Container (hidden initially, shown when Bills clicked) -->
 <div id="billsGlobalSection" style="display: none; height: 100%; flex-direction: column;">
-    <!-- Bills navigation buttons -->
-    <div id="billsNavButtons" style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-        <button class="btn btn-primary bills-nav-btn" id="billsInboxBtn" data-mode="inbox">Inbox</button>
-        <button class="btn btn-outline-primary bills-nav-btn" id="billsDirectBtn" data-mode="direct">Direct</button>
-        <button class="btn btn-outline-primary bills-nav-btn" id="billsApprovalsBtn" data-mode="approvals">Approvals</button>
-    </div>
+    <!-- Manila Folder Tabs -->
+    <ul class="nav nav-tabs" id="billsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="billsInboxTab" type="button" role="tab">Inbox</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="billsDirectTab" type="button" role="tab">Direct</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="billsApprovalsTab" type="button" role="tab">Approvals</button>
+        </li>
+    </ul>
     
-    <!-- Content area - loaded via AJAX -->
-    <div id="billsContentArea" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-        <!-- Content will be loaded via AJAX from bills_global_inbox/direct/approvals.html -->
-        <div class="text-center p-4">
-            <i class="fas fa-spinner fa-spin"></i> Loading...
+    <!-- Tab Content Area - consolidated template loaded via AJAX once, sections toggled via JS -->
+    <div id="billsTabContent">
+        <div id="billsContentArea" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%;">
+            <!-- Content will be loaded via AJAX from bills_global.html (consolidated template) -->
+            <div class="text-center p-4">
+                <i class="fas fa-spinner fa-spin"></i> Loading...
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Bills Global Button Switching Logic -->
+<!-- Bills Global Tab Switching Logic -->
 <script>
 $(document).ready(function() {
     // Global variables for bills state
     window.currentBillData = null;
     window.currentSelectedBillPk = null;
     window.currentBillsModalType = null;
-    window.billsContentLoaded = { inbox: false, direct: false, approvals: false };
+    window.billsConsolidatedLoaded = false;
     
-    // Helper function to reset ALL bills navigation buttons
-    window.resetAllBillsNavButtons = function() {
-        $('#billsInboxBtn').removeClass('btn-primary').addClass('btn-outline-primary');
-        $('#billsDirectBtn').removeClass('btn-primary').addClass('btn-outline-primary');
-        $('#billsApprovalsBtn').removeClass('btn-primary').addClass('btn-outline-primary');
+    // Helper function to reset all tab states
+    window.resetAllBillsTabs = function() {
+        $('#billsTabs .nav-link').removeClass('active');
     };
     
-    // Load bills content via AJAX
-    function loadBillsContent(mode) {
-        var url = '';
-        if (mode === 'inbox') {
-            url = '{% url "core:bills_global_inbox" %}';
-        } else if (mode === 'direct') {
-            url = '{% url "core:bills_global_direct" %}';
-        } else if (mode === 'approvals') {
-            url = '{% url "core:bills_global_approvals" %}';
+    // Load consolidated bills template via AJAX (only once)
+    function loadConsolidatedBillsTemplate(initialSection) {
+        if (window.billsConsolidatedLoaded) {
+            // Template already loaded, just switch section
+            switchBillsSection(initialSection);
+            return;
         }
         
         // Show loading indicator
         $('#billsContentArea').html('<div class="text-center p-4"><i class="fas fa-spinner fa-spin"></i> Loading...</div>');
         
         $.ajax({
-            url: url,
+            url: '{% url "core:bills_global" %}',
             type: 'GET',
             success: function(html) {
                 $('#billsContentArea').html(html);
-                window.billsContentLoaded[mode] = true;
-                window.currentBillsModalType = mode;
+                window.billsConsolidatedLoaded = true;
                 
-                // Trigger data load after template is inserted
+                // After template is loaded, switch to the initial section
+                // Small delay to ensure all JS is initialized
                 setTimeout(function() {
-                    if (mode === 'inbox' && typeof window.loadBillsInbox === 'function') {
-                        window.loadBillsInbox();
-                    } else if (mode === 'direct' && typeof window.loadBillsDirect === 'function') {
-                        window.loadBillsDirect();
-                    } else if (mode === 'approvals' && typeof window.loadApprovedBills === 'function') {
-                        window.loadApprovedBills();
-                    }
+                    switchBillsSection(initialSection);
                 }, 100);
             },
             error: function(xhr, status, error) {
@@ -73,6 +195,17 @@ $(document).ready(function() {
                 $('#billsContentArea').html('<p class="text-danger text-center p-4">Failed to load content</p>');
             }
         });
+    }
+    
+    // Switch between sections (uses window.showBillsSection from consolidated template)
+    function switchBillsSection(section) {
+        window.currentBillsModalType = section;
+        
+        if (typeof window.showBillsSection === 'function') {
+            window.showBillsSection(section);
+        } else {
+            console.error('showBillsSection function not available');
+        }
     }
     
     // Handle main Bills navbar link click - shows Bills section with Inbox selected by default
@@ -93,49 +226,49 @@ $(document).ready(function() {
             window.hideAllSections();
         }
         
-        // Show Bills section and add has-content class to hide background
-        $('#billsGlobalSection').css('display', 'flex').show();
-        $('#dynamicContentArea').addClass('has-content');
+        // Show Bills section and add classes for styling
+        $('#billsGlobalSection').css('display', 'flex');
+        $('#dynamicContentArea').addClass('has-content bills-active');
         
-        // Update button states - Inbox active
-        window.resetAllBillsNavButtons();
-        $('#billsInboxBtn').removeClass('btn-outline-primary').addClass('btn-primary');
+        // Update tab states - Inbox active
+        window.resetAllBillsTabs();
+        $('#billsInboxTab').addClass('active');
         
-        // Load Inbox content
-        loadBillsContent('inbox');
+        // Load consolidated template (or switch if already loaded)
+        loadConsolidatedBillsTemplate('inbox');
         
         // Scroll to top
         $('html, body').animate({ scrollTop: 0 }, 300);
     });
     
-    // Handle Inbox button click
-    $('#billsInboxBtn').click(function(e) {
+    // Handle Inbox tab click
+    $('#billsInboxTab').click(function(e) {
         e.preventDefault();
         
-        window.resetAllBillsNavButtons();
-        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        window.resetAllBillsTabs();
+        $(this).addClass('active');
         
-        loadBillsContent('inbox');
+        switchBillsSection('inbox');
     });
     
-    // Handle Direct button click
-    $('#billsDirectBtn').click(function(e) {
+    // Handle Direct tab click
+    $('#billsDirectTab').click(function(e) {
         e.preventDefault();
         
-        window.resetAllBillsNavButtons();
-        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        window.resetAllBillsTabs();
+        $(this).addClass('active');
         
-        loadBillsContent('direct');
+        switchBillsSection('direct');
     });
     
-    // Handle Approvals button click
-    $('#billsApprovalsBtn').click(function(e) {
+    // Handle Approvals tab click
+    $('#billsApprovalsTab').click(function(e) {
         e.preventDefault();
         
-        window.resetAllBillsNavButtons();
-        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        window.resetAllBillsTabs();
+        $(this).addClass('active');
         
-        loadBillsContent('approvals');
+        switchBillsSection('approvals');
     });
     
     // Add click handler for email links (delegated for dynamic content)
@@ -166,9 +299,9 @@ $(document).ready(function() {
         var blob = new Blob([emailContent], { type: 'text/html' });
         var blobUrl = URL.createObjectURL(blob);
         
-        // Find the PDF viewer in the current section (dynamic based on loaded content)
-        var pdfViewer = $('#billsContentArea').find('iframe[id$="PdfViewer"]');
-        var placeholder = $('#billsContentArea').find('[id$="ViewerPlaceholder"]');
+        // Find the PDF viewer in the current section (dynamic based on active section)
+        var pdfViewer = $('#billsContentArea').find('iframe[id$="PdfViewer"]:visible');
+        var placeholder = $('#billsContentArea').find('[id$="ViewerPlaceholder"]:visible');
         
         if (pdfViewer.length) {
             pdfViewer.attr('src', blobUrl).show();

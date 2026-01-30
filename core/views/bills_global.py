@@ -35,11 +35,96 @@ from .xero import get_xero_auth, parse_xero_validation_errors, handle_xero_reque
 logger = logging.getLogger(__name__)
 
 
+def bills_global_view(request):
+    """Render the consolidated Bills Global template with all three sections.
+    
+    This single view renders Inbox, Direct, and Approvals sections in one template.
+    JavaScript handles toggling between sections.
+    """
+    # ===== INBOX SECTION COLUMNS =====
+    inbox_main_columns = [
+        {'header': 'Xero / Project', 'width': '13%'},
+        {'header': 'Supplier', 'width': '14%'},
+        {'header': 'Bill #', 'width': '10%'},
+        {'header': '$ Gross', 'width': '9%'},
+        {'header': '$ Net', 'width': '9%'},
+        {'header': '$ GST', 'width': '6%'},
+        {'header': 'Date', 'width': '8%'},
+        {'header': 'Due', 'width': '8%'},
+        {'header': 'Email', 'width': '6%', 'class': 'col-action-first'},
+        {'header': 'Send', 'width': '8%', 'class': 'col-action'},
+        {'header': '', 'width': '5%', 'class': 'col-action'},
+    ]
+    inbox_alloc_columns = []  # Not used - allocations hidden for inbox
+    
+    # ===== DIRECT SECTION COLUMNS =====
+    direct_main_columns = [
+        {'header': 'Xero / Project', 'width': '12%'},
+        {'header': 'Supplier', 'width': '14%'},
+        {'header': 'Bill #', 'width': '10%'},
+        {'header': '$ Gross', 'width': '8%'},
+        {'header': '$ Net', 'width': '8%'},
+        {'header': '$ GST', 'width': '5%'},
+        {'header': 'Date', 'width': '8%'},
+        {'header': 'Due', 'width': '8%'},
+        {'header': 'Email', 'width': '6%', 'class': 'col-action-first'},
+        {'header': 'Approve', 'width': '9%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '6%', 'class': 'col-action'},
+    ]
+    direct_alloc_columns = [
+        {'header': 'Xero Account', 'width': '23%'},
+        {'header': 'Tracking', 'width': '18%'},
+        {'header': '$ Gross', 'width': '11%', 'still_to_allocate_id': 'RemainingGross'},
+        {'header': '$ Net', 'width': '11%', 'still_to_allocate_id': 'RemainingNet'},
+        {'header': '$ GST', 'width': '11%', 'still_to_allocate_id': 'RemainingGst'},
+        {'header': 'Notes', 'width': '21%'},
+        {'header': '', 'width': '5%', 'class': 'col-action-first'},  # Delete button
+    ]
+    
+    # ===== APPROVALS SECTION COLUMNS =====
+    approvals_main_columns = [
+        {'header': 'Project', 'width': '12%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '12%', 'sortable': True},
+        {'header': 'Supplier', 'width': '12%', 'sortable': True},
+        {'header': '$ Gross', 'width': '10%', 'sortable': True},
+        {'header': '$ Net', 'width': '10%', 'sortable': True},
+        {'header': '$ GST', 'width': '9%', 'sortable': True},
+        {'header': 'Date', 'width': '8%'},
+        {'header': 'Due', 'width': '8%'},
+        {'header': 'Send', 'width': '8%', 'class': 'col-action-first'},
+        {'header': 'Return', 'width': '6%', 'class': 'col-action'},
+    ]
+    approvals_alloc_columns = [
+        {'header': 'Xero Account', 'width': '18%'},
+        {'header': 'Tracking Category', 'width': '18%'},
+        {'header': 'Costing Item', 'width': '14%'},
+        {'header': '$ Gross', 'width': '12%', 'still_to_allocate_id': 'TotalGross'},
+        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
+        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
+        {'header': 'Notes', 'width': '14%'},
+    ]
+    
+    context = {
+        # Inbox columns
+        'inbox_main_columns': inbox_main_columns,
+        'inbox_alloc_columns': inbox_alloc_columns,
+        # Direct columns
+        'direct_main_columns': direct_main_columns,
+        'direct_alloc_columns': direct_alloc_columns,
+        # Approvals columns
+        'approvals_main_columns': approvals_main_columns,
+        'approvals_alloc_columns': approvals_alloc_columns,
+    }
+    return render(request, 'core/bills_global.html', context)
+
+
 def bills_global_inbox_view(request):
     """Render the Bills - Inbox section template using allocations_layout.
     
     Inbox mode shows unprocessed email bills (status = -2).
     No allocations table - just main table and PDF viewer.
+    
+    DEPRECATED: Use bills_global_view for the consolidated template.
     """
     # Main table columns for Inbox view
     main_table_columns = [
@@ -1087,6 +1172,8 @@ def get_bills_list(request):
                 'supplier_bill_number': invoice.supplier_bill_number or '',
                 'total_net': float(invoice.total_net) if invoice.total_net is not None else None,
                 'total_gst': float(invoice.total_gst) if invoice.total_gst is not None else None,
+                'bill_date': invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else None,
+                'bill_due_date': invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else None,
                 'pdf_url': pdf_url,
                 'email_subject': invoice.received_email.subject if invoice.received_email else 'N/A',
                 'email_from': invoice.received_email.from_address if invoice.received_email else 'N/A',

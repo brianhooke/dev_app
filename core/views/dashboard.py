@@ -180,9 +180,11 @@ def send_bill(request):
         bill_number = data.get('bill_number')
         total_net = data.get('total_net')
         total_gst = data.get('total_gst')
+        bill_date = data.get('bill_date')
+        bill_due_date = data.get('bill_due_date')
         
         # Check all required fields
-        if not all([bill_pk, xero_instance_or_project, supplier_pk, bill_number, total_net is not None, total_gst is not None]):
+        if not all([bill_pk, xero_instance_or_project, supplier_pk, bill_number, total_net is not None, total_gst is not None, bill_date, bill_due_date]):
             return JsonResponse({
                 'status': 'error',
                 'message': 'Missing required fields'
@@ -354,6 +356,8 @@ def send_bill(request):
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
             invoice.total_gst = Decimal(str(total_gst))
+            invoice.bill_date = bill_date
+            invoice.bill_due_date = bill_due_date
             invoice.bill_status = 2  # Set status to 2 (sent to Xero)
             
             invoice.save()
@@ -378,6 +382,8 @@ def send_bill(request):
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
             invoice.total_gst = Decimal(str(total_gst))
+            invoice.bill_date = bill_date
+            invoice.bill_due_date = bill_due_date
             invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct or Stocktake)
             
             invoice.save()

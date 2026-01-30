@@ -594,6 +594,8 @@ def get_approved_bills(request):
                 'total_gross': total_gross,
                 'total_net': total_net,
                 'total_gst': total_gst,
+                'bill_date': invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else None,
+                'bill_due_date': invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else None,
                 'pdf_url': pdf_url,
                 'allocations': allocations,
             }

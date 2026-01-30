@@ -93,6 +93,23 @@ function formatMoney(num) {
 }
 
 /**
+ * Format a date string as dd-mmm-yy (e.g., "31-Jan-26")
+ * 
+ * @param {string} dateStr - Date string in YYYY-MM-DD format
+ * @returns {string} Formatted date string
+ */
+function formatDateDMY(dateStr) {
+    if (!dateStr) return '-';
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '-';
+    var day = String(date.getDate()).padStart(2, '0');
+    var month = months[date.getMonth()];
+    var year = String(date.getFullYear()).slice(-2);
+    return day + '-' + month + '-' + year;
+}
+
+/**
  * Escape HTML special characters to prevent XSS attacks.
  * Converts &, <, >, ", ' to their HTML entity equivalents.
  * 
@@ -667,6 +684,7 @@ window.Utils = {
     getCookie: getCookie,
     formatNumber: formatNumber,
     formatMoney: formatMoney,
+    formatDateDMY: formatDateDMY,
     formatCurrency: formatCurrency,
     parseFloatSafe: parseFloatSafe,
     escapeHtml: escapeHtml,
