@@ -389,13 +389,30 @@ $(document).ready(function() {
     }
     
     function loadConstructionHCClaimsSection() {
-        $('#constructionContentArea').html(`
-            <div style="text-align: center; padding: #6c757d;">
-                <i class="fas fa-file-invoice-dollar" style="font-size: 64px; margin-bottom: 20px;"></i>
-                <h4>HC Claims</h4>
-                <p>Coming soon...</p>
-            </div>
-        `);
+        var projectPk = window.currentConstructionProject ? window.currentConstructionProject.pk : null;
+        
+        if (!projectPk) {
+            console.error('No project selected for HC Claims');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "core:hc_claims" %}?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                $('#constructionContentArea').html(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load HC Claims section:', error);
+                $('#constructionContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading HC Claims</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
+        });
     }
     
     function loadConstructionBillsSection(subsection) {

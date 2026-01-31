@@ -22,6 +22,12 @@ from .hc_variations import (
     delete_hc_variation_allocation
 )
 
+# HC Claims views
+from .hc_claims import (
+    hc_claims_view, get_hc_claims, get_available_bills, get_available_stocktake_snaps,
+    create_hc_claim, get_hc_claim_data, save_hc_claim, delete_hc_claim, update_claim_bills
+)
+
 # Bill/Invoice views
 from .bills import (
     delete_bill, upload_bill, upload_bill_allocations,

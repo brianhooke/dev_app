@@ -50,6 +50,8 @@ if 'runserver' in sys.argv or 'DEBUG' in os.environ:
     CSRF_TRUSTED_ORIGINS += [
         'http://127.0.0.1:62958',
         'http://localhost:62958',
+        'http://127.0.0.1:51459',
+        'http://localhost:51459',
     ]
 
 # Trust X-Forwarded-Proto header from AWS Load Balancer

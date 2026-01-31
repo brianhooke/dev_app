@@ -1,0 +1,1980 @@
+<!-- HC Claims Section Template -->
+<!-- SELF-CONTAINED: All HC claims logic is in this file -->
+{% load static %}
+
+<!-- Include shared table styles -->
+<link rel="stylesheet" href="{% static 'core/css/data_table_styles.css' %}">
+
+<style>
+    /* HC Claims specific styles (extend reusable-table) */
+    .hc-claims-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        height: 100%;
+    }
+    
+    /* Table container with fixed footer outside scroll */
+    .hc-claims-container .reusable-table-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        border: 1px solid black;
+        border-radius: 6px;
+        overflow: hidden;
+        min-height: 0;
+    }
+    
+    /* Scrollable area for table content */
+    #hcClaimsTableContainer {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    
+    /* Compact font for HC Claims table */
+    .hc-claims-container .reusable-table {
+        font-size: 11px;
+    }
+    
+    .hc-claims-container .reusable-table th,
+    .hc-claims-container .reusable-table td {
+        padding: 4px 6px;
+        text-align: left;
+    }
+    
+    /* Sticky table header */
+    #hcClaimsTable thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--color-bg-surface, white);
+    }
+    
+    #hcClaimsTable thead th {
+        background: var(--color-bg-muted, #f8f9fa);
+        border-bottom: 1px solid black;
+        vertical-align: middle;
+    }
+    
+    /* Two-row header: group headings */
+    #hcClaimsTable thead th.budget-group,
+    #hcClaimsTable thead th.uncommitted-group,
+    #hcClaimsTable thead th.committed-group,
+    #hcClaimsTable thead th.invoiced-group,
+    #hcClaimsTable thead th.hc-claim-group,
+    #hcClaimsTable thead th.qs-claim-group {
+        text-align: center;
+        border-bottom: 1px solid #ccc;
+    }
+    
+    /* Subheading row styling */
+    #hcClaimsTable thead tr:nth-child(2) th {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+    
+    .hc-claims-container .reusable-table input {
+        font-size: 11px;
+        padding: 2px 4px;
+    }
+    
+    /* Fixed footer outside scroll area */
+    #hcClaimsFixedFooter {
+        flex-shrink: 0;
+        background: var(--color-bg-muted);
+        border-top: 1px solid black;
+    }
+    
+    #hcClaimsFixedFooter table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+    
+    #hcClaimsFixedFooter td {
+        padding: 4px 6px;
+        font-weight: 600;
+        text-align: left;
+        border: none;
+    }
+    
+    /* Collapsible category rows */
+    .hc-claims-container .reusable-table tr.category-row {
+        cursor: pointer;
+        background-color: var(--color-bg-muted);
+    }
+    
+    .hc-claims-container .reusable-table tr.category-row:hover {
+        background-color: #eef2f7;
+    }
+    
+    .hc-claims-container .reusable-table tr.category-row .collapse-icon {
+        margin-right: 6px;
+        transition: transform 0.2s ease;
+        display: inline-block;
+        width: 12px;
+    }
+    
+    .hc-claims-container .reusable-table tr.category-row.collapsed .collapse-icon {
+        transform: rotate(-90deg);
+    }
+    
+    .hc-claims-container .reusable-table tr.category-row .subtotal-cell {
+        font-weight: normal;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .hc-claims-container .reusable-table tr.category-row.collapsed .subtotal-cell {
+        opacity: 1;
+    }
+    
+    .hc-claims-container .reusable-table tr.item-row.hidden-by-collapse {
+        display: none;
+    }
+    
+    /* Item row indent */
+    .hc-claims-container .reusable-table td.indent {
+        padding-left: 24px;
+    }
+    
+    /* Click-to-edit cells - blue like contract_budget */
+    .hc-claims-container .click-to-edit {
+        color: var(--color-primary, #007bff);
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .hc-claims-container .click-to-edit:hover {
+        text-decoration: underline;
+    }
+    
+    /* Green committed values (like contract_budget) */
+    .hc-claims-container .committed-value {
+        color: var(--color-success, #28a745);
+    }
+    
+    /* Clickable committed cells */
+    .hc-claims-container .committed-clickable {
+        color: var(--color-success, #28a745);
+        cursor: pointer;
+    }
+    
+    .hc-claims-container .committed-clickable:hover {
+        text-decoration: underline;
+    }
+    
+    /* Notes icon styling */
+    .hc-claims-container .notes-icon {
+        cursor: pointer;
+        font-size: 12px;
+        color: transparent;
+        -webkit-text-stroke: 1px var(--color-primary, #007bff);
+        transition: all 0.15s ease;
+    }
+    
+    .hc-claims-container .notes-icon:hover {
+        color: var(--color-primary, #007bff);
+        -webkit-text-stroke: 0;
+    }
+    
+    .hc-claims-container .notes-icon.has-notes {
+        color: var(--color-primary, #007bff);
+        -webkit-text-stroke: 0;
+    }
+    
+    /* Notes row - expandable inline */
+    .hc-claims-container .notes-row {
+        background-color: var(--color-bg-muted, #f8f9fa);
+    }
+    
+    .hc-claims-container .notes-row td {
+        padding: 8px 12px !important;
+    }
+    
+    .hc-claims-container .notes-row textarea {
+        width: 100%;
+        min-height: 50px;
+        padding: 6px;
+        border: 1px solid var(--color-border, #dee2e6);
+        border-radius: 4px;
+        font-size: 11px;
+        resize: vertical;
+    }
+    
+    /* Committed details row - green styling (matching contract_budget.html) */
+    .hc-claims-container .committed-details-row {
+        background-color: rgba(40, 167, 69, 0.08);
+    }
+    
+    .hc-claims-container .committed-details-row > td {
+        padding: 8px 12px !important;
+    }
+    
+    .hc-claims-container .committed-details-box {
+        border: 1px solid var(--color-success, #28a745);
+        border-radius: 4px;
+        padding: 8px 12px;
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    .hc-claims-container .committed-details-table {
+        width: 100%;
+        font-size: 12px;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    
+    .hc-claims-container .committed-details-table th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--color-text, #212529);
+        padding: 4px 8px;
+        border-bottom: 1px solid rgba(40, 167, 69, 0.2);
+    }
+    
+    .hc-claims-container .committed-details-table td {
+        padding: 4px 8px !important;
+        text-align: left;
+        color: var(--color-text);
+    }
+    
+    /* Finalized claim report styles (PDF-friendly) */
+    .finalized-report {
+        padding: 20px;
+        background: white;
+    }
+    
+    .finalized-report .claim-report-section {
+        margin-bottom: 30px;
+    }
+    
+    .finalized-report .report-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #212529;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 6px;
+    }
+    
+    .finalized-report .report-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    
+    .finalized-report .report-table th,
+    .finalized-report .report-table td {
+        padding: 8px 12px;
+        text-align: left;
+        border: 1px solid #dee2e6;
+    }
+    
+    .finalized-report .report-table th {
+        background: #e9ecef;
+        font-weight: 600;
+        color: #212529;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .finalized-report .report-table th.this-claim-col {
+        color: #28a745;
+        font-weight: 600;
+    }
+    
+    .finalized-report .report-table td.this-claim-col {
+        color: #28a745;
+        font-weight: 500;
+    }
+    
+    .finalized-report .report-table .totals-row {
+        background: #f8f9fa;
+    }
+    
+    .finalized-report .report-table .totals-row td {
+        border-top: 2px solid #212529;
+    }
+    
+    @media print {
+        .finalized-report {
+            padding: 0;
+        }
+        .claim-selector-row, .new-claim-form, .claim-actions-row {
+            display: none !important;
+        }
+    }
+    
+    /* Claim selector row */
+    .claim-selector-row {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 8px 12px;
+        background: var(--color-bg-muted);
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+    }
+    
+    .claim-selector-row label {
+        font-weight: 600;
+        margin: 0;
+        white-space: nowrap;
+    }
+    
+    .claim-selector-row select {
+        min-width: 250px;
+    }
+    
+    .claim-selector-row .claim-status {
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .claim-status.draft { background: rgba(245, 158, 11, 0.2); color: #92400e; }
+    .claim-status.approved { background: rgba(34, 197, 94, 0.2); color: #166534; }
+    .claim-status.sent { background: rgba(59, 130, 246, 0.2); color: #1e40af; }
+    .claim-status.paid { background: rgba(20, 184, 166, 0.2); color: #115e59; }
+    
+    /* New claim form */
+    .new-claim-form {
+        display: none;
+        padding: 12px;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 6px;
+    }
+    
+    .new-claim-form.show { display: block; }
+    
+    .new-claim-form .form-row {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+    
+    .new-claim-form .form-group {
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .new-claim-form .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 5px;
+        font-size: 12px;
+    }
+    
+    .bills-selection-list {
+        max-height: 120px;
+        overflow-y: auto;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        padding: 6px;
+        background: var(--color-bg-surface);
+    }
+    
+    .bills-selection-list .bill-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 0;
+        font-size: 11px;
+    }
+    
+    .bills-selection-list .bill-item:hover {
+        background: var(--color-bg-muted);
+    }
+    
+    /* Editable cells - subtle yellow highlight */
+    .hc-claims-container .reusable-table .editable-cell {
+        background: rgba(245, 158, 11, 0.08) !important;
+    }
+    
+    .hc-claims-container .reusable-table .editable-cell input {
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--color-border);
+        border-radius: 2px;
+    }
+    
+    .hc-claims-container .reusable-table .editable-cell input:focus {
+        border-color: var(--color-accent);
+        outline: none;
+    }
+    
+    /* Action buttons row */
+    .claim-actions-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        flex-shrink: 0;
+    }
+    
+    .claim-actions-row .btn-group {
+        display: flex;
+        gap: 10px;
+    }
+</style>
+
+<div class="hc-claims-container">
+    <!-- Claim Selector Row -->
+    <div class="claim-selector-row">
+        <label>HC Claim:</label>
+        <select id="hcClaimSelector" class="form-control form-control-sm" style="width: auto;">
+            <option value="">-- Select or Create New --</option>
+        </select>
+        <span id="hcClaimStatus" class="claim-status" style="display: none;"></span>
+        <button id="newClaimBtn" class="btn btn-success btn-sm">
+            <i class="fas fa-plus"></i> New Claim
+        </button>
+        <button id="deleteClaimBtn" class="btn btn-danger btn-sm" style="display: none;">
+            <i class="fas fa-trash"></i> Delete Draft
+        </button>
+    </div>
+    
+    <!-- New Claim Form (hidden initially) -->
+    <div id="newClaimForm" class="new-claim-form">
+        <h5 style="margin-top: 0; margin-bottom: 15px;">Create New HC Claim</h5>
+        <div class="form-row">
+            <div class="form-group" style="flex: 0 0 200px;">
+                <label>Claim Date</label>
+                <input type="date" id="newClaimDate" class="form-control form-control-sm">
+            </div>
+            <div class="form-group">
+                <label>Select Bills to Include (optional)</label>
+                <div id="billsSelectionList" class="bills-selection-list">
+                    <p class="text-muted" style="margin: 0;">Loading available bills...</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Select Stocktake Snaps to Include (optional)</label>
+                <div id="snapsSelectionList" class="bills-selection-list">
+                    <p class="text-muted" style="margin: 0;">Loading available snaps...</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button id="createClaimBtn" class="btn btn-primary btn-sm">
+                <i class="fas fa-check"></i> Create Claim
+            </button>
+            <button id="cancelNewClaimBtn" class="btn btn-secondary btn-sm">
+                <i class="fas fa-times"></i> Cancel
+            </button>
+        </div>
+    </div>
+    
+    <!-- Budget Table - header built dynamically based on isConstruction -->
+    <div class="reusable-table-container">
+        <!-- Scrollable table container -->
+        <div id="hcClaimsTableContainer">
+            <table class="reusable-table" id="hcClaimsTable">
+                <thead id="hcClaimsTableHead">
+                    <!-- Header built dynamically by JS -->
+                </thead>
+                <tbody id="hcClaimsTableBody">
+                    <tr>
+                        <td colspan="15" style="text-align: center; padding: 40px; color: #6c757d;">
+                            <i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
+                            Select a claim or create a new one to view budget data.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Fixed footer outside scroll -->
+        <div id="hcClaimsFixedFooter" style="display: none;">
+            <table id="hcClaimsFooterTable">
+                <tbody id="hcClaimsFixedFooterBody">
+                    <!-- Footer built dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="claim-actions-row" id="claimActionsRow" style="display: none;">
+        <div class="btn-group">
+            <button id="finalizeClaimBtn" class="btn btn-success">
+                <i class="fas fa-check-circle"></i> Finalize Claim
+            </button>
+        </div>
+        <div>
+            <span class="text-muted" style="font-size: 12px;">
+                Uncommitted and Fixed on Site values can be edited. Claim amounts are calculated automatically.
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Load shared utilities -->
+<script src="{% static 'core/js/utils.js' %}"></script>
+
+<!-- Pass context to JavaScript -->
+<script>
+    if ('{{ project_pk }}' && '{{ project_pk }}' !== 'None') {
+        window.hcClaimsProjectPk = '{{ project_pk }}';
+    }
+    window.hcClaimsIsConstruction = {{ is_construction|yesno:"true,false" }};
+</script>
+
+<!-- Self-Contained HC Claims Section JS -->
+<script>
+(function() {
+    'use strict';
+    
+    // Get project info from various sources
+    var projectPk = window.hcClaimsProjectPk || 
+                    (window.currentConstructionProject && window.currentConstructionProject.pk) ||
+                    (window.currentProject && window.currentProject.pk) ||
+                    (typeof Utils !== 'undefined' && Utils.getProjectPkFromUrl ? Utils.getProjectPkFromUrl() : null);
+    
+    var isConstruction = window.hcClaimsIsConstruction || false;
+    
+    // State
+    var currentClaimPk = null;
+    var currentClaimData = null;
+    var budgetData = [];
+    var availableBills = [];
+    var availableSnaps = [];
+    
+    // DOM references
+    var $claimSelector = $('#hcClaimSelector');
+    var $claimStatus = $('#hcClaimStatus');
+    var $newClaimForm = $('#newClaimForm');
+    var $tableBody = $('#hcClaimsTableBody');
+    var $fixedFooter = $('#hcClaimsFixedFooter');
+    var $footerBody = $('#hcClaimsFixedFooterBody');
+    var $actionsRow = $('#claimActionsRow');
+    var $deleteBtn = $('#deleteClaimBtn');
+    
+    // Get column count based on construction mode
+    function getColCount() {
+        // Construction: Cat/Item, Unit, ContractBudget, WorkingBudget, Uncommitted(Qty,Rate,Amt,Notes), Committed(Qty,Rate,Amt), FixedOnSite, Invoiced, HCPrev, HCThis, QSPrev, QSThis = 16 cols
+        // Non-construction: Cat/Item, ContractBudget, WorkingBudget, Uncommitted, Committed, FixedOnSite, Invoiced, HCPrev, HCThis, QSPrev, QSThis = 11 cols
+        return isConstruction ? 16 : 11;
+    }
+    
+    // Build table header based on construction mode
+    function buildTableHeader() {
+        var $thead = $('#hcClaimsTableHead');
+        $thead.empty();
+        
+        if (isConstruction) {
+            // Two-row header for construction mode
+            var $row1 = $('<tr>');
+            var $row2 = $('<tr>');
+            
+            // Row 1: Parent headings with rowspan/colspan
+            $row1.append('<th rowspan="2" style="min-width: 160px;">Category / Item</th>');
+            $row1.append('<th rowspan="2" style="width: 40px;">Unit</th>');
+            $row1.append('<th colspan="2" class="budget-group">Budget</th>');
+            $row1.append('<th colspan="4" class="uncommitted-group">Uncommitted</th>');
+            $row1.append('<th colspan="3" class="committed-group">Committed</th>');
+            $row1.append('<th rowspan="2" style="min-width: 75px;">Fixed on Site</th>');
+            $row1.append('<th colspan="2" class="invoiced-group">Invoiced</th>');
+            $row1.append('<th colspan="2" class="hc-claim-group">HC Claim</th>');
+            $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
+            
+            // Row 2: Subheadings for Budget, Uncommitted, Committed, Invoiced, HC Claim, QS Claim
+            $row2.append('<th>Contract</th>');
+            $row2.append('<th>Working</th>');
+            $row2.append('<th>Qty</th>');
+            $row2.append('<th>Rate</th>');
+            $row2.append('<th>Amt</th>');
+            $row2.append('<th style="width: 30px;">Notes</th>');
+            $row2.append('<th>Qty</th>');
+            $row2.append('<th>Rate</th>');
+            $row2.append('<th>Amt</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            
+            $thead.append($row1);
+            $thead.append($row2);
+        } else {
+            // Two-row header for non-construction mode (HC/QS Claim still have subheadings)
+            var $row1 = $('<tr>');
+            var $row2 = $('<tr>');
+            
+            $row1.append('<th rowspan="2" style="min-width: 160px;">Category / Item</th>');
+            $row1.append('<th colspan="2" class="budget-group">Budget</th>');
+            $row1.append('<th rowspan="2">Uncommitted</th>');
+            $row1.append('<th rowspan="2">Committed</th>');
+            $row1.append('<th rowspan="2" style="min-width: 75px;">Fixed on Site</th>');
+            $row1.append('<th colspan="2" class="invoiced-group">Invoiced</th>');
+            $row1.append('<th colspan="2" class="hc-claim-group">HC Claim</th>');
+            $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
+            
+            $row2.append('<th>Contract</th>');
+            $row2.append('<th>Working</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            $row2.append('<th>Prev</th>');
+            $row2.append('<th>This</th>');
+            
+            $thead.append($row1);
+            $thead.append($row2);
+        }
+    }
+    
+    // Build fixed footer based on construction mode
+    function buildTableFooter() {
+        $footerBody.empty();
+        
+        var $footerRow = $('<tr>');
+        $footerRow.append('<td><strong>TOTALS</strong></td>');
+        
+        if (isConstruction) {
+            $footerRow.append('<td></td>'); // Unit
+        }
+        
+        $footerRow.append('<td id="totalContractBudget">0.00</td>');
+        $footerRow.append('<td id="totalWorkingBudget">0.00</td>');
+        
+        if (isConstruction) {
+            $footerRow.append('<td></td>'); // Uncommit Qty
+            $footerRow.append('<td></td>'); // Rate
+            $footerRow.append('<td id="totalUncommitted">0.00</td>');
+            $footerRow.append('<td></td>'); // Notes
+            $footerRow.append('<td></td>'); // Commit Qty
+            $footerRow.append('<td></td>'); // Rate
+            $footerRow.append('<td id="totalCommitted" class="committed-value">0.00</td>');
+        } else {
+            $footerRow.append('<td id="totalUncommitted">0.00</td>');
+            $footerRow.append('<td id="totalCommitted" class="committed-value">0.00</td>');
+        }
+        
+        $footerRow.append('<td id="totalFixedOnSite">0.00</td>');
+        $footerRow.append('<td id="totalInvoicedPrev">0.00</td>');
+        $footerRow.append('<td id="totalInvoicedThis">0.00</td>');
+        $footerRow.append('<td id="totalPrevHcClaimed">0.00</td>');
+        $footerRow.append('<td id="totalThisHcClaim">0.00</td>');
+        $footerRow.append('<td id="totalPrevQsClaimed">0.00</td>');
+        $footerRow.append('<td id="totalThisQsClaim">0.00</td>');
+        
+        $footerBody.append($footerRow);
+    }
+    
+    // Toggle category collapse
+    function toggleCategory(categoryName) {
+        var $catRow = $tableBody.find('tr.category-row[data-category="' + categoryName + '"]');
+        $catRow.toggleClass('collapsed');
+        
+        var isCollapsed = $catRow.hasClass('collapsed');
+        $tableBody.find('tr.item-row[data-category="' + categoryName + '"]').each(function() {
+            if (isCollapsed) {
+                $(this).addClass('hidden-by-collapse');
+            } else {
+                $(this).removeClass('hidden-by-collapse');
+            }
+        });
+    }
+    
+    // Toggle notes row
+    function toggleNotesRow(costingPk, currentNotes) {
+        var $existingRow = $tableBody.find('tr.notes-row[data-item-pk="' + costingPk + '"]');
+        
+        if ($existingRow.length) {
+            // Save before closing
+            var notes = $existingRow.find('textarea').val();
+            saveNotes(costingPk, notes);
+            $existingRow.remove();
+            return;
+        }
+        
+        var colCount = getColCount();
+        var $notesRow = $('<tr class="notes-row" data-item-pk="' + costingPk + '">');
+        var $td = $('<td colspan="' + colCount + '">');
+        var $textarea = $('<textarea placeholder="Enter notes...">').val(currentNotes);
+        
+        // Save on blur
+        $textarea.on('blur', function() {
+            saveNotes(costingPk, $(this).val());
+        });
+        
+        $td.append($textarea);
+        $notesRow.append($td);
+        
+        // Insert after the item row
+        var $itemRow = $tableBody.find('tr.item-row[data-costing-pk="' + costingPk + '"]');
+        $itemRow.after($notesRow);
+        
+        // Focus the textarea
+        $textarea.focus();
+    }
+    
+    // Convert click-to-edit cell to input
+    function convertToInput(costingPk, fieldType, currentValue, $row) {
+        var $cell = $row.find('td[data-item-pk="' + costingPk + '"].' + fieldType + '-cell');
+        if (!$cell.length) {
+            $cell = $row.find('.fixed-on-site-cell[data-item-pk="' + costingPk + '"]');
+        }
+        if (!$cell.length) return;
+        
+        // Replace with input
+        var $input = $('<input type="number" step="0.01" class="' + fieldType + '-input">')
+            .val(currentValue.toFixed(2))
+            .css({ width: '100%', textAlign: 'left', padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: '2px' });
+        
+        $cell.empty().append($input);
+        $input.focus().select();
+        
+        // Save on blur
+        $input.on('blur', function() {
+            var newValue = parseFloat($(this).val()) || 0;
+            saveFieldValue(costingPk, fieldType, newValue, $row);
+        });
+        
+        // Save on enter
+        $input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                $(this).blur();
+            }
+        });
+    }
+    
+    // Save field value to server and revert to click-to-edit
+    function saveFieldValue(costingPk, fieldType, newValue, $row) {
+        var data = { costing_pk: costingPk };
+        data[fieldType] = newValue;
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': (typeof Utils !== 'undefined' ? Utils.getCSRFToken() : $('input[name="csrfmiddlewaretoken"]').val()) },
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                // Revert to click-to-edit display
+                var $cell = $row.find('.fixed-on-site-cell[data-item-pk="' + costingPk + '"]');
+                if ($cell.length) {
+                    var $link = $('<span class="click-to-edit">' + formatMoney(newValue) + '</span>');
+                    $link.on('click', function(e) {
+                        e.stopPropagation();
+                        convertToInput(costingPk, 'fixed_on_site', newValue, $row);
+                    });
+                    $cell.empty().append($link);
+                }
+                
+                // Update stored item data and recalculate
+                var item = $row.data('item');
+                if (item) {
+                    item.fixed_on_site = newValue;
+                    recalculateRow($row);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save field:', error);
+            }
+        });
+    }
+    
+    // Save notes to server
+    function saveNotes(costingPk, notes) {
+        var data = {
+            costing_pk: costingPk,
+            notes: notes
+        };
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': (typeof Utils !== 'undefined' ? Utils.getCSRFToken() : $('input[name="csrfmiddlewaretoken"]').val()) },
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                // Update local data on the row
+                var $row = $tableBody.find('tr.item-row[data-costing-pk="' + costingPk + '"]');
+                $row.attr('data-notes', notes);
+                
+                // Update icon state
+                var $icon = $row.find('.notes-icon');
+                if (notes && notes.trim() !== '') {
+                    $icon.addClass('has-notes');
+                    $icon.attr('title', notes);
+                } else {
+                    $icon.removeClass('has-notes');
+                    $icon.attr('title', 'Add notes');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to save notes:', error);
+            }
+        });
+    }
+    
+    // Toggle committed details row - fetch from backend like contract_budget.html
+    function toggleCommittedDetailsRow(costingPk) {
+        var $existingRow = $tableBody.find('tr.committed-details-row[data-item-pk="' + costingPk + '"]');
+        
+        if ($existingRow.length) {
+            $existingRow.remove();
+            $('.committed-clickable').removeClass('active');
+            return;
+        }
+        
+        // Close any other open committed details row
+        $tableBody.find('tr.committed-details-row').remove();
+        $('.committed-clickable').removeClass('active');
+        
+        var $itemRow = $tableBody.find('tr.item-row[data-costing-pk="' + costingPk + '"]');
+        
+        // Calculate column positions (matching contract_budget.html pattern)
+        // Empty cells before box, then box spans the committed columns area
+        var colsBeforeBox = isConstruction ? 8 : 5; // Up to and including uncommitted
+        var boxCols = isConstruction ? 8 : 6; // Committed through end
+        
+        // Show loading row
+        var $loadingRow = $('<tr class="committed-details-row" data-item-pk="' + costingPk + '">');
+        $loadingRow.append('<td colspan="' + colsBeforeBox + '"></td>');
+        $loadingRow.append('<td colspan="' + boxCols + '" style="text-align: center; padding: 10px;">Loading...</td>');
+        $itemRow.after($loadingRow);
+        
+        // Fetch allocations from backend (same endpoint as contract_budget.html)
+        $.ajax({
+            url: '/core/get_item_quote_allocations/' + costingPk + '/',
+            type: 'GET',
+            success: function(response) {
+                $loadingRow.remove();
+                
+                if (!response.allocations || response.allocations.length === 0) {
+                    console.log('No committed details for item', costingPk);
+                    return;
+                }
+                
+                var $detailsRow = $('<tr id="committed-details-row-' + costingPk + '" class="committed-details-row" data-item-pk="' + costingPk + '">');
+                
+                // Empty cells before the box
+                $detailsRow.append('<td colspan="' + colsBeforeBox + '"></td>');
+                
+                // Green box cell spanning the right columns
+                var $boxTd = $('<td colspan="' + boxCols + '">');
+                var $box = $('<div class="committed-details-box">');
+                
+                // Build internal table with column widths
+                var $table = $('<table class="committed-details-table">');
+                
+                if (isConstruction) {
+                    $table.append('<colgroup><col style="width:33.3%"><col style="width:16.7%"><col style="width:16.7%"><col style="width:16.7%"><col style="width:16.6%"></colgroup>');
+                    $table.append('<thead><tr><th>Supplier</th><th>Quote #</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>');
+                } else {
+                    $table.append('<colgroup><col style="width:50%"><col style="width:25%"><col style="width:25%"></colgroup>');
+                    $table.append('<thead><tr><th>Supplier</th><th>Quote #</th><th>Amount</th></tr></thead>');
+                }
+                
+                var $tbody = $('<tbody>');
+                response.allocations.forEach(function(alloc) {
+                    var $tr = $('<tr>');
+                    var supplierName = alloc.contact_name || (alloc.type === 'snap' ? 'Stocktake ' + (alloc.snap_date || '') : '-');
+                    var quoteNum = alloc.type === 'snap' ? 'Snap ' + (alloc.snap_id || '') : (alloc.supplier_quote_number ? alloc.supplier_quote_number : '-');
+                    
+                    $tr.append('<td>' + supplierName + '</td>');
+                    $tr.append('<td>' + (quoteNum ? '#' + quoteNum : '-') + '</td>');
+                    if (isConstruction) {
+                        $tr.append('<td>' + (alloc.qty ? alloc.qty.toFixed(2) : '-') + '</td>');
+                        $tr.append('<td>' + (alloc.rate ? formatMoney(alloc.rate) : '-') + '</td>');
+                    }
+                    $tr.append('<td>' + formatMoney(alloc.amount || 0) + '</td>');
+                    $tbody.append($tr);
+                });
+                
+                $table.append($tbody);
+                $box.append($table);
+                $boxTd.append($box);
+                $detailsRow.append($boxTd);
+                
+                $itemRow.after($detailsRow);
+            },
+            error: function(xhr, status, error) {
+                $loadingRow.remove();
+                console.error('Failed to load committed details:', error);
+            }
+        });
+    }
+    
+    // Convert uncommitted qty/rate click-to-edit to input (construction mode)
+    function convertUncommittedToInput(itemPk, field) {
+        var displaySelector = '.' + field + '-display[data-item-pk="' + itemPk + '"]';
+        var $display = $(displaySelector);
+        if (!$display.length) return;
+        
+        var currentVal = parseFloat($display.attr('data-value')) || 0;
+        var $td = $display.parent();
+        
+        // Create input
+        var $input = $('<input type="number" step="0.01" min="0">')
+            .addClass('uncommitted-' + field)
+            .attr('data-item-pk', itemPk)
+            .val(currentVal.toFixed(2))
+            .css('width', '100%');
+        
+        // Replace link with input
+        $td.empty().append($input);
+        $input.focus().select();
+        
+        // Handle input changes - update amount live
+        $input.on('input', function() {
+            updateUncommittedAmount(itemPk);
+        });
+        
+        // Handle Enter key
+        $input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
+        // Handle blur - convert back to link and save
+        $input.on('blur', function() {
+            var newVal = parseFloat($(this).val()) || 0;
+            var $newLink = $('<a href="#" class="click-to-edit ' + field + '-display" data-item-pk="' + itemPk + '" data-value="' + newVal + '">' + (field === 'qty' ? newVal.toFixed(2) : formatMoney(newVal)) + '</a>');
+            $newLink.on('click', function(e) {
+                e.preventDefault();
+                convertUncommittedToInput(itemPk, field);
+            });
+            $td.empty().append($newLink);
+            
+            // Save to database
+            saveUncommitted(itemPk);
+        });
+    }
+    
+    // Get uncommitted qty value
+    function getUncommittedQty(itemPk) {
+        var $input = $('.uncommitted-qty[data-item-pk="' + itemPk + '"]');
+        if ($input.length) return parseFloat($input.val()) || 0;
+        var $display = $('.qty-display[data-item-pk="' + itemPk + '"]');
+        return parseFloat($display.attr('data-value')) || 0;
+    }
+    
+    // Get uncommitted rate value
+    function getUncommittedRate(itemPk) {
+        var $input = $('.uncommitted-rate[data-item-pk="' + itemPk + '"]');
+        if ($input.length) return parseFloat($input.val()) || 0;
+        var $display = $('.rate-display[data-item-pk="' + itemPk + '"]');
+        return parseFloat($display.attr('data-value')) || 0;
+    }
+    
+    // Update uncommitted amount (Qty × Rate) for construction mode
+    function updateUncommittedAmount(itemPk) {
+        var qty = getUncommittedQty(itemPk);
+        var rate = getUncommittedRate(itemPk);
+        var amount = qty * rate;
+        
+        // Update the amount cell
+        $('.uncommitted-amt[data-item-pk="' + itemPk + '"]').text(formatMoney(amount));
+        
+        // Update working budget and recalculate claims
+        var $row = $tableBody.find('tr.item-row[data-costing-pk="' + itemPk + '"]');
+        if ($row.length) {
+            var item = $row.data('item');
+            if (item) {
+                item.uncommitted_qty = qty;
+                item.uncommitted_rate = rate;
+                item.uncommitted = amount;
+                item.working_budget = amount + (parseFloat(item.committed) || 0);
+                recalculateRow($row);
+            }
+        }
+    }
+    
+    // Save uncommitted data to server
+    function saveUncommitted(itemPk) {
+        var data = { costing_pk: itemPk };
+        
+        if (isConstruction) {
+            data.uncommitted_qty = getUncommittedQty(itemPk);
+            data.uncommitted_rate = getUncommittedRate(itemPk);
+            data.uncommitted = data.uncommitted_qty * data.uncommitted_rate;
+        } else {
+            data.uncommitted = parseFloat($('.uncommitted-input[data-item-pk="' + itemPk + '"]').val()) || 0;
+        }
+        
+        $.ajax({
+            url: '/core/update_uncommitted/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': (typeof Utils !== 'undefined' ? Utils.getCSRFToken() : $('input[name="csrfmiddlewaretoken"]').val()) },
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                console.log('Uncommitted saved for item', itemPk);
+            },
+            error: function(error) {
+                console.error('Error saving uncommitted:', error);
+            }
+        });
+    }
+    
+    // Convert HC/QS claim cell to input for special categories (Internal/Labour)
+    function convertClaimToInput(itemPk, claimType, $row) {
+        var displayClass = claimType + '-claim-display';
+        var $display = $row.find('.' + displayClass + '[data-item-pk="' + itemPk + '"]');
+        if (!$display.length) return;
+        
+        var currentVal = parseFloat($display.attr('data-value')) || 0;
+        var $td = $display.parent();
+        
+        var $input = $('<input type="number" step="0.01" min="0">')
+            .addClass(claimType + '-claim-input')
+            .attr('data-item-pk', itemPk)
+            .val(currentVal.toFixed(2))
+            .css('width', '100%');
+        
+        $td.empty().append($input);
+        $input.focus().select();
+        
+        // Handle Enter key
+        $input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
+        // Handle blur - convert back to link and update item data
+        $input.on('blur', function() {
+            var newVal = parseFloat($(this).val()) || 0;
+            var $newLink = $('<a href="#" class="click-to-edit ' + displayClass + '" data-item-pk="' + itemPk + '" data-value="' + newVal + '">' + formatMoney(newVal) + '</a>');
+            $newLink.on('click', function(e) {
+                e.preventDefault();
+                convertClaimToInput(itemPk, claimType, $row);
+            });
+            $td.empty().append($newLink);
+            
+            // Update stored item data
+            var item = $row.data('item');
+            if (item) {
+                if (claimType === 'hc') {
+                    item.this_hc_claim = newVal;
+                } else {
+                    item.this_qs_claim = newVal;
+                }
+            }
+        });
+    }
+    
+    // Initialize
+    function init() {
+        if (!projectPk) {
+            console.error('No project PK for HC Claims');
+            $tableBody.html('<tr><td colspan="' + getColCount() + '" class="text-center text-muted" style="padding: 40px;">Select a project to view HC Claims</td></tr>');
+            return;
+        }
+        
+        // Build dynamic table header and footer
+        buildTableHeader();
+        buildTableFooter();
+        
+        // Set default date to today
+        $('#newClaimDate').val(new Date().toISOString().split('T')[0]);
+        
+        // Load claims list
+        loadClaimsList();
+        
+        // Load available bills and snaps
+        loadAvailableBills();
+        loadAvailableSnaps();
+        
+        // Bind events
+        bindEvents();
+    }
+    
+    // Bind event handlers
+    function bindEvents() {
+        // Claim selector change
+        $claimSelector.on('change', function() {
+            var pk = $(this).val();
+            if (pk) {
+                loadClaimData(pk);
+            } else {
+                clearTable();
+            }
+        });
+        
+        // New claim button
+        $('#newClaimBtn').on('click', function() {
+            $newClaimForm.addClass('show');
+            $(this).hide();
+        });
+        
+        // Cancel new claim
+        $('#cancelNewClaimBtn').on('click', function() {
+            $newClaimForm.removeClass('show');
+            $('#newClaimBtn').show();
+        });
+        
+        // Create claim
+        $('#createClaimBtn').on('click', createNewClaim);
+        
+        // Delete claim
+        $deleteBtn.on('click', deleteClaim);
+        
+        // Finalize claim
+        $('#finalizeClaimBtn').on('click', function() {
+            if (confirm('Click OK to finalise the claim')) {
+                finalizeClaim();
+            }
+        });
+    }
+    
+    // Load claims list
+    function loadClaimsList() {
+        $.ajax({
+            url: '/core/get_hc_claims/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    populateClaimSelector(response.claims);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load claims:', error);
+            }
+        });
+    }
+    
+    // Populate claim selector dropdown
+    function populateClaimSelector(claims) {
+        $claimSelector.empty();
+        $claimSelector.append('<option value="">-- Select or Create New --</option>');
+        
+        claims.forEach(function(claim) {
+            var dateStr = claim.date ? formatDate(claim.date) : 'No date';
+            var label = 'Claim #' + claim.display_id + ' - ' + dateStr + ' (' + claim.status_display + ')';
+            $claimSelector.append($('<option>').val(claim.hc_claim_pk).text(label));
+        });
+    }
+    
+    // Load available bills for selection
+    function loadAvailableBills() {
+        $.ajax({
+            url: '/core/get_available_bills/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    availableBills = response.bills;
+                    renderBillsSelection();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load bills:', error);
+                $('#billsSelectionList').html('<p class="text-danger" style="margin: 0;">Error loading bills</p>');
+            }
+        });
+    }
+    
+    // Render bills selection checkboxes
+    function renderBillsSelection() {
+        var $list = $('#billsSelectionList');
+        $list.empty();
+        
+        if (availableBills.length === 0) {
+            $list.html('<p class="text-muted" style="margin: 0;">No unassigned bills available</p>');
+            return;
+        }
+        
+        availableBills.forEach(function(bill) {
+            var dateStr = bill.bill_date ? formatDate(bill.bill_date) : 'No date';
+            var amount = formatMoney(bill.total_amount);
+            
+            var $item = $('<div class="bill-item">');
+            var $checkbox = $('<input type="checkbox" class="bill-checkbox">').val(bill.bill_pk);
+            var $label = $('<span>').text(bill.supplier + ' - ' + dateStr + ' ($' + amount + ')');
+            
+            $item.append($checkbox).append($label);
+            $list.append($item);
+        });
+    }
+    
+    // Load available stocktake snaps for selection
+    function loadAvailableSnaps() {
+        $.ajax({
+            url: '/core/get_available_stocktake_snaps/' + projectPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    availableSnaps = response.snaps;
+                    renderSnapsSelection();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load snaps:', error);
+                $('#snapsSelectionList').html('<p class="text-danger" style="margin: 0;">Error loading snaps</p>');
+            }
+        });
+    }
+    
+    // Render snaps selection checkboxes
+    function renderSnapsSelection() {
+        var $list = $('#snapsSelectionList');
+        $list.empty();
+        
+        if (availableSnaps.length === 0) {
+            $list.html('<p class="text-muted" style="margin: 0;">No stocktake snaps available</p>');
+            return;
+        }
+        
+        availableSnaps.forEach(function(snap) {
+            var dateStr = snap.snap_date ? formatDate(snap.snap_date) : 'No date';
+            var amount = formatMoney(snap.total_allocated);
+            
+            var $item = $('<div class="bill-item">');
+            var $checkbox = $('<input type="checkbox" class="snap-checkbox">').val(snap.stocktake_snap_pk);
+            var $label = $('<span>').text('Stocktake - ' + dateStr + ' ($' + amount + ')');
+            
+            $item.append($checkbox).append($label);
+            $list.append($item);
+        });
+    }
+    
+    // Create new claim
+    function createNewClaim() {
+        var date = $('#newClaimDate').val();
+        if (!date) {
+            alert('Please select a date for the claim.');
+            return;
+        }
+        
+        // Get selected bill PKs
+        var billPks = [];
+        $('.bill-checkbox:checked').each(function() {
+            billPks.push(parseInt($(this).val()));
+        });
+        
+        // Get selected snap PKs
+        var snapPks = [];
+        $('.snap-checkbox:checked').each(function() {
+            snapPks.push(parseInt($(this).val()));
+        });
+        
+        $.ajax({
+            url: '/core/create_hc_claim/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({
+                project_pk: projectPk,
+                date: date,
+                bill_pks: billPks,
+                snap_pks: snapPks
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    $newClaimForm.removeClass('show');
+                    $('#newClaimBtn').show();
+                    
+                    // Reload claims list and select new claim
+                    loadClaimsList();
+                    setTimeout(function() {
+                        $claimSelector.val(response.hc_claim_pk);
+                        loadClaimData(response.hc_claim_pk);
+                    }, 500);
+                    
+                    // Reload available bills and snaps
+                    loadAvailableBills();
+                    loadAvailableSnaps();
+                } else {
+                    alert('Error: ' + (response.error || 'Failed to create claim'));
+                }
+            },
+            error: function(xhr) {
+                var error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error';
+                alert('Error creating claim: ' + error);
+            }
+        });
+    }
+    
+    // Load claim data
+    function loadClaimData(claimPk) {
+        currentClaimPk = claimPk;
+        
+        $tableBody.html('<tr><td colspan="' + getColCount() + '" class="text-center" style="padding: 20px;">Loading...</td></tr>');
+        
+        $.ajax({
+            url: '/core/get_hc_claim_data/' + claimPk + '/?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    currentClaimData = response.claim;
+                    budgetData = response.budget_data;
+                    
+                    // Check if claim is finalized (status != 0)
+                    if (currentClaimData.status !== 0) {
+                        renderFinalizedReport();
+                    } else {
+                        renderBudgetTable();
+                    }
+                    updateClaimStatus();
+                    updateActionButtons();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load claim data:', error);
+                $tableBody.html('<tr><td colspan="' + getColCount() + '" class="text-center text-danger" style="padding: 20px;">Error loading claim data</td></tr>');
+            }
+        });
+    }
+    
+    // Render finalized claim report (PDF-friendly)
+    function renderFinalizedReport() {
+        // Hide the main budget table and footer
+        $('#hcClaimsTable').hide();
+        $fixedFooter.hide();
+        
+        // Create or show report container
+        var $reportContainer = $('#finalizedReportContainer');
+        if (!$reportContainer.length) {
+            $reportContainer = $('<div id="finalizedReportContainer" class="finalized-report"></div>');
+            $('#hcClaimsTable').after($reportContainer);
+        }
+        $reportContainer.empty().show();
+        
+        // Aggregate data by category
+        var categoryTotals = {};
+        var grandTotals = {
+            contract_budget: 0,
+            hc_variations: 0,
+            this_hc_claim: 0,
+            total_hc_claimed: 0,
+            this_qs_claim: 0,
+            total_qs_claimed: 0
+        };
+        
+        budgetData.forEach(function(item) {
+            var catName = item.category || 'Uncategorized';
+            if (!categoryTotals[catName]) {
+                categoryTotals[catName] = {
+                    contract_budget: 0,
+                    hc_variations: 0,
+                    this_hc_claim: 0,
+                    total_hc_claimed: 0,
+                    this_qs_claim: 0,
+                    total_qs_claimed: 0
+                };
+            }
+            
+            var contractBudget = parseFloat(item.contract_budget) || 0;
+            var thisHcClaim = parseFloat(item.this_hc_claim) || 0;
+            var prevHcClaimed = parseFloat(item.prev_hc_claimed) || 0;
+            var thisQsClaim = parseFloat(item.this_qs_claim) || 0;
+            var prevQsClaimed = parseFloat(item.prev_qs_claimed) || 0;
+            
+            categoryTotals[catName].contract_budget += contractBudget;
+            categoryTotals[catName].this_hc_claim += thisHcClaim;
+            categoryTotals[catName].total_hc_claimed += prevHcClaimed + thisHcClaim;
+            categoryTotals[catName].this_qs_claim += thisQsClaim;
+            categoryTotals[catName].total_qs_claimed += prevQsClaimed + thisQsClaim;
+            
+            grandTotals.contract_budget += contractBudget;
+            grandTotals.this_hc_claim += thisHcClaim;
+            grandTotals.total_hc_claimed += prevHcClaimed + thisHcClaim;
+            grandTotals.this_qs_claim += thisQsClaim;
+            grandTotals.total_qs_claimed += prevQsClaimed + thisQsClaim;
+        });
+        
+        // Build HC Claim Report
+        var hcReportHtml = '<div class="claim-report-section">';
+        hcReportHtml += '<h3 class="report-title">This Head Contract Claim</h3>';
+        hcReportHtml += '<table class="report-table">';
+        hcReportHtml += '<thead><tr><th>Category</th><th>Contract Budget</th><th>HC Variations</th><th class="this-claim-col">This Claim</th><th>Total Claimed</th></tr></thead>';
+        hcReportHtml += '<tbody>';
+        
+        Object.keys(categoryTotals).forEach(function(catName) {
+            var cat = categoryTotals[catName];
+            hcReportHtml += '<tr>';
+            hcReportHtml += '<td>' + catName + '</td>';
+            hcReportHtml += '<td>' + formatMoney(cat.contract_budget) + '</td>';
+            hcReportHtml += '<td>' + formatMoney(cat.hc_variations) + '</td>';
+            hcReportHtml += '<td class="this-claim-col">' + formatMoney(cat.this_hc_claim) + '</td>';
+            hcReportHtml += '<td>' + formatMoney(cat.total_hc_claimed) + '</td>';
+            hcReportHtml += '</tr>';
+        });
+        
+        hcReportHtml += '</tbody>';
+        hcReportHtml += '<tfoot><tr class="totals-row">';
+        hcReportHtml += '<td><strong>Totals</strong></td>';
+        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.contract_budget) + '</strong></td>';
+        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.hc_variations) + '</strong></td>';
+        hcReportHtml += '<td class="this-claim-col"><strong>' + formatMoney(grandTotals.this_hc_claim) + '</strong></td>';
+        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.total_hc_claimed) + '</strong></td>';
+        hcReportHtml += '</tr></tfoot>';
+        hcReportHtml += '</table></div>';
+        
+        // Build QS Claim Report
+        var qsReportHtml = '<div class="claim-report-section">';
+        qsReportHtml += '<h3 class="report-title">This QS Claim</h3>';
+        qsReportHtml += '<table class="report-table">';
+        qsReportHtml += '<thead><tr><th>Category</th><th>Contract Budget</th><th>HC Variations</th><th class="this-claim-col">This Claim</th><th>Total Claimed</th></tr></thead>';
+        qsReportHtml += '<tbody>';
+        
+        Object.keys(categoryTotals).forEach(function(catName) {
+            var cat = categoryTotals[catName];
+            qsReportHtml += '<tr>';
+            qsReportHtml += '<td>' + catName + '</td>';
+            qsReportHtml += '<td>' + formatMoney(cat.contract_budget) + '</td>';
+            qsReportHtml += '<td>' + formatMoney(cat.hc_variations) + '</td>';
+            qsReportHtml += '<td class="this-claim-col">' + formatMoney(cat.this_qs_claim) + '</td>';
+            qsReportHtml += '<td>' + formatMoney(cat.total_qs_claimed) + '</td>';
+            qsReportHtml += '</tr>';
+        });
+        
+        qsReportHtml += '</tbody>';
+        qsReportHtml += '<tfoot><tr class="totals-row">';
+        qsReportHtml += '<td><strong>Totals</strong></td>';
+        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.contract_budget) + '</strong></td>';
+        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.hc_variations) + '</strong></td>';
+        qsReportHtml += '<td class="this-claim-col"><strong>' + formatMoney(grandTotals.this_qs_claim) + '</strong></td>';
+        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.total_qs_claimed) + '</strong></td>';
+        qsReportHtml += '</tr></tfoot>';
+        qsReportHtml += '</table></div>';
+        
+        $reportContainer.html(hcReportHtml + qsReportHtml);
+    }
+    
+    // Render category row with collapse icon and subtotals
+    function renderCategoryRow(catName, catItems, colCount) {
+        var $catRow = $('<tr class="category-row" data-category="' + catName + '">');
+        
+        // First cell: collapse icon + category name
+        $catRow.append('<td><i class="fas fa-chevron-down collapse-icon"></i><strong>' + catName + '</strong></td>');
+        
+        // Calculate category subtotals
+        var catTotals = { contract_budget: 0, working_budget: 0, uncommitted: 0, committed: 0, fixed_on_site: 0, invoiced: 0 };
+        catItems.forEach(function(item) {
+            catTotals.contract_budget += parseFloat(item.contract_budget) || 0;
+            catTotals.working_budget += parseFloat(item.working_budget) || 0;
+            if (isConstruction) {
+                catTotals.uncommitted += (parseFloat(item.uncommitted_qty) || 0) * (parseFloat(item.uncommitted_rate) || 0);
+            } else {
+                catTotals.uncommitted += parseFloat(item.uncommitted) || 0;
+            }
+            catTotals.committed += parseFloat(item.committed) || 0;
+            catTotals.fixed_on_site += parseFloat(item.fixed_on_site) || 0;
+            catTotals.invoiced += parseFloat(item.invoiced) || 0;
+        });
+        
+        // Add subtotal cells (hidden unless collapsed)
+        if (isConstruction) {
+            $catRow.append('<td class="subtotal-cell"></td>'); // Unit
+        }
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.contract_budget) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.working_budget) + '</td>');
+        
+        if (isConstruction) {
+            $catRow.append('<td class="subtotal-cell"></td>'); // Qty
+            $catRow.append('<td class="subtotal-cell"></td>'); // Rate
+            $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.uncommitted) + '</td>');
+            $catRow.append('<td class="subtotal-cell"></td>'); // Notes
+            $catRow.append('<td class="subtotal-cell"></td>'); // Commit Qty
+            $catRow.append('<td class="subtotal-cell"></td>'); // Commit Rate
+            $catRow.append('<td class="subtotal-cell committed-value">' + formatMoney(catTotals.committed) + '</td>');
+        } else {
+            $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.uncommitted) + '</td>');
+            $catRow.append('<td class="subtotal-cell committed-value">' + formatMoney(catTotals.committed) + '</td>');
+        }
+        
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.fixed_on_site) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.invoiced) + '</td>');
+        $catRow.append('<td class="subtotal-cell"></td>'); // HC Prev
+        $catRow.append('<td class="subtotal-cell"></td>'); // HC This
+        $catRow.append('<td class="subtotal-cell"></td>'); // QS Prev
+        $catRow.append('<td class="subtotal-cell"></td>'); // QS This
+        
+        // Add click handler
+        $catRow.on('click', function() {
+            toggleCategory(catName);
+        });
+        
+        return $catRow;
+    }
+    
+    // Render budget table
+    function renderBudgetTable() {
+        // Hide report container and show budget table
+        $('#finalizedReportContainer').hide();
+        $('#hcClaimsTable').show();
+        
+        $tableBody.empty();
+        var colCount = getColCount();
+        
+        if (!budgetData || budgetData.length === 0) {
+            $tableBody.html('<tr><td colspan="' + colCount + '" class="text-center text-muted" style="padding: 40px;">No budget items found for this project.</td></tr>');
+            $fixedFooter.hide();
+            return;
+        }
+        
+        // Group by category
+        var categories = {};
+        budgetData.forEach(function(item) {
+            var cat = item.category || 'Uncategorized';
+            if (!categories[cat]) {
+                categories[cat] = [];
+            }
+            categories[cat].push(item);
+        });
+        
+        // Totals
+        var totals = {
+            contract_budget: 0,
+            working_budget: 0,
+            uncommitted: 0,
+            committed: 0,
+            fixed_on_site: 0,
+            invoiced_prev: 0,
+            invoiced_this: 0,
+            prev_hc_claimed: 0,
+            this_hc_claim: 0,
+            prev_qs_claimed: 0,
+            this_qs_claim: 0
+        };
+        
+        var isDraft = currentClaimData && currentClaimData.status === 0;
+        
+        // Render each category and its items
+        Object.keys(categories).forEach(function(catName) {
+            var catItems = categories[catName];
+            
+            // Category row with collapse icon and subtotals
+            var $catRow = renderCategoryRow(catName, catItems, colCount);
+            $tableBody.append($catRow);
+            
+            // Check if this is a special category (Internal or Labour)
+            var isInternal = catName === 'Internal';
+            var isLabour = catName === 'Labour';
+            var isSpecialCategory = isInternal || isLabour;
+            
+            // Item rows
+            catItems.forEach(function(item) {
+                var $row = $('<tr class="item-row" data-costing-pk="' + item.costing_pk + '" data-category="' + catName + '">');
+                
+                // Item name with indent
+                $row.append($('<td class="indent">').text(item.item));
+                
+                // Unit (construction only)
+                if (isConstruction) {
+                    $row.append($('<td>').text(item.unit || ''));
+                }
+                
+                // Contract Budget
+                $row.append($('<td>').text(formatMoney(item.contract_budget)));
+                totals.contract_budget += parseFloat(item.contract_budget) || 0;
+                
+                // Working Budget
+                $row.append($('<td>').text(formatMoney(item.working_budget)));
+                totals.working_budget += parseFloat(item.working_budget) || 0;
+                
+                if (isConstruction) {
+                    // Uncommitted Qty/Rate from DB
+                    var uncommitQty = parseFloat(item.uncommitted_qty) || 0;
+                    var uncommitRate = parseFloat(item.uncommitted_rate) || 0;
+                    var uncommitAmt = uncommitQty * uncommitRate;
+                    
+                    // Show as blue click-to-edit links (like contract_budget)
+                    var $qtyLink = $('<a href="#" class="click-to-edit qty-display" data-item-pk="' + item.costing_pk + '" data-value="' + uncommitQty + '">' + uncommitQty.toFixed(2) + '</a>');
+                    $qtyLink.on('click', function(e) { e.preventDefault(); convertUncommittedToInput(item.costing_pk, 'qty'); });
+                    $row.append($('<td>').append($qtyLink));
+                    
+                    var $rateLink = $('<a href="#" class="click-to-edit rate-display" data-item-pk="' + item.costing_pk + '" data-value="' + uncommitRate + '">' + formatMoney(uncommitRate) + '</a>');
+                    $rateLink.on('click', function(e) { e.preventDefault(); convertUncommittedToInput(item.costing_pk, 'rate'); });
+                    $row.append($('<td>').append($rateLink));
+                    
+                    $row.append($('<td class="uncommitted-amt" data-item-pk="' + item.costing_pk + '">').text(formatMoney(uncommitAmt)));
+                    totals.uncommitted += uncommitAmt;
+                    
+                    // Notes icon
+                    var hasNotes = item.uncommitted_notes && item.uncommitted_notes.trim() !== '';
+                    $row.attr('data-notes', item.uncommitted_notes || '');
+                    var $notesIcon = $('<i class="fas fa-sticky-note notes-icon' + (hasNotes ? ' has-notes' : '') + '" data-item-pk="' + item.costing_pk + '"></i>');
+                    $notesIcon.attr('title', hasNotes ? item.uncommitted_notes : 'Add notes');
+                    $notesIcon.on('click', function(e) {
+                        e.stopPropagation();
+                        toggleNotesRow(item.costing_pk, $row.attr('data-notes') || '');
+                    });
+                    $row.append($('<td style="text-align: center;">').append($notesIcon));
+                    
+                    // Committed Qty/Rate/Amount - green, clickable if has value
+                    var commitQty = parseFloat(item.committed_qty) || 0;
+                    var commitRate = parseFloat(item.committed_rate) || 0;
+                    var commitAmt = parseFloat(item.committed) || 0;
+                    var hasCommitted = commitAmt > 0;
+                    var clickClass = hasCommitted ? 'committed-clickable' : 'committed-value';
+                    
+                    var $qtyTd = $('<td class="' + clickClass + '">').text(commitQty.toFixed(2));
+                    var $rateTd = $('<td class="' + clickClass + '">').text(formatMoney(commitRate));
+                    var $amtTd = $('<td class="' + clickClass + '">').text(formatMoney(commitAmt));
+                    
+                    if (hasCommitted) {
+                        $qtyTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                        $rateTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                        $amtTd.on('click', function() { toggleCommittedDetailsRow(item.costing_pk); });
+                    }
+                    
+                    $row.append($qtyTd).append($rateTd).append($amtTd);
+                    totals.committed += commitAmt;
+                } else {
+                    // Uncommitted (editable if draft) - non-construction
+                    var uncommitted = parseFloat(item.uncommitted) || 0;
+                    if (isDraft) {
+                        var $uncommittedCell = $('<td class="editable-cell">');
+                        $uncommittedCell.append($('<input type="number" step="0.01" class="uncommitted-input">').val(uncommitted.toFixed(2)).on('change', function() { recalculateRow($row); }));
+                        $row.append($uncommittedCell);
+                    } else {
+                        $row.append($('<td>').text(formatMoney(uncommitted)));
+                    }
+                    totals.uncommitted += uncommitted;
+                    
+                    // Committed - non-construction
+                    var committed = parseFloat(item.committed) || 0;
+                    $row.append($('<td>').text(formatMoney(committed)));
+                    totals.committed += committed;
+                }
+                
+                // Fixed on Site - blue click-to-edit (like contract_budget)
+                var fixedOnSite = parseFloat(item.fixed_on_site) || 0;
+                var $fosCell = $('<td class="fixed-on-site-cell" data-item-pk="' + item.costing_pk + '">');
+                var $fosLink = $('<span class="click-to-edit">' + formatMoney(fixedOnSite) + '</span>');
+                $fosLink.on('click', function(e) {
+                    e.stopPropagation();
+                    convertToInput(item.costing_pk, 'fixed_on_site', fixedOnSite, $row);
+                });
+                $fosCell.append($fosLink);
+                $row.append($fosCell);
+                totals.fixed_on_site += fixedOnSite;
+                
+                // Invoiced - Previous (from prior HC_claim_allocations.sc_invoiced)
+                var invoicedPrev = parseFloat(item.invoiced_prev) || 0;
+                $row.append($('<td class="invoiced-cell">').text(formatMoney(invoicedPrev)));
+                totals.invoiced_prev = (totals.invoiced_prev || 0) + invoicedPrev;
+                
+                // Invoiced - This (bills/stocktakes associated with this claim)
+                var invoicedThis = parseFloat(item.invoiced_this) || 0;
+                $row.append($('<td class="invoiced-cell">').text(formatMoney(invoicedThis)));
+                totals.invoiced_this = (totals.invoiced_this || 0) + invoicedThis;
+                
+                // HC Claim - Previous
+                $row.append($('<td class="hc-claim-cell">').text(formatMoney(item.prev_hc_claimed)));
+                totals.prev_hc_claimed += item.prev_hc_claimed;
+                
+                // HC Claim - This Claim
+                if (isSpecialCategory) {
+                    // Special categories (Internal/Labour): editable input, not formula
+                    var $hcThisLink = $('<a href="#" class="click-to-edit hc-claim-display" data-item-pk="' + item.costing_pk + '" data-value="' + (item.this_hc_claim || 0) + '">' + formatMoney(item.this_hc_claim) + '</a>');
+                    $hcThisLink.on('click', function(e) { e.preventDefault(); convertClaimToInput(item.costing_pk, 'hc', $row); });
+                    $row.append($('<td class="hc-claim-cell this-hc-claim">').append($hcThisLink));
+                } else {
+                    // Normal categories: calculated formula cell
+                    $row.append($('<td class="hc-claim-cell this-hc-claim">').text(formatMoney(item.this_hc_claim)));
+                }
+                totals.this_hc_claim += item.this_hc_claim;
+                
+                // QS Claim - Previous
+                $row.append($('<td class="qs-claim-cell">').text(formatMoney(item.prev_qs_claimed)));
+                totals.prev_qs_claimed += item.prev_qs_claimed;
+                
+                // QS Claim - This Claim
+                if (isSpecialCategory) {
+                    // Special categories (Internal/Labour): editable input, not formula
+                    var $qsThisLink = $('<a href="#" class="click-to-edit qs-claim-display" data-item-pk="' + item.costing_pk + '" data-value="' + (item.this_qs_claim || 0) + '">' + formatMoney(item.this_qs_claim) + '</a>');
+                    $qsThisLink.on('click', function(e) { e.preventDefault(); convertClaimToInput(item.costing_pk, 'qs', $row); });
+                    $row.append($('<td class="qs-claim-cell this-qs-claim">').append($qsThisLink));
+                } else {
+                    // Normal categories: calculated formula cell
+                    $row.append($('<td class="qs-claim-cell this-qs-claim">').text(formatMoney(item.this_qs_claim)));
+                }
+                totals.this_qs_claim += item.this_qs_claim;
+                
+                // Store item data on row
+                $row.data('item', item);
+                
+                $tableBody.append($row);
+            });
+        });
+        
+        // Update footer totals
+        $('#totalContractBudget').text(formatMoney(totals.contract_budget));
+        $('#totalWorkingBudget').text(formatMoney(totals.working_budget));
+        $('#totalUncommitted').text(formatMoney(totals.uncommitted));
+        $('#totalCommitted').text(formatMoney(totals.committed));
+        $('#totalFixedOnSite').text(formatMoney(totals.fixed_on_site));
+        $('#totalInvoicedPrev').text(formatMoney(totals.invoiced_prev));
+        $('#totalInvoicedThis').text(formatMoney(totals.invoiced_this));
+        $('#totalPrevHcClaimed').text(formatMoney(totals.prev_hc_claimed));
+        $('#totalThisHcClaim').text(formatMoney(totals.this_hc_claim));
+        $('#totalPrevQsClaimed').text(formatMoney(totals.prev_qs_claimed));
+        $('#totalThisQsClaim').text(formatMoney(totals.this_qs_claim));
+        
+        $fixedFooter.show();
+    }
+    
+    // Recalculate a row's claim values when inputs change
+    function recalculateRow($row) {
+        var item = $row.data('item');
+        if (!item) return;
+        
+        var uncommitted, fixedOnSite;
+        var itemPk = item.costing_pk;
+        
+        if (isConstruction) {
+            // Get qty and rate using helper functions (handles both input and display states)
+            var uncommitQty = getUncommittedQty(itemPk);
+            var uncommitRate = getUncommittedRate(itemPk);
+            uncommitted = uncommitQty * uncommitRate;
+            
+            // Update the calculated amount cell
+            $('.uncommitted-amt[data-item-pk="' + itemPk + '"]').text(formatMoney(uncommitted));
+            
+            item.uncommitted_qty = uncommitQty;
+            item.uncommitted_rate = uncommitRate;
+        } else {
+            uncommitted = parseFloat($row.find('.uncommitted-input').val()) || 0;
+        }
+        
+        // Use stored item data for fixed_on_site (already updated by saveFieldValue)
+        fixedOnSite = parseFloat(item.fixed_on_site) || 0;
+        
+        // Update item data
+        item.uncommitted = uncommitted;
+        item.fixed_on_site = fixedOnSite;
+        item.working_budget = uncommitted + (parseFloat(item.committed) || 0);
+        
+        // Recalculate QS Claim
+        // QS Claim = Max(0, Min(Contract Budget - C2C, Fixed on Site) - Previous QS Claims)
+        // C2C = Working Budget - Invoiced
+        var c2c_qs = item.working_budget - item.invoiced;
+        var qs_claim = Math.max(0, Math.min(item.contract_budget - c2c_qs, fixedOnSite) - item.prev_qs_claimed);
+        
+        // Recalculate HC Claim
+        // HC Claim = Min(Remaining Claimable, Max(0, Contract Budget - C2C - Previous HC Claims))
+        // Remaining Claimable = Contract Budget - Previous HC Claims
+        // C2C = Working Budget - (Paid Invoices + Invoices in This Claim)
+        var remaining_claimable = item.contract_budget - item.prev_hc_claimed;
+        var c2c_hc = item.working_budget - item.paid_invoices - item.invoices_in_claim;
+        var hc_claim = Math.min(remaining_claimable, Math.max(0, item.contract_budget - c2c_hc - item.prev_hc_claimed));
+        
+        // Update display
+        item.this_hc_claim = Math.round(hc_claim * 100) / 100;
+        item.this_qs_claim = Math.round(qs_claim * 100) / 100;
+        
+        $row.find('.this-hc-claim').text(formatMoney(item.this_hc_claim));
+        $row.find('.this-qs-claim').text(formatMoney(item.this_qs_claim));
+        
+        // Update totals
+        recalculateTotals();
+    }
+    
+    // Recalculate all totals
+    function recalculateTotals() {
+        var totals = {
+            uncommitted: 0,
+            working_budget: 0,
+            fixed_on_site: 0,
+            this_hc_claim: 0,
+            this_qs_claim: 0
+        };
+        
+        $('.item-row').each(function() {
+            var item = $(this).data('item');
+            if (item) {
+                totals.uncommitted += item.uncommitted || 0;
+                totals.working_budget += item.working_budget || 0;
+                totals.fixed_on_site += item.fixed_on_site || 0;
+                totals.this_hc_claim += item.this_hc_claim || 0;
+                totals.this_qs_claim += item.this_qs_claim || 0;
+            }
+        });
+        
+        $('#totalUncommitted').text('$' + formatMoney(totals.uncommitted));
+        $('#totalWorkingBudget').text('$' + formatMoney(totals.working_budget));
+        $('#totalFixedOnSite').text('$' + formatMoney(totals.fixed_on_site));
+        $('#totalThisHcClaim').text('$' + formatMoney(totals.this_hc_claim));
+        $('#totalThisQsClaim').text('$' + formatMoney(totals.this_qs_claim));
+    }
+    
+    // Update claim status badge
+    function updateClaimStatus() {
+        if (!currentClaimData) {
+            $claimStatus.hide();
+            return;
+        }
+        
+        var statusClass = '';
+        switch(currentClaimData.status) {
+            case 0: statusClass = 'draft'; break;
+            case 1: statusClass = 'approved'; break;
+            case 2: statusClass = 'sent'; break;
+            case 3: statusClass = 'paid'; break;
+        }
+        
+        $claimStatus
+            .removeClass('draft approved sent paid')
+            .addClass(statusClass)
+            .text(currentClaimData.status_display)
+            .show();
+    }
+    
+    // Update action buttons visibility
+    function updateActionButtons() {
+        if (!currentClaimData) {
+            $actionsRow.hide();
+            $deleteBtn.hide();
+            return;
+        }
+        
+        // Only show actions for draft claims
+        if (currentClaimData.status === 0) {
+            $actionsRow.show();
+            $deleteBtn.show();
+        } else {
+            $actionsRow.hide();
+            $deleteBtn.hide();
+        }
+    }
+    
+    // Finalize claim - creates HC_claim_allocations entries
+    function finalizeClaim() {
+        if (!currentClaimPk) {
+            alert('No claim selected.');
+            return;
+        }
+        
+        // Gather allocation data from table for all items
+        var allocations = [];
+        $('.item-row').each(function() {
+            var item = $(this).data('item');
+            if (item) {
+                allocations.push({
+                    costing_pk: item.costing_pk,
+                    category_pk: item.category_pk,
+                    contract_budget: item.contract_budget || 0,
+                    working_budget: item.working_budget || 0,
+                    uncommitted: item.uncommitted || 0,
+                    committed: item.committed || 0,
+                    fixed_on_site: item.fixed_on_site || 0,
+                    fixed_on_site_previous: 0, // To be calculated on backend if needed
+                    fixed_on_site_this: item.fixed_on_site || 0,
+                    sc_invoiced_previous: item.invoiced_prev || 0,
+                    sc_invoiced: item.invoiced_this || 0,
+                    hc_claimed_previous: item.prev_hc_claimed || 0,
+                    hc_claimed: item.this_hc_claim || 0,
+                    qs_claimed_previous: item.prev_qs_claimed || 0,
+                    qs_claimed: item.this_qs_claim || 0
+                });
+            }
+        });
+        
+        $.ajax({
+            url: '/core/finalize_hc_claim/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': (typeof Utils !== 'undefined' ? Utils.getCSRFToken() : $('input[name="csrfmiddlewaretoken"]').val()) },
+            data: JSON.stringify({
+                hc_claim_pk: currentClaimPk,
+                allocations: allocations
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    alert('Claim finalized successfully!');
+                    
+                    // Reload to reflect changes
+                    loadClaimsList();
+                    loadClaimData(currentClaimPk);
+                } else {
+                    alert('Error: ' + (response.error || 'Failed to finalize claim'));
+                }
+            },
+            error: function(xhr) {
+                var error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error';
+                alert('Error finalizing claim: ' + error);
+            }
+        });
+    }
+    
+    // Delete claim
+    function deleteClaim() {
+        if (!currentClaimPk) return;
+        
+        if (!confirm('Are you sure you want to delete this draft claim? This cannot be undone.')) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/core/delete_hc_claim/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({
+                hc_claim_pk: currentClaimPk
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    alert('Claim deleted.');
+                    currentClaimPk = null;
+                    currentClaimData = null;
+                    
+                    $claimSelector.val('');
+                    clearTable();
+                    loadClaimsList();
+                    loadAvailableBills();
+                } else {
+                    alert('Error: ' + (response.error || 'Failed to delete claim'));
+                }
+            },
+            error: function(xhr) {
+                var error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error';
+                alert('Error deleting claim: ' + error);
+            }
+        });
+    }
+    
+    // Clear table
+    function clearTable() {
+        currentClaimPk = null;
+        currentClaimData = null;
+        budgetData = [];
+        
+        $tableBody.html('<tr><td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>Select a claim or create a new one to view budget data.</td></tr>');
+        $tableFooter.hide();
+        $actionsRow.hide();
+        $deleteBtn.hide();
+        $claimStatus.hide();
+    }
+    
+    // Format date as dd-mmm-yy
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        var d = new Date(dateStr);
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var day = String(d.getDate()).padStart(2, '0');
+        var month = months[d.getMonth()];
+        var year = String(d.getFullYear()).slice(-2);
+        return day + '-' + month + '-' + year;
+    }
+    
+    // Format money
+    function formatMoney(value) {
+        if (typeof Utils !== 'undefined' && Utils.formatMoney) {
+            return Utils.formatMoney(value);
+        }
+        return (value || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    
+    // Initialize when DOM is ready
+    $(document).ready(function() {
+        init();
+    });
+    
+})();
+</script>

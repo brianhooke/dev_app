@@ -22,6 +22,11 @@ from .views.hc_variations import (
     save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
     delete_hc_variation_allocation
 )
+from .views.hc_claims import (
+    hc_claims_view, get_hc_claims, get_available_bills, get_available_stocktake_snaps,
+    create_hc_claim, get_hc_claim_data, save_hc_claim, delete_hc_claim, update_claim_bills,
+    finalize_hc_claim
+)
 from .views.pos import get_quotes_by_supplier, po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, download_folder, delete_file, move_file, move_folder
 from .views.xero import (
@@ -224,6 +229,18 @@ urlpatterns = [
     path('delete_hc_variation/', delete_hc_variation, name='delete_hc_variation'),
     path('update_hc_variation_allocation/<int:allocation_pk>/', update_hc_variation_allocation, name='update_hc_variation_allocation'),
     path('delete_hc_variation_allocation/<int:allocation_pk>/', delete_hc_variation_allocation, name='delete_hc_variation_allocation'),
+    
+    # HC Claims section (reusable template)
+    path('hc_claims/', hc_claims_view, name='hc_claims'),
+    path('get_hc_claims/<int:project_pk>/', get_hc_claims, name='get_hc_claims'),
+    path('get_available_bills/<int:project_pk>/', get_available_bills, name='get_available_bills'),
+    path('get_available_stocktake_snaps/<int:project_pk>/', get_available_stocktake_snaps, name='get_available_stocktake_snaps'),
+    path('create_hc_claim/', create_hc_claim, name='create_hc_claim'),
+    path('get_hc_claim_data/<int:claim_pk>/', get_hc_claim_data, name='get_hc_claim_data'),
+    path('save_hc_claim/', save_hc_claim, name='save_hc_claim'),
+    path('delete_hc_claim/', delete_hc_claim, name='delete_hc_claim'),
+    path('update_claim_bills/<int:claim_pk>/', update_claim_bills, name='update_claim_bills'),
+    path('finalize_hc_claim/', finalize_hc_claim, name='finalize_hc_claim'),
     
     # Document management endpoints
     path('get_project_folders/<int:project_pk>/', get_project_folders, name='get_project_folders'),
