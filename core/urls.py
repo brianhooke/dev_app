@@ -16,7 +16,7 @@ from .views.bills_global import (
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
-from .views.contract_budget import contract_budget_view, update_uncommitted, get_project_committed_amounts, get_item_quote_allocations, validate_fix_contract_budget, fix_contract_budget
+from .views.contract_budget import contract_budget_view, update_uncommitted, update_fixed_on_site, get_project_committed_amounts, get_item_quote_allocations, get_item_bill_allocations, validate_fix_contract_budget, fix_contract_budget
 from .views.hc_variations import (
     hc_variations_view, get_hc_variations, get_hc_variation_allocations,
     save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
@@ -64,7 +64,8 @@ from .views.staff_hours import (
     get_allocations, save_allocation, delete_allocation, create_leave_application,
     get_holiday_calendars, create_holiday_calendar, update_holiday_calendar,
     delete_holiday_calendar, get_calendar_holidays, create_holiday, update_holiday, delete_holiday,
-    get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet
+    get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet,
+    delete_timesheet_entry, delete_leave_application
 )
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
@@ -84,7 +85,7 @@ app_name = 'core'
 urlpatterns = [
     path('commit_data/', commit_data, name='commit_data'),
     path('update_uncommitted/', update_uncommitted, name='update_uncommitted'),
-    path('update_fixedonsite/', views.update_fixedonsite, name='update_fixedonsite'),
+    path('update_fixedonsite/', update_fixed_on_site, name='update_fixedonsite'),
     # path('update_costing/', update_costing, name='update_costing'),
     path('update_quote/', update_quote, name='update_quote'),
     path('create_contacts/', create_contacts, name='create_contacts'),
@@ -128,6 +129,7 @@ urlpatterns = [
     path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
     path('get_project_committed_amounts/<int:project_pk>/', get_project_committed_amounts, name='get_project_committed_amounts'),
     path('get_item_quote_allocations/<int:item_pk>/', get_item_quote_allocations, name='get_item_quote_allocations'),
+    path('get_item_bill_allocations/<int:item_pk>/', get_item_bill_allocations, name='get_item_bill_allocations'),
     path('validate_fix_contract_budget/<int:project_pk>/', validate_fix_contract_budget, name='validate_fix_contract_budget'),
     path('fix_contract_budget/<int:project_pk>/', fix_contract_budget, name='fix_contract_budget'),
     path('get_bill_allocations/<int:invoice_id>/', get_bill_allocations, name='get_bill_allocations'),
@@ -368,8 +370,10 @@ urlpatterns = [
     # Timesheets and Leave Applications (Xero API)
     path('staff_hours/timesheets/', get_timesheets, name='staff_hours_timesheets'),
     path('staff_hours/timesheets/save/', save_timesheet, name='staff_hours_save_timesheet'),
+    path('staff_hours/timesheets/delete/', delete_timesheet_entry, name='staff_hours_delete_timesheet'),
     path('staff_hours/leave_applications/', get_leave_applications, name='staff_hours_leave_applications'),
     path('staff_hours/create_leave_application/', create_leave_application, name='staff_hours_create_leave_application'),
+    path('staff_hours/leave/delete/', delete_leave_application, name='staff_hours_delete_leave'),
     path('staff_hours/employee_calendar/', get_employee_calendar_data, name='staff_hours_employee_calendar'),
     path('staff_hours/sync_pay_rates/', sync_employee_pay_rates, name='sync_employee_pay_rates'),
     

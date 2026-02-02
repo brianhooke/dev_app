@@ -359,6 +359,7 @@ def send_bill(request):
             invoice.bill_date = bill_date
             invoice.bill_due_date = bill_due_date
             invoice.bill_status = 2  # Set status to 2 (sent to Xero)
+            invoice.bill_type = 1  # Direct Cost
             
             invoice.save()
             
@@ -385,6 +386,7 @@ def send_bill(request):
             invoice.bill_date = bill_date
             invoice.bill_due_date = bill_due_date
             invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct or Stocktake)
+            invoice.bill_type = 1  # Direct Cost
             
             invoice.save()
             
@@ -497,6 +499,7 @@ def get_project_items(request, project_pk):
                 'uncommitted_notes': item.uncommitted_notes or '',
                 'xero_account_code': item.xero_account_code or '',
                 'xero_tracking_category': item.xero_tracking_category or '',
+                'fixed_on_site': float(item.fixed_on_site) if item.fixed_on_site else 0,
             })
         
         logger.info(f"Retrieved {len(items_list)} items for project {project_pk}")

@@ -28,6 +28,41 @@
         line-height: 1;
     }
     
+    .rates-heading-row .rates-bulk-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .rates-bulk-delete-btn {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        display: none;
+    }
+    
+    .rates-bulk-delete-btn:hover {
+        background: #c82333;
+    }
+    
+    .rates-bulk-delete-btn.visible {
+        display: inline-block;
+    }
+    
+    .rates-selected-count {
+        font-size: 11px;
+        color: var(--color-text-muted);
+        display: none;
+    }
+    
+    .rates-selected-count.visible {
+        display: inline-block;
+    }
+    
     .rates-heading-row #copyToContractBudgetBtn {
         font-size: 12px;
         padding: 4px 12px;
@@ -451,6 +486,21 @@
     
     .rates-flex-footer .col-total {
         font-weight: 700;
+    }
+    
+    /* Checkbox column styling */
+    .col-checkbox {
+        width: 30px;
+        min-width: 30px;
+        padding: 0 4px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    
+    .col-checkbox input[type="checkbox"] {
+        cursor: pointer;
+        width: 14px;
+        height: 14px;
     }
     
     /* Delete column styling */
@@ -947,12 +997,16 @@
         
         container.empty();
         
-        // Add heading row with optional button
+        // Add heading row with optional button and bulk actions
         var headingRow = $('<div class="rates-heading-row"></div>');
         headingRow.append('<h5>Rates and Quantities</h5>');
+        var bulkActions = $('<div class="rates-bulk-actions"></div>');
+        bulkActions.append('<span class="rates-selected-count"></span>');
+        bulkActions.append('<button class="rates-bulk-delete-btn"><i class="fas fa-trash"></i> Delete Selected</button>');
         if (showCopyToContractButton) {
-            headingRow.append('<button id="copyToContractBudgetBtn" class="btn btn-sm btn-outline-primary">Copy to Contract Budget</button>');
+            bulkActions.append('<button id="copyToContractBudgetBtn" class="btn btn-sm btn-outline-primary">Copy to Contract Budget</button>');
         }
+        headingRow.append(bulkActions);
         container.append(headingRow);
         
         // Create the table wrapper
@@ -960,6 +1014,7 @@
         
         // Create header row 1 - main headings
         var headerRow1 = $('<div class="rates-flex-header-row1"></div>');
+        headerRow1.append('<div class="col-checkbox"><input type="checkbox" class="rates-select-all" title="Select all"></div>');
         headerRow1.append('<div class="col-name">Category / Item</div>');
         headerRow1.append('<div class="col-xero-acc">Xero Account</div>');
         headerRow1.append('<div class="col-tracking-cat">Tracking Category</div>');
@@ -969,11 +1024,11 @@
             headerRow1.append('<div class="col-quantity">Qty</div>');
             headerRow1.append('<div class="col-total">Total ($)</div>');
         }
-        headerRow1.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow1);
         
         // Create header row 2 - sub-headings
         var headerRow2 = $('<div class="rates-flex-header-row2"></div>');
+        headerRow2.append('<div class="col-checkbox"></div>');
         headerRow2.append('<div class="col-name"></div>');
         headerRow2.append('<div class="col-xero-acc"></div>');
         headerRow2.append('<div class="col-tracking-cat"></div>');
@@ -985,7 +1040,6 @@
             headerRow2.append('<div class="col-quantity"></div>');
             headerRow2.append('<div class="col-total"></div>');
         }
-        headerRow2.append('<div class="col-delete"></div>');
         tableWrapper.append(headerRow2);
         
         // Create body container
@@ -1044,6 +1098,9 @@
                 categoryRow.addClass('draggable').attr('draggable', 'true');
             }
             
+            // Empty checkbox cell for category (categories don't have checkboxes)
+            categoryRow.append('<div class="col-checkbox"></div>');
+            
             // Build category name cell with collapse indicator and drag handle
             var nameCell = $('<div class="col-name"></div>');
             
@@ -1078,12 +1135,6 @@
                 categoryRow.append('<div class="col-total"></div>');
             }
             
-            // Delete cell for category (not for Internal category)
-            var categoryDeleteCell = $('<div class="col-delete"></div>');
-            if (!isInternal) {
-                categoryDeleteCell.append('<i class="fas fa-trash delete-icon delete-category" data-category-pk="' + category.categories_pk + '" data-category-name="' + category.category.replace(/"/g, '&quot;') + '"></i>');
-            }
-            categoryRow.append(categoryDeleteCell);
             
             bodyContainer.append(categoryRow);
             
@@ -1113,6 +1164,12 @@
                 if (isLabour) {
                     itemRow.addClass('labour-item');
                 }
+                
+                // Checkbox cell for item selection
+                var checkboxCell = $('<div class="col-checkbox"></div>');
+                var itemCheckbox = $('<input type="checkbox" class="rates-item-checkbox" data-item-pk="' + item.costing_pk + '" data-item-name="' + item.item.replace(/"/g, '&quot;') + '">');
+                checkboxCell.append(itemCheckbox);
+                itemRow.append(checkboxCell);
                 
                 // Item name cell - click to edit
                 var itemNameCell = $('<div class="col-name"></div>');
@@ -1289,11 +1346,6 @@
                     itemRow.append(totalCell);
                 }
                 
-                // Delete cell for item (items in Internal category CAN be deleted)
-                var itemDeleteCell = $('<div class="col-delete"></div>');
-                itemDeleteCell.append('<i class="fas fa-trash delete-icon delete-item" data-item-pk="' + item.costing_pk + '" data-item-name="' + item.item.replace(/"/g, '&quot;') + '"></i>');
-                itemRow.append(itemDeleteCell);
-                
                 itemsContainer.append(itemRow);
             });
             
@@ -1306,6 +1358,7 @@
         // Add footer row (optional, only for showQuantityColumn)
         if (showQuantityColumn) {
             var footerRow = $('<div class="rates-flex-footer"></div>');
+            footerRow.append('<div class="col-checkbox"></div>');
             footerRow.append('<div class="col-name">Total</div>');
             footerRow.append('<div class="col-rate"></div>');
             footerRow.append('<div class="col-unit"></div>');
@@ -1323,7 +1376,6 @@
                 maximumFractionDigits: 2
             });
             footerRow.append('<div class="col-total" id="ratesTableTotalSum">' + totalSumDisplay + '</div>');
-            footerRow.append('<div class="col-delete"></div>');
             tableWrapper.append(footerRow);
         }
         
@@ -1565,18 +1617,74 @@
             $display.show();
         });
         
-        // Xero Account display click handler - show dropdown (using event delegation)
+        // Xero Account display click handler - show searchable dropdown (using event delegation)
         container.off('click', '.xero-acc-display').on('click', '.xero-acc-display', function(e) {
             e.stopPropagation();
             var $display = $(this);
             var $select = $display.siblings('.xero-acc-select');
+            var itemPk = $select.attr('data-item-pk');
+            
+            // Check if searchable dropdown already exists
+            var existingDropdown = $select.data('searchable-dropdown');
+            if (existingDropdown) {
+                // Just trigger a click on the wrapper to open it
+                $display.hide();
+                $select.siblings('.searchable-dropdown-wrapper').find('.searchable-dropdown-trigger').click();
+                return;
+            }
+            
+            // Hide display, create searchable dropdown
             $display.hide();
-            $select.show().focus();
+            
+            // Use Utils.createSearchableDropdown if available
+            if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
+                var dropdown = Utils.createSearchableDropdown($select[0], {
+                    placeholder: 'Search accounts...',
+                    onChange: function(value, text) {
+                        // Save the selection
+                        $.ajax({
+                            url: '/core/update_item_xero_account/',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            headers: { 'X-CSRFToken': getCSRFToken() },
+                            data: JSON.stringify({
+                                item_pk: itemPk,
+                                xero_account_code: value
+                            }),
+                            success: function(response) {
+                                if (response.status === 'success') {
+                                    $display.text(text || value);
+                                    $display.attr('title', text || value || '');
+                                } else {
+                                    alert('Error: ' + response.message);
+                                }
+                            },
+                            error: function(xhr) {
+                                var msg = 'Failed to update Xero account';
+                                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                                alert(msg);
+                            }
+                        });
+                        $display.show();
+                    }
+                });
+                
+                // Trigger open after creation
+                setTimeout(function() {
+                    $select.siblings('.searchable-dropdown-wrapper').find('.searchable-dropdown-trigger').click();
+                }, 10);
+            } else {
+                // Fallback to standard select
+                $select.show().focus();
+            }
         });
         
-        // Xero Account select change/blur handler (using event delegation)
+        // Xero Account select change/blur handler - fallback for non-searchable (using event delegation)
         container.off('change blur', '.xero-acc-select').on('change blur', '.xero-acc-select', function(e) {
             var $select = $(this);
+            // Skip if using searchable dropdown
+            if ($select.data('searchable-dropdown')) return;
+            
             var $display = $select.siblings('.xero-acc-display');
             var itemPk = $select.attr('data-item-pk');
             var xeroAccCode = $select.val() || '';
@@ -1975,11 +2083,11 @@
         // Xero Account cell click handler - make whole cell clickable (using event delegation)
         container.off('click', '.col-xero-acc').on('click', '.col-xero-acc', function(e) {
             if ($(e.target).hasClass('xero-acc-select')) return;
+            if ($(e.target).hasClass('xero-acc-display')) return; // Let the display handler handle it
+            if ($(e.target).closest('.searchable-dropdown-wrapper').length) return; // Don't interfere with searchable dropdown
             var $display = $(this).find('.xero-acc-display');
-            var $select = $(this).find('.xero-acc-select');
-            if ($display.length && $select.length) {
-                $display.hide();
-                $select.show().focus();
+            if ($display.length) {
+                $display.trigger('click');
             }
         });
         
@@ -2046,39 +2154,96 @@
             });
         });
         
-        // Delete item handler (works for both project_type and project modes) (using event delegation)
-        container.off('click', '.delete-item').on('click', '.delete-item', function(e) {
-            e.stopPropagation();
-            var itemPk = $(this).attr('data-item-pk');
-            var itemName = $(this).attr('data-item-name');
+        // Helper function to update bulk delete UI
+        function updateBulkDeleteUI() {
+            var checkedCount = container.find('.rates-item-checkbox:checked').length;
+            var $countSpan = container.find('.rates-selected-count');
+            var $deleteBtn = container.find('.rates-bulk-delete-btn');
             
-            if (!confirm('Are you sure you want to delete the "' + itemName + '" Costing?')) return;
-            
-            var deleteData = { item_pk: itemPk };
-            if (useRatesEndpoint && projectType) {
-                deleteData.project_type = projectType;
-            } else if (projectPk) {
-                deleteData.project_pk = projectPk;
+            if (checkedCount > 0) {
+                $countSpan.text(checkedCount + ' selected').addClass('visible');
+                $deleteBtn.addClass('visible');
+            } else {
+                $countSpan.removeClass('visible');
+                $deleteBtn.removeClass('visible');
             }
             
-            $.ajax({
-                url: '/core/delete_category_or_item/',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(deleteData),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        if (onReload) onReload();
-                    } else {
-                        alert('Error: ' + response.message);
-                    }
-                },
-                error: function(xhr) {
-                    var msg = 'Failed to delete item';
-                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
-                    alert(msg);
-                }
+            // Update select all checkbox state
+            var totalCheckboxes = container.find('.rates-item-checkbox').length;
+            var $selectAll = container.find('.rates-select-all');
+            if (totalCheckboxes > 0 && checkedCount === totalCheckboxes) {
+                $selectAll.prop('checked', true);
+                $selectAll.prop('indeterminate', false);
+            } else if (checkedCount > 0) {
+                $selectAll.prop('checked', false);
+                $selectAll.prop('indeterminate', true);
+            } else {
+                $selectAll.prop('checked', false);
+                $selectAll.prop('indeterminate', false);
+            }
+        }
+        
+        // Select all checkbox handler
+        container.off('change', '.rates-select-all').on('change', '.rates-select-all', function(e) {
+            e.stopPropagation();
+            var isChecked = $(this).prop('checked');
+            container.find('.rates-item-checkbox').prop('checked', isChecked);
+            updateBulkDeleteUI();
+        });
+        
+        // Individual item checkbox handler
+        container.off('change', '.rates-item-checkbox').on('change', '.rates-item-checkbox', function(e) {
+            e.stopPropagation();
+            updateBulkDeleteUI();
+        });
+        
+        // Bulk delete button handler
+        container.off('click', '.rates-bulk-delete-btn').on('click', '.rates-bulk-delete-btn', function(e) {
+            e.stopPropagation();
+            var $checkedItems = container.find('.rates-item-checkbox:checked');
+            var count = $checkedItems.length;
+            
+            if (count === 0) return;
+            
+            if (!confirm('Are you sure you want to delete ' + count + ' selected item(s)?')) return;
+            
+            // Collect all item PKs to delete
+            var itemPks = [];
+            $checkedItems.each(function() {
+                itemPks.push($(this).attr('data-item-pk'));
             });
+            
+            // Delete items sequentially to avoid SQLite database lock
+            function deleteNextItem(index) {
+                if (index >= itemPks.length) {
+                    // All done, reload
+                    if (onReload) onReload();
+                    return;
+                }
+                
+                var deleteData = { item_pk: itemPks[index] };
+                if (useRatesEndpoint && projectType) {
+                    deleteData.project_type = projectType;
+                } else if (projectPk) {
+                    deleteData.project_pk = projectPk;
+                }
+                
+                $.ajax({
+                    url: '/core/delete_category_or_item/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(deleteData),
+                    success: function() {
+                        deleteNextItem(index + 1);
+                    },
+                    error: function() {
+                        console.error('Failed to delete item pk=' + itemPks[index]);
+                        deleteNextItem(index + 1);
+                    }
+                });
+            }
+            
+            deleteNextItem(0);
         });
         
         // Category collapse toggle (using event delegation)
@@ -2087,6 +2252,9 @@
                 return;
             }
             if ($(e.target).hasClass('delete-icon') || $(e.target).closest('.delete-icon').length) {
+                return;
+            }
+            if ($(e.target).is('input[type="checkbox"]') || $(e.target).closest('.col-checkbox').length) {
                 return;
             }
             

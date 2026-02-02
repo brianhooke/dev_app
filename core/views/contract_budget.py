@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +151,24 @@ def update_uncommitted(request):
             
             costing.save()
             return JsonResponse({'status': 'success'})
+        except Costing.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
+
+@csrf_exempt
+def update_fixed_on_site(request):
+    """Update the fixed_on_site amount for a costing item."""
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        costing_pk = data.get('costing_pk')
+        fixed_on_site = data.get('fixed_on_site')
+        
+        try:
+            costing = Costing.objects.get(costing_pk=costing_pk)
+            costing.fixed_on_site = fixed_on_site if fixed_on_site is not None else 0
+            costing.save()
+            return JsonResponse({'status': 'success', 'fixed_on_site': float(costing.fixed_on_site or 0)})
         except Costing.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
@@ -360,9 +378,76 @@ def get_project_committed_amounts(request, project_pk):
                 else:
                     committed_dict[costing_pk] = alloc_amount
         
+        # Add Bill_allocations where bill_type=1 (Direct Cost) to committed amounts
+        # These are direct costs that should be included in committed totals
+        direct_cost_bills = Bills.objects.filter(
+            project=project,
+            bill_type=1  # Direct Cost
+        )
+        
+        bill_allocations_direct = Bill_allocations.objects.filter(
+            bill__in=direct_cost_bills,
+            item__isnull=False
+        ).values('item__costing_pk', 'qty', 'rate', 'amount')
+        
+        # Group by costing_pk
+        from collections import defaultdict
+        bill_allocs_by_item = defaultdict(list)
+        for alloc in bill_allocations_direct:
+            if alloc['item__costing_pk']:
+                bill_allocs_by_item[alloc['item__costing_pk']].append(alloc)
+        
+        for costing_pk, allocs in bill_allocs_by_item.items():
+            total_qty = sum(float(a['qty'] or 0) for a in allocs)
+            total_amount = sum(float(a['amount'] or 0) for a in allocs)
+            unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
+            
+            if is_construction:
+                if costing_pk in committed_dict:
+                    existing = committed_dict[costing_pk]
+                    existing['qty'] = (existing.get('qty') or 0) + total_qty
+                    existing['amount'] = (existing.get('amount') or 0) + total_amount
+                    # Check if rates differ
+                    if unique_rates:
+                        if existing.get('rate') and existing['rate'] not in unique_rates:
+                            existing['has_multiple_rates'] = True
+                        elif len(unique_rates) > 1:
+                            existing['has_multiple_rates'] = True
+                else:
+                    rate = list(unique_rates)[0] if len(unique_rates) == 1 else None
+                    committed_dict[costing_pk] = {
+                        'qty': total_qty,
+                        'rate': rate,
+                        'amount': total_amount,
+                        'has_multiple_rates': len(unique_rates) > 1
+                    }
+            else:
+                if costing_pk in committed_dict:
+                    committed_dict[costing_pk] += total_amount
+                else:
+                    committed_dict[costing_pk] = total_amount
+        
+        # Calculate Billed amounts (ALL bill_types) per item
+        # This is the sum of all Bill_allocations.amount for this project
+        all_project_bills = Bills.objects.filter(project=project)
+        
+        all_bill_allocations = Bill_allocations.objects.filter(
+            bill__in=all_project_bills,
+            item__isnull=False
+        ).values('item__costing_pk').annotate(
+            total_billed=Sum('amount')
+        )
+        
+        billed_dict = {
+            item['item__costing_pk']: float(item['total_billed'])
+            for item in all_bill_allocations
+            if item['item__costing_pk']
+        }
+        
         return JsonResponse({
             'status': 'success',
             'committed_amounts': committed_dict,
+            'billed_amounts': billed_dict,
             'is_construction': is_construction
         })
         
@@ -437,6 +522,34 @@ def get_item_quote_allocations(request, item_pk):
                     'type': 'snap',
                 })
         
+        # Get direct cost bill allocations (bill_type=1) for this item
+        if project:
+            direct_cost_bill_allocations = Bill_allocations.objects.filter(
+                item=costing,
+                bill__project=project,
+                bill__bill_type=1  # Direct Cost
+            ).select_related('bill', 'bill__contact_pk')
+            
+            for bill_alloc in direct_cost_bill_allocations:
+                bill = bill_alloc.bill
+                contact = bill.contact_pk if bill else None
+                bill_date = bill.bill_date.strftime('%d-%b-%y') if bill and bill.bill_date else 'No Date'
+                
+                allocations_list.append({
+                    'allocation_pk': bill_alloc.bill_allocation_pk,
+                    'qty': float(bill_alloc.qty) if bill_alloc.qty else 0,
+                    'rate': float(bill_alloc.rate) if bill_alloc.rate else 0,
+                    'amount': float(bill_alloc.amount) if bill_alloc.amount else 0,
+                    'unit': bill_alloc.unit or '',
+                    'notes': bill_alloc.notes or '',
+                    'bill_pk': bill.bill_pk if bill else None,
+                    'supplier_quote_number': bill.supplier_bill_number or f'Bill #{bill.bill_pk}' if bill else '',
+                    'contact_name': contact.name if contact else 'Unknown',
+                    'contact_pk': contact.contact_pk if contact else None,
+                    'bill_date': bill_date,
+                    'type': 'bill',
+                })
+        
         return JsonResponse({
             'status': 'success',
             'allocations': allocations_list
@@ -447,6 +560,61 @@ def get_item_quote_allocations(request, item_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting quote allocations: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_item_bill_allocations(request, item_pk):
+    """
+    Get all bill allocations for a specific item (all bill_types).
+    Returns list of allocations with associated bill/contact information.
+    Used for the Billed cells dropdown.
+    """
+    try:
+        costing = get_object_or_404(Costing, pk=item_pk)
+        project = costing.project
+        
+        allocations_list = []
+        
+        if project:
+            # Get all bill allocations for this item (all bill_types)
+            bill_allocations = Bill_allocations.objects.filter(
+                item=costing,
+                bill__project=project
+            ).select_related('bill', 'bill__contact_pk')
+            
+            for bill_alloc in bill_allocations:
+                bill = bill_alloc.bill
+                contact = bill.contact_pk if bill else None
+                bill_date = bill.bill_date.strftime('%d-%b-%y') if bill and bill.bill_date else 'No Date'
+                bill_type_display = 'Direct Cost' if bill.bill_type == 1 else 'Progress Claim' if bill.bill_type == 2 else 'Other'
+                
+                allocations_list.append({
+                    'allocation_pk': bill_alloc.bill_allocation_pk,
+                    'qty': float(bill_alloc.qty) if bill_alloc.qty else 0,
+                    'rate': float(bill_alloc.rate) if bill_alloc.rate else 0,
+                    'amount': float(bill_alloc.amount) if bill_alloc.amount else 0,
+                    'unit': bill_alloc.unit or '',
+                    'notes': bill_alloc.notes or '',
+                    'bill_pk': bill.bill_pk if bill else None,
+                    'bill_number': bill.supplier_bill_number or f'Bill #{bill.bill_pk}' if bill else '',
+                    'contact_name': contact.name if contact else 'Unknown',
+                    'contact_pk': contact.contact_pk if contact else None,
+                    'bill_date': bill_date,
+                    'bill_type': bill.bill_type if bill else 0,
+                    'bill_type_display': bill_type_display,
+                })
+        
+        return JsonResponse({
+            'status': 'success',
+            'allocations': allocations_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting item bill allocations: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting bill allocations: {str(e)}'
         }, status=500)
 
 

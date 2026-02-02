@@ -49,6 +49,11 @@ Column Behaviors:
         min-height: 0;
     }
     
+    /* Ensure table doesn't break sticky positioning */
+    #contractBudgetMainTable {
+        overflow: visible;
+    }
+    
     /* Hide the original tfoot (we'll use a fixed footer instead) */
     #contractBudgetMainTableFooter {
         display: none !important;
@@ -241,13 +246,15 @@ Column Behaviors:
     }
     
     /* Green clickable committed cells with values */
-    .contractBudget-container .committed-clickable {
+    .contractBudget-container .committed-clickable,
+    .contractBudget-container .billed-clickable {
         color: var(--color-success, #28a745);
         cursor: pointer;
         transition: all 0.15s ease;
     }
     
-    .contractBudget-container .committed-clickable:hover {
+    .contractBudget-container .committed-clickable:hover,
+    .contractBudget-container .billed-clickable:hover {
         text-decoration: underline;
     }
     
@@ -258,6 +265,8 @@ Column Behaviors:
     
     .contractBudget-container .committed-details-row > td {
         padding: 8px 12px !important;
+        overflow: visible;
+        position: relative;
     }
     
     .contractBudget-container .committed-details-box {
@@ -265,13 +274,17 @@ Column Behaviors:
         border-radius: 4px;
         padding: 8px 12px;
         background-color: rgba(40, 167, 69, 0.05);
+        background-color: #fff;
+        min-width: 320px;
+        position: relative;
+        z-index: 10;
     }
     
     .contractBudget-container .committed-details-table {
         width: 100%;
         font-size: 12px;
         border-collapse: collapse;
-        table-layout: fixed;
+        table-layout: auto;
     }
     
     .contractBudget-container .committed-details-table th {
@@ -374,11 +387,12 @@ Column Behaviors:
             var categories = results[0].categories || [];
             var items = results[1].items || [];
             var committedAmounts = results[2].committed_amounts || {};
+            var billedAmounts = results[2].billed_amounts || {};
             
             console.log('Contract Budget - Committed Amounts from backend:', committedAmounts);
-            console.log('Contract Budget - Full results[2]:', results[2]);
+            console.log('Contract Budget - Billed Amounts from backend:', billedAmounts);
             
-            renderTable(categories, items, committedAmounts);
+            renderTable(categories, items, committedAmounts, billedAmounts);
         }).catch(function(error) {
             console.error('Error loading contract budget:', error);
             tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; color: #dc3545; padding: 20px;">Error loading data</td></tr>');
@@ -386,7 +400,7 @@ Column Behaviors:
     }
     
     // Render the table
-    function renderTable(categories, items, committedAmounts) {
+    function renderTable(categories, items, committedAmounts, billedAmounts) {
         var tbody = $('#contractBudgetMainTableBody');
         var tfoot = $('#contractBudgetMainTableFooter');
         var colCount = getColCount();
@@ -432,11 +446,12 @@ Column Behaviors:
             // Render item rows
             categoryItems.forEach(function(item) {
                 var committedData = committedAmounts[item.costing_pk];
+                var billedAmount = billedAmounts[item.costing_pk] || 0;
                 // For construction types, committedData is {qty, rate, amount}; for others, it's a number
                 var committedAmount = isConstruction ? 
                     (committedData ? committedData.amount : 0) : 
                     (committedData || 0);
-                var row = renderItemRow(item, committedData, isInternal, isLabour, category.category);
+                var row = renderItemRow(item, committedData, billedAmount, isInternal, isLabour, category.category);
                 tbody.append(row);
                 
                 // Update totals (include all items including internal category)
@@ -453,9 +468,11 @@ Column Behaviors:
                 
                 if (!isTender) {
                     totals.contract_budget += parseFloat(item.contract_budget) || 0;
-                    totals.cost_to_complete += parseFloat(item.cost_to_complete) || 0;
-                    totals.billed += parseFloat(item.billd_amount) || 0;
-                    totals.fixed_on_site += parseFloat(item.fixed_on_site_amount) || 0;
+                    // C2C = Working Budget - Billed
+                    var workingBudgetForItem = uncommittedAmount + committedAmount;
+                    totals.cost_to_complete += workingBudgetForItem - billedAmount;
+                    totals.billed += billedAmount;
+                    totals.fixed_on_site += parseFloat(item.fixed_on_site || 0);
                 }
             });
         });
@@ -518,7 +535,7 @@ Column Behaviors:
     }
     
     // Render an item row
-    function renderItemRow(item, committedData, isInternal, isLabour, categoryName) {
+    function renderItemRow(item, committedData, billedAmount, isInternal, isLabour, categoryName) {
         // For construction types, committedData is {qty, rate, amount, has_multiple_rates}; for others, it's a number
         var committedAmount = isConstruction ? 
             (committedData ? committedData.amount : 0) : 
@@ -684,9 +701,28 @@ Column Behaviors:
         
         if (!isTender) {
             // Execution mode extra columns
-            row.append('<td>' + Utils.formatCurrency(item.cost_to_complete || 0) + '</td>');
-            row.append('<td>' + Utils.formatCurrency(item.billd_amount || 0) + '</td>');
-            row.append('<td>' + Utils.formatCurrency(item.fixed_on_site_amount || 0) + '</td>');
+            // C2C = Working Budget - Billed
+            var c2cValue = workingBudget - billedAmount;
+            row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '">' + Utils.formatCurrency(c2cValue) + '</td>');
+            // Billed - clickable if has value (green like committed)
+            var hasBilledValue = billedAmount > 0;
+            var billedClickableClass = hasBilledValue ? ' billed-clickable' : '';
+            var billedTd = $('<td class="billed-cell' + billedClickableClass + '" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(billedAmount) + '</td>');
+            if (hasBilledValue) {
+                billedTd.on('click', function() { toggleBilledDetailsRow(item.costing_pk); });
+            }
+            row.append(billedTd);
+            
+            // Fixed on Site - clickable/editable like Uncommitted
+            var fixedOnSiteVal = parseFloat(item.fixed_on_site || 0);
+            var fixedOnSiteTd = $('<td class="fixed-on-site-cell" data-item-pk="' + item.costing_pk + '"></td>');
+            var fixedOnSiteLink = $('<a href="#" class="click-to-edit fixed-on-site-display" data-item-pk="' + item.costing_pk + '" data-value="' + fixedOnSiteVal + '">' + Utils.formatCurrency(fixedOnSiteVal) + '</a>');
+            fixedOnSiteLink.on('click', function(e) {
+                e.preventDefault();
+                convertFixedOnSiteToInput(item.costing_pk);
+            });
+            fixedOnSiteTd.append(fixedOnSiteLink);
+            row.append(fixedOnSiteTd);
         }
         
         return row;
@@ -803,6 +839,73 @@ Column Behaviors:
             },
             error: function(error) {
                 console.error('Error saving uncommitted:', error);
+            }
+        });
+    }
+    
+    // Convert Fixed on Site cell to input field
+    function convertFixedOnSiteToInput(itemPk) {
+        var displaySelector = '.fixed-on-site-display[data-item-pk="' + itemPk + '"]';
+        var display = $(displaySelector);
+        if (!display.length) return;
+        
+        var currentVal = parseFloat(display.attr('data-value')) || 0;
+        var td = display.parent();
+        
+        // Create input
+        var input = $('<input type="number" step="0.01" min="0">')
+            .addClass('fixed-on-site-input')
+            .attr('data-item-pk', itemPk)
+            .val(currentVal.toFixed(2))
+            .css('width', '100%');
+        
+        // Replace link with input
+        td.empty().append(input);
+        input.focus().select();
+        
+        // Handle Enter key - submit and blur
+        input.on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
+        // Handle blur - convert back to link and save
+        input.on('blur', function() {
+            var newVal = parseFloat($(this).val()) || 0;
+            var newLink = $('<a href="#" class="click-to-edit fixed-on-site-display" data-item-pk="' + itemPk + '" data-value="' + newVal + '">' + Utils.formatCurrency(newVal) + '</a>');
+            newLink.on('click', function(e) {
+                e.preventDefault();
+                convertFixedOnSiteToInput(itemPk);
+            });
+            td.empty().append(newLink);
+            
+            // Save to database
+            saveFixedOnSite(itemPk, newVal);
+        });
+    }
+    
+    // Save Fixed on Site amount
+    function saveFixedOnSite(itemPk, amount) {
+        var data = {
+            costing_pk: itemPk,
+            fixed_on_site: amount
+        };
+        
+        $.ajax({
+            url: '/core/update_fixedonsite/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log('Fixed on Site saved:', response.fixed_on_site);
+                }
+            },
+            error: function(error) {
+                console.error('Error saving Fixed on Site:', error);
             }
         });
     }
@@ -1098,7 +1201,91 @@ Column Behaviors:
         itemRow.after(detailsRow);
     }
     
-    // Close notes/committed details rows when clicking outside
+    // Toggle billed details row - shows bill allocations for this item
+    function toggleBilledDetailsRow(itemPk) {
+        var existingRow = $('#billed-details-row-' + itemPk);
+        
+        // If clicking the same row, just close it
+        if (existingRow.length) {
+            existingRow.remove();
+            $('.billed-clickable[data-item-pk="' + itemPk + '"]').removeClass('active');
+            return;
+        }
+        
+        // Close any other open billed/committed details row
+        $('.billed-details-row').remove();
+        $('.committed-details-row').remove();
+        $('.billed-clickable').removeClass('active');
+        $('.committed-clickable').removeClass('active');
+        
+        // Also close any open notes row
+        closeOpenNotesRow();
+        
+        // Fetch bill allocations for this item
+        $.ajax({
+            url: '/core/get_item_bill_allocations/' + itemPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' && response.allocations.length > 0) {
+                    renderBilledDetailsRow(itemPk, response.allocations);
+                }
+            },
+            error: function(xhr) {
+                console.error('Failed to fetch bill allocations:', xhr);
+            }
+        });
+        
+        // Mark cell as active
+        $('.billed-clickable[data-item-pk="' + itemPk + '"]').addClass('active');
+    }
+    
+    // Render the billed details row with bill allocations
+    function renderBilledDetailsRow(itemPk, allocations) {
+        var itemRow = $('tr.item-row[data-item-pk="' + itemPk + '"]');
+        
+        // Count total columns in item row to calculate positions
+        var totalCols = itemRow.find('td').length;
+        // Start box at Committed Amount column (4th from last: CommittedAmt, C2C, Billed, Fixed on Site)
+        // Box spans 4 cols to fit all content
+        var colsBeforeBox = totalCols - 4;  // All columns before Committed Amount
+        var boxCols = 4;  // Committed Amount + C2C + Billed + Fixed on Site
+        
+        var detailsRow = $('<tr id="billed-details-row-' + itemPk + '" class="billed-details-row committed-details-row" data-item-pk="' + itemPk + '"></tr>');
+        
+        // Empty cells before the box
+        detailsRow.append('<td colspan="' + colsBeforeBox + '"></td>');
+        
+        // Green box cell spanning C2C through Fixed on Site
+        var boxTd = $('<td colspan="' + boxCols + '"></td>');
+        var box = $('<div class="committed-details-box"></div>');
+        
+        // Build internal table
+        var table = $('<table class="committed-details-table"></table>');
+        
+        var colgroup = $('<colgroup><col style="width:35%"><col style="width:25%"><col style="width:20%"><col style="width:20%"></colgroup>');
+        table.append(colgroup);
+        var thead = $('<thead><tr><th>Supplier</th><th>Bill #</th><th>Type</th><th>Amount</th></tr></thead>');
+        table.append(thead);
+        
+        var tbody = $('<tbody></tbody>');
+        allocations.forEach(function(alloc) {
+            var tr = $('<tr></tr>');
+            tr.append('<td>' + Utils.escapeHtml(alloc.contact_name) + '</td>');
+            tr.append('<td>' + Utils.escapeHtml(alloc.bill_number) + '</td>');
+            tr.append('<td>' + Utils.escapeHtml(alloc.bill_type_display) + '</td>');
+            tr.append('<td>' + Utils.formatCurrency(alloc.amount) + '</td>');
+            tbody.append(tr);
+        });
+        table.append(tbody);
+        
+        box.append(table);
+        boxTd.append(box);
+        detailsRow.append(boxTd);
+        
+        itemRow.after(detailsRow);
+    }
+    
+    // Close notes/committed/billed details rows when clicking outside
     $(document).on('click', function(e) {
         var target = $(e.target);
         
@@ -1109,18 +1296,22 @@ Column Behaviors:
             return;
         }
         
-        // Don't close if clicking on committed details row or committed cells
+        // Don't close if clicking on committed/billed details row or clickable cells
         if (target.closest('.committed-details-row').length || 
-            target.closest('.committed-clickable').length) {
+            target.closest('.billed-details-row').length ||
+            target.closest('.committed-clickable').length ||
+            target.closest('.billed-clickable').length) {
             return;
         }
         
         // Close any open notes row
         closeOpenNotesRow();
         
-        // Close any open committed details row
+        // Close any open committed/billed details row
         $('.committed-details-row').remove();
+        $('.billed-details-row').remove();
         $('.committed-clickable').removeClass('active');
+        $('.billed-clickable').removeClass('active');
     });
     
     // Save notes to server
@@ -1173,7 +1364,7 @@ Column Behaviors:
         }, 1000);
     }
     
-    // Update working budget (Uncommitted + Committed)
+    // Update working budget (Uncommitted + Committed) and C2C (Working Budget - Billed)
     function updateWorkingBudget(itemPk) {
         var uncommitted = 0;
         if (isConstruction) {
@@ -1189,13 +1380,21 @@ Column Behaviors:
         
         $('.working-budget-cell[data-item-pk="' + itemPk + '"]').text(Utils.formatCurrency(workingBudget));
         
+        // Update C2C = Working Budget - Billed (execution mode only)
+        if (!isTender) {
+            var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
+            var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
+            var c2c = workingBudget - billed;
+            $c2cCell.text(Utils.formatCurrency(c2c));
+        }
+        
         // Update totals
         updateTotals();
     }
     
     // Update totals footer
     function updateTotals() {
-        var totals = { uncommitted: 0, committed: 0, working_budget: 0 };
+        var totals = { uncommitted: 0, committed: 0, working_budget: 0, cost_to_complete: 0, billed: 0 };
         
         $('#contractBudgetMainTableBody tr.item-row').each(function() {
             var itemPk = $(this).attr('data-item-pk');
@@ -1211,14 +1410,30 @@ Column Behaviors:
             var committedText = $('.committed-cell[data-item-pk="' + itemPk + '"]').text();
             var committed = parseFloat(committedText.replace(/[^0-9.-]/g, '')) || 0;
             
+            var workingBudget = uncommitted + committed;
+            
             totals.uncommitted += uncommitted;
             totals.committed += committed;
-            totals.working_budget += uncommitted + committed;
+            totals.working_budget += workingBudget;
+            
+            // C2C and Billed (execution mode only)
+            if (!isTender) {
+                var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
+                var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
+                var c2c = workingBudget - billed;
+                totals.billed += billed;
+                totals.cost_to_complete += c2c;
+            }
         });
         
         $('#totalUncommitted').text(Utils.formatCurrency(totals.uncommitted));
         $('#totalCommitted').text(Utils.formatCurrency(totals.committed));
         $('#totalWorkingBudget').text(Utils.formatCurrency(totals.working_budget));
+        
+        if (!isTender) {
+            $('#totalCostToComplete').text(Utils.formatCurrency(totals.cost_to_complete));
+            $('#totalBilled').text(Utils.formatCurrency(totals.billed));
+        }
     }
     
     // Render totals footer (now targets fixed footer)

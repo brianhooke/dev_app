@@ -2146,3 +2146,202 @@ def create_leave_application(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@login_required
+def delete_timesheet_entry(request):
+    """
+    Delete timesheet hours for a specific day by setting hours to 0.
+    Xero doesn't support deleting individual days, so we zero out the hours.
+    """
+    from datetime import datetime, timedelta
+    
+    try:
+        data = json.loads(request.body)
+        xero_instance_id = data.get('xero_instance_id')
+        employee_id = data.get('employee_id')
+        date_str = data.get('date')
+        
+        if not all([xero_instance_id, employee_id, date_str]):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing required fields'
+            }, status=400)
+        
+        xero_instance, access_token, tenant_id = get_xero_auth(int(xero_instance_id))
+        if not xero_instance:
+            return access_token
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Xero-tenant-id': tenant_id,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+        
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        # Find existing timesheet containing this date
+        timesheets_url = f'{XERO_PAYROLL_AU_URL}/Timesheets?where=EmployeeID==Guid("{employee_id}")'
+        ts_response = requests.get(timesheets_url, headers=headers, timeout=30)
+        
+        if ts_response.status_code != 200:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to fetch timesheets: {ts_response.status_code}'
+            }, status=ts_response.status_code)
+        
+        ts_data = ts_response.json()
+        target_timesheet = None
+        day_index = None
+        
+        for ts in ts_data.get('Timesheets', []):
+            ts_start = _parse_xero_date(ts.get('StartDate', ''))
+            if ts_start:
+                ts_start_date = datetime.strptime(ts_start, '%Y-%m-%d').date()
+                ts_end_date = ts_start_date + timedelta(days=6)
+                
+                if ts_start_date <= target_date <= ts_end_date:
+                    target_timesheet = ts
+                    day_index = (target_date - ts_start_date).days
+                    break
+        
+        if not target_timesheet:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No timesheet found for this date'
+            }, status=404)
+        
+        # Zero out hours for the target day in all lines
+        updated_lines = []
+        for line in target_timesheet.get('TimesheetLines', []):
+            units = list(line.get('NumberOfUnits', [0] * 7))
+            while len(units) < 7:
+                units.append(0)
+            units[day_index] = 0  # Zero out this day
+            updated_lines.append({
+                'EarningsRateID': line.get('EarningsRateID'),
+                'NumberOfUnits': [float(u) for u in units]
+            })
+        
+        # Update the timesheet
+        update_payload = {
+            'TimesheetID': target_timesheet.get('TimesheetID'),
+            'EmployeeID': employee_id,
+            'StartDate': target_timesheet.get('StartDate'),
+            'EndDate': target_timesheet.get('EndDate'),
+            'Status': 'DRAFT',
+            'TimesheetLines': updated_lines
+        }
+        
+        update_response = requests.post(
+            f'{XERO_PAYROLL_AU_URL}/Timesheets',
+            headers=headers,
+            json=[update_payload],
+            timeout=30
+        )
+        
+        if update_response.status_code not in [200, 201]:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to update timesheet: {update_response.text}'
+            }, status=update_response.status_code)
+        
+        logger.info(f"Deleted timesheet hours for {date_str}")
+        return JsonResponse({'status': 'success', 'message': 'Work hours deleted'})
+        
+    except Exception as e:
+        logger.error(f"Error deleting timesheet entry: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@login_required
+def delete_leave_application(request):
+    """
+    Delete a leave application from Xero.
+    Note: Xero may not allow deleting approved leave applications.
+    """
+    from datetime import datetime
+    
+    try:
+        data = json.loads(request.body)
+        xero_instance_id = data.get('xero_instance_id')
+        employee_id = data.get('employee_id')
+        date_str = data.get('date')
+        leave_type_id = data.get('leave_type_id')
+        
+        if not all([xero_instance_id, employee_id, date_str]):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing required fields'
+            }, status=400)
+        
+        xero_instance, access_token, tenant_id = get_xero_auth(int(xero_instance_id))
+        if not xero_instance:
+            return access_token
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Xero-tenant-id': tenant_id,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+        
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        # Find leave application for this date
+        leave_url = f'{XERO_PAYROLL_AU_URL}/LeaveApplications?where=EmployeeID==Guid("{employee_id}")'
+        leave_response = requests.get(leave_url, headers=headers, timeout=30)
+        
+        if leave_response.status_code != 200:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to fetch leave applications: {leave_response.status_code}'
+            }, status=leave_response.status_code)
+        
+        leave_data = leave_response.json()
+        target_leave = None
+        
+        for la in leave_data.get('LeaveApplications', []):
+            la_start = _parse_xero_date(la.get('StartDate', ''))
+            la_end = _parse_xero_date(la.get('EndDate', ''))
+            la_leave_type = la.get('LeaveTypeID', '')
+            
+            if la_start and la_end:
+                la_start_date = datetime.strptime(la_start, '%Y-%m-%d').date()
+                la_end_date = datetime.strptime(la_end, '%Y-%m-%d').date()
+                
+                if la_start_date <= target_date <= la_end_date:
+                    if not leave_type_id or la_leave_type == leave_type_id:
+                        target_leave = la
+                        break
+        
+        if not target_leave:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No leave application found for this date'
+            }, status=404)
+        
+        leave_app_id = target_leave.get('LeaveApplicationID')
+        
+        # Delete the leave application
+        delete_url = f'{XERO_PAYROLL_AU_URL}/LeaveApplications/{leave_app_id}'
+        delete_response = requests.delete(delete_url, headers=headers, timeout=30)
+        
+        if delete_response.status_code not in [200, 204]:
+            # If delete not supported, try to set status or return error
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to delete leave: {delete_response.text}'
+            }, status=delete_response.status_code)
+        
+        logger.info(f"Deleted leave application {leave_app_id} for {date_str}")
+        return JsonResponse({'status': 'success', 'message': 'Leave deleted'})
+        
+    except Exception as e:
+        logger.error(f"Error deleting leave application: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
