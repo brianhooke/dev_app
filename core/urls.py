@@ -6,7 +6,7 @@ from .views.bills import update_bill, null_allocation_xero_fields, get_approved_
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
     bills_global_view, bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
-    send_bill_direct, send_bill_to_xero, get_bill_pdf_info, return_bill_to_project, approve_bill_direct,
+    send_bill_direct, send_bill_to_xero, get_bill_pdf_info, return_bill_to_project, approve_bill_direct, mark_bill_as_sent,
     # Moved from bills.py:
     get_bills_list, archive_bill, return_to_inbox, 
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
@@ -65,7 +65,7 @@ from .views.staff_hours import (
     get_holiday_calendars, create_holiday_calendar, update_holiday_calendar,
     delete_holiday_calendar, get_calendar_holidays, create_holiday, update_holiday, delete_holiday,
     get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet,
-    delete_timesheet_entry, delete_leave_application
+    delete_timesheet_entry, delete_leave_application, get_allocation_super_summary
 )
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
@@ -274,6 +274,7 @@ urlpatterns = [
     path('send_bill_direct/', send_bill_direct, name='send_bill_direct'),
     path('approve_bill_direct/', approve_bill_direct, name='approve_bill_direct'),
     path('send_bill_to_xero/', send_bill_to_xero, name='send_bill_to_xero'),
+    path('mark_bill_as_sent/', mark_bill_as_sent, name='mark_bill_as_sent'),
     path('get_bill_pdf_info/', get_bill_pdf_info, name='get_bill_pdf_info'),
     path('send_po_email/<int:project_pk>/<int:supplier_pk>/', dashboard_send_po_email, name='dashboard_send_po_email'),
     path('download_po_pdf/<int:project_pk>/<int:supplier_pk>/', download_po_pdf, name='download_po_pdf'),
@@ -383,6 +384,7 @@ urlpatterns = [
     path('staff_hours/allocations/', get_allocations, name='staff_hours_allocations'),
     path('staff_hours/allocations/save/', save_allocation, name='staff_hours_save_allocation'),
     path('staff_hours/allocations/<int:allocation_pk>/delete/', delete_allocation, name='staff_hours_delete_allocation'),
+    path('staff_hours/allocations/super-summary/', get_allocation_super_summary, name='staff_hours_allocation_super_summary'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

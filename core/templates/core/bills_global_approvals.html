@@ -66,14 +66,30 @@
                 // 6. $ GST
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 7. Send to Xero button
+                // 7. Date
+                var billDate = bill.bill_date ? Utils.formatDate(bill.bill_date) : '-';
+                row.append($('<td>').text(billDate));
+                
+                // 8. Due Date
+                var dueDate = bill.bill_due_date ? Utils.formatDate(bill.bill_due_date) : '-';
+                row.append($('<td>').text(dueDate));
+                
+                // 9. Send to Xero button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-success approvals-send-btn')
                     .attr('data-bill-pk', bill.bill_pk)
                     .text('Send');
                 row.append($('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn));
                 
-                // 9. Return to Project button
+                // 10. Mark X button (marks as sent without actually sending to Xero)
+                var markXBtn = $('<button>')
+                    .addClass('btn btn-sm btn-secondary approvals-mark-x-btn')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .text('Mark X')
+                    .attr('title', 'Mark as sent to Xero without sending');
+                row.append($('<td>').addClass('col-action').css('text-align', 'center').append(markXBtn));
+                
+                // 11. Return to Project button
                 var returnBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning approvals-return-btn')
                     .attr('data-bill-pk', bill.bill_pk)
@@ -183,7 +199,7 @@
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load approved bills:', error);
-                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-danger">Failed to load bills</td></tr>');
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-danger">Failed to load bills</td></tr>');
             }
         });
     };
@@ -197,6 +213,53 @@
         
         // Send to Xero button - shows PDF preview modal first
         // Note: Actual send logic is in the second script block below (confirmSendToXeroBtn handler)
+        
+        // Mark X button - marks as sent without actually sending to Xero
+        $(document).on('click' + ns, '.approvals-mark-x-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var button = $(this);
+            var billPk = button.attr('data-bill-pk');
+            var row = button.closest('tr');
+            
+            if (confirm('Mark this bill as sent to Xero WITHOUT actually sending it?\n\nThis will update the status as if sent, but no data will be pushed to Xero.')) {
+                button.prop('disabled', true).text('...');
+                
+                $.ajax({
+                    url: '/core/mark_bill_as_sent/',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ bill_pk: billPk }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                                if (window.currentSelectedBillPk == billPk) {
+                                    $('#billsApprovalsAllocationsTableBody').empty();
+                                    $('#billsApprovalsPdfViewer').hide();
+                                    $('#billsApprovalsViewerPlaceholder').show();
+                                    window.currentSelectedBillPk = null;
+                                    window.currentBillData = null;
+                                }
+                                
+                                // Check if table is now empty
+                                if ($('#billsApprovalsMainTableBody tr').length === 0) {
+                                    $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                }
+                            });
+                        } else {
+                            alert('Error: ' + response.message);
+                            button.prop('disabled', false).text('Mark X');
+                        }
+                    },
+                    error: function(xhr) {
+                        alert('Failed to mark bill: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                        button.prop('disabled', false).text('Mark X');
+                    }
+                });
+            }
+        });
         
         // Return to Project button
         $(document).on('click' + ns, '.approvals-return-btn', function(e) {
@@ -226,7 +289,7 @@
                             
                             // Check if table is now empty
                             if ($('#billsApprovalsMainTableBody tr').length === 0) {
-                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
                             }
                         });
                     },
@@ -446,4 +509,60 @@
     });
     
 })();
+
+// Debug function for table column layout
+window.debugApprovalsTable = function() {
+    console.log('=== BILLS APPROVALS TABLE DEBUG ===');
+    
+    var table = document.getElementById('billsApprovalsMainTable');
+    if (!table) {
+        console.log('Table not found!');
+        return;
+    }
+    
+    // Colgroup columns
+    var colgroup = table.querySelector('colgroup');
+    var cols = colgroup ? colgroup.querySelectorAll('col') : [];
+    console.log('Colgroup columns:', cols.length);
+    cols.forEach(function(col, i) {
+        console.log('  Col ' + i + ': width=' + col.style.width);
+    });
+    
+    // Header columns
+    var headerRow = table.querySelector('thead tr');
+    var headers = headerRow ? headerRow.querySelectorAll('th') : [];
+    console.log('Header columns:', headers.length);
+    headers.forEach(function(th, i) {
+        console.log('  TH ' + i + ': "' + th.textContent.trim() + '" width=' + th.style.width);
+    });
+    
+    // Body rows
+    var bodyRows = table.querySelectorAll('tbody tr');
+    console.log('Body rows:', bodyRows.length);
+    
+    if (bodyRows.length > 0) {
+        var firstRow = bodyRows[0];
+        var cells = firstRow.querySelectorAll('td');
+        console.log('First row cells:', cells.length);
+        cells.forEach(function(td, i) {
+            var btn = td.querySelector('button');
+            var content = btn ? ('BUTTON: ' + (btn.textContent.trim() || btn.innerHTML.trim())) : td.textContent.trim().substring(0, 30);
+            console.log('  TD ' + i + ': ' + content);
+        });
+    }
+    
+    // Check for Mark X button
+    var markXBtns = document.querySelectorAll('.approvals-mark-x-btn');
+    console.log('Mark X buttons found:', markXBtns.length);
+    
+    // Check for Send button
+    var sendBtns = document.querySelectorAll('.approvals-send-btn');
+    console.log('Send buttons found:', sendBtns.length);
+    
+    // Check for Return button
+    var returnBtns = document.querySelectorAll('.approvals-return-btn');
+    console.log('Return buttons found:', returnBtns.length);
+    
+    console.log('=== END DEBUG ===');
+};
 </script>

@@ -19,7 +19,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations, XeroInstances
+from .staff_hours import get_employee_super_rate
 
 logger = logging.getLogger(__name__)
 
@@ -312,7 +313,20 @@ def get_project_committed_amounts(request, project_pk):
                                 hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
                         
                         if hourly_rate:
-                            total_amount += Decimal(str(float(hours) * hourly_rate))
+                            wages_cost = float(hours) * hourly_rate
+                            
+                            # Add superannuation to get total daily cost
+                            super_rate = get_employee_super_rate(
+                                employee.xero_instance_id,
+                                employee.xero_employee_id
+                            )
+                            if super_rate:
+                                super_amount = wages_cost * (super_rate / 100)
+                                total_cost = wages_cost + super_amount
+                            else:
+                                total_cost = wages_cost
+                            
+                            total_amount += Decimal(str(total_cost))
             
             # Set committed amount for Labour items (no qty/rate, just amount)
             if is_construction:

@@ -503,7 +503,12 @@ Backend Endpoints:
             <div class="tab-pane fade show active" id="calendar" role="tabpanel">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Employee Calendar</h5>
+                        <div class="d-flex align-items-center">
+                            <h5 class="mb-0 me-3">Employee Calendar</h5>
+                            <button id="recalcSuperBtn" class="btn btn-sm" style="font-size: 11px; background: var(--manila-accent); color: white; border: none;" title="Recalculate all allocations with super">
+                                Recalc Super
+                            </button>
+                        </div>
                         <div class="d-flex align-items-center">
                             <label class="mb-0" style="color: var(--manila-text); font-size: 14px; font-weight: 500; margin-right: 8px;">Employee:</label>
                             <select id="calendarEmployeeSelect" class="form-select manila-select" style="width: 220px; font-size: 14px; padding: 6px 10px; margin-right: 24px;">
@@ -608,25 +613,25 @@ Backend Endpoints:
                                         <div id="dayInputSection" class="d-none">
                                             <!-- Work Hours Row -->
                                             <div class="mb-2" style="background: #f8f9fa; padding: 8px; border-radius: 4px;">
-                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                <div class="d-flex align-items-center mb-1">
                                                     <label class="text-muted mb-0" style="width: 50px; font-size: 13px;">Work:</label>
-                                                    <select id="earningsRateSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1;">
+                                                    <select id="earningsRateSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1; height: 31px; margin-right: 10px;">
                                                         <option value="">Select rate...</option>
                                                     </select>
-                                                    <input type="number" id="dayHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px;">
-                                                    <span class="text-muted" style="font-size: 13px;">hrs</span>
+                                                    <input type="number" id="dayHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px; height: 31px;">
+                                                    <span class="text-muted" style="font-size: 13px; margin-left: 6px;">hrs</span>
                                                 </div>
                                             </div>
                                             
                                             <!-- Leave Row -->
                                             <div class="mb-2" style="background: #e8f4f8; padding: 8px; border-radius: 4px;">
-                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                <div class="d-flex align-items-center mb-1">
                                                     <label class="text-muted mb-0" style="width: 50px; font-size: 13px;">Leave:</label>
-                                                    <select id="leaveTypeSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1;">
+                                                    <select id="leaveTypeSelect" class="form-select form-select-sm" style="font-size: 13px; flex: 1; height: 31px; margin-right: 10px;">
                                                         <option value="">Select leave...</option>
                                                     </select>
-                                                    <input type="number" id="leaveHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px;">
-                                                    <span class="text-muted" style="font-size: 13px;">hrs</span>
+                                                    <input type="number" id="leaveHoursInput" class="form-control form-control-sm" min="0" max="24" step="0.5" value="0" style="width: 60px; font-size: 13px; height: 31px;">
+                                                    <span class="text-muted" style="font-size: 13px; margin-left: 6px;">hrs</span>
                                                 </div>
                                                 <div class="mb-1">
                                                     <input type="text" id="leaveCommentInput" class="form-control form-control-sm" placeholder="Comment/reason..." style="font-size: 13px;">
@@ -701,8 +706,16 @@ Backend Endpoints:
                                             </div>
                                             <!-- Daily Cost Display -->
                                             <div id="dailyCostDisplay" class="mt-2 pt-2 d-none" style="border-top: 1px dashed var(--manila-border);">
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <span class="text-muted small">Daily Total:</span>
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <span class="text-muted small">Wages:</span>
+                                                    <span id="wagesCostAmount" class="small" style="color: var(--manila-text);">$0.00</span>
+                                                </div>
+                                                <div id="superRow" class="d-flex justify-content-between align-items-center mb-1 d-none">
+                                                    <span class="text-muted small">Super (<span id="superRateDisplay">0</span>%):</span>
+                                                    <span id="superAmount" class="small" style="color: var(--manila-text);">$0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between align-items-center pt-1" style="border-top: 1px solid var(--manila-border);">
+                                                    <span class="text-muted small fw-bold">Daily Total:</span>
                                                     <span id="dailyCostAmount" class="fw-bold" style="color: var(--manila-text);">$0.00</span>
                                                 </div>
                                             </div>
@@ -1821,6 +1834,43 @@ Backend Endpoints:
     
     // Setup calendar event listeners
     function setupCalendarEventListeners() {
+        // Recalc Super button
+        const recalcSuperBtn = document.getElementById('recalcSuperBtn');
+        if (recalcSuperBtn) {
+            recalcSuperBtn.addEventListener('click', async function() {
+                if (!currentXeroInstanceId) {
+                    alert('Please select a Xero instance first');
+                    return;
+                }
+                
+                this.disabled = true;
+                this.textContent = 'Calculating...';
+                
+                try {
+                    const response = await fetch(`/core/staff_hours/allocations/super-summary/?xero_instance_id=${currentXeroInstanceId}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        alert(`Super Recalculation Complete!\n\n` +
+                            `Total Allocations: ${data.total_allocations}\n` +
+                            `Total Hours: ${data.total_hours}\n` +
+                            `Wages: $${data.total_wages.toLocaleString('en-AU', {minimumFractionDigits: 2})}\n` +
+                            `Super: $${data.total_super.toLocaleString('en-AU', {minimumFractionDigits: 2})}\n` +
+                            `Total Cost (incl. super): $${data.total_cost.toLocaleString('en-AU', {minimumFractionDigits: 2})}\n\n` +
+                            `All project labour costs now include superannuation.`);
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (e) {
+                    console.error('Error recalculating super:', e);
+                    alert('Error recalculating super: ' + e.message);
+                } finally {
+                    this.disabled = false;
+                    this.textContent = 'Recalc Super';
+                }
+            });
+        }
+        
         if (calendarEmployeeSelect) {
             calendarEmployeeSelect.addEventListener('change', function() {
                 if (this.value) {
@@ -2834,8 +2884,13 @@ Backend Endpoints:
             console.log('Allocations response:', data);
             savedAllocations = data.allocations || [];
             
-            // Update daily cost display and pay rate
-            updateDailyCostDisplay(data.daily_cost);
+            // Update daily cost display (with wages, super, and total) and pay rate
+            updateDailyCostDisplay({
+                wages_cost: data.wages_cost,
+                super_rate: data.super_rate,
+                super_amount: data.super_amount,
+                daily_cost: data.daily_cost
+            });
             if (data.rate_per_unit) {
                 const payRateEl = document.getElementById('selectedDayPayRate');
                 if (payRateEl) payRateEl.textContent = parseFloat(data.rate_per_unit).toFixed(2);
@@ -2853,13 +2908,42 @@ Backend Endpoints:
         }
     }
     
-    function updateDailyCostDisplay(dailyCost) {
+    function updateDailyCostDisplay(data) {
         const costDisplay = document.getElementById('dailyCostDisplay');
-        const costAmount = document.getElementById('dailyCostAmount');
-        if (!costDisplay || !costAmount) return;
+        const wagesCostEl = document.getElementById('wagesCostAmount');
+        const superRowEl = document.getElementById('superRow');
+        const superRateEl = document.getElementById('superRateDisplay');
+        const superAmountEl = document.getElementById('superAmount');
+        const dailyCostEl = document.getElementById('dailyCostAmount');
         
-        if (dailyCost !== null && dailyCost !== undefined) {
-            costAmount.textContent = `$${dailyCost.toFixed(2)}`;
+        if (!costDisplay || !dailyCostEl) return;
+        
+        // Handle both old format (number) and new format (object)
+        if (data !== null && data !== undefined) {
+            if (typeof data === 'number') {
+                // Legacy format - just daily cost number
+                if (wagesCostEl) wagesCostEl.textContent = `$${data.toFixed(2)}`;
+                if (superRowEl) superRowEl.classList.add('d-none');
+                dailyCostEl.textContent = `$${data.toFixed(2)}`;
+            } else {
+                // New format with wages, super, and total
+                const wagesCost = data.wages_cost || 0;
+                const superRate = data.super_rate;
+                const superAmount = data.super_amount || 0;
+                const dailyCost = data.daily_cost || wagesCost;
+                
+                if (wagesCostEl) wagesCostEl.textContent = `$${wagesCost.toFixed(2)}`;
+                
+                if (superRate && superAmount > 0) {
+                    if (superRowEl) superRowEl.classList.remove('d-none');
+                    if (superRateEl) superRateEl.textContent = superRate.toFixed(1);
+                    if (superAmountEl) superAmountEl.textContent = `$${superAmount.toFixed(2)}`;
+                } else {
+                    if (superRowEl) superRowEl.classList.add('d-none');
+                }
+                
+                dailyCostEl.textContent = `$${dailyCost.toFixed(2)}`;
+            }
             costDisplay.classList.remove('d-none');
         } else {
             costDisplay.classList.add('d-none');

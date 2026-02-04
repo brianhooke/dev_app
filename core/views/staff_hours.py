@@ -1859,6 +1859,69 @@ def get_employee_pay_rate(employee, target_date):
     return None
 
 
+def get_employee_super_rate(xero_instance_id, employee_id):
+    """
+    Get the superannuation contribution percentage for an employee from Xero.
+    Returns the SGC (Superannuation Guarantee Contribution) percentage.
+    
+    SuperMemberships structure from Xero:
+    - ContributionType: SGC, SALARYSACRIFICE, EMPLOYERADDITIONAL, etc.
+    - CalculationType: PERCENTAGEOFEARNINGS or FIXEDAMOUNT
+    - ContributionPercentage: The percentage (e.g., 11.5)
+    """
+    try:
+        xero_instance, access_token, tenant_id = get_xero_auth(xero_instance_id)
+        if not xero_instance:
+            return None
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Xero-tenant-id': tenant_id,
+            'Accept': 'application/json'
+        }
+        
+        # Fetch employee details including SuperMemberships
+        url = f'{XERO_PAYROLL_AU_URL}/Employees/{employee_id}'
+        response = requests.get(url, headers=headers, timeout=15)
+        
+        if response.status_code != 200:
+            logger.warning(f"Could not fetch employee super details: {response.status_code}")
+            return None
+        
+        data = response.json()
+        employees = data.get('Employees', [])
+        if not employees:
+            return None
+        
+        # Super details are in PayTemplate.SuperLines
+        emp_data = employees[0]
+        pay_template = emp_data.get('PayTemplate', {})
+        super_lines = pay_template.get('SuperLines', [])
+        
+        # Find the SGC (Superannuation Guarantee Contribution) rate
+        for line in super_lines:
+            contribution_type = line.get('ContributionType', '')
+            calculation_type = line.get('CalculationType', '')
+            
+            # Look for SGC contribution
+            if contribution_type == 'SGC':
+                if calculation_type == 'PERCENTAGEOFEARNINGS':
+                    # Custom percentage set
+                    percentage = line.get('Percentage')
+                    if percentage is not None:
+                        return float(percentage)
+                elif calculation_type == 'STATUTORY':
+                    # Statutory rate means current Australian SG rate
+                    # As of July 2024: 11.5%, July 2025: 12%
+                    return 11.5
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error fetching employee super rate: {e}")
+        return None
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 @login_required
@@ -1928,9 +1991,21 @@ def get_allocations(request):
         
         # Calculate daily cost using applicable pay rate
         rate_per_unit = get_employee_pay_rate(employee, target_date)
+        wages_cost = None
+        super_rate = None
+        super_amount = None
         daily_cost = None
+        
         if rate_per_unit and total_hours > 0:
-            daily_cost = round(total_hours * rate_per_unit, 2)
+            wages_cost = round(total_hours * rate_per_unit, 2)
+            
+            # Fetch employee super rate from Xero
+            super_rate = get_employee_super_rate(int(xero_instance_id), employee_id)
+            if super_rate:
+                super_amount = round(wages_cost * (super_rate / 100), 2)
+                daily_cost = round(wages_cost + super_amount, 2)
+            else:
+                daily_cost = wages_cost
         
         return JsonResponse({
             'status': 'success',
@@ -1938,6 +2013,9 @@ def get_allocations(request):
             'total_allocated': total_allocated,
             'total_hours': total_hours,
             'rate_per_unit': rate_per_unit,
+            'wages_cost': wages_cost,
+            'super_rate': super_rate,
+            'super_amount': super_amount,
             'daily_cost': daily_cost
         })
     except Exception as e:
@@ -2034,6 +2112,84 @@ def delete_allocation(request, allocation_pk):
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting allocation: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@login_required
+def get_allocation_super_summary(request):
+    """
+    Get summary of all staff hour allocations and their super-inclusive costs.
+    Used as a one-off tool to verify super has been applied to all allocations.
+    """
+    try:
+        xero_instance_id = request.GET.get('xero_instance_id')
+        if not xero_instance_id:
+            return JsonResponse({'status': 'error', 'message': 'xero_instance_id required'}, status=400)
+        
+        # Get all project allocations for this xero instance
+        allocations = StaffHoursAllocations.objects.filter(
+            allocation_type=1,  # Project allocations only
+            staff_hours__employee__xero_instance_id=xero_instance_id
+        ).select_related('staff_hours__employee', 'project', 'costing')
+        
+        total_allocations = allocations.count()
+        total_hours = 0
+        total_wages = 0
+        total_super = 0
+        total_cost = 0
+        
+        for alloc in allocations:
+            hours = float(alloc.hours or 0)
+            if hours > 0:
+                total_hours += hours
+                employee = alloc.staff_hours.employee
+                target_date = alloc.staff_hours.date
+                
+                # Get pay rate
+                pay_rate = EmployeePayRate.objects.filter(
+                    employee=employee,
+                    effective_date__lte=target_date,
+                    is_ordinary_rate=True
+                ).order_by('-effective_date').first()
+                
+                if pay_rate:
+                    hourly_rate = None
+                    if pay_rate.rate_per_unit:
+                        hourly_rate = float(pay_rate.rate_per_unit)
+                    elif pay_rate.annual_salary and pay_rate.units_per_week:
+                        weekly_hours = float(pay_rate.units_per_week)
+                        if weekly_hours > 0:
+                            hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
+                    
+                    if hourly_rate:
+                        wages = hours * hourly_rate
+                        total_wages += wages
+                        
+                        # Get super rate
+                        super_rate = get_employee_super_rate(
+                            employee.xero_instance_id,
+                            employee.xero_employee_id
+                        )
+                        if super_rate:
+                            super_amount = wages * (super_rate / 100)
+                            total_super += super_amount
+                            total_cost += wages + super_amount
+                        else:
+                            total_cost += wages
+        
+        return JsonResponse({
+            'status': 'success',
+            'total_allocations': total_allocations,
+            'total_hours': round(total_hours, 2),
+            'total_wages': round(total_wages, 2),
+            'total_super': round(total_super, 2),
+            'total_cost': round(total_cost, 2),
+            'message': f'Super calculation now applied to all {total_allocations} project allocations. Total cost including super: ${total_cost:,.2f}'
+        })
+    except Exception as e:
+        logger.error(f"Error getting allocation super summary: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 

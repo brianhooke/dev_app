@@ -83,15 +83,16 @@ def bills_global_view(request):
     
     # ===== APPROVALS SECTION COLUMNS =====
     approvals_main_columns = [
-        {'header': 'Project', 'width': '12%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '12%', 'sortable': True},
-        {'header': 'Supplier', 'width': '12%', 'sortable': True},
-        {'header': '$ Gross', 'width': '10%', 'sortable': True},
-        {'header': '$ Net', 'width': '10%', 'sortable': True},
-        {'header': '$ GST', 'width': '9%', 'sortable': True},
+        {'header': 'Project', 'width': '11%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '11%', 'sortable': True},
+        {'header': 'Supplier', 'width': '11%', 'sortable': True},
+        {'header': '$ Gross', 'width': '9%', 'sortable': True},
+        {'header': '$ Net', 'width': '9%', 'sortable': True},
+        {'header': '$ GST', 'width': '8%', 'sortable': True},
         {'header': 'Date', 'width': '8%'},
         {'header': 'Due', 'width': '8%'},
-        {'header': 'Send', 'width': '8%', 'class': 'col-action-first'},
+        {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
+        {'header': 'Mark X', 'width': '7%', 'class': 'col-action'},
         {'header': 'Return', 'width': '6%', 'class': 'col-action'},
     ]
     approvals_alloc_columns = [
@@ -191,14 +192,15 @@ def bills_global_approvals_view(request):
     """
     # Main table columns for Approvals view
     main_table_columns = [
-        {'header': 'Project', 'width': '14%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '14%', 'sortable': True},
-        {'header': 'Supplier', 'width': '14%', 'sortable': True},
-        {'header': '$ Gross', 'width': '13%', 'sortable': True},
-        {'header': '$ Net', 'width': '13%', 'sortable': True},
-        {'header': '$ GST', 'width': '13%', 'sortable': True},
-        {'header': 'Send', 'width': '8%', 'class': 'col-action-first'},
-        {'header': 'Return', 'width': '8%', 'class': 'col-action'},
+        {'header': 'Project', 'width': '13%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '13%', 'sortable': True},
+        {'header': 'Supplier', 'width': '13%', 'sortable': True},
+        {'header': '$ Gross', 'width': '11%', 'sortable': True},
+        {'header': '$ Net', 'width': '11%', 'sortable': True},
+        {'header': '$ GST', 'width': '11%', 'sortable': True},
+        {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
+        {'header': 'Mark X', 'width': '7%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '7%', 'class': 'col-action'},
     ]
     
     # Allocations columns for Approvals view (read-only)
@@ -948,7 +950,7 @@ def send_bill_to_xero(request):
 def return_bill_to_project(request, invoice_id):
     """
     Return an approved invoice back to project (from Approvals).
-    Status 2 -> 1 (allocated)
+    Status 2 -> 0 (unallocated)
     Status 103 -> 102 (PO approved, invoice uploaded)
     """
     if request.method != 'POST':
@@ -958,7 +960,7 @@ def return_bill_to_project(request, invoice_id):
         invoice = Bills.objects.get(bill_pk=invoice_id)
         
         if invoice.bill_status == 2:
-            invoice.bill_status = 1
+            invoice.bill_status = 0
         elif invoice.bill_status == 103:
             invoice.bill_status = 102
         else:
@@ -978,6 +980,52 @@ def return_bill_to_project(request, invoice_id):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f"Error returning invoice to project: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def mark_bill_as_sent(request):
+    """
+    Mark a bill as sent to Xero (status=3) WITHOUT actually sending to Xero.
+    Used for bills that have been manually processed or don't need Xero integration.
+    
+    Status transitions:
+    - Status 2 -> 3 (approved -> marked as sent)
+    - Status 103 -> 104 (PO approved -> marked as sent)
+    """
+    try:
+        data = json.loads(request.body)
+        bill_pk = data.get('bill_pk')
+        
+        if not bill_pk:
+            return JsonResponse({'status': 'error', 'message': 'bill_pk required'}, status=400)
+        
+        invoice = Bills.objects.get(bill_pk=bill_pk)
+        
+        if invoice.bill_status == 2:
+            invoice.bill_status = 3
+        elif invoice.bill_status == 103:
+            invoice.bill_status = 104
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Bill status {invoice.bill_status} cannot be marked as sent'
+            }, status=400)
+        
+        invoice.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'new_status': invoice.bill_status,
+            'message': 'Bill marked as sent (not sent to Xero)'
+        })
+    except Bills.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Bill not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error marking bill as sent: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 

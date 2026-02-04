@@ -1762,7 +1762,15 @@
                     .text('Send');
                 row.append($('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn));
                 
-                // 10. Return to Project button
+                // 10. Mark X button (marks as sent without actually sending to Xero)
+                var markXBtn = $('<button>')
+                    .addClass('btn btn-sm btn-secondary approvals-mark-x-btn')
+                    .attr('data-bill-pk', bill.bill_pk)
+                    .text('Mark X')
+                    .attr('title', 'Mark as sent to Xero without sending');
+                row.append($('<td>').addClass('col-action').css('text-align', 'center').append(markXBtn));
+                
+                // 11. Return to Project button
                 var returnBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning approvals-return-btn')
                     .attr('data-bill-pk', bill.bill_pk)
@@ -1872,7 +1880,7 @@
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load approved bills:', error);
-                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-danger">Failed to load bills</td></tr>');
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-danger">Failed to load bills</td></tr>');
             }
         });
     };
@@ -1883,6 +1891,53 @@
         
         // Unbind previous handlers
         $(document).off(ns);
+        
+        // Mark X button - marks as sent without actually sending to Xero
+        $(document).on('click' + ns, '.approvals-mark-x-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var button = $(this);
+            var billPk = button.attr('data-bill-pk');
+            var row = button.closest('tr');
+            
+            if (confirm('Mark this bill as sent to Xero WITHOUT actually sending it?\n\nThis will update the status as if sent, but no data will be pushed to Xero.')) {
+                button.prop('disabled', true).text('...');
+                
+                $.ajax({
+                    url: '/core/mark_bill_as_sent/',
+                    type: 'POST',
+                    headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ bill_pk: billPk }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                                if (window.currentSelectedBillPk == billPk) {
+                                    $('#billsApprovalsAllocationsTableBody').empty();
+                                    $('#billsApprovalsPdfViewer').hide();
+                                    $('#billsApprovalsViewerPlaceholder').show();
+                                    window.currentSelectedBillPk = null;
+                                    window.currentBillData = null;
+                                }
+                                
+                                // Check if table is now empty
+                                if ($('#billsApprovalsMainTableBody tr').length === 0) {
+                                    $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                }
+                            });
+                        } else {
+                            alert('Error: ' + response.message);
+                            button.prop('disabled', false).text('Mark X');
+                        }
+                    },
+                    error: function(xhr) {
+                        alert('Failed to mark bill: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                        button.prop('disabled', false).text('Mark X');
+                    }
+                });
+            }
+        });
         
         // Return to Project button
         $(document).on('click' + ns, '.approvals-return-btn', function(e) {
@@ -1912,7 +1967,7 @@
                             
                             // Check if table is now empty
                             if ($('#billsApprovalsMainTableBody tr').length === 0) {
-                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="9" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
                             }
                         });
                     },
