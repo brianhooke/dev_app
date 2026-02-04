@@ -44,7 +44,7 @@ from .views.api_diagnostics import api_diagnostics
 from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
 from .views.stocktake import (
-    toggle_stocktake_inclusion, get_stocktake_allocations,
+    toggle_stocktake_inclusion, toggle_xero_instance_stocktake, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
     delete_stocktake_allocation, approve_stocktake_bill,
     # Snap APIs
@@ -284,6 +284,7 @@ urlpatterns = [
     path('get_project_items/<int:project_pk>/', get_project_items, name='get_project_items'),
     path('get_categories_and_items/', get_categories_and_items_by_type, name='get_categories_and_items'),
     path('toggle_stocktake_inclusion/', toggle_stocktake_inclusion, name='toggle_stocktake_inclusion'),
+    path('toggle_xero_instance_stocktake/', toggle_xero_instance_stocktake, name='toggle_xero_instance_stocktake'),
     path('get_stocktake_allocations/<int:bill_pk>/', get_stocktake_allocations, name='get_stocktake_allocations'),
     path('create_stocktake_allocation/', create_stocktake_allocation, name='create_stocktake_allocation'),
     path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),

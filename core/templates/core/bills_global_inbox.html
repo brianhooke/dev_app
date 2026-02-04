@@ -269,6 +269,9 @@
                 
                 // Bind validation to input changes
                 bindInboxInputHandlers();
+                
+                // Bind xero-project-select change handlers directly (delegation unreliable)
+                bindXeroProjectSelectHandlers();
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load bills:', error);
@@ -282,6 +285,13 @@
             var $select = $(this);
             // Skip if already initialized or disabled
             if ($select.data('searchable-dropdown') || $select.prop('disabled')) {
+                return;
+            }
+            
+            // Skip if row has stocktake selected (handled separately)
+            var $row = $select.closest('tr');
+            var projectVal = $row.find('.xero-project-select').val();
+            if (projectVal && projectVal.startsWith('stocktake_')) {
                 return;
             }
             
@@ -311,6 +321,7 @@
         $(document).off('change.billsInbox input.billsInbox', '#billsInboxMainTableBody');
         
         $(document).on('change.billsInbox input.billsInbox', '#billsInboxMainTableBody .xero-project-select, #billsInboxMainTableBody .supplier-select, #billsInboxMainTableBody .bill-number-input, #billsInboxMainTableBody .net-input, #billsInboxMainTableBody .gst-input', function() {
+            console.log('[bindInboxInputHandlers] Change event fired on:', this.className, 'value:', $(this).val());
             var row = $(this).closest('tr');
             var billPk = row.attr('data-bill-pk');
             validateInboxSendButton(billPk);
@@ -337,8 +348,22 @@
         });
     }
     
+    // Bind xero-project-select change handlers directly (delegation unreliable)
+    function bindXeroProjectSelectHandlers() {
+        $('#billsInboxMainTableBody .xero-project-select').off('change.stocktake').on('change.stocktake', function() {
+            var $this = $(this);
+            var $row = $this.closest('tr');
+            updateSupplierDropdown($row, $this.val());
+        });
+    }
+    
     // Update supplier dropdown based on Xero Instance selection
     function updateSupplierDropdown(row, selectedValue) {
+        // Stocktake handling is done in bills_global.html - exit early before any DOM manipulation
+        if (selectedValue && selectedValue.startsWith('stocktake_')) {
+            return;
+        }
+        
         var supplierSelect = row.find('.supplier-select');
         supplierSelect.empty().append($('<option>').val('').text('Select Supplier...'));
         
@@ -356,11 +381,6 @@
                 return p.projects_pk === projectPk;
             });
             if (project) xeroInstanceId = project.xero_instance_id;
-        } else if (selectedValue && selectedValue.startsWith('stocktake_')) {
-            // Stocktake uses the first available Xero instance
-            if (window.billsInboxData && window.billsInboxData.xero_instances && window.billsInboxData.xero_instances.length > 0) {
-                xeroInstanceId = window.billsInboxData.xero_instances[0].xero_instance_pk;
-            }
         }
         
         // Store xeroInstanceId on the row for later use

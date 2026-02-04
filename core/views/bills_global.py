@@ -1164,7 +1164,7 @@ def get_bills_list(request):
     ).prefetch_related('bill_allocations').order_by('-created_at')
     
     # Get dropdown options
-    xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name')
+    xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name', 'stocktake')
     suppliers = Contacts.objects.filter(status='ACTIVE').order_by('name').values('contact_pk', 'name', 'xero_instance_id')
     projects = Projects.objects.filter(archived=False).order_by('project').values('projects_pk', 'project', 'xero_instance_id')
     

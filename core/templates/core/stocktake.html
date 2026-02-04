@@ -787,23 +787,46 @@ Tabs:
 
             <!-- Setup Tab -->
             <div class="tab-pane fade" id="stocktakeSetup" role="tabpanel" style="flex-direction: row !important; gap: 16px; padding: 12px 0;">
-                <!-- LHS: Project Types List -->
-                <div class="stocktake-setup-left" style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;">
-                    <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
-                        Project Types
+                <!-- LHS: Xero Instances + Project Types List -->
+                <div class="stocktake-setup-left" style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 12px;">
+                    <!-- Xero Instances Section -->
+                    <div style="flex-shrink: 0;">
+                        <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
+                            Xero Instances
+                        </div>
+                        <div class="setup-panel-body" style="border: 1px solid var(--manila-border); border-radius: 0 0 6px 6px; background: white;">
+                            <table class="reusable-table" id="stocktakeXeroInstancesTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60%;">Instance</th>
+                                        <th style="width: 40%; text-align: center;">Included</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stocktakeXeroInstancesBody">
+                                    <tr><td colspan="2" class="text-muted text-center py-2" style="font-size: 12px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="setup-panel-body" style="flex: 1; overflow-y: auto; border: 1px solid var(--manila-border); border-radius: 0 0 6px 6px; background: white;">
-                        <table class="reusable-table" id="stocktakeProjectTypesTable" style="margin: 0;">
-                            <thead>
-                                <tr>
-                                    <th style="width: 60%;">Type</th>
-                                    <th style="width: 40%; text-align: center;">Included</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stocktakeProjectTypesBody">
-                                <tr><td colspan="2" class="text-muted text-center py-3">Loading...</td></tr>
-                            </tbody>
-                        </table>
+                    
+                    <!-- Project Types Section -->
+                    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                        <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
+                            Project Types
+                        </div>
+                        <div class="setup-panel-body" style="flex: 1; overflow-y: auto; border: 1px solid var(--manila-border); border-radius: 0 0 6px 6px; background: white;">
+                            <table class="reusable-table" id="stocktakeProjectTypesTable" style="margin: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60%;">Type</th>
+                                        <th style="width: 40%; text-align: center;">Included</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stocktakeProjectTypesBody">
+                                    <tr><td colspan="2" class="text-muted text-center py-3">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 
@@ -835,6 +858,119 @@ Tabs:
 </div>
 
 <script>
+// Comprehensive debug function for stocktake allocations table
+window.debugStocktakeAllocations = function() {
+    var results = {};
+    
+    // Helper to get all computed styles that matter
+    function getStyles(el, name) {
+        if (!el || !el.length) return { error: 'NOT FOUND' };
+        var computed = window.getComputedStyle(el[0]);
+        return {
+            element: el[0],
+            width: computed.width,
+            minWidth: computed.minWidth,
+            maxWidth: computed.maxWidth,
+            padding: computed.padding,
+            margin: computed.margin,
+            display: computed.display,
+            position: computed.position,
+            overflow: computed.overflow,
+            overflowX: computed.overflowX,
+            overflowY: computed.overflowY,
+            boxSizing: computed.boxSizing,
+            tableLayout: computed.tableLayout,
+            flexGrow: computed.flexGrow,
+            flexShrink: computed.flexShrink,
+            flexBasis: computed.flexBasis
+        };
+    }
+    
+    // Get all parent elements up the chain
+    var allocTbody = $('#stocktakeAllocAllocationsTableBody');
+    var allocTable = $('#stocktakeAllocAllocationsTable');
+    var tableWrapper = allocTable.parent(); // div wrapping table
+    var allocSection = $('#stocktakeAllocAllocationsSection');
+    var sectionDivider = $('.stocktakeAlloc-section-divider');
+    var leftPanel = $('.stocktakeAlloc-left-panel');
+    var container = $('.stocktakeAlloc-container');
+    
+    console.log('=== COMPREHENSIVE DEBUG: Stocktake Allocations ===');
+    
+    console.log('\n1. CONTAINER (.stocktakeAlloc-container):');
+    results.container = getStyles(container, 'container');
+    console.log(results.container);
+    
+    console.log('\n2. LEFT PANEL (.stocktakeAlloc-left-panel):');
+    results.leftPanel = getStyles(leftPanel, 'leftPanel');
+    console.log(results.leftPanel);
+    
+    console.log('\n3. SECTION DIVIDER (.stocktakeAlloc-section-divider):');
+    results.sectionDivider = getStyles(sectionDivider, 'sectionDivider');
+    console.log(results.sectionDivider);
+    
+    console.log('\n4. ALLOCATIONS SECTION (#stocktakeAllocAllocationsSection):');
+    results.allocSection = getStyles(allocSection, 'allocSection');
+    console.log(results.allocSection);
+    
+    console.log('\n5. TABLE WRAPPER (div around table):');
+    results.tableWrapper = getStyles(tableWrapper, 'tableWrapper');
+    console.log(results.tableWrapper);
+    
+    console.log('\n6. ALLOCATIONS TABLE (#stocktakeAllocAllocationsTable):');
+    results.allocTable = getStyles(allocTable, 'allocTable');
+    console.log(results.allocTable);
+    
+    console.log('\n7. THEAD:');
+    var thead = allocTable.find('thead');
+    results.thead = getStyles(thead, 'thead');
+    console.log(results.thead);
+    
+    console.log('\n8. THEAD TR:');
+    var theadTr = thead.find('tr');
+    results.theadTr = getStyles(theadTr, 'theadTr');
+    console.log(results.theadTr);
+    
+    console.log('\n9. TBODY (#stocktakeAllocAllocationsTableBody):');
+    results.tbody = getStyles(allocTbody, 'tbody');
+    console.log(results.tbody);
+    
+    console.log('\n10. FIRST TBODY TR:');
+    var tbodyTr = allocTbody.find('tr').first();
+    results.tbodyTr = getStyles(tbodyTr, 'tbodyTr');
+    console.log(results.tbodyTr);
+    
+    console.log('\n11. FIRST TD in first row:');
+    var firstTd = tbodyTr.find('td').first();
+    results.firstTd = getStyles(firstTd, 'firstTd');
+    console.log(results.firstTd);
+    
+    // Check colgroup
+    console.log('\n12. COLGROUP COLS:');
+    var cols = allocTable.find('colgroup col');
+    results.cols = [];
+    cols.each(function(i) {
+        var colStyle = window.getComputedStyle(this);
+        results.cols.push({ index: i, width: colStyle.width });
+        console.log('  col ' + i + ': ' + colStyle.width);
+    });
+    
+    // Check for any CSS that might be overriding
+    console.log('\n13. INLINE STYLES:');
+    console.log('  tbody inline:', allocTbody.attr('style'));
+    console.log('  table inline:', allocTable.attr('style'));
+    console.log('  allocSection inline:', allocSection.attr('style'));
+    
+    // Check actual bounding rects
+    console.log('\n14. BOUNDING CLIENT RECTS:');
+    if (allocTable.length) console.log('  table:', allocTable[0].getBoundingClientRect());
+    if (allocTbody.length) console.log('  tbody:', allocTbody[0].getBoundingClientRect());
+    if (theadTr.length) console.log('  thead tr:', theadTr[0].getBoundingClientRect());
+    if (tbodyTr.length) console.log('  tbody tr:', tbodyTr[0].getBoundingClientRect());
+    
+    return results;
+};
+
 (function() {
     'use strict';
     
@@ -851,15 +987,21 @@ Tabs:
             success: function(response) {
                 if (response.status === 'success') {
                     var allocations = response.allocations || [];
-                    if (allocations.length === 0) {
+                    if (allocations.length === 0 && window.stocktakeFilterMode !== 'approved') {
                         addNewStocktakeAllocationRow();
-                    } else {
+                    } else if (allocations.length > 0) {
                         allocations.forEach(function(alloc) {
                             var row = createStocktakeAllocationRow(alloc);
                             tbody.append(row);
                         });
                     }
                     updateStocktakeStillToAllocate();
+                    // Show Add Row button only for unallocated bills (not approved)
+                    if (window.stocktakeFilterMode !== 'approved') {
+                        $('#stocktakeAllocAddAllocationBtn').show();
+                    } else {
+                        $('#stocktakeAllocAddAllocationBtn').hide();
+                    }
                 }
             },
             error: function(xhr, status, error) {
@@ -885,8 +1027,9 @@ Tabs:
                 gstField: true,
                 confirmDelete: true,
                 reloadAfterDelete: false,
-                showSaveButton: true,
-                alwaysShowAddButton: true
+                showSaveButton: false,
+                alwaysShowAddButton: true,
+                customAddRowHandler: true
             },
             data: {
                 pkField: 'bill_pk'
@@ -918,15 +1061,19 @@ Tabs:
                     row.append($('<td>').addClass('net-cell').text(bill.total_net !== null ? Utils.formatCurrency(bill.total_net) : ''));
                     row.append($('<td>').addClass('gst-cell').text(bill.total_gst !== null ? Utils.formatCurrency(bill.total_gst) : ''));
                     
-                    // Approve button
-                    var approveBtn = $('<button>')
-                        .addClass('btn btn-sm btn-secondary approve-stocktake-btn')
-                        .text('Approve')
-                        .css('font-size', '10px')
-                        .attr('data-bill-pk', bill.bill_pk)
-                        .prop('disabled', true)
-                        .attr('title', 'Approve bill (enabled when fully allocated)');
-                    row.append($('<td>').addClass('col-action').append(approveBtn));
+                    // Approve button - only show for unallocated bills (not already approved)
+                    var actionTd = $('<td>').addClass('col-action');
+                    if (window.stocktakeFilterMode !== 'approved') {
+                        var approveBtn = $('<button>')
+                            .addClass('btn btn-sm btn-secondary approve-stocktake-btn')
+                            .text('Approve')
+                            .css('font-size', '10px')
+                            .attr('data-bill-pk', bill.bill_pk)
+                            .prop('disabled', true)
+                            .attr('title', 'Approve bill (enabled when fully allocated)');
+                        actionTd.append(approveBtn);
+                    }
+                    row.append(actionTd);
                     
                     return row;
                 },
@@ -943,9 +1090,8 @@ Tabs:
                     loadStocktakeAllocations(pk);
                 },
                 onAllocationsLoaded: function(sectionId, allocations) {
-                    if (!allocations || allocations.length === 0) {
-                        addNewStocktakeAllocationRow();
-                    }
+                    // Note: Don't add row here - loadStocktakeAllocations handles it
+                    // (adding here causes duplicate rows since we use custom load function)
                     updateStocktakeStillToAllocate();
                 }
             },
@@ -961,7 +1107,7 @@ Tabs:
                 }
             },
             api: {
-                loadAllocations: '/core/get_stocktake_allocations/{pk}/',
+                // loadAllocations removed - using custom loadStocktakeAllocations in onRowSelect
                 createAllocation: '/core/create_stocktake_allocation/',
                 saveAllocation: '/core/update_stocktake_allocation/{pk}/',
                 deleteAllocation: '/core/delete_stocktake_allocation/{pk}/'
@@ -1013,7 +1159,23 @@ Tabs:
     function createStocktakeAllocationRow(allocation) {
         var row = $('<tr>').attr('data-allocation-pk', allocation.allocation_pk || '');
         var cls = 'stocktake-alloc';
+        var isReadOnly = window.stocktakeFilterMode === 'approved';
         
+        // Read-only mode: plain text cells
+        if (isReadOnly) {
+            row.append($('<td>').text(allocation.project_type || '-'));
+            row.append($('<td>').text(allocation.item_name || '-'));
+            row.append($('<td>').text(allocation.unit || '-'));
+            row.append($('<td>').text(allocation.qty !== null ? allocation.qty : '-'));
+            row.append($('<td>').text(allocation.rate !== null ? Utils.formatMoney(allocation.rate) : '-'));
+            row.append($('<td>').text(allocation.amount !== null ? Utils.formatMoney(allocation.amount) : '-'));
+            row.append($('<td>').text(allocation.gst_amount !== null ? Utils.formatMoney(allocation.gst_amount) : '-'));
+            row.append($('<td>').text(allocation.notes || '-'));
+            row.append($('<td>').addClass('col-action')); // Empty action column
+            return row;
+        }
+        
+        // Editable mode: inputs and dropdowns
         // 1. Project Type dropdown
         var projectTypeSelect = $('<select>').addClass('form-control form-control-sm ' + cls + '-project-type-select');
         projectTypeSelect.append($('<option>').val('').text('Select Type...'));
@@ -1289,14 +1451,29 @@ Tabs:
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             success: function(response) {
                 if (response.status === 'success') {
+                    // Update bill_status in frontend data so it shows in "approved" filter
+                    if (window.stocktakeData && window.stocktakeData.bills) {
+                        var bill = window.stocktakeData.bills.find(function(b) { 
+                            return b.bill_pk == billPk; 
+                        });
+                        if (bill) {
+                            bill.bill_status = 1; // Allocated/approved status
+                        }
+                    }
+                    
                     btn.html('<i class="fas fa-check"></i>').addClass('btn-success');
                     setTimeout(function() {
                         row.fadeOut(300, function() {
-                            row.remove();
+                            $(this).remove(); // Use $(this) to ensure correct element
                             $('#stocktakeAllocAllocationsTableBody').empty();
                             window.currentSelectedBill = null;
-                            // Recalculate footer totals after row removal
-                            AllocationsManager.recalculateFooterTotals('stocktakeAlloc');
+                            window.currentSelectedBillPk = null;
+                            
+                            // Recalculate footer totals after row is fully removed from DOM
+                            setTimeout(function() {
+                                AllocationsManager.recalculateFooterTotals('stocktakeAlloc');
+                            }, 10);
+                            
                             var firstRow = $('#stocktakeAllocMainTableBody tr').first();
                             if (firstRow.length && firstRow.attr('data-pk')) {
                                 AllocationsManager.selectRow('stocktakeAlloc', firstRow);
@@ -1316,9 +1493,12 @@ Tabs:
     });
     
     // Add Row button handler
-    $(document).on('click', '#stocktakeAllocAddRowBtn, .stocktakeAlloc-add-btn', function() {
+    $(document).on('click', '#stocktakeAllocAddAllocationBtn, #stocktakeAllocAddRowBtn, .stocktakeAlloc-add-btn', function() {
         addNewStocktakeAllocationRow();
     });
+    
+    // Track filter mode: 'unallocated' (status 0) or 'approved' (status 1,2,3,4)
+    window.stocktakeFilterMode = 'unallocated';
     
     // Load Stocktake bills
     window.loadStocktakeBills = function() {
@@ -1330,9 +1510,18 @@ Tabs:
             success: function(response) {
                 window.stocktakeData = response;
                 
-                var stocktakeBills = response.bills.filter(function(bill) {
-                    return bill.is_stocktake === true && bill.bill_status === 0;
-                });
+                var stocktakeBills;
+                if (window.stocktakeFilterMode === 'approved') {
+                    // Show approved/allocated bills (status 1, 2, 3, or 4)
+                    stocktakeBills = response.bills.filter(function(bill) {
+                        return bill.is_stocktake === true && [1, 2, 3, 4].indexOf(bill.bill_status) !== -1;
+                    });
+                } else {
+                    // Default: show unallocated bills (status 0)
+                    stocktakeBills = response.bills.filter(function(bill) {
+                        return bill.is_stocktake === true && bill.bill_status === 0;
+                    });
+                }
                 
                 stocktakeBills.forEach(function(bill) {
                     if (bill.contact_pk && response.suppliers) {
@@ -1354,6 +1543,19 @@ Tabs:
     window.initStocktakeSection = function() {
         console.log('[Stocktake] Initializing stocktake section');
         initAllocationsManager();
+        
+        // Add filter toggle button below main table (only once)
+        if (!$('#stocktakeFilterToggleBtn').length) {
+            var toggleBtn = $('<button>')
+                .attr('id', 'stocktakeFilterToggleBtn')
+                .addClass('btn btn-sm btn-outline-secondary')
+                .css({ 'margin-top': '8px', 'font-size': '11px' })
+                .text('Show Approved Bills');
+            // Wrap in a div to prevent full-width stretching from flex parent
+            var btnWrapper = $('<div>').css({ 'display': 'block' }).append(toggleBtn);
+            $('.stocktakeAlloc-table-container').first().after(btnWrapper);
+        }
+        
         // Load project types first for allocation dropdowns
         loadProjectTypes(function() {
             window.loadStocktakeBills();
@@ -1362,13 +1564,33 @@ Tabs:
         console.log('[Stocktake] Section initialized');
     };
     
+    // Filter toggle button click handler
+    $(document).on('click', '#stocktakeFilterToggleBtn', function() {
+        var btn = $(this);
+        if (window.stocktakeFilterMode === 'unallocated') {
+            window.stocktakeFilterMode = 'approved';
+            btn.text('Show Unallocated Bills');
+        } else {
+            window.stocktakeFilterMode = 'unallocated';
+            btn.text('Show Approved Bills');
+        }
+        // Clear selection manually (AllocationsManager.clearSelection doesn't exist)
+        window.currentSelectedBill = null;
+        window.currentSelectedBillPk = null;
+        $('#stocktakeAllocMainTableBody tr').removeClass('selected-row');
+        $('#stocktakeAllocAllocationsTableBody').empty();
+        $('#stocktakeAllocAddAllocationBtn').hide();
+        window.loadStocktakeBills();
+    });
+    
     // ========== SETUP TAB FUNCTIONS ==========
     
     var setupData = {
         projectTypes: [],
         categories: [],
         costings: [],
-        selectedProjectType: null
+        selectedProjectType: null,
+        xeroInstances: []
     };
     
     function initSetupTab() {
@@ -1384,12 +1606,103 @@ Tabs:
                 $('#stocktakeTabs .nav-link').removeClass('active');
                 $(this).addClass('active');
                 
-                // Load project types when setup tab is clicked
-                if (target === '#stocktakeSetup' && setupData.projectTypes.length === 0) {
-                    loadProjectTypes();
+                // Load xero instances and project types when setup tab is clicked
+                if (target === '#stocktakeSetup') {
+                    if (setupData.xeroInstances.length === 0) {
+                        loadXeroInstances();
+                    }
+                    if (setupData.projectTypes.length === 0) {
+                        loadProjectTypes();
+                    }
                 }
             });
         });
+    }
+    
+    // Load Xero instances for stocktake setup
+    function loadXeroInstances() {
+        $.ajax({
+            url: '/core/get_xero_instances_list/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success' || response.xero_instances) {
+                    setupData.xeroInstances = response.xero_instances || [];
+                    renderXeroInstances();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake Setup] Failed to load Xero instances:', error);
+                $('#stocktakeXeroInstancesBody').html('<tr><td colspan="2" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
+            }
+        });
+    }
+    
+    // Render Xero instances table
+    function renderXeroInstances() {
+        var tbody = $('#stocktakeXeroInstancesBody');
+        tbody.empty();
+        
+        if (setupData.xeroInstances.length === 0) {
+            tbody.html('<tr><td colspan="2" class="text-muted text-center py-2" style="font-size: 12px;">No Xero instances found</td></tr>');
+            return;
+        }
+        
+        setupData.xeroInstances.forEach(function(xi) {
+            var isIncluded = xi.stocktake === 1;
+            var row = $('<tr class="xero-instance-row"></tr>');
+            row.attr('data-xero-instance-pk', xi.xero_instance_pk);
+            row.addClass(isIncluded ? 'stocktake-included' : 'stocktake-excluded');
+            
+            row.append($('<td>').text(xi.xero_name));
+            
+            var checkbox = $('<input type="checkbox" class="xero-instance-stocktake-checkbox">')
+                .attr('data-xero-instance-pk', xi.xero_instance_pk)
+                .prop('checked', isIncluded);
+            checkbox.on('change', function(e) {
+                e.stopPropagation();
+                var checked = $(this).prop('checked');
+                toggleXeroInstanceStocktake(xi.xero_instance_pk, checked, row);
+                // Update local data
+                xi.stocktake = checked ? 1 : 0;
+            });
+            row.append($('<td style="text-align: center;">').append(checkbox));
+            
+            tbody.append(row);
+        });
+    }
+    
+    // Toggle Xero instance stocktake inclusion
+    function toggleXeroInstanceStocktake(xeroInstancePk, included, row) {
+        $.ajax({
+            url: '/core/toggle_xero_instance_stocktake/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({
+                xero_instance_pk: xeroInstancePk,
+                included: included
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    row.removeClass('stocktake-included stocktake-excluded');
+                    row.addClass(included ? 'stocktake-included' : 'stocktake-excluded');
+                } else {
+                    console.error('[Stocktake] Toggle failed:', response.message);
+                    // Revert checkbox
+                    row.find('input[type="checkbox"]').prop('checked', !included);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('[Stocktake] Toggle error:', error);
+                // Revert checkbox
+                row.find('input[type="checkbox"]').prop('checked', !included);
+            }
+        });
+    }
+    
+    // Get Xero instances that are included in stocktake
+    function getIncludedXeroInstances() {
+        return setupData.xeroInstances.filter(function(xi) { return xi.stocktake === 1; });
     }
     
     function loadProjectTypes(callback) {

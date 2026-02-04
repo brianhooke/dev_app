@@ -25,6 +25,18 @@
 
 <!-- Bills Inbox compact styling -->
 <style>
+    /* Hide searchable dropdown wrapper for stocktake rows */
+    tr.stocktake-mode .searchable-dropdown-wrapper {
+        display: none !important;
+    }
+    
+    /* Add left padding to bills left panels */
+    .billsInbox-left-panel,
+    .billsDirect-left-panel,
+    .billsApprovals-left-panel {
+        padding-left: 12px !important;
+    }
+    
     /* Compact styling for entire Bills Inbox table */
     #billsInboxMainTable {
         font-size: 10px;
@@ -470,6 +482,13 @@
             var $select = $(this);
             // Skip if already initialized or disabled
             if ($select.data('searchable-dropdown') || $select.prop('disabled')) {
+                return;
+            }
+            
+            // Skip if row has stocktake selected (handled separately)
+            var $row = $select.closest('tr');
+            var projectVal = $row.find('.xero-project-select').val();
+            if (projectVal && projectVal.startsWith('stocktake_')) {
                 return;
             }
             
@@ -2187,6 +2206,276 @@
     });
     
 })();
+
+// Debug function to inspect padding/margin between containers
+window.debugBillsLayout = function(sectionId) {
+    sectionId = sectionId || 'billsApprovals';
+    var leftPanel = $('.' + sectionId + '-left-panel');
+    var tableContainer = $('#' + sectionId + 'TableContainer');
+    var allocationsSection = $('#' + sectionId + 'AllocationsSection');
+    var outerTableContainer = tableContainer.parent();
+    
+    console.log('=== DEBUG: ' + sectionId + ' Layout ===');
+    console.log('Left Panel:', leftPanel.length ? leftPanel[0] : 'NOT FOUND');
+    console.log('  - padding:', leftPanel.css('padding'));
+    console.log('  - gap:', leftPanel.css('gap'));
+    console.log('  - computed style:', window.getComputedStyle(leftPanel[0]));
+    
+    console.log('Outer Table Container (.table-container):', outerTableContainer.length ? outerTableContainer[0] : 'NOT FOUND');
+    console.log('  - margin:', outerTableContainer.css('margin'));
+    console.log('  - margin-top:', outerTableContainer.css('margin-top'));
+    console.log('  - padding:', outerTableContainer.css('padding'));
+    
+    console.log('Table Container (#' + sectionId + 'TableContainer):', tableContainer.length ? tableContainer[0] : 'NOT FOUND');
+    console.log('  - margin:', tableContainer.css('margin'));
+    console.log('  - padding:', tableContainer.css('padding'));
+    
+    console.log('Allocations Section:', allocationsSection.length ? allocationsSection[0] : 'NOT FOUND');
+    console.log('  - margin:', allocationsSection.css('margin'));
+    console.log('  - padding:', allocationsSection.css('padding'));
+    
+    // Return structured data
+    return {
+        leftPanel: {
+            el: leftPanel[0],
+            padding: leftPanel.css('padding'),
+            gap: leftPanel.css('gap'),
+            paddingTop: leftPanel.css('padding-top')
+        },
+        outerTableContainer: {
+            el: outerTableContainer[0],
+            margin: outerTableContainer.css('margin'),
+            marginTop: outerTableContainer.css('margin-top'),
+            padding: outerTableContainer.css('padding')
+        },
+        tableContainer: {
+            el: tableContainer[0],
+            margin: tableContainer.css('margin'),
+            padding: tableContainer.css('padding')
+        },
+        allocationsSection: {
+            el: allocationsSection[0],
+            margin: allocationsSection.css('margin'),
+            padding: allocationsSection.css('padding')
+        }
+    };
+};
+
+// Auto-bind xero-project-select handlers when inbox loads
+$(document).on('ajaxComplete', function(event, xhr, settings) {
+    if (settings.url && settings.url.indexOf('get_bills_list') !== -1) {
+        setTimeout(function() {
+            window.bindXeroProjectSelectHandlers();
+        }, 100);
+    }
+});
+
+// Bind xero-project-select change handlers
+window.bindXeroProjectSelectHandlers = function() {
+    var selects = $('#billsInboxMainTableBody .xero-project-select');
+    if (selects.length === 0) return;
+    
+    selects.off('change.xeroProject').on('change.xeroProject', function() {
+        var $this = $(this);
+        var $row = $this.closest('tr');
+        var value = $this.val();
+        
+        if (value && value.startsWith('stocktake_')) {
+            // Stocktake selected - show Xero instance radio buttons
+            var stocktakeInstances = (window.billsInboxData.xero_instances || []).filter(function(xi) {
+                return xi.stocktake === 1;
+            });
+            
+            if (stocktakeInstances.length > 0) {
+                var supplierCell = $row.find('.supplier-cell');
+                var supplierSelect = $row.find('.supplier-select');
+                
+                // Mark row as stocktake mode - CSS will hide the searchable-dropdown-wrapper
+                $row.addClass('stocktake-mode');
+                
+                // Hide original supplier select
+                supplierSelect.hide();
+                
+                // Remove any existing stocktake UI (will recreate)
+                supplierCell.find('.stocktake-instance-selector').remove();
+                supplierCell.find('.stocktake-supplier-dropdown').remove();
+                
+                // Create instance selector with radio buttons
+                var instanceSelector = $('<div class="stocktake-instance-selector" style="margin-bottom: 6px;">');
+                stocktakeInstances.forEach(function(xi, index) {
+                    var radioId = 'stocktake_radio_' + $row.attr('data-bill-pk') + '_' + xi.xero_instance_pk;
+                    var label = $('<label style="display: block; margin: 2px 0; font-size: 11px; cursor: pointer;">');
+                    var radio = $('<input type="radio">')
+                        .attr('name', 'xero_instance_' + $row.attr('data-bill-pk'))
+                        .attr('id', radioId)
+                        .val(xi.xero_instance_pk)
+                        .addClass('stocktake-xero-radio');
+                    if (index === 0) radio.prop('checked', true);
+                    label.append(radio).append($('<span>').text(' ' + xi.xero_name));
+                    instanceSelector.append(label);
+                });
+                
+                supplierCell.prepend(instanceSelector);
+                
+                // Create supplier dropdown for stocktake
+                var stocktakeSupplierSelect = $('<select class="form-control form-control-sm stocktake-supplier-dropdown">');
+                stocktakeSupplierSelect.append($('<option>').val('').text('Select Supplier...'));
+                supplierCell.append(stocktakeSupplierSelect);
+                
+                // Function to populate suppliers based on selected instance
+                var populateStocktakeSuppliers = function(xeroInstanceId) {
+                    stocktakeSupplierSelect.empty().append($('<option>').val('').text('Select Supplier...'));
+                    if (window.billsInboxData && window.billsInboxData.suppliers) {
+                        window.billsInboxData.suppliers.forEach(function(supplier) {
+                            if (supplier.xero_instance_id === xeroInstanceId) {
+                                stocktakeSupplierSelect.append(
+                                    $('<option>').val(supplier.contact_pk).text(supplier.name)
+                                );
+                            }
+                        });
+                    }
+                };
+                
+                // Initial populate with first instance
+                populateStocktakeSuppliers(stocktakeInstances[0].xero_instance_pk);
+                
+                // Bind radio button change handler
+                instanceSelector.find('.stocktake-xero-radio').on('change', function() {
+                    var selectedInstanceId = parseInt($(this).val());
+                    populateStocktakeSuppliers(selectedInstanceId);
+                });
+            }
+        } else {
+            // Not stocktake - remove stocktake mode and show normal supplier dropdown
+            $row.removeClass('stocktake-mode');
+            var supplierCell = $row.find('.supplier-cell');
+            supplierCell.find('.stocktake-instance-selector').remove();
+            supplierCell.find('.stocktake-supplier-dropdown').remove();
+        }
+    });
+};
+
+// Debug function for stocktake supplier dropdown issue
+window.debugStocktakeDropdowns = function() {
+    console.log('=== DEBUG: Stocktake Dropdowns ===');
+    
+    var rows = $('#billsInboxMainTableBody tr');
+    console.log('1. Total rows in inbox:', rows.length);
+    
+    rows.each(function(i) {
+        var $row = $(this);
+        var billPk = $row.attr('data-bill-pk');
+        var projectSelect = $row.find('.xero-project-select');
+        var selectedValue = projectSelect.val();
+        
+        if (selectedValue && selectedValue.startsWith('stocktake')) {
+            console.log('\n--- Row', i, '(bill_pk:', billPk, ') has Stocktake selected ---');
+            
+            var supplierCell = $row.find('.supplier-cell');
+            console.log('2. Supplier cell children:', supplierCell.children().length);
+            supplierCell.children().each(function(j) {
+                console.log('   Child', j + ':', this.tagName, this.className, 'visible:', $(this).is(':visible'));
+            });
+            
+            // Check for all select elements
+            var allSelects = supplierCell.find('select');
+            console.log('3. All select elements in supplier cell:', allSelects.length);
+            allSelects.each(function(k) {
+                var $sel = $(this);
+                console.log('   Select', k + ':', $sel.attr('class'), 'visible:', $sel.is(':visible'), 'options:', $sel.find('option').length);
+                console.log('      First 5 options:', $sel.find('option').slice(0, 5).map(function() { return $(this).text(); }).get());
+            });
+            
+            // Check for stocktake-specific elements
+            console.log('4. .stocktake-instance-selector:', supplierCell.find('.stocktake-instance-selector').length);
+            console.log('5. .stocktake-supplier-dropdown:', supplierCell.find('.stocktake-supplier-dropdown').length);
+            console.log('6. .stocktake-supplier-ui:', supplierCell.find('.stocktake-supplier-ui').length);
+            console.log('7. .searchable-dropdown-wrapper:', supplierCell.find('.searchable-dropdown-wrapper').length, 'visible:', supplierCell.find('.searchable-dropdown-wrapper').is(':visible'));
+            console.log('8. .supplier-select:', supplierCell.find('.supplier-select').length, 'visible:', supplierCell.find('.supplier-select').is(':visible'));
+        }
+    });
+    
+    // Check billsInboxData suppliers
+    console.log('\n9. billsInboxData.suppliers sample:');
+    if (window.billsInboxData && window.billsInboxData.suppliers) {
+        console.log('   Total suppliers:', window.billsInboxData.suppliers.length);
+        console.log('   First 3 FULL:', JSON.stringify(window.billsInboxData.suppliers.slice(0, 3), null, 2));
+        console.log('   Field names:', Object.keys(window.billsInboxData.suppliers[0] || {}));
+        
+        // Group by xero_instance_id
+        var byInstance = {};
+        window.billsInboxData.suppliers.forEach(function(s) {
+            byInstance[s.xero_instance_id] = (byInstance[s.xero_instance_id] || 0) + 1;
+        });
+        console.log('   Suppliers per xero_instance_id:', byInstance);
+    }
+    
+    console.log('\n10. xero_instances with stocktake:');
+    if (window.billsInboxData && window.billsInboxData.xero_instances) {
+        window.billsInboxData.xero_instances.forEach(function(xi) {
+            console.log('   pk:', xi.xero_instance_pk, 'name:', xi.xero_name, 'stocktake:', xi.stocktake);
+        });
+    }
+};
+
+// Debug function to check if handlers are bound
+window.debugBillsHandlers = function() {
+    console.log('=== DEBUG: Bills Handlers ===');
+    
+    // Check tbody ID
+    var tbody = $('#billsInboxMainTableBody');
+    console.log('0. #billsInboxMainTableBody found:', tbody.length > 0, tbody[0]);
+    
+    var selects = $('#billsInboxMainTableBody .xero-project-select');
+    console.log('1. xero-project-select elements found:', selects.length);
+    if (selects.length > 0) {
+        console.log('   First select:', selects[0]);
+        console.log('   Is hidden:', selects.first().is(':hidden'));
+        console.log('   Parent chain:', selects.first().parents().map(function() { return this.tagName + (this.id ? '#'+this.id : ''); }).get().join(' > '));
+    }
+    
+    // Check if there's a wrapper
+    var wrappers = $('#billsInboxMainTableBody .searchable-dropdown-wrapper');
+    console.log('2. searchable-dropdown-wrapper elements:', wrappers.length);
+    
+    // Check events bound to document
+    var events = $._data(document, 'events');
+    console.log('3. Document events:', events);
+    if (events && events.change) {
+        var billsEvents = events.change.filter(function(e) { return e.namespace === 'billsInbox'; });
+        console.log('4. Change events with billsInbox namespace:', billsEvents.length);
+        billsEvents.forEach(function(e, i) {
+            console.log('   Event ' + i + ':', e.selector, e.handler.toString().substring(0, 100));
+        });
+    }
+    
+    // Try direct binding test
+    console.log('5. Testing direct event binding...');
+    var testSelect = selects.first();
+    testSelect.off('change.test').on('change.test', function() {
+        console.log('[DIRECT HANDLER] Change fired!');
+    });
+    testSelect.val('stocktake_-1').trigger('change');
+};
+
+// Debug function for stocktake supplier dropdown
+window.debugStocktakeSupplierDropdown = function() {
+    console.log('=== DEBUG: Stocktake Supplier Dropdown ===');
+    console.log('1. billsInboxData exists:', !!window.billsInboxData);
+    console.log('2. xero_instances:', window.billsInboxData ? window.billsInboxData.xero_instances : 'N/A');
+    if (window.billsInboxData && window.billsInboxData.xero_instances) {
+        console.log('3. xero_instances details:');
+        window.billsInboxData.xero_instances.forEach(function(xi, i) {
+            console.log('   [' + i + '] pk:', xi.xero_instance_pk, 'name:', xi.xero_name, 'stocktake:', xi.stocktake, 'type:', typeof xi.stocktake);
+        });
+        var filtered = window.billsInboxData.xero_instances.filter(function(xi) { return xi.stocktake === 1; });
+        console.log('4. Filtered (stocktake===1):', filtered);
+        var filteredLoose = window.billsInboxData.xero_instances.filter(function(xi) { return xi.stocktake == 1; });
+        console.log('5. Filtered (stocktake==1):', filteredLoose);
+    }
+    console.log('6. suppliers count:', window.billsInboxData ? (window.billsInboxData.suppliers || []).length : 'N/A');
+    return window.billsInboxData;
+};
 </script>
 
 <!-- =====================================================

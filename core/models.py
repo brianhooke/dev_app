@@ -31,6 +31,7 @@ class XeroInstances(models.Model):
     oauth_token_expires_at = models.DateTimeField(null=True, blank=True)
     oauth_tenant_id = models.CharField(max_length=255, null=True, blank=True)
     staff_hours_tracking = models.IntegerField(default=0)  # 0=no, 1=yes
+    stocktake = models.IntegerField(default=0)  # 0=not included, 1=included in stocktake
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     

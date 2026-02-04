@@ -87,6 +87,59 @@ def toggle_stocktake_inclusion(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def toggle_xero_instance_stocktake(request):
+    """
+    Toggle the stocktake inclusion for a Xero instance.
+    
+    Expected POST data:
+    - xero_instance_pk: int
+    - included: bool (true = include, false = exclude)
+    """
+    try:
+        from core.models import XeroInstances
+        
+        data = json.loads(request.body)
+        xero_instance_pk = data.get('xero_instance_pk')
+        included = data.get('included', False)
+        
+        if not xero_instance_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'xero_instance_pk is required'
+            }, status=400)
+        
+        stocktake_value = 1 if included else 0
+        
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+            xero_instance.stocktake = stocktake_value
+            xero_instance.save(update_fields=['stocktake', 'updated_at'])
+            logger.info(f"Updated XeroInstance {xero_instance_pk} stocktake to {stocktake_value}")
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Xero instance stocktake updated to {included}'
+            })
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'XeroInstance with pk {xero_instance_pk} not found'
+            }, status=404)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error toggling Xero instance stocktake: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def get_stocktake_allocations(request, bill_pk):
     """

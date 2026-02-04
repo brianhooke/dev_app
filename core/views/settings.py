@@ -66,7 +66,7 @@ def get_xero_instances_list(request):
     Get all Xero instances for dropdown selection.
     """
     try:
-        instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name')
+        instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name', 'stocktake')
         
         return JsonResponse({
             'status': 'success',
