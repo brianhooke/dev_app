@@ -1769,7 +1769,7 @@ var AllocationsManager = (function() {
                     var url = typeof api.delete === 'function' ? api.delete(pk) : api.delete.replace('{pk}', pk);
                     $.ajax({
                         url: url,
-                        type: 'POST',
+                        type: 'DELETE',
                         headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                         success: function(response) {
                             row.remove();
