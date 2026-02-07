@@ -565,21 +565,46 @@
         });
     });
     
-    // Fix: Ensure modal close buttons work after alert
-    $(document).on('click', '#pdfConfirmModal .btn-close, #pdfConfirmModal .btn-secondary', function() {
-        console.log('Modal close button clicked');
-        if (pdfConfirmModal) {
-            pdfConfirmModal.hide();
-        }
-        // Also try Bootstrap's native method as backup
-        var modalEl = document.getElementById('pdfConfirmModal');
-        if (modalEl) {
-            var bsModal = bootstrap.Modal.getInstance(modalEl);
-            if (bsModal) {
-                bsModal.hide();
-            }
+    // Fix: Ensure modal close buttons work after alert - more aggressive approach
+    $(document).on('click', '#pdfConfirmModal .btn-close, #pdfConfirmModal .btn-secondary', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Modal close button clicked - forcing close');
+        forceCloseModal();
+    });
+    
+    // Also handle Escape key
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && $('#pdfConfirmModal').hasClass('show')) {
+            console.log('Escape pressed - forcing modal close');
+            forceCloseModal();
         }
     });
+    
+    // Force close modal function
+    function forceCloseModal() {
+        var modalEl = document.getElementById('pdfConfirmModal');
+        if (modalEl) {
+            // Try Bootstrap's hide first
+            if (pdfConfirmModal) {
+                try { pdfConfirmModal.hide(); } catch(e) { console.log('pdfConfirmModal.hide() error:', e); }
+            }
+            var bsModal = bootstrap.Modal.getInstance(modalEl);
+            if (bsModal) {
+                try { bsModal.hide(); } catch(e) { console.log('bsModal.hide() error:', e); }
+            }
+            
+            // Force remove modal classes and backdrop
+            $(modalEl).removeClass('show').css('display', 'none');
+            $('body').removeClass('modal-open').css('overflow', '').css('padding-right', '');
+            $('.modal-backdrop').remove();
+            
+            // Reset pending state
+            pendingBillPk = null;
+            pendingButton = null;
+            pendingRow = null;
+        }
+    }
     
 })();
 

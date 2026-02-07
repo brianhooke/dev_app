@@ -301,6 +301,14 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
     logger.info(f"  pdf field: {invoice.pdf}")
     logger.info(f"  pdf.name: {invoice.pdf.name if invoice.pdf else 'None'}")
     
+    # Check if bill was already sent to Xero
+    if invoice.bill_xero_id:
+        logger.warning(f"Bill {bill_pk} already has Xero ID: {invoice.bill_xero_id}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'This bill was already sent to Xero (Xero ID: {invoice.bill_xero_id}). Cannot send again.'
+        }, status=400)
+    
     # Get supplier
     supplier = invoice.contact_pk
     if not supplier:
