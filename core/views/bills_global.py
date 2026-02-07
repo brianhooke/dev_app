@@ -317,8 +317,18 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
                 access_token = xero_instance.get_valid_access_token()
                 tenant_id = xero_instance.xero_tenant_id
                 
-                # Search for existing ACCPAY invoice with this number
-                search_url = f'https://api.xero.com/api.xro/2.0/Invoices?where=Type=="ACCPAY"&&InvoiceNumber=="{invoice.supplier_bill_number}"'
+                # Search for existing ACCPAY invoice with this number (URL encode the where clause)
+                from urllib.parse import quote
+                inv_num = invoice.supplier_bill_number.strip()
+                where_clause = f'Type=="ACCPAY" AND InvoiceNumber=="{inv_num}"'
+                encoded_where = quote(where_clause)
+                search_url = f'https://api.xero.com/api.xro/2.0/Invoices?where={encoded_where}'
+                
+                logger.info(f"=== PRE-CHECK: Searching Xero for existing invoice ===")
+                logger.info(f"  supplier_bill_number: '{inv_num}'")
+                logger.info(f"  where_clause: {where_clause}")
+                logger.info(f"  search_url: {search_url}")
+                
                 search_response = requests.get(
                     search_url,
                     headers={
@@ -329,9 +339,13 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
                     timeout=15
                 )
                 
+                logger.info(f"  search_response.status_code: {search_response.status_code}")
+                logger.info(f"  search_response.text: {search_response.text[:500] if search_response.text else 'empty'}")
+                
                 if search_response.status_code == 200:
                     search_data = search_response.json()
                     existing_invoices = search_data.get('Invoices', [])
+                    logger.info(f"  Found {len(existing_invoices)} existing invoices")
                     if existing_invoices:
                         existing = existing_invoices[0]
                         existing_id = existing.get('InvoiceID')
@@ -348,6 +362,8 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
                         }, status=400)
             except Exception as e:
                 logger.warning(f"Error checking for existing Xero invoice: {e}")
+                import traceback
+                logger.warning(traceback.format_exc())
                 # Continue anyway - the create will fail if it exists
     
     # Get supplier
