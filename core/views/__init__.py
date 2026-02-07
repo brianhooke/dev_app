@@ -13,7 +13,7 @@ from .quotes import (
 )
 
 # Contract Budget views
-from .contract_budget import update_uncommitted, get_project_committed_amounts, get_item_quote_allocations
+from .contract_budget import update_uncommitted, get_project_committed_amounts, get_item_quote_allocations, get_item_hc_variation_allocations
 
 # HC Variations views
 from .hc_variations import (

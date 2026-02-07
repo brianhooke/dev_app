@@ -258,6 +258,21 @@ Column Behaviors:
         text-decoration: underline;
     }
     
+    /* Green clickable contract budget cells with HC variations */
+    .contractBudget-container .contract-budget-clickable {
+        color: var(--color-success, #28a745);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    
+    .contractBudget-container .contract-budget-clickable:hover {
+        text-decoration: underline;
+    }
+    
+    .contractBudget-container .contract-budget-clickable.active {
+        font-weight: 600;
+    }
+    
     /* Committed details row - green styling (similar to notes row) */
     .contractBudget-container .committed-details-row {
         background-color: rgba(40, 167, 69, 0.08);
@@ -354,6 +369,18 @@ Column Behaviors:
         
         // Insert after the scrollable container (inside reusable-table-container)
         tableContainer.after(footerHtml);
+    }
+    
+    // Format date as dd-mmm-yy (e.g., 07-Feb-26)
+    function formatDateDDMMMYY(dateStr) {
+        if (!dateStr || dateStr === '-') return '-';
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        var day = ('0' + d.getDate()).slice(-2);
+        var month = months[d.getMonth()];
+        var year = String(d.getFullYear()).slice(-2);
+        return day + '-' + month + '-' + year;
     }
     
     // Get column count based on mode
@@ -563,7 +590,14 @@ Column Behaviors:
         
         if (!isTender) {
             // Contract Budget column (execution mode only)
-            row.append('<td>' + Utils.formatCurrency(item.contract_budget || 0) + '</td>');
+            // Make clickable if item has HC variation allocations
+            var hasHcVariations = (item.hc_variation_amount || 0) > 0;
+            var contractBudgetClickableClass = hasHcVariations ? ' contract-budget-clickable' : '';
+            var contractBudgetTd = $('<td class="contract-budget-cell' + contractBudgetClickableClass + '" data-item-pk="' + item.costing_pk + '" data-base-budget="' + (item.base_contract_budget || 0) + '" data-hc-variation="' + (item.hc_variation_amount || 0) + '">' + Utils.formatCurrency(item.contract_budget || 0) + '</td>');
+            if (hasHcVariations) {
+                contractBudgetTd.on('click', function() { toggleContractBudgetDetailsRow(item.costing_pk); });
+            }
+            row.append(contractBudgetTd);
         }
         
         // Working Budget column (calculated: Uncommitted + Committed)
@@ -1285,6 +1319,106 @@ Column Behaviors:
         itemRow.after(detailsRow);
     }
     
+    // Toggle contract budget details row - shows base budget and HC variation allocations
+    function toggleContractBudgetDetailsRow(itemPk) {
+        var existingRow = $('#contract-budget-details-row-' + itemPk);
+        
+        // If clicking the same row, just close it
+        if (existingRow.length) {
+            existingRow.remove();
+            $('.contract-budget-clickable[data-item-pk="' + itemPk + '"]').removeClass('active');
+            return;
+        }
+        
+        // Close any other open details rows
+        $('.contract-budget-details-row').remove();
+        $('.billed-details-row').remove();
+        $('.committed-details-row').remove();
+        $('.contract-budget-clickable').removeClass('active');
+        $('.billed-clickable').removeClass('active');
+        $('.committed-clickable').removeClass('active');
+        
+        // Also close any open notes row
+        closeOpenNotesRow();
+        
+        // Fetch HC variation allocations for this item
+        $.ajax({
+            url: '/core/get_item_hc_variation_allocations/' + itemPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    renderContractBudgetDetailsRow(itemPk, response.base_contract_budget, response.allocations);
+                }
+            },
+            error: function(xhr) {
+                console.error('Failed to fetch HC variation allocations:', xhr);
+            }
+        });
+        
+        // Mark cell as active
+        $('.contract-budget-clickable[data-item-pk="' + itemPk + '"]').addClass('active');
+    }
+    
+    // Render the contract budget details row with base budget and HC variations
+    function renderContractBudgetDetailsRow(itemPk, baseBudget, allocations) {
+        var itemRow = $('tr.item-row[data-item-pk="' + itemPk + '"]');
+        
+        // Count total columns in item row to calculate positions
+        var totalCols = itemRow.find('td').length;
+        // Box spans from Contract Budget column (3rd column, index 2) for 3 cols
+        var colsBeforeBox = 2;  // Category/Item + Unit
+        var boxCols = 3;  // Contract Budget + Working Budget + Committed Amount
+        var colsAfterBox = totalCols - colsBeforeBox - boxCols;
+        
+        var detailsRow = $('<tr id="contract-budget-details-row-' + itemPk + '" class="contract-budget-details-row committed-details-row" data-item-pk="' + itemPk + '"></tr>');
+        
+        // Empty cells before the box
+        detailsRow.append('<td colspan="' + colsBeforeBox + '"></td>');
+        
+        // Blue box cell
+        var boxTd = $('<td colspan="' + boxCols + '"></td>');
+        var box = $('<div class="committed-details-box"></div>');
+        
+        // Build internal table
+        var table = $('<table class="committed-details-table"></table>');
+        
+        var colgroup = $('<colgroup><col style="width:50%"><col style="width:25%"><col style="width:25%"></colgroup>');
+        table.append(colgroup);
+        var thead = $('<thead><tr><th>Source</th><th>Date</th><th>Amount</th></tr></thead>');
+        table.append(thead);
+        
+        var tbody = $('<tbody></tbody>');
+        
+        // Add base contract budget row
+        var baseTr = $('<tr></tr>');
+        baseTr.append('<td>Contract Budget</td>');
+        baseTr.append('<td>-</td>');
+        baseTr.append('<td>' + Utils.formatCurrency(baseBudget) + '</td>');
+        tbody.append(baseTr);
+        
+        // Add HC variation allocation rows
+        allocations.forEach(function(alloc) {
+            var tr = $('<tr></tr>');
+            tr.append('<td>HC Variation</td>');
+            tr.append('<td>' + formatDateDDMMMYY(alloc.variation_date) + '</td>');
+            tr.append('<td>' + Utils.formatCurrency(alloc.amount) + '</td>');
+            tbody.append(tr);
+        });
+        
+        table.append(tbody);
+        
+        box.append(table);
+        boxTd.append(box);
+        detailsRow.append(boxTd);
+        
+        // Empty cells after the box
+        if (colsAfterBox > 0) {
+            detailsRow.append('<td colspan="' + colsAfterBox + '"></td>');
+        }
+        
+        itemRow.after(detailsRow);
+    }
+    
     // Close notes/committed/billed details rows when clicking outside
     $(document).on('click', function(e) {
         var target = $(e.target);
@@ -1296,21 +1430,25 @@ Column Behaviors:
             return;
         }
         
-        // Don't close if clicking on committed/billed details row or clickable cells
+        // Don't close if clicking on committed/billed/contract-budget details row or clickable cells
         if (target.closest('.committed-details-row').length || 
             target.closest('.billed-details-row').length ||
+            target.closest('.contract-budget-details-row').length ||
             target.closest('.committed-clickable').length ||
-            target.closest('.billed-clickable').length) {
+            target.closest('.billed-clickable').length ||
+            target.closest('.contract-budget-clickable').length) {
             return;
         }
         
         // Close any open notes row
         closeOpenNotesRow();
         
-        // Close any open committed/billed details row
+        // Close any open committed/billed/contract-budget details row
         $('.committed-details-row').remove();
         $('.billed-details-row').remove();
+        $('.contract-budget-details-row').remove();
         $('.committed-clickable').removeClass('active');
+        $('.contract-budget-clickable').removeClass('active');
         $('.billed-clickable').removeClass('active');
     });
     

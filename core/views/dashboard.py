@@ -454,7 +454,8 @@ def get_project_items(request, project_pk):
     - tender_or_execution: '1' for tender items, '2' for execution items (default: '1')
     """
     try:
-        from core.models import Costing
+        from core.models import Costing, Hc_variation_allocations
+        from django.db.models import Sum
         
         exclude_internal = request.GET.get('exclude_internal', '0') == '1'
         tender_or_execution = int(request.GET.get('tender_or_execution', '1'))
@@ -469,6 +470,15 @@ def get_project_items(request, project_pk):
         
         items = items.select_related('category', 'unit').order_by('category__order_in_list', 'order_in_list')
         
+        # Get HC variation allocations summed by costing item
+        hc_variation_totals = Hc_variation_allocations.objects.filter(
+            costing__project_id=project_pk,
+            costing__tender_or_execution=tender_or_execution
+        ).values('costing_id').annotate(
+            total_amount=Sum('amount')
+        )
+        hc_variation_map = {item['costing_id']: float(item['total_amount'] or 0) for item in hc_variation_totals}
+        
         items_list = []
         for item in items:
             # Calculate quantity from rate * operator_value (based on operator)
@@ -478,6 +488,11 @@ def get_project_items(request, project_pk):
                     quantity = float(item.rate) * float(item.operator_value)
                 elif item.operator == 2:  # divide
                     quantity = float(item.rate) / float(item.operator_value) if float(item.operator_value) != 0 else None
+            
+            # Contract budget = Costing.contract_budget + HC variation allocations
+            base_contract_budget = float(item.contract_budget) if item.contract_budget else 0
+            hc_variation_amount = hc_variation_map.get(item.costing_pk, 0)
+            total_contract_budget = base_contract_budget + hc_variation_amount
             
             items_list.append({
                 'costing_pk': item.costing_pk,
@@ -492,7 +507,9 @@ def get_project_items(request, project_pk):
                 'operator': item.operator,
                 'operator_value': float(item.operator_value) if item.operator_value is not None else None,
                 'quantity': quantity,
-                'contract_budget': float(item.contract_budget) if item.contract_budget else 0,
+                'contract_budget': total_contract_budget,
+                'base_contract_budget': base_contract_budget,
+                'hc_variation_amount': hc_variation_amount,
                 'uncommitted_amount': float(item.uncommitted_amount) if item.uncommitted_amount else 0,
                 'uncommitted_qty': float(item.uncommitted_qty) if item.uncommitted_qty else None,
                 'uncommitted_rate': float(item.uncommitted_rate) if item.uncommitted_rate else None,

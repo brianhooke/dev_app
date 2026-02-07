@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations, XeroInstances
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations, XeroInstances, Hc_variation_allocations
 from .staff_hours import get_employee_super_rate
 
 logger = logging.getLogger(__name__)
@@ -832,4 +832,45 @@ def fix_contract_budget(request, project_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error fixing contract budget: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_item_hc_variation_allocations(request, costing_pk):
+    """
+    Get HC variation allocations for a specific costing item.
+    Returns the base contract budget and list of HC variation allocations with variation details.
+    """
+    try:
+        costing = get_object_or_404(Costing, costing_pk=costing_pk)
+        
+        # Get HC variation allocations for this item
+        allocations = Hc_variation_allocations.objects.filter(
+            costing=costing
+        ).select_related('hc_variation').order_by('-hc_variation__date')
+        
+        allocations_list = []
+        for alloc in allocations:
+            allocations_list.append({
+                'allocation_pk': alloc.hc_variation_allocation_pk,
+                'variation_pk': alloc.hc_variation.hc_variation_pk,
+                'variation_date': alloc.hc_variation.date.strftime('%Y-%m-%d') if alloc.hc_variation.date else '',
+                'amount': float(alloc.amount or 0),
+                'qty': float(alloc.qty) if alloc.qty else None,
+                'rate': float(alloc.rate) if alloc.rate else None,
+                'unit': alloc.unit or '',
+                'notes': alloc.notes or '',
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'base_contract_budget': float(costing.contract_budget or 0),
+            'allocations': allocations_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting HC variation allocations for item {costing_pk}: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error getting HC variation allocations: {str(e)}'
         }, status=500)

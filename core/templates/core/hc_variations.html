@@ -19,6 +19,7 @@
         window.projectPk = '{{ project_pk }}';
     }
     window.hcVariationIsConstruction = {{ is_construction|yesno:"true,false" }};
+    window.hcVariationProjectStatus = {{ project_status|default:1 }};
 </script>
 
 <!-- Self-Contained HC Variations Section JS -->
@@ -45,6 +46,8 @@
     window.newVariationMode = false;
     window.editingVariationPk = null;
     window.variationsCostingItems = [];
+    window.variationsUnits = [];
+    window.variationsXeroAccounts = [];
     
     // Initialize AllocationsManager
     AllocationsManager.init({
@@ -122,7 +125,7 @@
             renderEditableRow: function(allocation, cfg, onChange) {
                 // Use constructionMode from config to ensure it matches the header columns
                 var useConstructionMode = cfg.features.constructionMode;
-                return AllocationsManager.createEditableAllocationRow({
+                var row = AllocationsManager.createEditableAllocationRow({
                     sectionId: 'hcVariation',
                     allocation: allocation,
                     isConstruction: useConstructionMode,
@@ -136,6 +139,30 @@
                         delete: '/core/delete_hc_variation_allocation/{pk}/'
                     }
                 });
+                
+                // Add "+ New Item" option at top of item dropdown
+                var itemSelect = row.find('.hcVariation-allocation-item-select');
+                if (itemSelect.length) {
+                    // Insert "+ New Item" option after "Select Item..."
+                    var newItemOption = $('<option>').val('__new_item__').text('+ New Item').css('font-weight', 'bold');
+                    itemSelect.find('option:first').after(newItemOption);
+                    
+                    // Handle "+ New Item" selection
+                    itemSelect.on('change', function() {
+                        if ($(this).val() === '__new_item__') {
+                            transformToNewItemMode(row, useConstructionMode, onChange);
+                        }
+                    });
+                }
+                
+                // If Xero Account header exists (from another row in new item mode), add empty placeholder cell
+                var thead = $('#hcVariationAllocationsTable thead');
+                if (thead.find('th.hcVariation-xero-header').length) {
+                    var itemCell = row.find('td').first();
+                    $('<td>').addClass('hcVariation-xero-placeholder').insertAfter(itemCell);
+                }
+                
+                return row;
             },
             onUpdate: function(sectionId, data) {
                 var saveBtn = $('#' + sectionId + 'SaveAllocationsBtn');
@@ -143,6 +170,10 @@
                     var isValid = Math.abs(data.remainingNet) < 0.01;
                     saveBtn.prop('disabled', !isValid);
                     saveBtn.css('opacity', isValid ? '1' : '0.5');
+                }
+                // Also validate new variation save button if in new mode
+                if (window.newVariationMode && typeof validateNewVariation === 'function') {
+                    validateNewVariation();
                 }
             }
         },
@@ -248,12 +279,192 @@
         }
     }
     
+    // Transform allocation row to "New Item" mode - splits Item column into Category + Item
+    function transformToNewItemMode(row, isConstruction, onChange) {
+        // Mark this row as in "new item" mode
+        row.attr('data-new-item-mode', 'true');
+        
+        // Get the first td (Item column)
+        var itemCell = row.find('td').first();
+        var originalWidth = itemCell.width();
+        
+        // Clear the item cell
+        itemCell.empty();
+        
+        // Create Category dropdown
+        var categorySelect = $('<select>').addClass('form-control form-control-sm hcVariation-new-category-select').css('width', '45%').css('display', 'inline-block').css('margin-right', '5%');
+        categorySelect.append($('<option>').val('').text('Category...'));
+        categorySelect.append($('<option>').val('__new_category__').text('+ New Category'));
+        
+        // Populate categories from existing costing items
+        var categories = [];
+        var costingItems = window.variationsCostingItems || [];
+        costingItems.forEach(function(item) {
+            var cat = item.category__category;
+            if (cat && categories.indexOf(cat) === -1) {
+                categories.push(cat);
+            }
+        });
+        categories.forEach(function(cat) {
+            categorySelect.append($('<option>').val(cat).text(cat));
+        });
+        
+        // Create Item text input
+        var itemInput = $('<input>').attr('type', 'text').attr('placeholder', 'New item name...').addClass('form-control form-control-sm hcVariation-new-item-input').css('width', '50%').css('display', 'inline-block');
+        
+        // Handle "+ New Category" selection - transform to input
+        categorySelect.on('change', function() {
+            if ($(this).val() === '__new_category__') {
+                var categoryInput = $('<input>').attr('type', 'text').attr('placeholder', 'New category name...').addClass('form-control form-control-sm hcVariation-new-category-input').css('width', '45%').css('display', 'inline-block').css('margin-right', '5%');
+                $(this).replaceWith(categoryInput);
+                categoryInput.focus();
+                
+                categoryInput.on('input', function() {
+                    if (onChange) onChange();
+                    if (typeof validateNewVariation === 'function') validateNewVariation();
+                });
+            }
+        });
+        
+        // Add to cell
+        itemCell.append(categorySelect).append(itemInput);
+        
+        // Update header to show split columns (only for this row's perspective)
+        var thead = $('#hcVariationAllocationsTable thead');
+        var itemTh = thead.find('th').first();
+        if (!itemTh.attr('data-original-text')) {
+            itemTh.attr('data-original-text', itemTh.text());
+            itemTh.css('width', '30%'); // Make Item column wider
+            itemTh.html('<span style="display: inline-block; width: 45%;">Category</span><span style="display: inline-block; width: 50%; margin-left: 5%;">Item</span>');
+            
+            // Add Xero Account header right after Item column
+            if (!thead.find('th.hcVariation-xero-header').length) {
+                $('<th>').addClass('hcVariation-xero-header').css('width', '20%').text('Xero Account').insertAfter(itemTh);
+            }
+        }
+        
+        // For construction mode, transform Unit cell to dropdown
+        if (isConstruction) {
+            var unitCell = row.find('td').eq(1); // Second td is Unit
+            unitCell.empty();
+            
+            var unitSelect = $('<select>').addClass('form-control form-control-sm hcVariation-new-unit-select');
+            unitSelect.append($('<option>').val('').text('Unit...'));
+            unitSelect.append($('<option>').val('__new_unit__').text('+ New Unit'));
+            
+            var units = window.variationsUnits || [];
+            units.forEach(function(unit) {
+                unitSelect.append($('<option>').val(unit).text(unit));
+            });
+            
+            unitCell.append(unitSelect);
+            
+            unitSelect.on('change', function() {
+                if ($(this).val() === '__new_unit__') {
+                    var unitInput = $('<input>').attr('type', 'text').attr('placeholder', 'New unit...').addClass('form-control form-control-sm hcVariation-new-unit-input');
+                    $(this).replaceWith(unitInput);
+                    unitInput.focus();
+                    
+                    unitInput.on('input', function() {
+                        if (onChange) onChange();
+                        if (typeof validateNewVariation === 'function') validateNewVariation();
+                    });
+                } else {
+                    if (onChange) onChange();
+                    if (typeof validateNewVariation === 'function') validateNewVariation();
+                }
+            });
+        }
+        
+        // Add Xero Account column - insert before delete button (last column)
+        var xeroCell = $('<td>').addClass('hcVariation-new-xero-cell');
+        var xeroSelect = $('<select>').addClass('form-control form-control-sm hcVariation-new-xero-select');
+        xeroSelect.append($('<option>').val('').text('Xero Account...'));
+        
+        // Populate with xero accounts grouped by account_type
+        var xeroAccounts = window.variationsXeroAccounts || [];
+        var currentType = null;
+        xeroAccounts.forEach(function(acc) {
+            if (acc.account_type !== currentType) {
+                currentType = acc.account_type;
+                xeroSelect.append($('<optgroup>').attr('label', currentType || 'Other'));
+            }
+            var displayText = acc.account_code + ' - ' + acc.account_name;
+            xeroSelect.find('optgroup').last().append(
+                $('<option>').val(acc.account_code).text(displayText)
+            );
+        });
+        
+        xeroCell.append(xeroSelect);
+        
+        // Remove any existing placeholder (if row was created after Xero header existed)
+        row.find('.hcVariation-xero-placeholder').remove();
+        
+        // Insert after the first td (Item cell) to match header position
+        var firstCell = row.find('td').first();
+        xeroCell.insertAfter(firstCell);
+        
+        xeroSelect.on('change', function() {
+            if (onChange) onChange();
+            if (typeof validateNewVariation === 'function') validateNewVariation();
+        });
+        
+        // Trigger validation on input
+        categorySelect.on('change', function() {
+            if (onChange) onChange();
+            if (typeof validateNewVariation === 'function') validateNewVariation();
+        });
+        itemInput.on('input', function() {
+            if (onChange) onChange();
+            if (typeof validateNewVariation === 'function') validateNewVariation();
+        });
+    }
+    
+    // Debug function to show table alignment
+    window.debugTableAlignment = function() {
+        var table = $('#hcVariationAllocationsTable');
+        console.log('=== ALLOCATIONS TABLE DEBUG ===');
+        
+        // Show header
+        console.log('\n--- HEADER (th elements) ---');
+        var ths = table.find('thead th');
+        console.log('Total th count:', ths.length);
+        ths.each(function(i) {
+            var $th = $(this);
+            var text = $th.text().trim().substring(0, 30);
+            var classes = $th.attr('class') || '';
+            var width = $th.css('width') || $th.attr('style') || '';
+            console.log('th[' + i + ']: "' + text + '" | class: ' + classes + ' | width: ' + width);
+        });
+        
+        // Show each row
+        console.log('\n--- ROWS (td elements) ---');
+        var rows = table.find('tbody tr');
+        rows.each(function(rowIndex) {
+            var $row = $(this);
+            var rowClass = $row.attr('class') || '';
+            var tds = $row.find('> td');
+            console.log('\nRow ' + rowIndex + ' (' + rowClass + ') - Total td count: ' + tds.length);
+            tds.each(function(i) {
+                var $td = $(this);
+                var content = $td.html().substring(0, 50).replace(/\n/g, ' ');
+                var classes = $td.attr('class') || '';
+                console.log('  td[' + i + ']: class="' + classes + '" | content: ' + content + '...');
+            });
+        });
+        
+        console.log('\n=== END DEBUG ===');
+    };
+    
     // Create new variation row with inputs
     function createNewVariationRow() {
         window.newVariationMode = true;
         AllocationsManager.setNewMode('hcVariation', true);
         
         var tbody = $('#hcVariationMainTableBody');
+        
+        // Remove the "No HC variations found" empty message row
+        tbody.find('td[colspan]').closest('tr').remove();
         
         // Remove any existing new row
         tbody.find('.new-variation-row').remove();
@@ -270,11 +481,21 @@
         var amountInput = $('<input type="number" step="0.01" class="form-control form-control-sm new-hcVariation-net" placeholder="0.00">')
             .on('input change', function() {
                 AllocationsManager.updateStillToAllocate('hcVariation');
+                validateNewVariation();
             });
         row.append($('<td>').append(amountInput));
         
-        // Empty Update column (save is via allocations footer Save button)
-        row.append($('<td>').addClass('col-action-first'));
+        // Save button in Update column (starts grey/disabled until validation passes)
+        var saveCell = $('<td>').addClass('col-action-first');
+        var saveBtn = $('<button type="button" class="btn btn-secondary btn-sm" id="saveNewVariationBtn" title="Save Variation" disabled>')
+            .html('<i class="fas fa-save"></i>')
+            .on('click', function() {
+                if (!$(this).prop('disabled')) {
+                    saveNewVariation();
+                }
+            });
+        saveCell.append(saveBtn);
+        row.append(saveCell);
         
         // Cancel button
         var cancelBtn = $('<button class="btn btn-sm btn-secondary">')
@@ -290,7 +511,8 @@
         // Clear allocations table and show add button
         $('#hcVariationAllocationsTableBody').empty();
         $('#hcVariationAddAllocationBtn').show();
-        $('#hcVariationSaveAllocationsBtn').show();
+        // Hide footer Save button - using row Save button instead
+        $('#hcVariationSaveAllocationsBtn').hide();
         
         // Add one blank editable allocation row by default
         AllocationsManager.addAllocationRow('hcVariation');
@@ -300,6 +522,157 @@
         
         // Update still to allocate
         AllocationsManager.updateStillToAllocate('hcVariation');
+        
+        // Initial validation
+        validateNewVariation();
+    }
+    
+    // Validate new variation - enables/disables save button
+    function validateNewVariation() {
+        if (!window.newVariationMode) return;
+        
+        var saveBtn = $('#saveNewVariationBtn');
+        if (!saveBtn.length) return;
+        
+        var isValid = true;
+        
+        // 1. Check "still to allocate" is $0.00
+        var remainingText = $('#hcVariationRemainingNet').text();
+        var remaining = parseFloat(remainingText.replace(/[^0-9.-]/g, '')) || 0;
+        if (Math.abs(remaining) >= 0.01) {
+            isValid = false;
+        }
+        
+        // 2. Check allocations - either existing item selected OR new item fields filled
+        var hasValidItem = false;
+        $('#hcVariationAllocationsTableBody tr').each(function() {
+            var row = $(this);
+            var isNewItemRow = row.attr('data-new-item-mode') === 'true';
+            
+            if (isNewItemRow) {
+                // New item row: check category and item name are filled
+                var categorySelect = row.find('.hcVariation-new-category-select');
+                var categoryInput = row.find('.hcVariation-new-category-input');
+                var itemInput = row.find('.hcVariation-new-item-input');
+                var xeroSelect = row.find('.hcVariation-new-xero-select');
+                
+                var hasCategory = (categorySelect.length && categorySelect.val()) || 
+                                  (categoryInput.length && categoryInput.val().trim());
+                var hasItem = itemInput.length && itemInput.val().trim();
+                var hasXero = xeroSelect.length && xeroSelect.val();
+                
+                if (hasCategory && hasItem && hasXero) {
+                    hasValidItem = true;
+                }
+            } else {
+                // Normal row: check item selected
+                var itemSelect = row.find('.hcVariation-allocation-item-select');
+                if (itemSelect.length && itemSelect.val() && itemSelect.val() !== '__new_item__') {
+                    hasValidItem = true;
+                }
+            }
+        });
+        if (!hasValidItem) {
+            isValid = false;
+        }
+        
+        // 3. Check at least one allocation amount is not $0.00
+        var hasValidAmount = false;
+        $('#hcVariationAllocationsTableBody .hcVariation-allocation-amount-display, #hcVariationAllocationsTableBody .hcVariation-allocation-amount-input, #hcVariationAllocationsTableBody .hcVariation-allocation-net-input').each(function() {
+            var amountText = $(this).is('input') ? $(this).val() : $(this).text();
+            var amount = parseFloat(amountText.replace(/[^0-9.-]/g, '')) || 0;
+            if (Math.abs(amount) >= 0.01) {
+                hasValidAmount = true;
+            }
+        });
+        if (!hasValidAmount) {
+            isValid = false;
+        }
+        
+        // Update button state
+        if (isValid) {
+            saveBtn.removeClass('btn-secondary').addClass('btn-success').prop('disabled', false);
+        } else {
+            saveBtn.removeClass('btn-success').addClass('btn-secondary').prop('disabled', true);
+        }
+    }
+    
+    // Make validation available globally for allocation row changes
+    window.validateNewVariation = validateNewVariation;
+    
+    // Gather allocations including new item data
+    function gatherAllocationsWithNewItems() {
+        var allocations = [];
+        var isConstruction = window.hcVariationIsConstruction || false;
+        
+        $('#hcVariationAllocationsTableBody tr').each(function() {
+            var row = $(this);
+            var isNewItemRow = row.attr('data-new-item-mode') === 'true';
+            
+            var alloc = {
+                notes: row.find('.hcVariation-allocation-notes-input').val() || '',
+                allocation_pk: row.attr('data-allocation-pk') || null
+            };
+            
+            // Get amount - try multiple selectors
+            var amountInput = row.find('.hcVariation-allocation-amount-input, .hcVariation-allocation-net-input');
+            alloc.amount = parseFloat(amountInput.val()) || 0;
+            
+            if (isConstruction) {
+                var qtyInput = row.find('.hcVariation-allocation-qty-input');
+                var rateInput = row.find('.hcVariation-allocation-rate-input');
+                alloc.qty = parseFloat(qtyInput.val()) || null;
+                alloc.rate = parseFloat(rateInput.val()) || null;
+            }
+            
+            if (isNewItemRow) {
+                // New item row - gather new item data
+                alloc.is_new_item = true;
+                
+                // Category - either from select or input
+                var categorySelect = row.find('.hcVariation-new-category-select');
+                var categoryInput = row.find('.hcVariation-new-category-input');
+                if (categoryInput.length && categoryInput.val().trim()) {
+                    alloc.new_category_name = categoryInput.val().trim();
+                } else if (categorySelect.length && categorySelect.val()) {
+                    alloc.category_name = categorySelect.val();
+                }
+                
+                // Item name
+                var itemInput = row.find('.hcVariation-new-item-input');
+                alloc.new_item_name = itemInput.val().trim();
+                
+                // Unit - either from select or input
+                var unitSelect = row.find('.hcVariation-new-unit-select');
+                var unitInput = row.find('.hcVariation-new-unit-input');
+                if (unitInput.length && unitInput.val().trim()) {
+                    alloc.new_unit_name = unitInput.val().trim();
+                } else if (unitSelect.length && unitSelect.val() && unitSelect.val() !== '__new_unit__') {
+                    alloc.unit = unitSelect.val();
+                }
+                
+                // Xero account
+                var xeroSelect = row.find('.hcVariation-new-xero-select');
+                alloc.xero_account_code = xeroSelect.val() || '';
+                
+                allocations.push(alloc);
+            } else {
+                // Normal row - existing item
+                var itemSelect = row.find('.hcVariation-allocation-item-select');
+                if (itemSelect.length && itemSelect.val() && itemSelect.val() !== '__new_item__') {
+                    alloc.item_pk = itemSelect.val();
+                    alloc.is_new_item = false;
+                    
+                    // Get unit from selected item
+                    var selectedOption = itemSelect.find('option:selected');
+                    alloc.unit = selectedOption.attr('data-unit') || '';
+                    
+                    allocations.push(alloc);
+                }
+            }
+        });
+        
+        return allocations;
     }
     
     // Save new variation
@@ -317,12 +690,26 @@
             return;
         }
         
-        // Gather allocations
-        var allocations = AllocationsManager.getAllocations('hcVariation');
+        // Gather allocations including new item data
+        var allocations = gatherAllocationsWithNewItems();
         
-        // Validate allocations - check all have item selected
+        // Validate allocations
         for (var i = 0; i < allocations.length; i++) {
-            if (!allocations[i].item_pk) {
+            var alloc = allocations[i];
+            if (alloc.is_new_item) {
+                if (!alloc.new_item_name) {
+                    alert('Please enter an item name for all new item rows.');
+                    return;
+                }
+                if (!alloc.category_name && !alloc.new_category_name) {
+                    alert('Please select or enter a category for all new item rows.');
+                    return;
+                }
+                if (!alloc.xero_account_code) {
+                    alert('Please select a Xero account for all new item rows.');
+                    return;
+                }
+            } else if (!alloc.item_pk) {
                 alert('Please select an item for all allocation rows.');
                 return;
             }
@@ -413,16 +800,39 @@
         }
         
         
-        // Load costing items first
-        $.ajax({
-            url: '/core/get_project_items/' + projectPk + '/',
+        // Load costing items and xero dropdown data in parallel
+        // Use project_status to determine tender_or_execution (1=tender, 2=execution)
+        var tenderOrExecution = window.hcVariationProjectStatus || 1;
+        var itemsLoaded = $.ajax({
+            url: '/core/get_project_items/' + projectPk + '/?tender_or_execution=' + tenderOrExecution,
             type: 'GET',
             success: function(response) {
                 if (response.status === 'success') {
                     window.variationsCostingItems = response.items;
+                    // Extract unique units from costing items
+                    var unitNames = [];
+                    response.items.forEach(function(item) {
+                        var unit = item.unit__unit_name || item.unit || '';
+                        if (unit && unitNames.indexOf(unit) === -1) {
+                            unitNames.push(unit);
+                        }
+                    });
+                    window.variationsUnits = unitNames;
                 }
             }
-        }).always(function() {
+        });
+        
+        var xeroLoaded = $.ajax({
+            url: '/core/get_xero_dropdown_data/?project_pk=' + projectPk,
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    window.variationsXeroAccounts = response.xero_accounts || [];
+                }
+            }
+        });
+        
+        $.when(itemsLoaded, xeroLoaded).always(function() {
             // Then load variations using custom AJAX like quotes does
             $.ajax({
                 url: '/core/get_hc_variations/' + projectPk + '/',

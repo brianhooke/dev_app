@@ -8,11 +8,12 @@ Template Rendering:
 import json
 import logging
 
+from django.db import models
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
-from ..models import Costing, Hc_variation, Hc_variation_allocations, Projects
+from ..models import Categories, Costing, Hc_variation, Hc_variation_allocations, Projects, Units
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,14 @@ def hc_variations_view(request):
     """
     project_pk = request.GET.get('project_pk')
     is_construction = False
+    project_status = 1  # Default to tender
     
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
             # Use rates_based flag from ProjectTypes instead of hardcoded project type names
             is_construction = (project.project_type and project.project_type.rates_based == 1)
+            project_status = project.project_status if project.project_status in [1, 2] else 1
         except Projects.DoesNotExist:
             pass
     
@@ -49,10 +52,10 @@ def hc_variations_view(request):
         allocations_columns = [
             {'header': 'Item', 'width': '25%'},
             {'header': 'Unit', 'width': '8%'},
-            {'header': 'Qty', 'width': '10%'},
-            {'header': 'Rate', 'width': '12%'},
-            {'header': '$ Amount', 'width': '15%', 'still_to_allocate_id': 'RemainingNet'},
-            {'header': 'Notes', 'width': '25%'},
+            {'header': 'Qty', 'width': '7%'},
+            {'header': 'Rate', 'width': '9%'},
+            {'header': '$ Amount', 'width': '11%', 'still_to_allocate_id': 'RemainingNet'},
+            {'header': 'Notes', 'width': '35%'},
             {'header': 'Delete', 'width': '5%', 'class': 'col-action-first', 'edit_only': True},
         ]
     else:
@@ -66,6 +69,7 @@ def hc_variations_view(request):
     context = {
         'project_pk': project_pk,
         'is_construction': is_construction,
+        'project_status': project_status,
         'main_table_columns': main_table_columns,
         'allocations_columns': allocations_columns,
     }
@@ -150,6 +154,127 @@ def get_hc_variation_allocations(request, variation_pk):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def _create_new_item_for_variation(project, alloc_data):
+    """
+    Helper function to create a new category/unit/costing item from variation allocation data.
+    
+    Args:
+        project: The Project object
+        alloc_data: Dict containing:
+            - new_category_name: str (optional) - Create new category with this name
+            - category_name: str (optional) - Use existing category with this name
+            - new_item_name: str - The new item name
+            - new_unit_name: str (optional) - Create new unit with this name
+            - unit: str (optional) - Use existing unit with this name
+            - xero_account_code: str - Xero account code
+    
+    Returns:
+        Costing object if created successfully, None otherwise
+    """
+    try:
+        # 1. Get or create category
+        new_category_name = alloc_data.get('new_category_name')
+        category_name = alloc_data.get('category_name')
+        
+        if new_category_name:
+            # Create new category
+            # Get max order_in_list for this project
+            max_order = Categories.objects.filter(project=project).aggregate(
+                max_order=models.Max('order_in_list')
+            )['max_order'] or 0
+            
+            category = Categories.objects.create(
+                project=project,
+                category=new_category_name,
+                invoice_category=new_category_name,
+                order_in_list=max_order + 1,
+                division=0
+            )
+            logger.info(f"Created new category '{new_category_name}' for project {project.projects_pk}")
+        elif category_name:
+            # Find existing category by name
+            category = Categories.objects.filter(
+                project=project,
+                category__iexact=category_name
+            ).first()
+            if not category:
+                logger.error(f"Category '{category_name}' not found for project {project.projects_pk}")
+                return None
+        else:
+            logger.error("No category specified for new item")
+            return None
+        
+        # 2. Get or create unit (if provided)
+        unit_obj = None
+        new_unit_name = alloc_data.get('new_unit_name')
+        unit_name = alloc_data.get('unit')
+        
+        if new_unit_name:
+            # Create new unit for project
+            max_unit_order = Units.objects.filter(project=project).aggregate(
+                max_order=models.Max('order_in_list')
+            )['max_order'] or 0
+            
+            unit_obj = Units.objects.create(
+                project=project,
+                unit_name=new_unit_name,
+                order_in_list=max_unit_order + 1
+            )
+            logger.info(f"Created new unit '{new_unit_name}' for project {project.projects_pk}")
+        elif unit_name:
+            # Find existing unit by name
+            unit_obj = Units.objects.filter(
+                project=project,
+                unit_name__iexact=unit_name
+            ).first()
+            # If not found at project level, try project_type level
+            if not unit_obj and project.project_type:
+                unit_obj = Units.objects.filter(
+                    project__isnull=True,
+                    project_type=project.project_type,
+                    unit_name__iexact=unit_name
+                ).first()
+        
+        # 3. Create the costing item
+        item_name = alloc_data.get('new_item_name', '').strip()
+        xero_account_code = alloc_data.get('xero_account_code', '')
+        
+        if not item_name:
+            logger.error("No item name provided for new item")
+            return None
+        
+        # Get max order_in_list for items in this category
+        max_item_order = Costing.objects.filter(
+            project=project,
+            category=category
+        ).aggregate(max_order=models.Max('order_in_list'))['max_order'] or 0
+        
+        # Set tender_or_execution based on project_status (1=tender, 2=execution)
+        tender_or_execution = project.project_status if project.project_status in [1, 2] else 1
+        
+        costing = Costing.objects.create(
+            project=project,
+            category=category,
+            item=item_name,
+            unit=unit_obj,
+            order_in_list=max_item_order + 1,
+            xero_account_code=xero_account_code,
+            contract_budget=0,
+            uncommitted_amount=0,
+            fixed_on_site=0,
+            sc_invoiced=0,
+            sc_paid=0,
+            tender_or_execution=tender_or_execution
+        )
+        
+        logger.info(f"Created new item '{item_name}' in category '{category.category}' for project {project.projects_pk}")
+        return costing
+        
+    except Exception as e:
+        logger.error(f"Error creating new item for variation: {e}", exc_info=True)
+        return None
+
+
 @csrf_exempt
 def save_hc_variation(request):
     """Save a new HC variation with allocations, or update allocations for existing variation."""
@@ -215,20 +340,44 @@ def save_hc_variation(request):
             if not project_pk or not date:
                 return JsonResponse({'error': 'project_pk and date required'}, status=400)
             
+            # Get the project
+            try:
+                project = Projects.objects.get(projects_pk=project_pk)
+            except Projects.DoesNotExist:
+                return JsonResponse({'error': 'Project not found'}, status=404)
+            
             # Create the variation with amount
             from datetime import datetime
             variation_date = datetime.strptime(date, '%Y-%m-%d').date()
             variation = Hc_variation.objects.create(date=variation_date, amount=total_amount)
             
+            created_items = []
+            
             # Create allocations
             for alloc_data in allocations_data:
-                costing_pk = alloc_data.get('item_pk')
-                if not costing_pk:
-                    continue
+                is_new_item = alloc_data.get('is_new_item', False)
                 
-                try:
-                    costing = Costing.objects.get(costing_pk=costing_pk)
-                    
+                if is_new_item:
+                    # Handle new item creation
+                    costing = _create_new_item_for_variation(project, alloc_data)
+                    if costing:
+                        created_items.append({
+                            'costing_pk': costing.costing_pk,
+                            'item': costing.item,
+                            'category': costing.category.category
+                        })
+                else:
+                    # Existing item
+                    costing_pk = alloc_data.get('item_pk')
+                    if not costing_pk:
+                        continue
+                    try:
+                        costing = Costing.objects.get(costing_pk=costing_pk)
+                    except Costing.DoesNotExist:
+                        logger.warning(f"Costing {costing_pk} not found for variation allocation")
+                        continue
+                
+                if costing:
                     # Handle construction mode (qty/rate) vs simple mode (amount)
                     qty = alloc_data.get('qty')
                     rate = alloc_data.get('rate')
@@ -246,13 +395,12 @@ def save_hc_variation(request):
                         rate=rate,
                         notes=alloc_data.get('notes', '')
                     )
-                except Costing.DoesNotExist:
-                    logger.warning(f"Costing {costing_pk} not found for variation allocation")
             
-            logger.info(f"Created HC variation {variation.hc_variation_pk} with {len(allocations_data)} allocations")
+            logger.info(f"Created HC variation {variation.hc_variation_pk} with {len(allocations_data)} allocations, {len(created_items)} new items")
             return JsonResponse({
                 'status': 'success',
-                'hc_variation_pk': variation.hc_variation_pk
+                'hc_variation_pk': variation.hc_variation_pk,
+                'created_items': created_items
             })
     
     except Exception as e:
