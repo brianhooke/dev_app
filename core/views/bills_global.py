@@ -309,6 +309,47 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
             'message': f'This bill was already sent to Xero (Xero ID: {invoice.bill_xero_id}). Cannot send again.'
         }, status=400)
     
+    # Pre-check: Search Xero for existing invoice with same InvoiceNumber
+    if invoice.supplier_bill_number:
+        xero_instance = invoice.xero_instance
+        if xero_instance:
+            try:
+                access_token = xero_instance.get_valid_access_token()
+                tenant_id = xero_instance.xero_tenant_id
+                
+                # Search for existing ACCPAY invoice with this number
+                search_url = f'https://api.xero.com/api.xro/2.0/Invoices?where=Type=="ACCPAY"&&InvoiceNumber=="{invoice.supplier_bill_number}"'
+                search_response = requests.get(
+                    search_url,
+                    headers={
+                        'Authorization': f'Bearer {access_token}',
+                        'Accept': 'application/json',
+                        'Xero-tenant-id': tenant_id
+                    },
+                    timeout=15
+                )
+                
+                if search_response.status_code == 200:
+                    search_data = search_response.json()
+                    existing_invoices = search_data.get('Invoices', [])
+                    if existing_invoices:
+                        existing = existing_invoices[0]
+                        existing_id = existing.get('InvoiceID')
+                        existing_status = existing.get('Status')
+                        logger.warning(f"Found existing Xero invoice: {existing_id} with status {existing_status}")
+                        
+                        # Update our database with the Xero ID
+                        invoice.bill_xero_id = existing_id
+                        invoice.save(update_fields=['bill_xero_id'])
+                        
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'This invoice already exists in Xero (InvoiceNumber: {invoice.supplier_bill_number}, Status: {existing_status}). The Xero ID has been linked to this bill.'
+                        }, status=400)
+            except Exception as e:
+                logger.warning(f"Error checking for existing Xero invoice: {e}")
+                # Continue anyway - the create will fail if it exists
+    
     # Get supplier
     supplier = invoice.contact_pk
     if not supplier:
