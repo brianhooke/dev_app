@@ -542,9 +542,23 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
         if not error_msg:
             error_msg = f'Xero API error: {response.status_code} - {response.text}'
         logger.error(f"Xero API error: {error_msg}")
+        
+        # Include diagnostic info in the error response
+        formatted_date = invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else 'None'
+        formatted_due_date = invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else 'None'
         return JsonResponse({
             'status': 'error',
-            'message': error_msg
+            'message': error_msg,
+            'debug': {
+                'bill_pk': bill_pk,
+                'supplier_bill_number': invoice.supplier_bill_number,
+                'bill_date_raw': str(invoice.bill_date),
+                'bill_date_formatted': formatted_date,
+                'bill_due_date_raw': str(invoice.bill_due_date),
+                'bill_due_date_formatted': formatted_due_date,
+                'bill_xero_id': invoice.bill_xero_id,
+                'xero_instance_id': invoice.xero_instance_id,
+            }
         }, status=response.status_code)
     
     # Success - parse response

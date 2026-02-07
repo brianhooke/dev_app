@@ -560,6 +560,18 @@
                     errMsg += '\nStatus: ' + xhr.status + ' ' + error;
                 }
                 console.error('Send to Xero error:', xhr, status, error);
+                
+                // Log debug info if available
+                if (xhr.responseJSON && xhr.responseJSON.debug) {
+                    console.log('=== XERO DEBUG INFO ===');
+                    console.log('Debug data:', JSON.stringify(xhr.responseJSON.debug, null, 2));
+                    errMsg += '\n\n--- Debug Info ---';
+                    errMsg += '\nSupplier Bill #: ' + xhr.responseJSON.debug.supplier_bill_number;
+                    errMsg += '\nBill Date (raw): ' + xhr.responseJSON.debug.bill_date_raw;
+                    errMsg += '\nBill Date (sent): ' + xhr.responseJSON.debug.bill_date_formatted;
+                    errMsg += '\nBill Xero ID: ' + (xhr.responseJSON.debug.bill_xero_id || 'None');
+                }
+                
                 alert(errMsg);
             }
         });
