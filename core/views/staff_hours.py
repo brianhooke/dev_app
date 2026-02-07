@@ -2076,26 +2076,30 @@ def save_allocation(request):
         if clear_existing:
             StaffHoursAllocations.objects.filter(staff_hours=staff_hours).delete()
         
-        # Create allocation (always create new since we cleared existing)
+        # Create allocation - always create new since we clear existing on first save
         if allocation_type == 1:  # Project allocation
-            allocation, created = StaffHoursAllocations.objects.update_or_create(
+            allocation = StaffHoursAllocations.objects.create(
                 staff_hours=staff_hours,
                 allocation_type=allocation_type,
                 project_id=project_id,
                 costing_id=costing_id,
-                defaults={'hours': hours, 'note': note}
+                hours=hours,
+                note=note
             )
         else:  # Unchargeable or Other Chargeable
-            allocation, created = StaffHoursAllocations.objects.update_or_create(
+            allocation = StaffHoursAllocations.objects.create(
                 staff_hours=staff_hours,
                 allocation_type=allocation_type,
-                defaults={'hours': hours, 'note': note, 'project': None, 'costing': None}
+                hours=hours,
+                note=note,
+                project=None,
+                costing=None
             )
         
         return JsonResponse({
             'status': 'success',
             'allocation_id': allocation.allocation_pk,
-            'created': created
+            'created': True
         })
     except Exception as e:
         logger.error(f"Error saving allocation: {str(e)}", exc_info=True)
