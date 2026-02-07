@@ -113,12 +113,12 @@ def dashboard_view(request):
     
     # Stocktake table columns
     stocktake_main_columns = [
-        {'header': 'Supplier', 'width': '20%'},
-        {'header': 'Bill #', 'width': '15%'},
-        {'header': '$ Gross', 'width': '15%'},
-        {'header': '$ Net', 'width': '15%'},
-        {'header': '$ GST', 'width': '15%'},
-        {'header': '', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Supplier', 'width': '20%', 'sortable': True},
+        {'header': 'Bill #', 'width': '15%', 'sortable': True},
+        {'header': '$ Gross', 'width': '15%', 'sortable': True},
+        {'header': '$ Net', 'width': '15%', 'sortable': True},
+        {'header': '$ GST', 'width': '15%', 'sortable': True},
+        {'header': '', 'width': '10%', 'class': 'col-action', 'sortable': True},
     ]
     stocktake_alloc_columns = [
         {'header': 'Project Type', 'width': '15%'},
@@ -2060,6 +2060,7 @@ def get_recent_activities(request):
     6. Quotes Created
     7. Purchase Orders Sent
     8. Documents added
+    9. Emails received (grouped summary to avoid clutter - shows count + bills created)
     """
     try:
         # Calculate 24 hours ago
@@ -2243,6 +2244,67 @@ def get_recent_activities(request):
                 'link': None,
                 'project_pk': doc.folder.project.projects_pk if doc.folder and doc.folder.project else None,
             })
+        
+        # 9. Email activity (grouped to avoid clutter)
+        from core.models import ReceivedEmail
+        
+        # Get emails received in last 24 hours
+        recent_emails = ReceivedEmail.objects.filter(
+            processed_at__gte=cutoff
+        ).order_by('-processed_at')
+        
+        total_emails = recent_emails.count()
+        
+        if total_emails > 0:
+            # Get the most recent email for timestamp
+            latest_email = recent_emails.first()
+            
+            # Count emails with bills created vs duplicates/errors
+            emails_with_bills = recent_emails.filter(is_processed=True).count()
+            
+            # Group into a single activity entry with summary
+            if total_emails == 1:
+                # Single email - show details
+                email = latest_email
+                bill_count = email.bills.count()
+                activities.append({
+                    'type': 'email_received',
+                    'icon': 'fas fa-envelope',
+                    'color': '#17a2b8',  # info blue
+                    'message': f'Email received from {email.from_address[:30]}{"..." if len(email.from_address) > 30 else ""}',
+                    'detail': f'{bill_count} bill{"s" if bill_count != 1 else ""} created | {email.subject[:40]}{"..." if len(email.subject) > 40 else ""}',
+                    'timestamp': email.processed_at.isoformat() if email.processed_at else None,
+                    'link': None,
+                    'project_pk': None,
+                })
+            else:
+                # Multiple emails - show grouped summary
+                # Calculate time range
+                oldest_email = recent_emails.last()
+                time_span = ''
+                if oldest_email and latest_email:
+                    diff = latest_email.processed_at - oldest_email.processed_at
+                    if diff.total_seconds() < 3600:
+                        time_span = 'in the last hour'
+                    elif diff.total_seconds() < 86400:
+                        hours = int(diff.total_seconds() / 3600)
+                        time_span = f'in the last {hours} hour{"s" if hours > 1 else ""}'
+                    else:
+                        time_span = 'in the last 24 hours'
+                
+                # Count total bills created from these emails
+                total_bills_created = sum(e.bills.count() for e in recent_emails)
+                
+                activities.append({
+                    'type': 'email_summary',
+                    'icon': 'fas fa-envelope-open-text',
+                    'color': '#17a2b8',  # info blue
+                    'message': f'{total_emails} emails received {time_span}',
+                    'detail': f'{total_bills_created} bill{"s" if total_bills_created != 1 else ""} created | {emails_with_bills} processed successfully',
+                    'timestamp': latest_email.processed_at.isoformat() if latest_email and latest_email.processed_at else None,
+                    'link': None,
+                    'project_pk': None,
+                })
         
         # Sort all activities by timestamp (most recent first)
         activities.sort(key=lambda x: x['timestamp'] or '', reverse=True)

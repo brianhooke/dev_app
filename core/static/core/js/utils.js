@@ -633,6 +633,7 @@ function createSearchableDropdown(selectElement, options) {
     }
     
     $dropdown.on('click', '.searchable-dropdown-item:not(.disabled)', function(e) {
+        console.log('[SearchableDropdown] Item clicked, value:', $(this).attr('data-value'));
         e.stopPropagation();
         selectOption($(this).attr('data-value'));
     });

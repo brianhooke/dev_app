@@ -507,6 +507,48 @@ Tabs:
         .snap-add-alloc-btn i {
             font-size: 10px;
         }
+        
+        /* Stocktake Toggle Switch */
+        .stocktake-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .stocktake-toggle-switch {
+            position: relative;
+            width: 32px;
+            height: 16px;
+            background: #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .stocktake-toggle-switch.active {
+            background: var(--manila-dark);
+        }
+        .stocktake-toggle-switch .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+        .stocktake-toggle-switch.active .toggle-slider {
+            left: 18px;
+        }
+        .stocktake-toggle-label {
+            font-size: 11px;
+            color: var(--manila-text-muted);
+            cursor: pointer;
+        }
+        .stocktake-toggle-label.active {
+            color: var(--manila-text);
+            font-weight: 600;
+        }
     </style>
 
     <!-- Main Content -->
@@ -1061,9 +1103,13 @@ window.debugStocktakeAllocations = function() {
                     row.append($('<td>').addClass('net-cell').text(bill.total_net !== null ? Utils.formatCurrency(bill.total_net) : ''));
                     row.append($('<td>').addClass('gst-cell').text(bill.total_gst !== null ? Utils.formatCurrency(bill.total_gst) : ''));
                     
-                    // Approve button - only show for unallocated bills (not already approved)
+                    // Approve button or Approval date
                     var actionTd = $('<td>').addClass('col-action');
-                    if (window.stocktakeFilterMode !== 'approved') {
+                    if (window.stocktakeFilterMode === 'approved') {
+                        // Show approval date
+                        var approvalDate = bill.updated_at ? formatStocktakeDate(bill.updated_at) : '-';
+                        actionTd.text(approvalDate).css('font-size', '11px');
+                    } else {
                         var approveBtn = $('<button>')
                             .addClass('btn btn-sm btn-secondary approve-stocktake-btn')
                             .text('Approve')
@@ -1457,7 +1503,7 @@ window.debugStocktakeAllocations = function() {
                             return b.bill_pk == billPk; 
                         });
                         if (bill) {
-                            bill.bill_status = 1; // Allocated/approved status
+                            bill.bill_status = 2; // Approved status
                         }
                     }
                     
@@ -1532,6 +1578,11 @@ window.debugStocktakeAllocations = function() {
                 
                 AllocationsManager.populateMainTable('stocktakeAlloc', stocktakeBills);
                 Utils.addTruncationTooltips('stocktakeAllocMainTable');
+                
+                // Initialize sortable columns
+                if (typeof Utils !== 'undefined' && Utils.initSortableTable) {
+                    Utils.initSortableTable('stocktakeAllocMainTable');
+                }
             },
             error: function(xhr, status, error) {
                 console.error('[Stocktake] Failed to load bills:', error);
@@ -1544,16 +1595,42 @@ window.debugStocktakeAllocations = function() {
         console.log('[Stocktake] Initializing stocktake section');
         initAllocationsManager();
         
-        // Add filter toggle button below main table (only once)
-        if (!$('#stocktakeFilterToggleBtn').length) {
-            var toggleBtn = $('<button>')
-                .attr('id', 'stocktakeFilterToggleBtn')
-                .addClass('btn btn-sm btn-outline-secondary')
-                .css({ 'margin-top': '8px', 'font-size': '11px' })
-                .text('Show Approved Bills');
-            // Wrap in a div to prevent full-width stretching from flex parent
-            var btnWrapper = $('<div>').css({ 'display': 'block' }).append(toggleBtn);
-            $('.stocktakeAlloc-table-container').first().after(btnWrapper);
+        // Add toggle switch above main table (only once)
+        if (!$('#stocktakeToggleContainer').length) {
+            var toggleHtml = `
+                <div id="stocktakeToggleContainer" class="stocktake-toggle-container">
+                    <span class="stocktake-toggle-label active" data-mode="pending">Pending</span>
+                    <div id="stocktakeToggleSwitch" class="stocktake-toggle-switch">
+                        <div class="toggle-slider"></div>
+                    </div>
+                    <span class="stocktake-toggle-label" data-mode="approved">Approved</span>
+                </div>
+            `;
+            $('.stocktakeAlloc-table-container').first().before(toggleHtml);
+        }
+        
+        // MutationObserver to reset toggle when Allocations tab becomes visible
+        if (!window.stocktakeAllocObserver) {
+            var allocationsPane = document.getElementById('stocktakeAllocations');
+            if (allocationsPane) {
+                window.stocktakeAllocObserver = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.attributeName === 'class') {
+                            var isVisible = allocationsPane.classList.contains('show') && allocationsPane.classList.contains('active');
+                            if (isVisible && window.stocktakeFilterMode === 'approved') {
+                                // Reset to pending mode
+                                window.stocktakeFilterMode = 'unallocated';
+                                $('#stocktakeToggleSwitch').removeClass('active');
+                                $('.stocktake-toggle-label[data-mode="pending"]').addClass('active');
+                                $('.stocktake-toggle-label[data-mode="approved"]').removeClass('active');
+                                updateStocktakeTableHeader('pending');
+                                window.loadStocktakeBills();
+                            }
+                        }
+                    });
+                });
+                window.stocktakeAllocObserver.observe(allocationsPane, { attributes: true });
+            }
         }
         
         // Load project types first for allocation dropdowns
@@ -1564,17 +1641,64 @@ window.debugStocktakeAllocations = function() {
         console.log('[Stocktake] Section initialized');
     };
     
-    // Filter toggle button click handler
-    $(document).on('click', '#stocktakeFilterToggleBtn', function() {
-        var btn = $(this);
-        if (window.stocktakeFilterMode === 'unallocated') {
-            window.stocktakeFilterMode = 'approved';
-            btn.text('Show Unallocated Bills');
+    // Update table header for pending/approved mode
+    function updateStocktakeTableHeader(mode) {
+        var lastTh = $('#stocktakeAllocMainTable thead th').last();
+        if (mode === 'approved') {
+            lastTh.text('Approved').removeClass('col-action');
         } else {
-            window.stocktakeFilterMode = 'unallocated';
-            btn.text('Show Approved Bills');
+            lastTh.text('').addClass('col-action');
         }
-        // Clear selection manually (AllocationsManager.clearSelection doesn't exist)
+    }
+    
+    // Format date for stocktake display (dd-mmm-yy)
+    function formatStocktakeDate(dateString) {
+        if (!dateString) return '-';
+        var date = new Date(dateString);
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var day = date.getDate();
+        var month = months[date.getMonth()];
+        var year = String(date.getFullYear()).slice(-2);
+        return day + '-' + month + '-' + year;
+    }
+    
+    // Toggle switch click handler
+    $(document).on('click', '#stocktakeToggleSwitch, .stocktake-toggle-label', function() {
+        var clickedMode = $(this).data('mode');
+        var isCurrentlyApproved = window.stocktakeFilterMode === 'approved';
+        
+        // Determine new mode
+        var newMode;
+        if (clickedMode === 'pending') {
+            newMode = 'unallocated';
+        } else if (clickedMode === 'approved') {
+            newMode = 'approved';
+        } else {
+            // Clicked on switch itself - toggle
+            newMode = isCurrentlyApproved ? 'unallocated' : 'approved';
+        }
+        
+        // Don't do anything if mode hasn't changed
+        if ((newMode === 'approved' && isCurrentlyApproved) || (newMode === 'unallocated' && !isCurrentlyApproved)) {
+            return;
+        }
+        
+        window.stocktakeFilterMode = newMode;
+        
+        // Update toggle UI
+        if (newMode === 'approved') {
+            $('#stocktakeToggleSwitch').addClass('active');
+            $('.stocktake-toggle-label[data-mode="pending"]').removeClass('active');
+            $('.stocktake-toggle-label[data-mode="approved"]').addClass('active');
+            updateStocktakeTableHeader('approved');
+        } else {
+            $('#stocktakeToggleSwitch').removeClass('active');
+            $('.stocktake-toggle-label[data-mode="pending"]').addClass('active');
+            $('.stocktake-toggle-label[data-mode="approved"]').removeClass('active');
+            updateStocktakeTableHeader('pending');
+        }
+        
+        // Clear selection manually
         window.currentSelectedBill = null;
         window.currentSelectedBillPk = null;
         $('#stocktakeAllocMainTableBody tr').removeClass('selected-row');

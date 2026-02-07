@@ -346,7 +346,7 @@ def delete_stocktake_allocation(request, allocation_pk):
 @require_http_methods(["POST"])
 def approve_stocktake_bill(request, bill_pk):
     """
-    Approve a stocktake bill - updates bill status to 1 (allocated).
+    Approve a stocktake bill - updates bill status to 2 (approved).
     """
     try:
         from core.models import Bills
@@ -359,8 +359,8 @@ def approve_stocktake_bill(request, bill_pk):
                 'message': f'Bill with pk {bill_pk} not found'
             }, status=404)
         
-        # Update bill status to allocated (1)
-        bill.bill_status = 1
+        # Update bill status to approved (2)
+        bill.bill_status = 2
         bill.save(update_fields=['bill_status', 'updated_at'])
         
         logger.info(f"Approved stocktake bill {bill_pk}")

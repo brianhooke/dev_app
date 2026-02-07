@@ -83,17 +83,18 @@ def bills_global_view(request):
     
     # ===== APPROVALS SECTION COLUMNS =====
     approvals_main_columns = [
-        {'header': 'Project', 'width': '11%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '11%', 'sortable': True},
-        {'header': 'Supplier', 'width': '11%', 'sortable': True},
-        {'header': '$ Gross', 'width': '9%', 'sortable': True},
-        {'header': '$ Net', 'width': '9%', 'sortable': True},
-        {'header': '$ GST', 'width': '8%', 'sortable': True},
-        {'header': 'Date', 'width': '8%'},
-        {'header': 'Due', 'width': '8%'},
+        {'header': 'Project', 'width': '10%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '10%', 'sortable': True},
+        {'header': 'Supplier', 'width': '10%', 'sortable': True},
+        {'header': 'Bill #', 'width': '9%', 'sortable': True},
+        {'header': '$ Gross', 'width': '8%', 'sortable': True},
+        {'header': '$ Net', 'width': '8%', 'sortable': True},
+        {'header': '$ GST', 'width': '7%', 'sortable': True},
+        {'header': 'Date', 'width': '7%', 'sortable': True},
+        {'header': 'Due', 'width': '7%', 'sortable': True},
         {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
         {'header': 'Mark X', 'width': '7%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '6%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '5%', 'class': 'col-action'},
     ]
     approvals_alloc_columns = [
         {'header': 'Xero Account', 'width': '18%'},
@@ -192,15 +193,18 @@ def bills_global_approvals_view(request):
     """
     # Main table columns for Approvals view
     main_table_columns = [
-        {'header': 'Project', 'width': '13%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '13%', 'sortable': True},
-        {'header': 'Supplier', 'width': '13%', 'sortable': True},
-        {'header': '$ Gross', 'width': '11%', 'sortable': True},
-        {'header': '$ Net', 'width': '11%', 'sortable': True},
-        {'header': '$ GST', 'width': '11%', 'sortable': True},
-        {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Mark X', 'width': '7%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '7%', 'class': 'col-action'},
+        {'header': 'Project', 'width': '11%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '11%', 'sortable': True},
+        {'header': 'Supplier', 'width': '11%', 'sortable': True},
+        {'header': 'Bill #', 'width': '9%', 'sortable': True},
+        {'header': '$ Gross', 'width': '9%', 'sortable': True},
+        {'header': '$ Net', 'width': '8%', 'sortable': True},
+        {'header': '$ GST', 'width': '8%', 'sortable': True},
+        {'header': 'Date', 'width': '8%', 'sortable': True},
+        {'header': 'Due Date', 'width': '7%', 'sortable': True},
+        {'header': 'Send', 'width': '6%', 'class': 'col-action-first'},
+        {'header': 'Mark X', 'width': '6%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '6%', 'class': 'col-action'},
     ]
     
     # Allocations columns for Approvals view (read-only)
@@ -266,16 +270,17 @@ def approve_bill_direct(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-def _send_bill_to_xero_core(invoice, workflow='approvals'):
+def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     """
     Shared helper that sends a bill to Xero and attaches the PDF.
     
     Args:
         invoice: Bills model instance with supplier (contact_pk), xero_instance, and allocations set
         workflow: 'approvals' or 'direct' - determines status transitions
+        force_update: If True, proceed even if duplicate invoice exists in Xero
     
     Returns:
-        JsonResponse with success/error status
+        JsonResponse with success/error status, or 'duplicate_found' status if duplicate detected
     """
     bill_pk = invoice.bill_pk
     
@@ -309,8 +314,8 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
             'message': f'This bill was already sent to Xero (Xero ID: {invoice.bill_xero_id}). Cannot send again.'
         }, status=400)
     
-    # Pre-check: Search Xero for existing invoice with same InvoiceNumber
-    if invoice.supplier_bill_number:
+    # Pre-check: Search Xero for existing invoice with same InvoiceNumber (unless force_update)
+    if invoice.supplier_bill_number and not force_update:
         xero_instance = invoice.xero_instance
         if xero_instance:
             try:
@@ -350,16 +355,22 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
                         existing = existing_invoices[0]
                         existing_id = existing.get('InvoiceID')
                         existing_status = existing.get('Status')
+                        existing_date = existing.get('DateString', existing.get('Date', 'Unknown'))
+                        existing_total = existing.get('Total', 'Unknown')
                         logger.warning(f"Found existing Xero invoice: {existing_id} with status {existing_status}")
                         
-                        # Update our database with the Xero ID
-                        invoice.bill_xero_id = existing_id
-                        invoice.save(update_fields=['bill_xero_id'])
-                        
+                        # Return duplicate_found status - let frontend ask user for confirmation
                         return JsonResponse({
-                            'status': 'error',
-                            'message': f'This invoice already exists in Xero (InvoiceNumber: {invoice.supplier_bill_number}, Status: {existing_status}). The Xero ID has been linked to this bill.'
-                        }, status=400)
+                            'status': 'duplicate_found',
+                            'message': f'Invoice #{inv_num} already exists in Xero',
+                            'existing_invoice': {
+                                'invoice_id': existing_id,
+                                'invoice_number': inv_num,
+                                'status': existing_status,
+                                'date': existing_date,
+                                'total': existing_total,
+                            }
+                        })
             except Exception as e:
                 logger.warning(f"Error checking for existing Xero invoice: {e}")
                 import traceback
@@ -993,10 +1004,12 @@ def send_bill_to_xero(request):
     
     Expected POST data:
     - bill_pk: int
+    - force_update: bool (optional) - if True, proceed even if duplicate exists in Xero
     """
     try:
         data = json.loads(request.body)
         bill_pk = data.get('bill_pk')
+        force_update = data.get('force_update', False)
         
         if not bill_pk:
             return JsonResponse({
@@ -1023,7 +1036,7 @@ def send_bill_to_xero(request):
             }, status=400)
         
         # Delegate to shared helper
-        return _send_bill_to_xero_core(invoice, workflow='approvals')
+        return _send_bill_to_xero_core(invoice, workflow='approvals', force_update=force_update)
         
     except json.JSONDecodeError:
         return JsonResponse({
@@ -1323,6 +1336,7 @@ def get_bills_list(request):
                 'attachment_url': attachment_url,
                 'email_url': email_url,
                 'allocations': allocations,
+                'updated_at': invoice.updated_at.isoformat() if invoice.updated_at else None,
             }
             bills_data.append(bill)
         except Exception as e:

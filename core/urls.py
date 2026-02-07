@@ -2,7 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 from . import views
 from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, send_po_email_view, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
-from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills
+from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills, get_sent_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
     bills_global_view, bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
@@ -185,6 +185,7 @@ urlpatterns = [
     path('update_bill/', update_bill, name='update_bill'),
     path('null_allocation_xero_fields/', null_allocation_xero_fields, name='null_allocation_xero_fields'),
     path('get_approved_bills/', get_approved_bills, name='get_approved_bills'),
+    path('get_sent_bills/', get_sent_bills, name='get_sent_bills'),
     path('return_bill_to_project/<int:invoice_id>/', return_bill_to_project, name='return_bill_to_project'),
     
     # Email receiving API

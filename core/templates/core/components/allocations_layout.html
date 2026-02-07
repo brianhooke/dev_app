@@ -304,7 +304,7 @@ Optional context variables:
 <div class="{{ section_id }}-container" style="height: 100%; display: flex; flex-direction: column;">
     <div style="display: flex; flex: 1; overflow: hidden;">
         <!-- Left side: Main Table (top 2/3) and Allocations (bottom 1/3) -->
-        <div class="{{ section_id }}-left-panel" style="width: {% if hide_viewer %}100%{% else %}60%{% endif %}; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px {% if hide_viewer %}0{% else %}12px{% endif %} 6px 0; min-height: 0;">
+        <div class="{{ section_id }}-left-panel" style="width: {% if hide_viewer %}100%{% else %}67.5%{% endif %}; display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px {% if hide_viewer %}0{% else %}12px{% endif %} 6px 0; min-height: 0;">
             <!-- Main Table Container -->
             <div class="{{ section_id }}-table-container reusable-table-container" style="flex: 0 1 auto; display: flex; flex-direction: column; overflow: hidden; min-height: 0; margin-top: 8px;">
                 <div id="{{ section_id }}TableContainer" style="overflow-y: auto;">
@@ -419,8 +419,8 @@ Optional context variables:
         </div>
         
         {% if not hide_viewer %}
-        <!-- Right side: PDF Viewer (40% - full height) -->
-        <div style="width: 40%; display: flex; flex-direction: column; height: 100%; padding: 6px; padding-right: 0;">
+        <!-- Right side: PDF Viewer (32.5% - full height) -->
+        <div style="width: 32.5%; display: flex; flex-direction: column; height: 100%; padding: 6px; padding-right: 0;">
             <div id="{{ section_id }}ViewerSection" class="{{ section_id }}-viewer-container" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
                     <iframe 

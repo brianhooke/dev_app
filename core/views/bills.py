@@ -612,6 +612,96 @@ def get_approved_bills(request):
     })
 
 
+def get_sent_bills(request):
+    """
+    Get list of bills that have been sent to Xero (status 3, 4, or 104).
+    Used by the Approvals section "Sent" toggle.
+    """
+    from core.models import XeroInstances, Projects, XeroAccounts
+    
+    # Get bills with status 3 (sent to Xero), 4 (paid), or 104 (PO sent to Xero)
+    invoices = Bills.objects.filter(
+        bill_status__in=[3, 4, 104]
+    ).select_related(
+        'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
+    ).prefetch_related('bill_allocations__xero_account', 'bill_allocations__item').order_by('-updated_at')[:100]  # Limit to last 100
+    
+    # Prepare invoices data
+    invoices_data = []
+    for invoice in invoices:
+        try:
+            # Get project name
+            project_name = invoice.project.project if invoice.project else '-'
+            
+            # Get xero instance name (from invoice or project)
+            xero_instance_name = '-'
+            xero_instance_id = None
+            if invoice.xero_instance:
+                xero_instance_name = invoice.xero_instance.xero_name
+                xero_instance_id = invoice.xero_instance.xero_instance_pk
+            elif invoice.project and invoice.project.xero_instance:
+                xero_instance_name = invoice.project.xero_instance.xero_name
+                xero_instance_id = invoice.project.xero_instance.xero_instance_pk
+            
+            # Get supplier name
+            supplier_name = invoice.contact_pk.name if invoice.contact_pk else '-'
+            
+            # Calculate gross
+            total_net = float(invoice.total_net) if invoice.total_net else 0
+            total_gst = float(invoice.total_gst) if invoice.total_gst else 0
+            total_gross = total_net + total_gst
+            
+            # Get PDF URL - check invoice.pdf first, then email_attachment
+            pdf_url = ''
+            if invoice.pdf:
+                pdf_url = invoice.pdf.url
+            elif invoice.email_attachment:
+                pdf_url = invoice.email_attachment.get_download_url() or ''
+            
+            # Get allocations
+            allocations = []
+            for allocation in invoice.bill_allocations.all():
+                allocations.append({
+                    'allocation_pk': allocation.bill_allocation_pk,
+                    'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
+                    'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
+                    'costing_name': allocation.item.item if allocation.item else '-',
+                    'amount': float(allocation.amount) if allocation.amount else 0,
+                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
+                    'notes': allocation.notes or '',
+                })
+            
+            invoice_data = {
+                'bill_pk': invoice.bill_pk,
+                'bill_status': invoice.bill_status,
+                'project_name': project_name,
+                'project_pk': invoice.project.projects_pk if invoice.project else None,
+                'xero_instance_name': xero_instance_name,
+                'xero_instance_id': xero_instance_id,
+                'supplier_name': supplier_name,
+                'supplier_bill_number': invoice.supplier_bill_number or '',
+                'total_gross': total_gross,
+                'total_net': total_net,
+                'total_gst': total_gst,
+                'bill_date': invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else None,
+                'bill_due_date': invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else None,
+                'sent_at': invoice.updated_at.strftime('%Y-%m-%d') if invoice.updated_at else None,
+                'pdf_url': pdf_url,
+                'allocations': allocations,
+            }
+            invoices_data.append(invoice_data)
+        except Exception as e:
+            import traceback
+            logger.error(f"Error processing sent invoice {invoice.bill_pk}: {str(e)}")
+            logger.error(traceback.format_exc())
+            continue
+    
+    return JsonResponse({
+        'bills': invoices_data,
+        'count': len(invoices_data)
+    })
+
+
 # ============================================================================
 # Bill views moved from main.py for consolidation
 # ============================================================================

@@ -10,13 +10,18 @@
 
 <!-- Bills Inbox Section JS -->
 <script>
+console.log('[bills_global_inbox.html] Script loading...');
 (function() {
     'use strict';
+    console.log('[bills_global_inbox.html] IIFE starting...');
+    console.log('[bills_global_inbox.html] #billsInboxMainTableBody exists:', $('#billsInboxMainTableBody').length > 0);
     
     // Wait for DOM and ensure we have the table
     if ($('#billsInboxMainTableBody').length === 0) {
+        console.log('[bills_global_inbox.html] Table not found, exiting early');
         return;
     }
+    console.log('[bills_global_inbox.html] Table found, continuing...');
     
     
     // Initialize AllocationsManager for Bills Inbox
@@ -209,11 +214,16 @@
     
     // Validate Send button for Inbox mode
     function validateInboxSendButton(billPk) {
+        console.log('=== validateInboxSendButton called for billPk:', billPk, '===');
+        
         var button = $('button[data-bill-pk="' + billPk + '"].send-bill-btn');
+        console.log('  Button found:', button.length > 0);
         if (button.length === 0) return;
         
         var row = button.closest('tr');
+        console.log('  Row found:', row.length > 0, 'Row data-bill-pk:', row.attr('data-bill-pk'));
         var isValid = true;
+        var failReasons = [];
         
         var xeroInstanceOrProject = row.find('.xero-project-select').val();
         var supplierPk = row.find('.supplier-select').val();
@@ -221,16 +231,27 @@
         var netValue = row.find('.net-input').val();
         var gstValue = row.find('.gst-input').val();
         
-        if (!xeroInstanceOrProject) isValid = false;
-        if (!supplierPk) isValid = false;
-        if (!billNumber || billNumber.trim() === '') isValid = false;
-        if (!netValue || parseFloat(netValue) === 0) isValid = false;
-        if (gstValue === null || gstValue === undefined || gstValue === '') isValid = false;
+        console.log('  Field values:');
+        console.log('    xeroInstanceOrProject:', JSON.stringify(xeroInstanceOrProject), 'type:', typeof xeroInstanceOrProject);
+        console.log('    supplierPk:', JSON.stringify(supplierPk), 'type:', typeof supplierPk);
+        console.log('    billNumber:', JSON.stringify(billNumber), 'type:', typeof billNumber);
+        console.log('    netValue:', JSON.stringify(netValue), 'type:', typeof netValue, 'parsed:', parseFloat(netValue));
+        console.log('    gstValue:', JSON.stringify(gstValue), 'type:', typeof gstValue);
+        
+        if (!xeroInstanceOrProject) { isValid = false; failReasons.push('xeroInstanceOrProject empty'); }
+        if (!supplierPk) { isValid = false; failReasons.push('supplierPk empty'); }
+        if (!billNumber || billNumber.trim() === '') { isValid = false; failReasons.push('billNumber empty'); }
+        if (!netValue || parseFloat(netValue) === 0) { isValid = false; failReasons.push('netValue empty or 0'); }
+        if (gstValue === null || gstValue === undefined || gstValue === '') { isValid = false; failReasons.push('gstValue empty/null/undefined'); }
+        
+        console.log('  isValid:', isValid, 'failReasons:', failReasons);
         
         if (isValid) {
             button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+            console.log('  -> Button ENABLED (green)');
         } else {
             button.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+            console.log('  -> Button DISABLED (grey)');
         }
     }
     
@@ -318,6 +339,14 @@
     
     // Bind input change handlers for validation
     function bindInboxInputHandlers() {
+        console.log('[bindInboxInputHandlers] BINDING event handlers...');
+        console.log('  #billsInboxMainTableBody exists:', $('#billsInboxMainTableBody').length > 0);
+        console.log('  .xero-project-select count:', $('#billsInboxMainTableBody .xero-project-select').length);
+        console.log('  .supplier-select count:', $('#billsInboxMainTableBody .supplier-select').length);
+        console.log('  .bill-number-input count:', $('#billsInboxMainTableBody .bill-number-input').length);
+        console.log('  .net-input count:', $('#billsInboxMainTableBody .net-input').length);
+        console.log('  .gst-input count:', $('#billsInboxMainTableBody .gst-input').length);
+        
         $(document).off('change.billsInbox input.billsInbox', '#billsInboxMainTableBody');
         
         $(document).on('change.billsInbox input.billsInbox', '#billsInboxMainTableBody .xero-project-select, #billsInboxMainTableBody .supplier-select, #billsInboxMainTableBody .bill-number-input, #billsInboxMainTableBody .net-input, #billsInboxMainTableBody .gst-input', function() {

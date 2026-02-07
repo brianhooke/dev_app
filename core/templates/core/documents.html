@@ -13,6 +13,13 @@
             <input type="file" id="fileUploadInput" style="display: none;" multiple>
         </div>
         
+        <!-- Folder Tree Header -->
+        <div id="folderTreeHeader" style="display: flex; padding: 6px 10px; background-color: #e9ecef; border: 1px solid #ddd; border-bottom: none; font-size: 11px; font-weight: 600; color: #495057;">
+            <span style="flex: 1;">Folder/File</span>
+            <span style="width: 70px; text-align: right;">Date Added</span>
+            <span style="width: 70px; text-align: right;">Filesize</span>
+        </div>
+        
         <!-- Folder Tree -->
         <div id="folderTreeContainer" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa;">
             <div id="folderTree">
@@ -254,6 +261,13 @@
     font-size: 11px;
     color: #9e9e9e;
     white-space: nowrap;
+}
+
+.file-date {
+    font-size: 11px;
+    color: #9e9e9e;
+    white-space: nowrap;
+    min-width: 70px;
 }
 
 .file-actions {
@@ -1021,7 +1035,11 @@ var DocumentsManager = (function() {
             .addClass('file-size')
             .text(formatFileSize(file.file_size));
         
-        fileMeta.append(fileActions).append(fileSize);
+        var fileDate = $('<span></span>')
+            .addClass('file-date')
+            .text(file.uploaded_at ? formatDateShort(file.uploaded_at) : '-');
+        
+        fileMeta.append(fileActions).append(fileDate).append(fileSize);
         
         fileRow.append(fileIcon).append(fileName).append(fileMeta);
         
@@ -1724,6 +1742,19 @@ var DocumentsManager = (function() {
     function formatDate(dateString) {
         var date = new Date(dateString);
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+    
+    /**
+     * Format date short (dd-mmm-yy) for file list
+     */
+    function formatDateShort(dateString) {
+        if (!dateString) return '-';
+        var date = new Date(dateString);
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var day = date.getDate();
+        var month = months[date.getMonth()];
+        var year = String(date.getFullYear()).slice(-2);
+        return day + '-' + month + '-' + year;
     }
     
     /**

@@ -7,6 +7,7 @@ from .models import (
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
     Document_folders, Document_files,
     Employee, EmployeePayRate, StaffHours, StaffHoursAllocations,
+    PublicHolidayCalendar, PublicHoliday,
     StocktakeAllocations, StocktakeOpeningBalance, StocktakeSnap, StocktakeSnapItem, StocktakeSnapAllocation
 )
 
@@ -96,12 +97,13 @@ class UnitsAdmin(admin.ModelAdmin):
     list_filter = ('project', 'project_type')
 
 class ProjectTypesAdmin(admin.ModelAdmin):
-    list_display = ("project_type_pk", "project_type", "xero_instance", "archived", "created_at", "updated_at")
-    list_filter = ('xero_instance', 'archived')
+    list_display = ("project_type_pk", "project_type", "xero_instance", "rates_based", "stocktake", "archived", "created_at", "updated_at")
+    list_filter = ('xero_instance', 'archived', 'rates_based', 'stocktake')
     search_fields = ('project_type',)
 
 class XeroInstancesAdmin(admin.ModelAdmin):
-    list_display = ("xero_instance_pk", "xero_name", "xero_client_id")
+    list_display = ("xero_instance_pk", "xero_name", "xero_client_id", "staff_hours_tracking", "stocktake", "created_at", "updated_at")
+    list_filter = ('staff_hours_tracking', 'stocktake')
 
 class XeroAccountsAdmin(admin.ModelAdmin):
     list_display = ("xero_account_pk", "xero_instance", "account_code", "account_name", "account_type", "account_status")
@@ -120,7 +122,9 @@ class ProjectsAdmin(admin.ModelAdmin):
     list_filter = ('project_type', 'archived', 'project_status')
 
 class ContactsAdmin(admin.ModelAdmin):
-    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_details_verified", "checked")
+    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_bsb", "bank_account_number", "bank_details_verified", "checked", "created_at")
+    list_filter = ('xero_instance', 'status', 'bank_details_verified', 'checked')
+    search_fields = ('name', 'email', 'xero_contact_id')
 
 class QuotesAdmin(admin.ModelAdmin):
     form = QuotesForm
@@ -129,8 +133,8 @@ class QuotesAdmin(admin.ModelAdmin):
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution")
-    list_filter = ('project', 'project_type', 'category', 'tender_or_execution')
+    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution", "stocktake")
+    list_filter = ('project', 'project_type', 'category', 'tender_or_execution', 'stocktake')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
     form = QuoteAllocationsForm
@@ -181,12 +185,12 @@ class LetterheadAdmin(admin.ModelAdmin):
 class BillsAdmin(admin.ModelAdmin):
     form = BillsForm
     list_display = (
-        "bill_pk", "contact_pk", "project", "bill_status", "bill_xero_id", "supplier_bill_number", 
+        "bill_pk", "contact_pk", "project", "is_stocktake", "xero_instance", "bill_status", "bill_xero_id", "supplier_bill_number", 
         "bill_date", "bill_due_date", "total_net", "total_gst", "pdf", "associated_hc_claim", 
-        "bill_type", "auto_created", "received_email", "email_attachment"
+        "bill_type", "auto_created", "received_email", "email_attachment", "created_at", "updated_at"
     )
-    list_filter = ('bill_status', 'auto_created', 'bill_type', 'project')
-    search_fields = ('supplier_bill_number', 'contact_pk__contact_name', 'bill_xero_id')
+    list_filter = ('bill_status', 'is_stocktake', 'auto_created', 'bill_type', 'project', 'xero_instance')
+    search_fields = ('supplier_bill_number', 'contact_pk__name', 'bill_xero_id')
 class BillAllocationsAdmin(admin.ModelAdmin):
     form = BillAllocationsForm
     list_display = ("bill_allocation_pk", "bill", "item", "xero_account", "tracking_category", "amount", "gst_amount", "notes", "allocation_type")
@@ -297,6 +301,21 @@ class EmailAttachmentAdmin(admin.ModelAdmin):
 
 admin.site.register(ReceivedEmail, ReceivedEmailAdmin)
 admin.site.register(EmailAttachment, EmailAttachmentAdmin)
+
+# Public Holiday models
+class PublicHolidayCalendarAdmin(admin.ModelAdmin):
+    list_display = ('calendar_pk', 'name', 'state', 'is_default', 'archived', 'created_at', 'updated_at')
+    list_filter = ('state', 'is_default', 'archived')
+    search_fields = ('name',)
+
+class PublicHolidayAdmin(admin.ModelAdmin):
+    list_display = ('holiday_pk', 'calendar', 'name', 'date', 'created_at')
+    list_filter = ('calendar', 'date')
+    search_fields = ('name',)
+    date_hierarchy = 'date'
+
+admin.site.register(PublicHolidayCalendar, PublicHolidayCalendarAdmin)
+admin.site.register(PublicHoliday, PublicHolidayAdmin)
 
 # Staff Hours models
 class EmployeeAdmin(admin.ModelAdmin):

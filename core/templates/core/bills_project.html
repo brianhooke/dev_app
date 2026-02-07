@@ -94,88 +94,26 @@ $(document).ready(function() {
                 var pdfUrl = bill.pdf_url || bill.attachment_url || '';
                 var row = $('<tr>').attr('data-pk', bill.bill_pk).attr('data-bill-pk', bill.bill_pk).attr('data-pdf-url', pdfUrl);
                 
-                // 1. Supplier dropdown
-                var supplierSelect = $('<select>').addClass('form-control form-control-sm supplier-select');
-                supplierSelect.append($('<option>').val('').text('Select Supplier...'));
+                // 1. Supplier (fixed/read-only)
+                var supplierName = '';
                 suppliers.forEach(function(supplier) {
-                    var option = $('<option>').val(supplier.contact_pk).text(supplier.name);
-                    if (bill.supplier_pk === supplier.contact_pk) option.prop('selected', true);
-                    supplierSelect.append(option);
+                    if (bill.supplier_pk === supplier.contact_pk) supplierName = supplier.name;
                 });
-                var supplierTd = $('<td>').append(supplierSelect);
-                row.append(supplierTd);
+                row.append($('<td>').addClass('supplier-cell').text(supplierName || '-'));
                 
-                // Initialize searchable dropdown for supplier
-                if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
-                    Utils.createSearchableDropdown(supplierSelect, {
-                        placeholder: 'Search suppliers...'
-                    });
-                }
-                
-                // 2. Bill # input
-                var billNumberInput = $('<input>')
-                    .attr('type', 'text')
-                    .addClass('form-control form-control-sm bill-number-input')
-                    .val(bill.bill_number || '')
-                    .attr('placeholder', 'Bill #');
-                row.append($('<td>').append(billNumberInput));
+                // 2. Bill # (fixed/read-only)
+                row.append($('<td>').addClass('bill-number-cell').text(bill.bill_number || '-'));
                 
                 // 3. $ Gross (calculated: Net + GST)
                 var netVal = parseFloat(bill.total_net) || 0;
                 var gstVal = parseFloat(bill.total_gst) || 0;
                 row.append($('<td>').addClass('gross-cell').text('$' + Utils.formatMoney(netVal + gstVal)));
                 
-                // 4. $ Net input
-                var netInput = $('<input>')
-                    .attr('type', 'number')
-                    .attr('step', '0.01')
-                    .attr('min', '0')
-                    .addClass('form-control form-control-sm net-input')
-                    .val(bill.total_net !== null ? bill.total_net : '')
-                    .attr('placeholder', '0.00')
-                    .on('input', function() {
-                        var value = $(this).val();
-                        if (parseFloat(value) < 0) { $(this).val(0); return; }
-                        if (value.includes('.')) {
-                            var parts = value.split('.');
-                            if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
-                        }
-                        var r = $(this).closest('tr');
-                        var gstInputEl = r.find('.gst-input');
-                        if (!gstInputEl.data('manually-edited')) {
-                            var netValue = parseFloat($(this).val());
-                            if (!isNaN(netValue)) gstInputEl.val((netValue * 0.1).toFixed(2));
-                        }
-                        // Update $ Gross cell
-                        var nv = parseFloat(r.find('.net-input').val()) || 0;
-                        var gv = parseFloat(r.find('.gst-input').val()) || 0;
-                        r.find('.gross-cell').text('$' + Utils.formatMoney(nv + gv));
-                    });
-                row.append($('<td>').append(netInput));
+                // 4. $ Net (fixed/read-only)
+                row.append($('<td>').addClass('net-cell').text('$' + Utils.formatMoney(netVal)));
                 
-                // 4. $ GST input
-                var gstInput = $('<input>')
-                    .attr('type', 'number')
-                    .attr('step', '0.01')
-                    .attr('min', '0')
-                    .addClass('form-control form-control-sm gst-input')
-                    .val(bill.total_gst !== null ? bill.total_gst : '')
-                    .attr('placeholder', '0.00')
-                    .on('focus', function() { $(this).data('manually-edited', true); })
-                    .on('input', function() {
-                        var value = $(this).val();
-                        if (parseFloat(value) < 0) { $(this).val(0); return; }
-                        if (value.includes('.')) {
-                            var parts = value.split('.');
-                            if (parts[1] && parts[1].length > 2) $(this).val(parseFloat(value).toFixed(2));
-                        }
-                        // Update $ Gross cell
-                        var r = $(this).closest('tr');
-                        var nv = parseFloat(r.find('.net-input').val()) || 0;
-                        var gv = parseFloat(r.find('.gst-input').val()) || 0;
-                        r.find('.gross-cell').text('$' + Utils.formatMoney(nv + gv));
-                    });
-                row.append($('<td>').append(gstInput));
+                // 5. $ GST (fixed/read-only)
+                row.append($('<td>').addClass('gst-cell').text('$' + Utils.formatMoney(gstVal)));
                 
                 // 5. Approve button
                 var approveBtn = $('<button>')

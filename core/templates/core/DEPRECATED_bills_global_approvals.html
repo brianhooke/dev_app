@@ -4,6 +4,69 @@
 
 {% include "core/components/allocations_layout.html" with section_id="billsApprovals" main_table_columns=main_table_columns allocations_columns=allocations_columns hide_allocations=False viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
 
+<!-- Toggle button for Pending vs Sent bills -->
+<style>
+    .approvals-toggle-container {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 100;
+    }
+    .approvals-toggle-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 4px;
+        margin-right: 4px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        cursor: pointer;
+    }
+    .approvals-toggle-btn.active {
+        background: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    .approvals-toggle-btn:hover:not(.active) {
+        background: #f8f9fa;
+    }
+</style>
+<script>
+$(document).ready(function() {
+    // Add toggle buttons to the approvals section
+    var toggleHtml = '<div class="approvals-toggle-container">' +
+        '<button class="approvals-toggle-btn active" data-mode="pending">Pending</button>' +
+        '<button class="approvals-toggle-btn" data-mode="sent">Sent</button>' +
+        '</div>';
+    $('.billsApprovals-left-panel').css('position', 'relative').prepend(toggleHtml);
+    
+    // Toggle button click handler
+    $(document).on('click', '.approvals-toggle-btn', function() {
+        var mode = $(this).data('mode');
+        $('.approvals-toggle-btn').removeClass('active');
+        $(this).addClass('active');
+        window.approvalsMode = mode;
+        
+        // Show/hide action buttons based on mode
+        if (mode === 'sent') {
+            // Hide action columns for sent bills
+            $('#billsApprovalsMainTable th:nth-child(10), #billsApprovalsMainTable th:nth-child(11), #billsApprovalsMainTable th:nth-child(12)').hide();
+            $('#billsApprovalsMainTable td:nth-child(10), #billsApprovalsMainTable td:nth-child(11), #billsApprovalsMainTable td:nth-child(12)').hide();
+        } else {
+            // Show action columns for pending bills
+            $('#billsApprovalsMainTable th:nth-child(10), #billsApprovalsMainTable th:nth-child(11), #billsApprovalsMainTable th:nth-child(12)').show();
+            $('#billsApprovalsMainTable td:nth-child(10), #billsApprovalsMainTable td:nth-child(11), #billsApprovalsMainTable td:nth-child(12)').show();
+        }
+        
+        // Reload data
+        if (mode === 'sent') {
+            loadSentBills();
+        } else {
+            loadApprovedBills();
+        }
+    });
+});
+</script>
+
 <!-- Load shared utilities and AllocationsManager -->
 <script src="{% static 'core/js/utils.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
@@ -57,45 +120,55 @@
                 var supplierName = bill.supplier_name || '-';
                 row.append($('<td>').attr('title', supplierName).text(supplierName));
                 
-                // 4. $ Gross
+                // 4. Bill #
+                var billNumber = bill.supplier_bill_number || '-';
+                row.append($('<td>').attr('title', billNumber).text(billNumber));
+                
+                // 5. $ Gross
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
                 
-                // 5. $ Net
+                // 6. $ Net
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 6. $ GST
+                // 7. $ GST
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 7. Date
+                // 8. Date
                 var billDate = bill.bill_date ? Utils.formatDate(bill.bill_date) : '-';
                 row.append($('<td>').text(billDate));
                 
-                // 8. Due Date
+                // 9. Due Date
                 var dueDate = bill.bill_due_date ? Utils.formatDate(bill.bill_due_date) : '-';
                 row.append($('<td>').text(dueDate));
                 
-                // 9. Send to Xero button
+                // 10. Send to Xero button (hidden in sent mode)
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-success approvals-send-btn')
                     .attr('data-bill-pk', bill.bill_pk)
                     .text('Send');
-                row.append($('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn));
+                var sendTd = $('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn);
+                if (window.approvalsMode === 'sent') sendTd.hide();
+                row.append(sendTd);
                 
-                // 10. Mark X button (marks as sent without actually sending to Xero)
+                // 11. Mark X button (marks as sent without actually sending to Xero)
                 var markXBtn = $('<button>')
                     .addClass('btn btn-sm btn-secondary approvals-mark-x-btn')
                     .attr('data-bill-pk', bill.bill_pk)
                     .text('Mark X')
                     .attr('title', 'Mark as sent to Xero without sending');
-                row.append($('<td>').addClass('col-action').css('text-align', 'center').append(markXBtn));
+                var markXTd = $('<td>').addClass('col-action').css('text-align', 'center').append(markXBtn);
+                if (window.approvalsMode === 'sent') markXTd.hide();
+                row.append(markXTd);
                 
-                // 11. Return to Project button
+                // 12. Return to Project button
                 var returnBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning approvals-return-btn')
                     .attr('data-bill-pk', bill.bill_pk)
                     .html('<i class="fas fa-undo"></i>')
                     .attr('title', 'Return to Project');
-                row.append($('<td>').addClass('col-action').css('text-align', 'center').append(returnBtn));
+                var returnTd = $('<td>').addClass('col-action').css('text-align', 'center').append(returnBtn);
+                if (window.approvalsMode === 'sent') returnTd.hide();
+                row.append(returnTd);
                 
                 return row;
             },
@@ -164,7 +237,7 @@
         Utils.applyColumnStyles('billsApprovals', ['18%', '18%', '14%', '12%', '12%', '12%', '14%'], { addEditableClass: false });
     }
     
-    // Load Approved Bills data
+    // Load Approved Bills data (pending - status 2 or 103)
     window.loadApprovedBills = function() {
         console.log('=== loadApprovedBills called ===');
         
@@ -179,11 +252,6 @@
                 
                 console.log('Approvals - API response:', response);
                 console.log('Approvals - Bills count:', response.bills ? response.bills.length : 0);
-                if (response.bills) {
-                    response.bills.forEach(function(b) {
-                        console.log('  bill_pk=' + b.bill_pk + ', status=' + b.bill_status + ', project=' + b.project_name);
-                    });
-                }
                 
                 // Store data globally
                 window.billsApprovalsData = response.bills;
@@ -199,7 +267,43 @@
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load approved bills:', error);
-                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-danger">Failed to load bills</td></tr>');
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-danger">Failed to load bills</td></tr>');
+            }
+        });
+    };
+    
+    // Load Sent Bills data (status 3, 4, or 104)
+    window.loadSentBills = function() {
+        console.log('=== loadSentBills called ===');
+        
+        $.ajax({
+            url: '{% url "core:get_sent_bills" %}',
+            type: 'GET',
+            success: function(response) {
+                // Guard: ensure table still exists (user may have navigated away)
+                if (!$('#billsApprovalsMainTableBody').length) {
+                    return;
+                }
+                
+                console.log('Sent Bills - API response:', response);
+                console.log('Sent Bills count:', response.bills ? response.bills.length : 0);
+                
+                // Store data globally
+                window.billsApprovalsData = response.bills;
+                
+                // Populate table
+                AllocationsManager.populateMainTable('billsApprovals', response.bills);
+                
+                // Add truncation tooltips
+                Utils.addTruncationTooltips('billsApprovalsMainTable');
+                
+                // Hide action columns for sent mode
+                $('#billsApprovalsMainTable th:nth-child(10), #billsApprovalsMainTable th:nth-child(11), #billsApprovalsMainTable th:nth-child(12)').hide();
+                $('#billsApprovalsMainTable td:nth-child(10), #billsApprovalsMainTable td:nth-child(11), #billsApprovalsMainTable td:nth-child(12)').hide();
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load sent bills:', error);
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-danger">Failed to load bills</td></tr>');
             }
         });
     };

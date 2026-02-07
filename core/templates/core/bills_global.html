@@ -23,6 +23,291 @@
 {% include "core/components/allocations_layout.html" with section_id="billsApprovals" main_table_columns=approvals_main_columns allocations_columns=approvals_alloc_columns hide_allocations=False viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
 </div>
 
+<!-- Toggle switch for Pending vs Sent bills in Approvals -->
+<style>
+    .approvals-toggle-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .approvals-toggle-switch {
+        position: relative;
+        width: 32px;
+        height: 16px;
+        background: #ccc;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .approvals-toggle-switch.active {
+        background: #4a90d9;
+    }
+    .approvals-toggle-switch .toggle-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        background: white;
+        border-radius: 50%;
+        transition: left 0.2s;
+    }
+    .approvals-toggle-switch.active .toggle-slider {
+        left: 18px;
+    }
+    .approvals-toggle-label {
+        font-size: 11px;
+        color: #888;
+        cursor: pointer;
+    }
+    .approvals-toggle-label.active {
+        color: #333;
+        font-weight: 600;
+    }
+</style>
+<script>
+$(document).ready(function() {
+    // Add toggle switch to the approvals section (after it's visible)
+    var toggleAdded = false;
+    function addToggleSwitch() {
+        if (toggleAdded || !$('.billsApprovals-left-panel').length) return;
+        var toggleHtml = '<div class="approvals-toggle-container">' +
+            '<span class="approvals-toggle-label active" data-mode="pending">Pending</span>' +
+            '<div class="approvals-toggle-switch">' +
+            '<div class="toggle-slider"></div>' +
+            '</div>' +
+            '<span class="approvals-toggle-label" data-mode="sent">Sent</span>' +
+            '</div>';
+        $('.billsApprovals-table-container').first().before(toggleHtml);
+        toggleAdded = true;
+    }
+    
+    // Call when approvals section becomes visible
+    var observer = new MutationObserver(function(mutations) {
+        if ($('#billsApprovalsSectionWrapper').css('display') !== 'none') {
+            addToggleSwitch();
+            // Reset toggle to Pending mode when section becomes visible
+            resetToggleToPending();
+        }
+    });
+    observer.observe(document.getElementById('billsApprovalsSectionWrapper') || document.body, { attributes: true, attributeFilter: ['style'] });
+    
+    // Reset toggle to Pending state
+    function resetToggleToPending() {
+        $('.approvals-toggle-switch').removeClass('active');
+        $('.approvals-toggle-label[data-mode="pending"]').addClass('active');
+        $('.approvals-toggle-label[data-mode="sent"]').removeClass('active');
+        window.approvalsMode = 'pending';
+    }
+    
+    // Toggle switch click handler
+    $(document).on('click', '.approvals-toggle-switch, .approvals-toggle-label', function() {
+        var clickedMode = $(this).data('mode');
+        var isCurrentlySent = window.approvalsMode === 'sent';
+        
+        // Determine new mode
+        var newMode;
+        if (clickedMode === 'pending') {
+            newMode = 'pending';
+        } else if (clickedMode === 'sent') {
+            newMode = 'sent';
+        } else {
+            // Clicked on switch itself - toggle
+            newMode = isCurrentlySent ? 'pending' : 'sent';
+        }
+        
+        // Don't do anything if mode hasn't changed
+        if (newMode === window.approvalsMode) return;
+        
+        window.approvalsMode = newMode;
+        
+        // Update toggle UI
+        if (newMode === 'sent') {
+            $('.approvals-toggle-switch').addClass('active');
+            $('.approvals-toggle-label[data-mode="pending"]').removeClass('active');
+            $('.approvals-toggle-label[data-mode="sent"]').addClass('active');
+            loadSentBills();
+        } else {
+            $('.approvals-toggle-switch').removeClass('active');
+            $('.approvals-toggle-label[data-mode="pending"]').addClass('active');
+            $('.approvals-toggle-label[data-mode="sent"]').removeClass('active');
+            loadApprovedBills();
+        }
+    });
+    
+    // Load Sent Bills data (status 3, 4, or 104)
+    window.loadSentBills = function() {
+        console.log('=== loadSentBills called ===');
+        
+        $.ajax({
+            url: '{% url "core:get_sent_bills" %}',
+            type: 'GET',
+            success: function(response) {
+                if (!$('#billsApprovalsMainTableBody').length) return;
+                
+                console.log('Sent Bills - count:', response.bills ? response.bills.length : 0);
+                window.billsApprovalsData = response.bills;
+                
+                // Custom render for sent bills - replace action columns with Sent date
+                var tbody = $('#billsApprovalsMainTableBody');
+                tbody.empty();
+                
+                if (!response.bills || response.bills.length === 0) {
+                    tbody.html('<tr><td colspan="12" class="text-center text-muted p-4">No sent bills found</td></tr>');
+                    return;
+                }
+                
+                // Remove last 2 col elements from colgroup for sent mode
+                $('#billsApprovalsMainTable colgroup col:nth-child(11), #billsApprovalsMainTable colgroup col:nth-child(12)').remove();
+                // Remove last 2 th elements
+                $('#billsApprovalsMainTable thead th:nth-child(11), #billsApprovalsMainTable thead th:nth-child(12)').remove();
+                // Update 10th header to "Sent" and make it sortable
+                $('#billsApprovalsMainTable thead th:nth-child(10)').text('Sent').addClass('sortable');
+                
+                // Set new column widths (10 columns = 100%)
+                var sentWidths = ['11%', '11%', '11%', '11%', '10%', '10%', '9%', '9%', '9%', '9%'];
+                var colgroup = $('#billsApprovalsMainTable colgroup col');
+                var headers = $('#billsApprovalsMainTable thead th');
+                for (var i = 0; i < 10; i++) {
+                    colgroup.eq(i).attr('style', 'width: ' + sentWidths[i]);
+                    headers.eq(i).attr('style', 'width: ' + sentWidths[i]);
+                }
+                
+                // Now render rows with only 10 cells
+                response.bills.forEach(function(bill) {
+                    var pdfUrl = bill.pdf_url || '';
+                    var row = $('<tr>')
+                        .attr('data-pk', bill.bill_pk)
+                        .attr('data-bill-pk', bill.bill_pk)
+                        .attr('data-pdf-url', pdfUrl);
+                    
+                    row.append($('<td>').attr('title', bill.project_name || '-').text(bill.project_name || '-'));
+                    row.append($('<td>').attr('title', bill.xero_instance_name || '-').text(bill.xero_instance_name || '-'));
+                    row.append($('<td>').attr('title', bill.supplier_name || '-').text(bill.supplier_name || '-'));
+                    row.append($('<td>').attr('title', bill.supplier_bill_number || '-').text(bill.supplier_bill_number || '-'));
+                    row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
+                    row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
+                    row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
+                    row.append($('<td>').text(bill.bill_date ? Utils.formatDateDMY(bill.bill_date) : '-'));
+                    row.append($('<td>').text(bill.bill_due_date ? Utils.formatDateDMY(bill.bill_due_date) : '-'));
+                    row.append($('<td>').text(bill.sent_at ? Utils.formatDateDMY(bill.sent_at) : '-'));
+                    
+                    tbody.append(row);
+                });
+                
+                Utils.addTruncationTooltips('billsApprovalsMainTable');
+                
+                // Initialize sortable table functionality for sent mode
+                Utils.initSortableTable('billsApprovalsMainTable', {
+                    tbodyId: 'billsApprovalsMainTableBody'
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load sent bills:', error);
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-danger">Failed to load bills</td></tr>');
+            }
+        });
+    };
+    
+    // Debug function to show all column styling
+    window.debugApprovalsColumns = function() {
+        var table = document.getElementById('billsApprovalsMainTable');
+        if (!table) {
+            console.log('Table not found');
+            return;
+        }
+        
+        console.log('--- Table Styles ---');
+        var tableStyles = window.getComputedStyle(table);
+        console.log('table-layout:', tableStyles.tableLayout);
+        console.log('width:', tableStyles.width);
+        console.log('table offsetWidth:', table.offsetWidth);
+        console.log('table style attribute:', table.getAttribute('style'));
+        
+        console.log('\n--- Parent Chain ---');
+        var el = table.parentElement;
+        while (el && el !== document.body) {
+            var s = window.getComputedStyle(el);
+            console.log(el.tagName + '#' + el.id + ': width=' + s.width + ', padding=' + s.padding + ', overflow=' + s.overflow);
+            el = el.parentElement;
+        }
+        
+        console.log('\n--- Colgroup Col Elements ---');
+        var cols = table.querySelectorAll('colgroup col');
+        cols.forEach(function(col, i) {
+            var styles = window.getComputedStyle(col);
+            console.log('col[' + i + ']: width=' + styles.width + ', visibility=' + styles.visibility + ', display=' + styles.display);
+        });
+        
+        console.log('\n--- Header TH Elements ---');
+        var ths = table.querySelectorAll('thead th');
+        var totalThWidth = 0;
+        ths.forEach(function(th, i) {
+            var styles = window.getComputedStyle(th);
+            var rect = th.getBoundingClientRect();
+            totalThWidth += rect.width;
+            console.log('th[' + i + ']: computed=' + styles.width + ', actual=' + rect.width.toFixed(1) + 'px, visibility=' + styles.visibility + ', display=' + styles.display + ', text="' + th.textContent.trim() + '"');
+        });
+        console.log('Total TH width:', totalThWidth.toFixed(1) + 'px');
+        
+        console.log('\n--- First Row TD Elements ---');
+        var firstRow = table.querySelector('tbody tr');
+        if (firstRow) {
+            var tds = firstRow.querySelectorAll('td');
+            var totalTdWidth = 0;
+            tds.forEach(function(td, i) {
+                var styles = window.getComputedStyle(td);
+                var rect = td.getBoundingClientRect();
+                totalTdWidth += rect.width;
+                console.log('td[' + i + ']: computed=' + styles.width + ', actual=' + rect.width.toFixed(1) + 'px, visibility=' + styles.visibility);
+            });
+            console.log('Total TD width:', totalTdWidth.toFixed(1) + 'px');
+        }
+        
+        console.log('\n--- Container ---');
+        var container = document.getElementById('billsApprovalsTableContainer');
+        if (container) {
+            var cs = window.getComputedStyle(container);
+            console.log('Container width:', container.offsetWidth + 'px', 'clientWidth:', container.clientWidth + 'px');
+            console.log('Container padding:', cs.padding, 'overflow:', cs.overflow);
+        }
+    };
+    
+    // Override loadApprovedBills to restore headers when switching back to pending
+    var originalLoadApprovedBills = window.loadApprovedBills;
+    window.loadApprovedBills = function() {
+        // Restore columns if they were removed (sent mode removes cols 11 & 12)
+        var colgroup = $('#billsApprovalsMainTable colgroup');
+        var thead = $('#billsApprovalsMainTable thead tr');
+        
+        // If only 10 cols, we need to restore 11 & 12
+        if (colgroup.find('col').length === 10) {
+            colgroup.append('<col style="width: 7%;">');
+            colgroup.append('<col style="width: 5%;">');
+            thead.append('<th style="width: 7%;" class="col-action">Mark X</th>');
+            thead.append('<th style="width: 5%;" class="col-action">Return</th>');
+        }
+        
+        // Restore 10th header text and remove sortable class (Send button column isn't sortable)
+        $('#billsApprovalsMainTable thead th:nth-child(10)').text('Send').removeClass('sortable');
+        
+        // Restore original column widths for pending mode (12 columns)
+        var pendingWidths = ['10%', '10%', '10%', '9%', '8%', '8%', '7%', '7%', '7%', '7%', '7%', '5%'];
+        var cols = $('#billsApprovalsMainTable colgroup col');
+        var headers = $('#billsApprovalsMainTable thead th');
+        pendingWidths.forEach(function(w, i) {
+            cols.eq(i).attr('style', 'width: ' + w);
+            headers.eq(i).attr('style', 'width: ' + w);
+        });
+        
+        if (typeof originalLoadApprovedBills === 'function') {
+            originalLoadApprovedBills();
+        }
+    };
+});
+</script>
+
 <!-- Bills Inbox compact styling -->
 <style>
     /* Hide searchable dropdown wrapper for stocktake rows */
@@ -405,32 +690,50 @@
     
     // Validate Send button for Inbox mode
     function validateInboxSendButton(billPk) {
+        console.log('=== validateInboxSendButton called for billPk:', billPk, '===');
+        
         var button = $('button[data-bill-pk="' + billPk + '"].send-bill-btn');
+        console.log('  Button found:', button.length > 0);
         if (button.length === 0) return;
         
         var row = button.closest('tr');
         var isValid = true;
+        var failReasons = [];
         
         var xeroInstanceOrProject = row.find('.xero-project-select').val();
-        var supplierPk = row.find('.supplier-select').val();
+        // Check both normal supplier-select AND stocktake-supplier-dropdown (used when Stocktake is selected)
+        var supplierPk = row.find('.supplier-select').val() || row.find('.stocktake-supplier-dropdown').val();
         var billNumber = row.find('.bill-number-input').val();
         var netValue = row.find('.net-input').val();
         var gstValue = row.find('.gst-input').val();
         var billDate = row.find('.bill-date-input').val();
         var billDueDate = row.find('.bill-due-date-input').val();
         
-        if (!xeroInstanceOrProject) isValid = false;
-        if (!supplierPk) isValid = false;
-        if (!billNumber || billNumber.trim() === '') isValid = false;
-        if (!netValue || parseFloat(netValue) === 0) isValid = false;
-        if (gstValue === null || gstValue === undefined || gstValue === '') isValid = false;
-        if (!billDate) isValid = false;
-        if (!billDueDate) isValid = false;
+        console.log('  Field values:');
+        console.log('    xeroInstanceOrProject:', JSON.stringify(xeroInstanceOrProject));
+        console.log('    supplierPk:', JSON.stringify(supplierPk), '(from supplier-select or stocktake-supplier-dropdown)');
+        console.log('    billNumber:', JSON.stringify(billNumber));
+        console.log('    netValue:', JSON.stringify(netValue), 'parsed:', parseFloat(netValue));
+        console.log('    gstValue:', JSON.stringify(gstValue));
+        console.log('    billDate:', JSON.stringify(billDate));
+        console.log('    billDueDate:', JSON.stringify(billDueDate));
+        
+        if (!xeroInstanceOrProject) { isValid = false; failReasons.push('xeroInstanceOrProject empty'); }
+        if (!supplierPk) { isValid = false; failReasons.push('supplierPk empty'); }
+        if (!billNumber || billNumber.trim() === '') { isValid = false; failReasons.push('billNumber empty'); }
+        if (!netValue || parseFloat(netValue) === 0) { isValid = false; failReasons.push('netValue empty or 0'); }
+        if (gstValue === null || gstValue === undefined || gstValue === '') { isValid = false; failReasons.push('gstValue empty'); }
+        if (!billDate) { isValid = false; failReasons.push('billDate empty'); }
+        if (!billDueDate) { isValid = false; failReasons.push('billDueDate empty'); }
+        
+        console.log('  isValid:', isValid, 'failReasons:', failReasons);
         
         if (isValid) {
             button.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
+            console.log('  -> Button ENABLED (green)');
         } else {
             button.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
+            console.log('  -> Button DISABLED (grey)');
         }
     }
     
@@ -546,6 +849,9 @@
     
     // Update supplier dropdown based on Xero Instance selection
     function updateSupplierDropdown(row, selectedValue) {
+        console.log('=== updateSupplierDropdown called ===');
+        console.log('  selectedValue:', selectedValue);
+        
         var supplierSelect = row.find('.supplier-select');
         supplierSelect.empty().append($('<option>').val('').text('Select Supplier...'));
         
@@ -567,8 +873,11 @@
             // Stocktake uses the first available Xero instance
             if (window.billsInboxData && window.billsInboxData.xero_instances && window.billsInboxData.xero_instances.length > 0) {
                 xeroInstanceId = window.billsInboxData.xero_instances[0].xero_instance_pk;
+                console.log('  Stocktake mode: using first xero instance pk:', xeroInstanceId);
             }
         }
+        
+        console.log('  xeroInstanceId:', xeroInstanceId);
         
         // Store xeroInstanceId on the row for later use
         row.attr('data-xero-instance-id', xeroInstanceId || '');
@@ -578,21 +887,30 @@
             // Add "+ New Supplier" option
             supplierSelect.append($('<option>').val('__new__').text('+ New Supplier'));
             
+            var matchingSuppliers = 0;
             window.billsInboxData.suppliers.forEach(function(supplier) {
                 if (supplier.xero_instance_id === xeroInstanceId) {
                     supplierSelect.append($('<option>').val(supplier.contact_pk).text(supplier.name));
+                    matchingSuppliers++;
                 }
             });
+            console.log('  Total suppliers in data:', window.billsInboxData.suppliers.length);
+            console.log('  Suppliers matching xeroInstanceId:', matchingSuppliers);
+            console.log('  Sample supplier xero_instance_id:', window.billsInboxData.suppliers[0]?.xero_instance_id);
             
             // Refresh or initialize searchable dropdown
             var controller = supplierSelect.data('searchable-dropdown');
+            console.log('  Searchable dropdown controller exists:', !!controller);
             if (controller) {
+                console.log('  Calling controller.refresh()');
                 controller.refresh();
             } else {
+                console.log('  Creating NEW searchable dropdown');
                 Utils.createSearchableDropdown(supplierSelect, {
                     pinnedValues: ['__new__'],
                     placeholder: 'Search suppliers...',
                     onChange: function(value, text, $sel) {
+                        console.log('[Supplier onChange] value:', value, 'text:', text);
                         var r = $sel.closest('tr');
                         if (value === '__new__') {
                             r.find('.searchable-dropdown-wrapper').hide();
@@ -614,6 +932,100 @@
             }
         }
     }
+    
+    // DEBUG: Global click handler to test if searchable dropdown clicks are working
+    $(document).on('click', '.searchable-dropdown-item', function(e) {
+        console.log('[GLOBAL] searchable-dropdown-item clicked:', $(this).text(), 'value:', $(this).attr('data-value'));
+    });
+    
+    // DEBUG: Comprehensive diagnostic function
+    window.debugSupplierDropdown = function() {
+        console.log('========== SUPPLIER DROPDOWN DIAGNOSTIC ==========');
+        
+        // 1. Find the supplier select in the current row
+        var row = $('#billsInboxMainTableBody tr[data-bill-pk="68"]');
+        console.log('1. Row found:', row.length > 0);
+        
+        if (row.length === 0) {
+            row = $('#billsInboxMainTableBody tr').first();
+            console.log('   Using first row instead, data-bill-pk:', row.attr('data-bill-pk'));
+        }
+        
+        var supplierSelect = row.find('.supplier-select');
+        console.log('2. Supplier select found:', supplierSelect.length > 0);
+        console.log('   Supplier select visible:', supplierSelect.is(':visible'));
+        console.log('   Supplier select value:', supplierSelect.val());
+        console.log('   Supplier select options count:', supplierSelect.find('option').length);
+        
+        // 3. Check searchable dropdown controller
+        var controller = supplierSelect.data('searchable-dropdown');
+        console.log('3. Controller exists:', !!controller);
+        
+        // 4. Check wrapper
+        var wrapper = row.find('.searchable-dropdown-wrapper');
+        console.log('4. Wrapper found:', wrapper.length > 0);
+        console.log('   Wrapper visible:', wrapper.is(':visible'));
+        console.log('   Wrapper position:', wrapper.offset());
+        
+        // 5. Find all dropdown menus in body
+        var allDropdowns = $('body > .searchable-dropdown-menu');
+        console.log('5. All dropdown menus in body:', allDropdowns.length);
+        
+        allDropdowns.each(function(i) {
+            var $d = $(this);
+            console.log('   Dropdown ' + i + ':');
+            console.log('     - hasClass open:', $d.hasClass('open'));
+            console.log('     - visible:', $d.is(':visible'));
+            console.log('     - css display:', $d.css('display'));
+            console.log('     - position:', $d.css('position'));
+            console.log('     - top/left:', $d.css('top'), $d.css('left'));
+            console.log('     - z-index:', $d.css('z-index'));
+            console.log('     - items count:', $d.find('.searchable-dropdown-item').length);
+            
+            // Check items
+            var items = $d.find('.searchable-dropdown-item');
+            console.log('     - first 3 items:');
+            items.slice(0, 3).each(function(j) {
+                console.log('       Item ' + j + ':', $(this).text().substring(0, 30), 'value:', $(this).attr('data-value'));
+            });
+        });
+        
+        // 6. Check for overlapping elements
+        console.log('6. Checking for overlapping elements...');
+        var openDropdown = $('body > .searchable-dropdown-menu.open');
+        if (openDropdown.length > 0) {
+            var offset = openDropdown.offset();
+            var width = openDropdown.outerWidth();
+            var height = openDropdown.outerHeight();
+            console.log('   Open dropdown bounds:', offset, 'size:', width, 'x', height);
+            
+            // Check what element is at the center of the dropdown
+            var centerX = offset.left + width/2;
+            var centerY = offset.top + height/2;
+            var elementAtPoint = document.elementFromPoint(centerX - window.scrollX, centerY - window.scrollY);
+            console.log('   Element at dropdown center:', elementAtPoint);
+            console.log('   Element tagName:', elementAtPoint?.tagName);
+            console.log('   Element classes:', elementAtPoint?.className);
+        }
+        
+        // 7. Try clicking an item programmatically
+        console.log('7. Attempting programmatic click on first visible item...');
+        var firstItem = $('body > .searchable-dropdown-menu.open .searchable-dropdown-item:visible:first');
+        if (firstItem.length > 0) {
+            console.log('   Found item:', firstItem.text().substring(0, 30));
+            console.log('   Triggering click...');
+            firstItem.trigger('click');
+            console.log('   Click triggered. Check if value changed.');
+            console.log('   Supplier select value after click:', supplierSelect.val());
+        } else {
+            console.log('   No visible item found in open dropdown');
+        }
+        
+        console.log('========== END DIAGNOSTIC ==========');
+        return 'Run this while the supplier dropdown is OPEN';
+    };
+    
+    console.log('[DEBUG] Run window.debugSupplierDropdown() while the supplier dropdown is open');
     
     // Handle "+ New Supplier" selection - show inline form
     $(document).off('change.billsInbox', '.supplier-select');
@@ -1759,22 +2171,26 @@
                 var supplierName = bill.supplier_name || '-';
                 row.append($('<td>').attr('title', supplierName).text(supplierName));
                 
-                // 4. $ Gross
+                // 4. Bill #
+                var billNumber = bill.supplier_bill_number || '-';
+                row.append($('<td>').attr('title', billNumber).text(billNumber));
+                
+                // 5. $ Gross
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
                 
-                // 5. $ Net
+                // 6. $ Net
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 6. $ GST
+                // 7. $ GST
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 7. Date (display only, dd-mmm-yy format)
+                // 8. Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_date ? Utils.formatDateDMY(bill.bill_date) : '-'));
                 
-                // 8. Due Date (display only, dd-mmm-yy format)
+                // 9. Due Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_due_date ? Utils.formatDateDMY(bill.bill_due_date) : '-'));
                 
-                // 9. Send to Xero button
+                // 10. Send to Xero button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-success approvals-send-btn')
                     .attr('data-bill-pk', bill.bill_pk)
@@ -1894,12 +2310,17 @@
                 // Add truncation tooltips
                 Utils.addTruncationTooltips('billsApprovalsMainTable');
                 
+                // Initialize sortable table functionality
+                Utils.initSortableTable('billsApprovalsMainTable', {
+                    tbodyId: 'billsApprovalsMainTableBody'
+                });
+                
                 // Bind event handlers
                 bindApprovalsEventHandlers();
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load approved bills:', error);
-                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-danger">Failed to load bills</td></tr>');
+                $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-danger">Failed to load bills</td></tr>');
             }
         });
     };
@@ -1942,7 +2363,7 @@
                                 
                                 // Check if table is now empty
                                 if ($('#billsApprovalsMainTableBody tr').length === 0) {
-                                    $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                    $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
                                 }
                             });
                         } else {
@@ -1986,7 +2407,7 @@
                             
                             // Check if table is now empty
                             if ($('#billsApprovalsMainTableBody tr').length === 0) {
-                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="11" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
+                                $('#billsApprovalsMainTableBody').html('<tr><td colspan="12" class="text-center text-muted p-4">No approved bills waiting to be sent to Xero</td></tr>');
                             }
                         });
                     },
@@ -2185,6 +2606,55 @@
                             window.currentBillData = null;
                         }
                     });
+                } else if (response.status === 'duplicate_found') {
+                    // Duplicate invoice found in Xero - ask user for confirmation
+                    var existing = response.existing_invoice || {};
+                    var confirmMsg = 'Invoice #' + existing.invoice_number + ' already exists in Xero!\n\n' +
+                        'Existing Invoice Details:\n' +
+                        '- Status: ' + existing.status + '\n' +
+                        '- Date: ' + existing.date + '\n' +
+                        '- Total: $' + existing.total + '\n\n' +
+                        'Do you want to UPDATE the existing invoice in Xero?\n\n' +
+                        'WARNING: If the existing invoice is locked or has payments, this will fail.';
+                    
+                    if (confirm(confirmMsg)) {
+                        // User confirmed - retry with force_update=true
+                        confirmBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Updating...');
+                        $.ajax({
+                            url: '/core/send_bill_to_xero/',
+                            type: 'POST',
+                            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                            contentType: 'application/json',
+                            data: JSON.stringify({ bill_pk: pendingBillPk, force_update: true }),
+                            success: function(retryResponse) {
+                                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
+                                if (retryResponse.status === 'success') {
+                                    pdfConfirmModal.hide();
+                                    alert('Invoice updated in Xero!');
+                                    AllocationsManager.showSuccessAndFadeRow(pendingButton, pendingRow, function() {
+                                        if (window.currentSelectedBillPk == pendingBillPk) {
+                                            $('#billsApprovalsAllocationsTableBody').empty();
+                                            $('#billsApprovalsPdfViewer').hide();
+                                            $('#billsApprovalsViewerPlaceholder').show();
+                                            window.currentSelectedBillPk = null;
+                                            window.currentBillData = null;
+                                        }
+                                    });
+                                } else {
+                                    alert('Error updating invoice: ' + retryResponse.message);
+                                }
+                            },
+                            error: function(xhr) {
+                                confirmBtn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirm & Send to Xero');
+                                var errMsg = 'Failed to update invoice in Xero.';
+                                if (xhr.responseJSON && xhr.responseJSON.message) {
+                                    errMsg += '\n' + xhr.responseJSON.message;
+                                }
+                                alert(errMsg);
+                            }
+                        });
+                    }
+                    // If user clicked Cancel, modal stays open - they can retry or close
                 } else {
                     // Keep modal open on error so user can retry or cancel
                     alert('Error: ' + response.message);
@@ -2355,6 +2825,20 @@ window.bindXeroProjectSelectHandlers = function() {
                 instanceSelector.find('.stocktake-xero-radio').on('change', function() {
                     var selectedInstanceId = parseInt($(this).val());
                     populateStocktakeSuppliers(selectedInstanceId);
+                    // Trigger validation after changing xero instance (supplier will be reset)
+                    var billPk = $row.attr('data-bill-pk');
+                    if (typeof validateInboxSendButton === 'function') {
+                        validateInboxSendButton(billPk);
+                    }
+                });
+                
+                // Bind stocktake supplier dropdown change handler to trigger validation
+                stocktakeSupplierSelect.on('change', function() {
+                    var billPk = $row.attr('data-bill-pk');
+                    console.log('[Stocktake] Supplier changed, billPk:', billPk, 'value:', $(this).val());
+                    if (typeof validateInboxSendButton === 'function') {
+                        validateInboxSendButton(billPk);
+                    }
                 });
             }
         } else {
