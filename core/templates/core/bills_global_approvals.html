@@ -382,6 +382,27 @@
         var billPk = button.attr('data-bill-pk');
         var row = button.closest('tr');
         
+        // Debug: Log bill data including dates
+        console.log('=== SEND TO XERO - BUTTON CLICKED ===');
+        console.log('Bill PK:', billPk);
+        // Get the bill data from window.currentBillData or find from table
+        var billData = null;
+        if (window.billsData && window.billsData.approvals) {
+            billData = window.billsData.approvals.find(function(b) { return b.bill_pk == billPk; });
+        }
+        if (billData) {
+            console.log('Bill Data from cache:', billData);
+            console.log('  bill_date (raw):', billData.bill_date);
+            console.log('  bill_due_date (raw):', billData.bill_due_date);
+            console.log('  bill_date type:', typeof billData.bill_date);
+            console.log('  bill_due_date type:', typeof billData.bill_due_date);
+        } else {
+            console.log('Bill data not found in cache, will check row cells');
+            var cells = row.find('td');
+            console.log('  Date cell (7th):', cells.eq(6).text());
+            console.log('  Due Date cell (8th):', cells.eq(7).text());
+        }
+        
         // Store for later
         pendingBillPk = billPk;
         pendingButton = button;
@@ -471,13 +492,17 @@
                 }
                 
                 if (response.status === 'success') {
+                    // Hide modal BEFORE showing alert
                     pdfConfirmModal.hide();
-                    // Show attachment status
-                    var msg = 'Bill sent to Xero!';
-                    if (response.attachment_status) {
-                        msg += '\nAttachment status: ' + response.attachment_status;
-                    }
-                    alert(msg);
+                    
+                    // Small delay to ensure modal is fully hidden before alert
+                    setTimeout(function() {
+                        var msg = 'Bill sent to Xero!';
+                        if (response.attachment_status) {
+                            msg += '\nAttachment status: ' + response.attachment_status;
+                        }
+                        alert(msg);
+                    }, 100);
                     
                     AllocationsManager.showSuccessAndFadeRow(pendingButton, pendingRow, function() {
                         if (window.currentSelectedBillPk == pendingBillPk) {
@@ -489,6 +514,11 @@
                         }
                     });
                 } else {
+                    // Log the error details
+                    console.log('=== SEND TO XERO ERROR ===');
+                    console.log('Error message:', response.message);
+                    console.log('Full response:', response);
+                    
                     // Keep modal open on error so user can retry or cancel
                     alert('Error: ' + response.message);
                 }
@@ -506,6 +536,22 @@
                 alert(errMsg);
             }
         });
+    });
+    
+    // Fix: Ensure modal close buttons work after alert
+    $(document).on('click', '#pdfConfirmModal .btn-close, #pdfConfirmModal .btn-secondary', function() {
+        console.log('Modal close button clicked');
+        if (pdfConfirmModal) {
+            pdfConfirmModal.hide();
+        }
+        // Also try Bootstrap's native method as backup
+        var modalEl = document.getElementById('pdfConfirmModal');
+        if (modalEl) {
+            var bsModal = bootstrap.Modal.getInstance(modalEl);
+            if (bsModal) {
+                bsModal.hide();
+            }
+        }
     });
     
 })();

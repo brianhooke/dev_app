@@ -431,13 +431,26 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
         line_items.append(line_item)
     
     # Build invoice payload for Xero
+    # === DATE FORMAT DEBUG ===
+    logger.info(f"=== DATE FORMAT DEBUG ===")
+    logger.info(f"  invoice.bill_date raw: {invoice.bill_date}")
+    logger.info(f"  invoice.bill_date type: {type(invoice.bill_date)}")
+    logger.info(f"  invoice.bill_due_date raw: {invoice.bill_due_date}")
+    logger.info(f"  invoice.bill_due_date type: {type(invoice.bill_due_date)}")
+    
+    formatted_date = invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else date.today().strftime('%Y-%m-%d')
+    formatted_due_date = invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else date.today().strftime('%Y-%m-%d')
+    
+    logger.info(f"  formatted_date for Xero: {formatted_date}")
+    logger.info(f"  formatted_due_date for Xero: {formatted_due_date}")
+    
     invoice_payload = {
         "Type": "ACCPAY",
         "Contact": {
             "ContactID": supplier.xero_contact_id
         },
-        "Date": invoice.bill_date.strftime('%Y-%m-%d') if invoice.bill_date else date.today().strftime('%Y-%m-%d'),
-        "DueDate": invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else date.today().strftime('%Y-%m-%d'),
+        "Date": formatted_date,
+        "DueDate": formatted_due_date,
         "InvoiceNumber": invoice.supplier_bill_number or '',
         "LineItems": line_items,
         "Status": "DRAFT"
