@@ -140,10 +140,12 @@ def format_bank_details(bsb, account_number):
     return ''
 
 
-def parse_xero_validation_errors(response):
+def parse_xero_validation_errors(response, invoice_number=None):
     """
     Extract validation error messages from Xero API error response.
     Returns formatted error message or None.
+    
+    Detects common patterns like duplicate invoice numbers and provides clearer messages.
     """
     try:
         error_data = response.json()
@@ -151,7 +153,26 @@ def parse_xero_validation_errors(response):
             element = error_data['Elements'][0]
             if 'ValidationErrors' in element and len(element['ValidationErrors']) > 0:
                 validation_errors = [err['Message'] for err in element['ValidationErrors']]
-                return 'Xero validation error: ' + '; '.join(validation_errors)
+                raw_msg = '; '.join(validation_errors)
+                
+                # Detect duplicate invoice pattern: when Xero tries to UPDATE an existing
+                # invoice (because InvoiceNumber matches), it returns errors about the
+                # EXISTING invoice being locked/having payments - which is confusing
+                is_duplicate_pattern = (
+                    ('lock date' in raw_msg.lower() or 'cannot be edited' in raw_msg.lower()) and
+                    ('payment' in raw_msg.lower() or 'credit note' in raw_msg.lower())
+                )
+                
+                if is_duplicate_pattern:
+                    inv_ref = f' (Bill #{invoice_number})' if invoice_number else ''
+                    return (
+                        f'DUPLICATE INVOICE NUMBER{inv_ref}: An invoice with this number already exists in Xero. '
+                        f'The existing invoice is locked or has payments, so Xero cannot update it. '
+                        f'Please change the Supplier Bill Number to a unique value.\n\n'
+                        f'Original Xero error: {raw_msg}'
+                    )
+                
+                return 'Xero validation error: ' + raw_msg
     except (ValueError, KeyError, TypeError, IndexError):
         pass
     return None

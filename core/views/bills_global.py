@@ -538,7 +538,7 @@ def _send_bill_to_xero_core(invoice, workflow='approvals'):
     
     # Check response
     if response.status_code != 200:
-        error_msg = parse_xero_validation_errors(response)
+        error_msg = parse_xero_validation_errors(response, invoice_number=invoice.supplier_bill_number)
         if not error_msg:
             error_msg = f'Xero API error: {response.status_code} - {response.text}'
         logger.error(f"Xero API error: {error_msg}")
