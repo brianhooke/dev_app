@@ -3149,20 +3149,39 @@ Backend Endpoints:
     
     // Helper function called from Save Day to save allocations silently
     async function saveAllocationsFromSaveDay() {
+        console.log('=== saveAllocationsFromSaveDay START ===');
         const rows = document.querySelectorAll('#allocationRows tr');
-        if (rows.length === 0) return;
+        console.log('Found allocation rows:', rows.length);
+        if (rows.length === 0) {
+            console.log('No rows found, returning early');
+            return;
+        }
         
         const allocations = [];
-        rows.forEach(row => {
+        rows.forEach((row, rowIndex) => {
+            console.log(`Processing row ${rowIndex}:`, row);
             const typeSelect = row.querySelector('.alloc-type');
             const projectSelect = row.querySelector('.alloc-project');
             const costingSelect = row.querySelector('.alloc-costing');
             const noteInput = row.querySelector('.alloc-note');
             const hoursInput = row.querySelector('.alloc-hours');
             
+            console.log(`  Row ${rowIndex} elements:`, {
+                typeSelect: typeSelect?.value,
+                projectSelect: projectSelect?.value,
+                costingSelect: costingSelect?.value,
+                noteInput: noteInput?.value,
+                hoursInput: hoursInput?.value
+            });
+            
             const allocType = parseInt(typeSelect?.value) || 1;
             const hours = parseFloat(hoursInput?.value) || 0;
-            if (hours <= 0) return; // Skip empty rows
+            console.log(`  Row ${rowIndex} parsed: allocType=${allocType}, hours=${hours}`);
+            
+            if (hours <= 0) {
+                console.log(`  Row ${rowIndex} SKIPPED - hours <= 0`);
+                return; // Skip empty rows
+            }
             
             const alloc = {
                 allocation_type: allocType,
@@ -3178,34 +3197,48 @@ Backend Endpoints:
                 alloc.costing_id = null;
                 alloc.note = noteInput?.value?.trim() || '';
             }
+            console.log(`  Row ${rowIndex} allocation object:`, alloc);
             allocations.push(alloc);
         });
         
-        if (allocations.length === 0) return;
+        console.log('Total allocations to save:', allocations.length);
+        console.log('Allocations array:', JSON.stringify(allocations, null, 2));
+        
+        if (allocations.length === 0) {
+            console.log('No valid allocations, returning early');
+            return;
+        }
         
         try {
             for (let i = 0; i < allocations.length; i++) {
                 const alloc = allocations[i];
-                await fetch('/core/staff_hours/allocations/save/', {
+                const payload = {
+                    xero_instance_id: currentXeroInstanceId,
+                    employee_id: calendarEmployeeSelect.value,
+                    date: selectedDayData.date,
+                    allocation_type: alloc.allocation_type,
+                    project_id: alloc.project_id,
+                    costing_id: alloc.costing_id,
+                    hours: alloc.hours,
+                    note: alloc.note,
+                    clear_existing: i === 0  // Clear on first save only
+                };
+                console.log(`Saving allocation ${i + 1}/${allocations.length}:`, JSON.stringify(payload, null, 2));
+                
+                const response = await fetch('/core/staff_hours/allocations/save/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
                     },
-                    body: JSON.stringify({
-                        xero_instance_id: currentXeroInstanceId,
-                        employee_id: calendarEmployeeSelect.value,
-                        date: selectedDayData.date,
-                        allocation_type: alloc.allocation_type,
-                        project_id: alloc.project_id,
-                        costing_id: alloc.costing_id,
-                        hours: alloc.hours,
-                        note: alloc.note,
-                        clear_existing: i === 0  // Clear on first save only
-                    })
+                    body: JSON.stringify(payload)
                 });
+                
+                const responseData = await response.json();
+                console.log(`Allocation ${i + 1} response status:`, response.status);
+                console.log(`Allocation ${i + 1} response data:`, responseData);
             }
-            console.log('Allocations saved successfully');
+            console.log('=== saveAllocationsFromSaveDay COMPLETE ===');
         } catch (e) {
             console.error('Error saving allocations:', e);
         }
