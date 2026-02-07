@@ -2030,6 +2030,7 @@ def save_allocation(request):
     """
     Save or update an hour allocation.
     Supports: Project (type=1), Unchargeable (type=2), Other Chargeable (type=3)
+    If clear_existing=True, deletes all existing allocations for that employee/date first.
     """
     try:
         data = json.loads(request.body)
@@ -2041,6 +2042,7 @@ def save_allocation(request):
         costing_id = data.get('costing_id')
         hours = data.get('hours')
         note = data.get('note', '')
+        clear_existing = data.get('clear_existing', False)
         
         # Validate based on allocation type
         if allocation_type == 1:  # Project
@@ -2070,7 +2072,11 @@ def save_allocation(request):
             defaults={'hours': 0}
         )
         
-        # Create or update allocation based on type
+        # If clear_existing flag is set, delete all existing allocations for this day
+        if clear_existing:
+            StaffHoursAllocations.objects.filter(staff_hours=staff_hours).delete()
+        
+        # Create allocation (always create new since we cleared existing)
         if allocation_type == 1:  # Project allocation
             allocation, created = StaffHoursAllocations.objects.update_or_create(
                 staff_hours=staff_hours,
