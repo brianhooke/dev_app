@@ -657,7 +657,7 @@ Backend Endpoints:
                                         <!-- Hours Allocation Section -->
                                         <div id="hoursAllocationSection" class="d-none" style="border-top: 1px solid var(--manila-border); padding-top: 8px; margin-top: 8px;">
                                             <label class="text-muted small fw-bold mb-1 d-block">Allocate Hours</label>
-                                            <div class="allocation-table-container" style="border: 1px solid var(--manila-border); border-radius: 4px; overflow: hidden;">
+                                            <div class="allocation-table-container" style="border: 1px solid var(--manila-border); border-radius: 4px; max-height: 200px; overflow-y: auto;">
                                                 <table id="allocationTable" class="reusable-table w-100" style="font-size: 11px; margin-bottom: 0;">
                                                     <thead>
                                                         <tr>
@@ -2575,13 +2575,18 @@ Backend Endpoints:
                 const section = document.getElementById('hoursAllocationSection');
                 if (section && section.classList.contains('d-none')) {
                     section.classList.remove('d-none');
-                    // Initialize with empty allocation table
-                    loadAllocationProjects().then(() => {
-                        const tbody = document.getElementById('allocationRows');
-                        if (tbody) tbody.innerHTML = '';
-                        tbody.appendChild(createAllocationRow());
+                    // Only initialize if no rows exist yet
+                    const tbody = document.getElementById('allocationRows');
+                    const existingRows = tbody?.querySelectorAll('tr[id^="alloc-row-"]');
+                    if (!existingRows || existingRows.length === 0) {
+                        loadAllocationProjects().then(() => {
+                            if (tbody) tbody.innerHTML = '';
+                            tbody.appendChild(createAllocationRow());
+                            validateAllocations();
+                        });
+                    } else {
                         validateAllocations();
-                    });
+                    }
                 } else {
                     validateAllocations();
                 }
