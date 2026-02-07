@@ -3245,15 +3245,26 @@ Backend Endpoints:
     }
     
     async function saveAllAllocations() {
+        console.log('=== saveAllAllocations START ===');
         const rows = document.querySelectorAll('#allocationRows tr');
+        console.log('Found allocation rows:', rows.length);
         const allocations = [];
         
-        rows.forEach(row => {
+        rows.forEach((row, rowIndex) => {
+            console.log(`Processing row ${rowIndex}:`, row);
             const typeSelect = row.querySelector('.alloc-type');
             const projectSelect = row.querySelector('.alloc-project');
             const costingSelect = row.querySelector('.alloc-costing');
             const noteInput = row.querySelector('.alloc-note');
             const hoursInput = row.querySelector('.alloc-hours');
+            
+            console.log(`  Row ${rowIndex} elements:`, {
+                typeSelect: typeSelect?.value,
+                projectSelect: projectSelect?.value,
+                costingSelect: costingSelect?.value,
+                noteInput: noteInput?.value,
+                hoursInput: hoursInput?.value
+            });
             
             const allocType = parseInt(typeSelect?.value) || 1;
             const alloc = {
@@ -3277,8 +3288,12 @@ Backend Endpoints:
                 alloc.note = noteInput?.value?.trim() || '';
             }
             alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
+            console.log(`  Row ${rowIndex} allocation object:`, alloc);
             allocations.push(alloc);
         });
+        
+        console.log('Total allocations to save:', allocations.length);
+        console.log('Allocations array:', JSON.stringify(allocations, null, 2));
         
         const saveBtn = document.getElementById('saveAllocationsBtn');
         saveBtn.disabled = true;
@@ -3287,26 +3302,34 @@ Backend Endpoints:
         try {
             for (let i = 0; i < allocations.length; i++) {
                 const alloc = allocations[i];
-                await fetch('/core/staff_hours/allocations/save/', {
+                const payload = {
+                    xero_instance_id: currentXeroInstanceId,
+                    employee_id: calendarEmployeeSelect.value,
+                    date: selectedDayData.date,
+                    allocation_type: alloc.allocation_type,
+                    project_id: alloc.project_id,
+                    costing_id: alloc.costing_id,
+                    hours: alloc.hours,
+                    note: alloc.note,
+                    clear_existing: i === 0  // Clear on first save only
+                };
+                console.log(`Saving allocation ${i + 1}/${allocations.length}:`, JSON.stringify(payload, null, 2));
+                
+                const response = await fetch('/core/staff_hours/allocations/save/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
                     },
-                    body: JSON.stringify({
-                        xero_instance_id: currentXeroInstanceId,
-                        employee_id: calendarEmployeeSelect.value,
-                        date: selectedDayData.date,
-                        allocation_type: alloc.allocation_type,
-                        project_id: alloc.project_id,
-                        costing_id: alloc.costing_id,
-                        hours: alloc.hours,
-                        note: alloc.note,
-                        clear_existing: i === 0  // Clear on first save only
-                    })
+                    body: JSON.stringify(payload)
                 });
+                
+                const responseData = await response.json();
+                console.log(`Allocation ${i + 1} response status:`, response.status);
+                console.log(`Allocation ${i + 1} response data:`, responseData);
             }
             savedAllocations = allocations;
+            console.log('=== saveAllAllocations COMPLETE ===');
             saveBtn.textContent = 'Saved!';
             setTimeout(() => {
                 saveBtn.textContent = 'Save Allocations';
