@@ -506,11 +506,17 @@ Column Behaviors:
         
         // Render totals footer
         renderTotalsFooter(tfoot, totals);
+        
+        // Calculate subtotals for all collapsed categories
+        $('tr.category-row.collapsed').each(function() {
+            var categoryName = $(this).attr('data-category');
+            updateCategorySubtotals(categoryName);
+        });
     }
     
     // Render a category row with collapsible subtotals
     function renderCategoryRow(category, isInternal, isLabour) {
-        var row = $('<tr class="category-row"></tr>');
+        var row = $('<tr class="category-row collapsed"></tr>');
         row.attr('data-category', category.category);
         if (isInternal) row.addClass('internal-category');
         if (isLabour) row.addClass('labour-category');
@@ -571,7 +577,7 @@ Column Behaviors:
         var committedRate = isConstruction && committedData ? (committedData.rate || 0) : 0;
         var hasMultipleRates = isConstruction && committedData ? (committedData.has_multiple_rates || false) : false;
         
-        var row = $('<tr class="item-row"></tr>');
+        var row = $('<tr class="item-row hidden-by-collapse"></tr>');
         if (isInternal) {
             row.addClass('internal-item');
             row.attr('data-is-internal', 'true');
@@ -1279,26 +1285,25 @@ Column Behaviors:
         
         // Count total columns in item row to calculate positions
         var totalCols = itemRow.find('td').length;
-        // Start box at Committed Amount column (4th from last: CommittedAmt, C2C, Billed, Fixed on Site)
-        // Box spans 4 cols to fit all content
-        var colsBeforeBox = totalCols - 4;  // All columns before Committed Amount
-        var boxCols = 4;  // Committed Amount + C2C + Billed + Fixed on Site
+        // Extend box 4 columns to the left (8 cols total)
+        var colsBeforeBox = totalCols - 8;
+        var boxCols = 8;
         
         var detailsRow = $('<tr id="billed-details-row-' + itemPk + '" class="billed-details-row committed-details-row" data-item-pk="' + itemPk + '"></tr>');
         
         // Empty cells before the box
         detailsRow.append('<td colspan="' + colsBeforeBox + '"></td>');
         
-        // Green box cell spanning C2C through Fixed on Site
+        // Green box cell
         var boxTd = $('<td colspan="' + boxCols + '"></td>');
         var box = $('<div class="committed-details-box"></div>');
         
         // Build internal table
         var table = $('<table class="committed-details-table"></table>');
         
-        var colgroup = $('<colgroup><col style="width:35%"><col style="width:25%"><col style="width:20%"><col style="width:20%"></colgroup>');
+        var colgroup = $('<colgroup><col style="width:25%"><col style="width:18%"><col style="width:12%"><col style="width:12%"><col style="width:33%"></colgroup>');
         table.append(colgroup);
-        var thead = $('<thead><tr><th>Supplier</th><th>Bill #</th><th>Type</th><th>Amount</th></tr></thead>');
+        var thead = $('<thead><tr><th>Supplier</th><th>Bill #</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead>');
         table.append(thead);
         
         var tbody = $('<tbody></tbody>');
@@ -1308,6 +1313,7 @@ Column Behaviors:
             tr.append('<td>' + Utils.escapeHtml(alloc.bill_number) + '</td>');
             tr.append('<td>' + Utils.escapeHtml(alloc.bill_type_display) + '</td>');
             tr.append('<td>' + Utils.formatCurrency(alloc.amount) + '</td>');
+            tr.append('<td>' + Utils.escapeHtml(alloc.notes || '-') + '</td>');
             tbody.append(tr);
         });
         table.append(tbody);
