@@ -823,7 +823,7 @@ window.Utils = {
 
 /**
  * Verify sticky header implementation for a table.
- * Call from browser console: Utils.verifyStickyHeader('bill') or verifyStickyHeader('bill')
+ * Call from browser console: verifyStickyHeader('bill')
  * 
  * @param {string} sectionId - Section identifier (e.g., 'bill', 'quote')
  * @returns {Object} Verification result with details
@@ -842,7 +842,8 @@ function verifyStickyHeader(sectionId) {
         containerFound: !!container,
         theadFound: !!thead,
         issues: [],
-        recommendations: []
+        recommendations: [],
+        critical: {}
     };
     
     if (!table) {
@@ -860,6 +861,38 @@ function verifyStickyHeader(sectionId) {
         return result;
     }
     
+    // CRITICAL: Check table vs container dimensions
+    var tableRect = table.getBoundingClientRect();
+    var containerRect = container.getBoundingClientRect();
+    result.critical.tableHeight = Math.round(tableRect.height);
+    result.critical.containerHeight = Math.round(containerRect.height);
+    result.critical.tableOverflows = tableRect.height > containerRect.height;
+    result.critical.containerScrollHeight = container.scrollHeight;
+    result.critical.containerClientHeight = container.clientHeight;
+    result.critical.canScroll = container.scrollHeight > container.clientHeight;
+    
+    // CRITICAL: Check current scroll position
+    result.critical.containerScrollTop = container.scrollTop;
+    
+    // CRITICAL: Find the ACTUAL scrolling element by walking up the DOM
+    var scrollingElements = [];
+    var el = container;
+    while (el && el !== document.body) {
+        if (el.scrollHeight > el.clientHeight) {
+            var style = window.getComputedStyle(el);
+            scrollingElements.push({
+                element: el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : ''),
+                scrollHeight: el.scrollHeight,
+                clientHeight: el.clientHeight,
+                scrollTop: el.scrollTop,
+                overflowY: style.overflowY,
+                isScrollable: style.overflowY === 'auto' || style.overflowY === 'scroll'
+            });
+        }
+        el = el.parentElement;
+    }
+    result.critical.scrollingElements = scrollingElements;
+    
     // Check thead sticky positioning
     var theadStyle = window.getComputedStyle(thead);
     result.theadPosition = theadStyle.position;
@@ -876,33 +909,58 @@ function verifyStickyHeader(sectionId) {
     result.containerOverflowY = containerStyle.overflowY;
     result.containerHeight = containerStyle.height;
     result.containerMaxHeight = containerStyle.maxHeight;
+    result.containerDisplay = containerStyle.display;
+    result.containerFlex = containerStyle.flex;
     
     if (containerStyle.overflowY !== 'auto' && containerStyle.overflowY !== 'scroll') {
         result.issues.push('Container overflow-y is "' + containerStyle.overflowY + '" (should be "auto" or "scroll")');
         result.recommendations.push('Add CSS: #' + containerId + ' { overflow-y: auto; }');
     }
     
-    // Check for parent containers with overflow:hidden that might break sticky
+    // CRITICAL: Check if container can actually scroll (has constrained height)
+    if (!result.critical.canScroll && result.critical.tableOverflows) {
+        result.issues.push('CRITICAL: Table overflows container but container cannot scroll - height not constrained');
+    }
+    
+    // Check for parent containers with overflow that might be scrolling instead
     var parent = container.parentElement;
     var problematicParents = [];
+    var actualScrollParent = null;
     while (parent && parent !== document.body) {
         var parentStyle = window.getComputedStyle(parent);
+        var parentInfo = {
+            element: parent.tagName + (parent.id ? '#' + parent.id : '') + (parent.className ? '.' + parent.className.split(' ').join('.') : ''),
+            overflow: parentStyle.overflow,
+            overflowY: parentStyle.overflowY,
+            height: parentStyle.height,
+            scrollHeight: parent.scrollHeight,
+            clientHeight: parent.clientHeight
+        };
+        
+        // Check if THIS parent is actually scrolling
+        if (parent.scrollHeight > parent.clientHeight && 
+            (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll')) {
+            parentInfo.isActuallyScrolling = true;
+            if (!actualScrollParent) actualScrollParent = parentInfo;
+        }
+        
         if (parentStyle.overflow === 'hidden' || parentStyle.overflowY === 'hidden') {
-            problematicParents.push({
-                element: parent.tagName + (parent.id ? '#' + parent.id : '') + (parent.className ? '.' + parent.className.split(' ').join('.') : ''),
-                overflow: parentStyle.overflow,
-                overflowY: parentStyle.overflowY
-            });
+            problematicParents.push(parentInfo);
         }
         parent = parent.parentElement;
     }
     
-    if (problematicParents.length > 0) {
-        result.problematicParents = problematicParents;
-        result.issues.push('Found ' + problematicParents.length + ' parent(s) with overflow:hidden which may break sticky positioning');
+    if (actualScrollParent) {
+        result.critical.actualScrollParent = actualScrollParent;
+        result.issues.push('CRITICAL: A parent element is the actual scroll container: ' + actualScrollParent.element);
+        result.recommendations.push('The scroll should happen in #' + containerId + ', not in a parent');
     }
     
-    // Check th background color (important for sticky headers to hide content behind)
+    if (problematicParents.length > 0) {
+        result.problematicParents = problematicParents;
+    }
+    
+    // Check th background color
     var ths = thead.querySelectorAll('th');
     if (ths.length > 0) {
         var thStyle = window.getComputedStyle(ths[0]);
@@ -920,12 +978,36 @@ function verifyStickyHeader(sectionId) {
         : 'Found ' + result.issues.length + ' issue(s) with sticky header';
     
     console.log('=== Sticky Header Verification for "' + sectionId + '" ===');
+    console.log('');
+    console.log('📊 CRITICAL MEASUREMENTS:');
+    console.log('   Table height:', result.critical.tableHeight + 'px');
+    console.log('   Container height:', result.critical.containerHeight + 'px');
+    console.log('   Container scrollHeight:', result.critical.containerScrollHeight + 'px');
+    console.log('   Container clientHeight:', result.critical.containerClientHeight + 'px');
+    console.log('   Table overflows container:', result.critical.tableOverflows);
+    console.log('   Container CAN scroll:', result.critical.canScroll);
+    console.log('');
+    console.log('🔍 SCROLLING ELEMENTS (has scrollHeight > clientHeight):');
+    if (result.critical.scrollingElements.length === 0) {
+        console.log('   None found - this is the problem!');
+    } else {
+        result.critical.scrollingElements.forEach(function(el, i) {
+            console.log('   ' + (i+1) + '. ' + el.element);
+            console.log('      scrollHeight: ' + el.scrollHeight + ', clientHeight: ' + el.clientHeight);
+            console.log('      overflow-y: ' + el.overflowY + ', isScrollable: ' + el.isScrollable);
+        });
+    }
+    console.log('');
+    if (result.critical.actualScrollParent) {
+        console.log('⚠️  ACTUAL SCROLL PARENT: ' + result.critical.actualScrollParent.element);
+        console.log('   This is wrong - scroll should be on #' + containerId);
+    }
+    console.log('');
     console.log('Summary:', result.summary);
     if (result.issues.length > 0) {
         console.log('Issues:', result.issues);
         console.log('Recommendations:', result.recommendations);
     }
-    console.log('Details:', result);
     
     return result;
 }
@@ -936,3 +1018,134 @@ if (typeof Utils !== 'undefined') {
 }
 // Also expose globally for easy console access
 window.verifyStickyHeader = verifyStickyHeader;
+
+/**
+ * Deep diagnostic for sticky header issues.
+ * Checks for transform/filter/perspective that break sticky, and does live scroll test.
+ * Call from console: debugStickyHeader('bill')
+ */
+function debugStickyHeader(sectionId) {
+    var tableId = sectionId + 'MainTable';
+    var containerId = sectionId + 'TableContainer';
+    
+    var table = document.getElementById(tableId);
+    var container = document.getElementById(containerId);
+    var thead = table ? table.querySelector('thead') : null;
+    
+    if (!table || !container || !thead) {
+        console.log('ERROR: Required elements not found');
+        return;
+    }
+    
+    console.log('=== DEEP STICKY HEADER DEBUG for "' + sectionId + '" ===\n');
+    
+    // 1. Check for transform/filter/perspective/will-change that break sticky
+    console.log('🔬 CHECKING FOR STICKY-BREAKING CSS PROPERTIES:');
+    var breakingProps = ['transform', 'filter', 'perspective', 'willChange', 'contain'];
+    var el = thead;
+    var foundBreakingProp = false;
+    while (el && el !== document.body) {
+        var style = window.getComputedStyle(el);
+        var elName = el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : '');
+        
+        breakingProps.forEach(function(prop) {
+            var value = style[prop];
+            if (value && value !== 'none' && value !== 'auto' && value !== '' && value !== 'normal') {
+                console.log('   ⚠️  ' + elName + ' has ' + prop + ': ' + value);
+                foundBreakingProp = true;
+            }
+        });
+        el = el.parentElement;
+    }
+    if (!foundBreakingProp) {
+        console.log('   ✓ No breaking properties found');
+    }
+    
+    // 2. Check the exact DOM structure
+    console.log('\n📐 DOM STRUCTURE (thead to scroll container):');
+    el = thead;
+    var depth = 0;
+    while (el && el !== container.parentElement) {
+        var style = window.getComputedStyle(el);
+        var elName = el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : '');
+        var indent = '   ' + '  '.repeat(depth);
+        console.log(indent + elName);
+        console.log(indent + '  position: ' + style.position + ', overflow: ' + style.overflow);
+        el = el.parentElement;
+        depth++;
+    }
+    
+    // 3. Live scroll test
+    console.log('\n🎯 LIVE SCROLL TEST:');
+    var theadRect1 = thead.getBoundingClientRect();
+    var containerRect = container.getBoundingClientRect();
+    console.log('   Before scroll - thead.top: ' + Math.round(theadRect1.top) + 'px, container.top: ' + Math.round(containerRect.top) + 'px');
+    
+    // Scroll the container programmatically
+    var originalScrollTop = container.scrollTop;
+    container.scrollTop = 100;
+    
+    var theadRect2 = thead.getBoundingClientRect();
+    console.log('   After scroll 100px - thead.top: ' + Math.round(theadRect2.top) + 'px');
+    
+    var stickyWorking = Math.abs(theadRect2.top - containerRect.top) < 5;
+    if (stickyWorking) {
+        console.log('   ✓ STICKY IS WORKING! thead stayed at container top');
+    } else {
+        console.log('   ✗ STICKY NOT WORKING - thead moved with scroll');
+        console.log('   Expected thead.top ≈ ' + Math.round(containerRect.top) + ', got ' + Math.round(theadRect2.top));
+    }
+    
+    // Restore scroll position
+    container.scrollTop = originalScrollTop;
+    
+    // 4. Check if scroll events go to the right element
+    console.log('\n🖱️  SCROLL EVENT TEST (scroll the table manually, watch console):');
+    
+    // Remove any existing listeners
+    if (window._stickyDebugListeners) {
+        window._stickyDebugListeners.forEach(function(item) {
+            item.el.removeEventListener('scroll', item.fn);
+        });
+    }
+    window._stickyDebugListeners = [];
+    
+    // Add scroll listeners to container and parents
+    var addScrollListener = function(element) {
+        var elName = element.tagName + (element.id ? '#' + element.id : '') + (element.className ? '.' + element.className.split(' ')[0] : '');
+        var fn = function() {
+            console.log('   SCROLL EVENT on: ' + elName + ' (scrollTop: ' + element.scrollTop + ')');
+        };
+        element.addEventListener('scroll', fn);
+        window._stickyDebugListeners.push({el: element, fn: fn});
+    };
+    
+    addScrollListener(container);
+    var parent = container.parentElement;
+    while (parent && parent !== document.body) {
+        addScrollListener(parent);
+        parent = parent.parentElement;
+    }
+    addScrollListener(document.body);
+    addScrollListener(document.documentElement);
+    
+    console.log('   Listeners added. Now scroll the Bills table and watch which element receives scroll events.');
+    console.log('   Run debugStickyHeader.cleanup() when done to remove listeners.');
+    
+    return {
+        stickyWorking: stickyWorking,
+        foundBreakingProp: foundBreakingProp
+    };
+}
+
+debugStickyHeader.cleanup = function() {
+    if (window._stickyDebugListeners) {
+        window._stickyDebugListeners.forEach(function(item) {
+            item.el.removeEventListener('scroll', item.fn);
+        });
+        window._stickyDebugListeners = [];
+        console.log('Scroll listeners removed.');
+    }
+};
+
+window.debugStickyHeader = debugStickyHeader;

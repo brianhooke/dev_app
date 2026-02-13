@@ -1,0 +1,96 @@
+================================================================================
+                              KNOWLEDGE BASE
+                    Documented Solutions to Gnarly Issues
+================================================================================
+
+This file documents tricky bugs and their solutions for future reference.
+
+================================================================================
+ISSUE #1: Sticky Table Headers Not Working
+================================================================================
+Date Fixed: 2026-02-14
+Files Affected: core/templates/core/components/allocations_layout.html
+
+SYMPTOMS:
+- Table headers (<th>) scroll with content instead of staying fixed
+- CSS shows position: sticky, top: 0 is correctly applied
+- Diagnostic function reports "correctly configured" but sticky doesn't work
+
+ROOT CAUSE:
+The TABLE element had `overflow: hidden` applied by the browser as a side effect
+of `table-layout: fixed`. This breaks sticky positioning because:
+- Sticky elements need to stick relative to their scroll container
+- When the table has overflow: hidden, it creates a new containing block
+- The thead tries to stick but is clipped by the table's overflow
+
+DIAGNOSTIC APPROACH:
+1. Created debugStickyHeader('bill') function in utils.js
+2. Checked for CSS properties that break sticky: transform, filter, perspective
+3. Logged DOM structure showing: TABLE#billMainTable has overflow: hidden
+4. Live scroll test confirmed: thead.top moved with scroll instead of staying put
+
+SOLUTION:
+Add `overflow: visible` to the table CSS to override the browser default:
+
+```css
+#{{ section_id }}MainTable {
+    table-layout: fixed;
+    width: 100%;
+    overflow: visible;  /* Required for sticky thead */
+}
+```
+
+KEY LEARNINGS:
+1. table-layout: fixed causes browsers to apply overflow: hidden by default
+2. overflow: hidden on ANY ancestor between the sticky element and its scroll
+   container will break sticky positioning
+3. Use debugStickyHeader() function to diagnose sticky issues - it checks:
+   - transform/filter/perspective on ancestors (breaks sticky)
+   - overflow properties on ancestors
+   - Live scroll test to verify if sticky actually works
+
+RELATED FILES:
+- core/static/core/js/utils.js - contains verifyStickyHeader() and debugStickyHeader()
+
+================================================================================
+ISSUE #2: "Still to Allocate" Showing Wrong Values
+================================================================================
+Date Fixed: 2026-02-14
+Files Affected: core/templates/core/bills_project.html
+
+SYMPTOMS:
+- "Still to Allocate" footer shows $0.00 or incorrect values
+- Selecting a bill row doesn't update the allocation totals correctly
+
+ROOT CAUSE:
+The onRowSelect function was trying to read bill amounts from INPUT fields
+(.net-input, .gst-input) but the main table displays values as plain TEXT
+in <td> elements with classes .net-cell, .gst-cell.
+
+SOLUTION:
+Changed onRowSelect to read from text content instead of input values:
+
+```javascript
+onRowSelect: function(row, pk, cfg) {
+    // Parse from text cells (not inputs)
+    var netText = row.find('.net-cell').text().replace(/[$,]/g, '');
+    var gstText = row.find('.gst-cell').text().replace(/[$,]/g, '');
+    
+    var netVal = parseFloat(netText) || 0;
+    var gstVal = parseFloat(gstText) || 0;
+    
+    currentSelectedBill = {
+        bill_pk: pk,
+        total_net: netVal,
+        total_gst: gstVal
+    };
+    cfg.data.currentItem = currentSelectedBill;
+}
+```
+
+KEY LEARNINGS:
+1. Always verify whether table cells contain inputs or plain text
+2. When parsing currency from text, strip $ and commas before parseFloat
+3. Use console.log debugging to trace data flow through functions
+
+================================================================================
