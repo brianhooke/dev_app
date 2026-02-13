@@ -136,12 +136,32 @@ $(document).ready(function() {
                 return row;
             },
             onRowSelect: function(row, pk, cfg) {
+                // Parse gross/net/gst from text cells (they are display-only, not inputs)
+                // The cells contain text like "$1,234.56" so we need to strip $ and commas
+                var grossText = row.find('.gross-cell').text().replace(/[$,]/g, '');
+                var netText = row.find('.net-cell').text().replace(/[$,]/g, '');
+                var gstText = row.find('.gst-cell').text().replace(/[$,]/g, '');
+                
+                var grossVal = parseFloat(grossText) || 0;
+                var netVal = parseFloat(netText) || 0;
+                var gstVal = parseFloat(gstText) || 0;
+                
+                // DEBUG: Log the values for diagnosis
+                console.log('[bills_project] onRowSelect - bill_pk:', pk);
+                console.log('[bills_project] onRowSelect - grossText:', grossText, '-> grossVal:', grossVal);
+                console.log('[bills_project] onRowSelect - netText:', netText, '-> netVal:', netVal);
+                console.log('[bills_project] onRowSelect - gstText:', gstText, '-> gstVal:', gstVal);
+                
                 // Set currentSelectedBill for bill-specific logic
+                // Use NET for total_net (still to allocate calculation uses net, not gross)
                 currentSelectedBill = {
                     bill_pk: pk,
-                    total_net: parseFloat(row.find('.net-input').val()) || 0,
-                    total_gst: parseFloat(row.find('.gst-input').val()) || 0
+                    total_net: netVal,
+                    total_gst: gstVal
                 };
+                
+                console.log('[bills_project] currentSelectedBill set:', JSON.stringify(currentSelectedBill));
+                
                 // Set currentItem for shared updateStillToAllocate
                 cfg.data.currentItem = currentSelectedBill;
                 // Enable edit mode so footer shows "still to allocate"

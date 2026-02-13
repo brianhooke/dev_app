@@ -820,3 +820,119 @@ window.Utils = {
     style.textContent = css;
     document.head.appendChild(style);
 })();
+
+/**
+ * Verify sticky header implementation for a table.
+ * Call from browser console: Utils.verifyStickyHeader('bill') or verifyStickyHeader('bill')
+ * 
+ * @param {string} sectionId - Section identifier (e.g., 'bill', 'quote')
+ * @returns {Object} Verification result with details
+ */
+function verifyStickyHeader(sectionId) {
+    var tableId = sectionId + 'MainTable';
+    var containerId = sectionId + 'TableContainer';
+    
+    var table = document.getElementById(tableId);
+    var container = document.getElementById(containerId);
+    var thead = table ? table.querySelector('thead') : null;
+    
+    var result = {
+        sectionId: sectionId,
+        tableFound: !!table,
+        containerFound: !!container,
+        theadFound: !!thead,
+        issues: [],
+        recommendations: []
+    };
+    
+    if (!table) {
+        result.issues.push('Table #' + tableId + ' not found');
+        return result;
+    }
+    
+    if (!container) {
+        result.issues.push('Container #' + containerId + ' not found');
+        return result;
+    }
+    
+    if (!thead) {
+        result.issues.push('thead not found in table');
+        return result;
+    }
+    
+    // Check thead sticky positioning
+    var theadStyle = window.getComputedStyle(thead);
+    result.theadPosition = theadStyle.position;
+    result.theadTop = theadStyle.top;
+    result.theadZIndex = theadStyle.zIndex;
+    
+    if (theadStyle.position !== 'sticky') {
+        result.issues.push('thead position is "' + theadStyle.position + '" (should be "sticky")');
+        result.recommendations.push('Add CSS: #' + tableId + ' thead { position: sticky; top: 0; z-index: 11; }');
+    }
+    
+    // Check container overflow
+    var containerStyle = window.getComputedStyle(container);
+    result.containerOverflowY = containerStyle.overflowY;
+    result.containerHeight = containerStyle.height;
+    result.containerMaxHeight = containerStyle.maxHeight;
+    
+    if (containerStyle.overflowY !== 'auto' && containerStyle.overflowY !== 'scroll') {
+        result.issues.push('Container overflow-y is "' + containerStyle.overflowY + '" (should be "auto" or "scroll")');
+        result.recommendations.push('Add CSS: #' + containerId + ' { overflow-y: auto; }');
+    }
+    
+    // Check for parent containers with overflow:hidden that might break sticky
+    var parent = container.parentElement;
+    var problematicParents = [];
+    while (parent && parent !== document.body) {
+        var parentStyle = window.getComputedStyle(parent);
+        if (parentStyle.overflow === 'hidden' || parentStyle.overflowY === 'hidden') {
+            problematicParents.push({
+                element: parent.tagName + (parent.id ? '#' + parent.id : '') + (parent.className ? '.' + parent.className.split(' ').join('.') : ''),
+                overflow: parentStyle.overflow,
+                overflowY: parentStyle.overflowY
+            });
+        }
+        parent = parent.parentElement;
+    }
+    
+    if (problematicParents.length > 0) {
+        result.problematicParents = problematicParents;
+        result.issues.push('Found ' + problematicParents.length + ' parent(s) with overflow:hidden which may break sticky positioning');
+    }
+    
+    // Check th background color (important for sticky headers to hide content behind)
+    var ths = thead.querySelectorAll('th');
+    if (ths.length > 0) {
+        var thStyle = window.getComputedStyle(ths[0]);
+        result.thBackground = thStyle.backgroundColor;
+        if (thStyle.backgroundColor === 'rgba(0, 0, 0, 0)' || thStyle.backgroundColor === 'transparent') {
+            result.issues.push('th background is transparent - content will show through when scrolling');
+            result.recommendations.push('Add CSS: #' + tableId + ' thead th { background: #fff; }');
+        }
+    }
+    
+    // Summary
+    result.isValid = result.issues.length === 0;
+    result.summary = result.isValid 
+        ? 'Sticky header is correctly configured' 
+        : 'Found ' + result.issues.length + ' issue(s) with sticky header';
+    
+    console.log('=== Sticky Header Verification for "' + sectionId + '" ===');
+    console.log('Summary:', result.summary);
+    if (result.issues.length > 0) {
+        console.log('Issues:', result.issues);
+        console.log('Recommendations:', result.recommendations);
+    }
+    console.log('Details:', result);
+    
+    return result;
+}
+
+// Expose to Utils namespace
+if (typeof Utils !== 'undefined') {
+    Utils.verifyStickyHeader = verifyStickyHeader;
+}
+// Also expose globally for easy console access
+window.verifyStickyHeader = verifyStickyHeader;

@@ -902,10 +902,15 @@ var AllocationsManager = (function() {
         var hasGst = cfg.features && cfg.features.gstField;
         var cls = sectionId + '-allocation';
         
+        // DEBUG: Log entry point
+        console.log('[updateStillToAllocate] sectionId:', sectionId, 'isNewMode:', st.isNewMode, 'editMode:', st.editMode, 'hasGst:', hasGst);
+        
         // Get totals from main table row or current item
         var totalNet = 0, totalGst = 0;
+        var sourceType = 'none';
         if (st.isNewMode) {
             // New mode: get total from input field
+            sourceType = 'newMode';
             var totalInput = $('.new-' + sectionId + '-net');
             totalNet = parseFloat(totalInput.val()) || 0;
             if (hasGst) {
@@ -916,8 +921,10 @@ var AllocationsManager = (function() {
             // Edit mode: check for editable input first (e.g., quote-edit-net)
             var editNetInput = $('.' + sectionId + '-edit-net');
             if (editNetInput.length) {
+                sourceType = 'editInput';
                 totalNet = parseFloat(editNetInput.val()) || 0;
             } else if (cfg.data.currentItem) {
+                sourceType = 'currentItem';
                 totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
             }
             if (hasGst) {
@@ -929,29 +936,41 @@ var AllocationsManager = (function() {
                 }
             }
         } else if (cfg.data.currentItem) {
+            sourceType = 'currentItem(noEdit)';
             totalNet = parseFloat(cfg.data.currentItem.total_cost || cfg.data.currentItem.total_net || cfg.data.currentItem.total_amount || cfg.data.currentItem.amount || 0);
             if (hasGst) {
                 totalGst = parseFloat(cfg.data.currentItem.total_gst || 0);
             }
         }
         
+        // DEBUG: Log source and totals
+        console.log('[updateStillToAllocate] sourceType:', sourceType, 'totalNet:', totalNet, 'totalGst:', totalGst);
+        if (cfg.data.currentItem) {
+            console.log('[updateStillToAllocate] currentItem:', JSON.stringify(cfg.data.currentItem));
+        }
+        
         // Calculate allocated amounts
         var allocatedNet = 0, allocatedGst = 0;
+        var rowCount = $('#' + sectionId + 'AllocationsTableBody tr').length;
         $('#' + sectionId + 'AllocationsTableBody tr').each(function(index) {
             // Net amount - use standardized class name
             var netInput = $(this).find('.' + cls + '-net-input');
+            var rowNet = 0, rowGst = 0;
             if (netInput.length) {
-                allocatedNet += parseFloat(netInput.val()) || 0;
+                rowNet = parseFloat(netInput.val()) || 0;
+                allocatedNet += rowNet;
             } else {
                 // Fallback: try amount-input class or parse from text
                 var amountInput = $(this).find('.' + cls + '-amount-input');
                 if (amountInput.length) {
-                    allocatedNet += parseFloat(amountInput.val()) || 0;
+                    rowNet = parseFloat(amountInput.val()) || 0;
+                    allocatedNet += rowNet;
                 } else {
                     // Read-only row - parse from text (column index varies)
                     var amountCell = $(this).find('td:eq(1)');
                     var text = amountCell.text().replace(/[$,]/g, '');
-                    allocatedNet += parseFloat(text) || 0;
+                    rowNet = parseFloat(text) || 0;
+                    allocatedNet += rowNet;
                 }
             }
             
@@ -959,12 +978,22 @@ var AllocationsManager = (function() {
             if (hasGst) {
                 var gstInput = $(this).find('.' + cls + '-gst-input');
                 if (gstInput.length) {
-                    allocatedGst += parseFloat(gstInput.val()) || 0;
+                    rowGst = parseFloat(gstInput.val()) || 0;
+                    allocatedGst += rowGst;
                 }
+            }
+            
+            // DEBUG: Log per-row values (only first 5 rows to avoid spam)
+            if (index < 5) {
+                console.log('[updateStillToAllocate] row', index, '- net:', rowNet, 'gst:', rowGst);
             }
         });
         
+        // DEBUG: Log final calculation
+        console.log('[updateStillToAllocate] rowCount:', rowCount, 'allocatedNet:', allocatedNet, 'allocatedGst:', allocatedGst);
+        
         var remainingNet = totalNet - allocatedNet;
+        console.log('[updateStillToAllocate] remainingNet:', remainingNet, '(totalNet:', totalNet, '- allocatedNet:', allocatedNet, ')');
         var remainingGst = hasGst ? totalGst - allocatedGst : 0;
         
         // Update Net display
