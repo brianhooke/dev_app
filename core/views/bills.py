@@ -598,6 +598,12 @@ def get_approved_bills(request):
                 'bill_due_date': invoice.bill_due_date.strftime('%Y-%m-%d') if invoice.bill_due_date else None,
                 'pdf_url': pdf_url,
                 'allocations': allocations,
+                # FX fields - added 2026-02-15
+                'currency': getattr(invoice, 'currency', 'AUD') or 'AUD',
+                'foreign_amount': float(invoice.foreign_amount) if getattr(invoice, 'foreign_amount', None) else None,
+                'foreign_gst': float(invoice.foreign_gst) if getattr(invoice, 'foreign_gst', None) else None,
+                'exchange_rate': float(invoice.exchange_rate) if getattr(invoice, 'exchange_rate', None) else None,
+                'is_fx_fixed': getattr(invoice, 'is_fx_fixed', False),
             }
             invoices_data.append(invoice_data)
         except Exception as e:

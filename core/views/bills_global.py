@@ -312,6 +312,15 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"  pdf field: {invoice.pdf}")
     logger.info(f"  pdf.name: {invoice.pdf.name if invoice.pdf else 'None'}")
     
+    # FX fields logging - added 2026-02-15
+    logger.info(f"=== FX/CURRENCY DETAILS ===")
+    logger.info(f"  currency (raw): {getattr(invoice, 'currency', 'NOT_SET')}")
+    logger.info(f"  currency type: {type(getattr(invoice, 'currency', None))}")
+    logger.info(f"  foreign_amount: {getattr(invoice, 'foreign_amount', 'NOT_SET')}")
+    logger.info(f"  foreign_gst: {getattr(invoice, 'foreign_gst', 'NOT_SET')}")
+    logger.info(f"  exchange_rate: {getattr(invoice, 'exchange_rate', 'NOT_SET')}")
+    logger.info(f"  is_fx_fixed: {getattr(invoice, 'is_fx_fixed', 'NOT_SET')}")
+    
     # Check if bill was already sent to Xero
     if invoice.bill_xero_id:
         logger.warning(f"Bill {bill_pk} already has Xero ID: {invoice.bill_xero_id}")
@@ -526,6 +535,12 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"  formatted_date for Xero: {formatted_date}")
     logger.info(f"  formatted_due_date for Xero: {formatted_due_date}")
     
+    # Determine currency code - use invoice.currency if set and not AUD
+    bill_currency = getattr(invoice, 'currency', None) or 'AUD'
+    logger.info(f"=== CURRENCY FOR XERO ===")
+    logger.info(f"  bill_currency resolved: '{bill_currency}'")
+    logger.info(f"  is foreign currency: {bill_currency != 'AUD'}")
+    
     invoice_payload = {
         "Type": "ACCPAY",
         "Contact": {
@@ -537,6 +552,13 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
         "LineItems": line_items,
         "Status": "DRAFT"
     }
+    
+    # FX: Add CurrencyCode if not AUD - critical for foreign currency bills
+    if bill_currency and bill_currency != 'AUD':
+        invoice_payload["CurrencyCode"] = bill_currency
+        logger.info(f"  *** ADDING CurrencyCode '{bill_currency}' to Xero payload ***")
+    else:
+        logger.info(f"  Using default AUD currency (not adding CurrencyCode field)")
     
     # Send to Xero API
     logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
@@ -595,6 +617,13 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"=== ATTACHMENT PROCESSING for bill {bill_pk} ({workflow}) ===")
     logger.info(f"{'='*60}")
     logger.info(f"Xero Invoice ID: {xero_invoice_id}")
+    logger.info(f"")
+    logger.info(f"=== ATTACHMENT PRE-CHECK (2026-02-15 debug) ===")
+    logger.info(f"  invoice object type: {type(invoice)}")
+    logger.info(f"  invoice.pk: {invoice.pk}")
+    logger.info(f"  hasattr(invoice, 'pdf'): {hasattr(invoice, 'pdf')}")
+    logger.info(f"  hasattr(invoice, 'email_attachment'): {hasattr(invoice, 'email_attachment')}")
+    logger.info(f"  hasattr(invoice, 'email_attachment_id'): {hasattr(invoice, 'email_attachment_id')}")
     
     if xero_invoice_id:
         pdf_url = None
