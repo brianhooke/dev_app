@@ -357,6 +357,47 @@ $(document).ready(function() {
     }
     #billsInboxMainTableBody .date-picker-cell {
         position: relative;
+    }
+    
+    /* FX: Orange row styling for unfixed FX bills - Added 2026-02-14 */
+    /* Applied to Bills Inbox, Direct, Approvals, and bills_project tables */
+    /* Apply to both tr AND td to ensure visibility regardless of cell backgrounds */
+    #billsInboxMainTableBody tr.fx-unfixed,
+    #billsInboxMainTableBody tr.fx-unfixed td,
+    #billsDirectMainTableBody tr.fx-unfixed,
+    #billsDirectMainTableBody tr.fx-unfixed td,
+    #billsApprovalsMainTableBody tr.fx-unfixed,
+    #billsApprovalsMainTableBody tr.fx-unfixed td,
+    tr.fx-unfixed,
+    tr.fx-unfixed td {
+        background-color: rgba(255, 140, 0, 0.5) !important;
+    }
+    #billsInboxMainTableBody tr.fx-unfixed:hover,
+    #billsInboxMainTableBody tr.fx-unfixed:hover td,
+    #billsDirectMainTableBody tr.fx-unfixed:hover,
+    #billsDirectMainTableBody tr.fx-unfixed:hover td,
+    #billsApprovalsMainTableBody tr.fx-unfixed:hover,
+    #billsApprovalsMainTableBody tr.fx-unfixed:hover td,
+    tr.fx-unfixed:hover,
+    tr.fx-unfixed:hover td {
+        background-color: rgba(255, 140, 0, 0.6) !important;
+    }
+    #billsInboxMainTableBody tr.fx-unfixed.selected-row,
+    #billsInboxMainTableBody tr.fx-unfixed.selected-row td,
+    #billsDirectMainTableBody tr.fx-unfixed.selected-row,
+    #billsDirectMainTableBody tr.fx-unfixed.selected-row td,
+    #billsApprovalsMainTableBody tr.fx-unfixed.selected-row,
+    #billsApprovalsMainTableBody tr.fx-unfixed.selected-row td,
+    tr.fx-unfixed.selected-row,
+    tr.fx-unfixed.selected-row td {
+        background-color: rgba(255, 140, 0, 0.7) !important;
+    }
+    /* Currency selector styling */
+    #billsInboxMainTableBody .currency-select {
+        width: 60px;
+        text-align: center;
+    }
+    #billsInboxMainTableBody .date-picker-cell {
         text-align: center;
         white-space: nowrap;
     }
@@ -481,6 +522,12 @@ $(document).ready(function() {
                     .attr('data-bill-pk', bill.bill_pk)
                     .attr('data-pdf-url', pdfUrl);
                 
+                // FX: Add orange highlighting for unfixed FX bills
+                if (isUnfixedFxBill(bill)) {
+                    row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                    console.log('[FX] Row', bill.bill_pk, 'is unfixed FX - adding orange styling');
+                }
+                
                 // 1. Xero Instance / Project dropdown
                 var combinedSelect = $('<select>').addClass('form-control form-control-sm xero-project-select');
                 combinedSelect.append($('<option>').val('').text('Select...'));
@@ -574,14 +621,27 @@ $(document).ready(function() {
                     .val(bill.supplier_bill_number || '');
                 row.append($('<td>').append(billNumberInput));
                 
-                // 4. $ Gross (calculated: Net + GST)
+                // 4. Currency selector (FX support - added 2026-02-14)
+                var currencySelect = $('<select>').addClass('form-control form-control-sm currency-select');
+                FX_CURRENCIES.forEach(function(curr) {
+                    var option = $('<option>').val(curr).text(curr);
+                    if ((bill.currency || 'AUD') === curr) {
+                        option.prop('selected', true);
+                    }
+                    currencySelect.append(option);
+                });
+                var currencyCell = $('<td>').append(currencySelect);
+                row.append(currencyCell);
+                console.log('[FX] Inbox row', bill.bill_pk, 'currency:', bill.currency || 'AUD');
+                
+                // 5. $ Gross (calculated: Net + GST)
                 var netVal = bill.total_net !== null ? parseFloat(bill.total_net) : 0;
                 var gstVal = bill.total_gst !== null ? parseFloat(bill.total_gst) : 0;
                 var grossVal = netVal + gstVal;
                 var grossCell = $('<td>').addClass('gross-cell').text(grossVal ? Utils.formatCurrency(grossVal) : '');
                 row.append(grossCell);
                 
-                // 5. $ Net input
+                // 6. $ Net input
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -590,7 +650,7 @@ $(document).ready(function() {
                     .val(bill.total_net !== null ? bill.total_net : '');
                 row.append($('<td>').append(netInput));
                 
-                // 6. $ GST input
+                // 7. $ GST input
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
@@ -599,7 +659,7 @@ $(document).ready(function() {
                     .val(bill.total_gst !== null ? bill.total_gst : '');
                 row.append($('<td>').append(gstInput));
                 
-                // 7. Date (required) - clickable icon/text with hidden date picker
+                // 8. Date (required) - clickable icon/text with hidden date picker
                 var dateCell = $('<td>').addClass('date-picker-cell');
                 var dateInput = $('<input>')
                     .attr('type', 'date')
@@ -622,7 +682,7 @@ $(document).ready(function() {
                 dateCell.append(dateInput).append(dateDisplay);
                 row.append(dateCell);
                 
-                // 8. Due Date (required) - clickable icon/text with hidden date picker
+                // 9. Due Date (required) - clickable icon/text with hidden date picker
                 var dueDateCell = $('<td>').addClass('date-picker-cell');
                 var dueDateInput = $('<input>')
                     .attr('type', 'date')
@@ -657,7 +717,7 @@ $(document).ready(function() {
                     .attr('title', bill.email_subject + ' from ' + bill.email_from);
                 row.append($('<td>').addClass('col-action-first').append(emailLink));
                 
-                // 10. Send button
+                // 11. Send button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-secondary send-bill-btn')
                     .text('Send')
@@ -665,7 +725,7 @@ $(document).ready(function() {
                     .prop('disabled', true);
                 row.append($('<td>').addClass('col-action').append(sendBtn));
                 
-                // 11. Archive button
+                // 12. Archive button
                 var archiveBtn = $('<button>')
                     .addClass('btn btn-sm btn-danger archive-bill-btn')
                     .html('<i class="fas fa-archive"></i>')
@@ -820,10 +880,24 @@ $(document).ready(function() {
     function bindInboxInputHandlers() {
         $(document).off('change.billsInbox input.billsInbox', '#billsInboxMainTableBody');
         
-        $(document).on('change.billsInbox input.billsInbox', '#billsInboxMainTableBody .xero-project-select, #billsInboxMainTableBody .supplier-select, #billsInboxMainTableBody .bill-number-input, #billsInboxMainTableBody .net-input, #billsInboxMainTableBody .gst-input, #billsInboxMainTableBody .bill-date-input, #billsInboxMainTableBody .bill-due-date-input', function() {
+        // Updated 2026-02-14: Added .currency-select for FX support
+        $(document).on('change.billsInbox input.billsInbox', '#billsInboxMainTableBody .xero-project-select, #billsInboxMainTableBody .supplier-select, #billsInboxMainTableBody .bill-number-input, #billsInboxMainTableBody .currency-select, #billsInboxMainTableBody .net-input, #billsInboxMainTableBody .gst-input, #billsInboxMainTableBody .bill-date-input, #billsInboxMainTableBody .bill-due-date-input', function() {
             var row = $(this).closest('tr');
             var billPk = row.attr('data-bill-pk');
             validateInboxSendButton(billPk);
+            
+            // FX: Log currency changes
+            if ($(this).hasClass('currency-select')) {
+                var currency = $(this).val();
+                console.log('[FX] Currency changed for bill', billPk, 'to:', currency);
+                // Mark row as unfixed if non-AUD currency selected
+                if (currency !== 'AUD') {
+                    row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                    console.log('[FX] Bill', billPk, 'marked as unfixed FX');
+                } else {
+                    row.removeClass('fx-unfixed').css('background-color', '');
+                }
+            }
             
             // Auto-calculate GST when Net changes
             if ($(this).hasClass('net-input')) {
@@ -1220,6 +1294,10 @@ $(document).ready(function() {
         var totalGst = parseFloat(row.find('.gst-input').val());
         var billDate = row.find('.bill-date-input').val();
         var billDueDate = row.find('.bill-due-date-input').val();
+        // FX: Get currency from selector (added 2026-02-14)
+        var currency = row.find('.currency-select').val() || 'AUD';
+        
+        console.log('[FX] Sending bill', billPk, 'with currency:', currency);
         
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
         
@@ -1236,7 +1314,9 @@ $(document).ready(function() {
                 total_net: totalNet,
                 total_gst: totalGst,
                 bill_date: billDate,
-                bill_due_date: billDueDate
+                bill_due_date: billDueDate,
+                // FX fields
+                currency: currency
             }),
             success: function(response) {
                 if (response.status === 'success') {
@@ -1349,24 +1429,33 @@ $(document).ready(function() {
                 // 3. Bill # (display only)
                 row.append($('<td>').text(bill.supplier_bill_number || ''));
                 
-                // 4. $ Gross (calculated: Net + GST)
+                // 4. Currency (FX - display only, added 2026-02-14)
+                var currencyDisplay = (bill.currency && bill.currency !== 'AUD') ? bill.currency : '';
+                row.append($('<td>').addClass('currency-cell').text(currencyDisplay));
+                // Add fx-unfixed class and inline style for orange highlighting
+                if (isUnfixedFxBill(bill)) {
+                    row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                    console.log('[FX] Direct row', bill.bill_pk, 'is unfixed FX - adding orange styling');
+                }
+                
+                // 5. $ Gross (calculated: Net + GST)
                 var netVal = parseFloat(bill.total_net) || 0;
                 var gstVal = parseFloat(bill.total_gst) || 0;
                 row.append($('<td>').text('$' + Utils.formatMoney(netVal + gstVal)));
                 
-                // 5. $ Net (display only)
+                // 6. $ Net (display only)
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 6. $ GST (display only)
+                // 7. $ GST (display only)
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 7. Date (display only, dd-mmm-yy format)
+                // 8. Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_date ? Utils.formatDateDMY(bill.bill_date) : '-'));
                 
-                // 8. Due Date (display only, dd-mmm-yy format)
+                // 9. Due Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_due_date ? Utils.formatDateDMY(bill.bill_due_date) : '-'));
                 
-                // 9. Email link
+                // 10. Email link
                 var emailLink = $('<a>')
                     .attr('href', '#')
                     .text('email')
@@ -1378,7 +1467,7 @@ $(document).ready(function() {
                     .attr('title', bill.email_subject + ' from ' + bill.email_from);
                 row.append($('<td>').addClass('col-action-first').append(emailLink));
                 
-                // 10. Approve button
+                // 11. Approve button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-secondary approve-btn')
                     .text('Approve')
@@ -1386,7 +1475,7 @@ $(document).ready(function() {
                     .prop('disabled', true);
                 row.append($('<td>').addClass('col-action').append(sendBtn));
                 
-                // 8. Return to Inbox button
+                // 12. Return to Inbox button
                 var returnBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning return-to-inbox-btn')
                     .html('<i class="fas fa-undo"></i>')
@@ -2175,29 +2264,38 @@ $(document).ready(function() {
                 var billNumber = bill.supplier_bill_number || '-';
                 row.append($('<td>').attr('title', billNumber).text(billNumber));
                 
-                // 5. $ Gross
+                // 5. Currency (FX - display only, added 2026-02-14)
+                var currencyDisplay = (bill.currency && bill.currency !== 'AUD') ? bill.currency : '';
+                row.append($('<td>').addClass('currency-cell').text(currencyDisplay));
+                // Add fx-unfixed class and inline style for orange highlighting
+                if (isUnfixedFxBill(bill)) {
+                    row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                    console.log('[FX] Approvals row', bill.bill_pk, 'is unfixed FX - adding orange styling');
+                }
+                
+                // 6. $ Gross
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gross)));
                 
-                // 6. $ Net
+                // 7. $ Net
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
                 
-                // 7. $ GST
+                // 8. $ GST
                 row.append($('<td>').text('$' + Utils.formatMoney(bill.total_gst)));
                 
-                // 8. Date (display only, dd-mmm-yy format)
+                // 9. Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_date ? Utils.formatDateDMY(bill.bill_date) : '-'));
                 
-                // 9. Due Date (display only, dd-mmm-yy format)
+                // 10. Due Date (display only, dd-mmm-yy format)
                 row.append($('<td>').text(bill.bill_due_date ? Utils.formatDateDMY(bill.bill_due_date) : '-'));
                 
-                // 10. Send to Xero button
+                // 11. Send to Xero button
                 var sendBtn = $('<button>')
                     .addClass('btn btn-sm btn-success approvals-send-btn')
                     .attr('data-bill-pk', bill.bill_pk)
                     .text('Send');
                 row.append($('<td>').addClass('col-action-first').css('text-align', 'center').append(sendBtn));
                 
-                // 10. Mark X button (marks as sent without actually sending to Xero)
+                // 12. Mark X button (marks as sent without actually sending to Xero)
                 var markXBtn = $('<button>')
                     .addClass('btn btn-sm btn-secondary approvals-mark-x-btn')
                     .attr('data-bill-pk', bill.bill_pk)
@@ -2205,7 +2303,7 @@ $(document).ready(function() {
                     .attr('title', 'Mark as sent to Xero without sending');
                 row.append($('<td>').addClass('col-action').css('text-align', 'center').append(markXBtn));
                 
-                // 11. Return to Project button
+                // 13. Return to Project button
                 var returnBtn = $('<button>')
                     .addClass('btn btn-sm btn-warning approvals-return-btn')
                     .attr('data-bill-pk', bill.bill_pk)

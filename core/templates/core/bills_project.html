@@ -5,6 +5,22 @@
 
 {% include "core/components/allocations_layout.html" with section_id="bill" main_table_columns=main_table_columns allocations_columns=allocations_columns allocations_title="Bill Allocations" viewer_placeholder_text="Click on a bill to view the PDF" viewer_placeholder_icon="fas fa-file-pdf" %}
 
+<!-- FX: Orange row styling for unfixed FX bills - Added 2026-02-14 -->
+<style>
+    #billMainTableBody tr.fx-unfixed,
+    #billMainTableBody tr.fx-unfixed td {
+        background-color: rgba(255, 140, 0, 0.5) !important;
+    }
+    #billMainTableBody tr.fx-unfixed:hover,
+    #billMainTableBody tr.fx-unfixed:hover td {
+        background-color: rgba(255, 140, 0, 0.6) !important;
+    }
+    #billMainTableBody tr.fx-unfixed.selected-row,
+    #billMainTableBody tr.fx-unfixed.selected-row td {
+        background-color: rgba(255, 140, 0, 0.7) !important;
+    }
+</style>
+
 <!-- Load shared utilities and AllocationsManager -->
 <script src="{% static 'core/js/utils.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
@@ -104,7 +120,16 @@ $(document).ready(function() {
                 // 2. Bill # (fixed/read-only)
                 row.append($('<td>').addClass('bill-number-cell').text(bill.bill_number || '-'));
                 
-                // 3. $ Gross (calculated: Net + GST)
+                // 3. Currency (FX - display only, added 2026-02-14)
+                var currencyDisplay = (bill.currency && bill.currency !== 'AUD') ? bill.currency : '';
+                row.append($('<td>').addClass('currency-cell').text(currencyDisplay));
+                // Add fx-unfixed class and inline style for orange highlighting
+                if (typeof isUnfixedFxBill === 'function' && isUnfixedFxBill(bill)) {
+                    row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                    console.log('[FX] bills_project row', bill.bill_pk, 'is unfixed FX - adding orange styling');
+                }
+                
+                // 4. $ Gross (calculated: Net + GST)
                 var netVal = parseFloat(bill.total_net) || 0;
                 var gstVal = parseFloat(bill.total_gst) || 0;
                 row.append($('<td>').addClass('gross-cell').text('$' + Utils.formatMoney(netVal + gstVal)));
@@ -536,15 +561,24 @@ $(document).ready(function() {
             }
             row.append(billNumCell);
             
-            // 3. $ Gross (calculated: Net + GST)
+            // 3. Currency (FX - display only, added 2026-02-14)
+            var currencyDisplay = (bill.currency && bill.currency !== 'AUD') ? bill.currency : '';
+            row.append($('<td>').addClass('currency-cell').text(currencyDisplay));
+            // Add fx-unfixed class and inline style for orange highlighting
+            if (typeof isUnfixedFxBill === 'function' && isUnfixedFxBill(bill)) {
+                row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
+                console.log('[FX] allocated bills_project row', bill.bill_pk, 'is unfixed FX - adding orange styling');
+            }
+            
+            // 4. $ Gross (calculated: Net + GST)
             var netVal = parseFloat(bill.total_net) || 0;
             var gstVal = parseFloat(bill.total_gst) || 0;
             row.append($('<td>').text('$' + Utils.formatMoney(netVal + gstVal)));
             
-            // 4. $ Net (read-only)
+            // 5. $ Net (read-only)
             row.append($('<td>').text('$' + Utils.formatMoney(bill.total_net)));
             
-            // 5. $ GST
+            // 6. $ GST
             var gstCell = $('<td>');
             if (isPOClaim) {
                 var hasBillNumber = bill.bill_number && bill.bill_number.trim() !== '';

@@ -805,6 +805,16 @@ class Bills(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
+    # Foreign Currency (FX) fields - added 2026-02-14 per Accountant requirements
+    # See FX_IMPLEMENTATION_PLAN.md for full spec
+    currency = models.CharField(max_length=3, default='AUD')  # ISO 4217: AUD, USD, EUR, GBP, NZD, SGD
+    foreign_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Net amount in foreign currency
+    foreign_gst = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # GST in foreign currency
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)  # FX rate: 1 foreign unit = X AUD
+    is_fx_fixed = models.BooleanField(default=True)  # False for unfixed FX bills, True once payment confirmed or AUD bill
+    fx_fixed_at = models.DateTimeField(null=True, blank=True)  # When FX was fixed (payment confirmed)
+    xero_paid_aud = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Actual AUD amount from Xero payment
+    
     class Meta:
         db_table = 'core_invoices'  # Keep old table name to avoid migration
         indexes = [
@@ -813,6 +823,7 @@ class Bills(models.Model):
             models.Index(fields=['project']),
             models.Index(fields=['bill_type']),
             models.Index(fields=['-created_at']),
+            models.Index(fields=['currency', 'is_fx_fixed']),  # FX queries: find unfixed FX bills
         ]
         ordering = ['-created_at']
     
@@ -820,6 +831,25 @@ class Bills(models.Model):
         if self.total_net:
             return f"Bill #{self.bill_pk} - Cost: {self.total_net}"
         return f"Bill #{self.bill_pk} - Email: {self.received_email_id if self.received_email else 'N/A'}"
+    
+    @property
+    def is_fx_bill(self):
+        """Returns True if this is a foreign currency bill (not AUD)."""
+        return self.currency and self.currency != 'AUD'
+    
+    @property
+    def estimated_aud_net(self):
+        """Calculate estimated AUD net from foreign_amount and exchange_rate."""
+        if self.foreign_amount and self.exchange_rate:
+            return self.foreign_amount * self.exchange_rate
+        return self.total_net
+    
+    @property
+    def estimated_aud_gst(self):
+        """Calculate estimated AUD GST from foreign_gst and exchange_rate."""
+        if self.foreign_gst and self.exchange_rate:
+            return self.foreign_gst * self.exchange_rate
+        return self.total_gst
 
 # SERVICE: bills
 class Bill_allocations(models.Model):

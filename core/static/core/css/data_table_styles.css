@@ -379,6 +379,23 @@
   background: rgba(34, 197, 94, 0.15);
 }
 
+/* FX: Orange row highlighting for unfixed foreign currency bills - Added 2026-02-14 */
+/* Apply to both tr AND td to ensure visibility regardless of cell backgrounds */
+.reusable-table tbody tr.fx-unfixed,
+.reusable-table tbody tr.fx-unfixed td {
+  background-color: rgba(255, 140, 0, 0.5) !important;
+}
+
+.reusable-table tbody tr.fx-unfixed:hover,
+.reusable-table tbody tr.fx-unfixed:hover td {
+  background-color: rgba(255, 140, 0, 0.6) !important;
+}
+
+.reusable-table tbody tr.fx-unfixed.selected-row,
+.reusable-table tbody tr.fx-unfixed.selected-row td {
+  background-color: rgba(255, 140, 0, 0.7) !important;
+}
+
 /* ========================================
    FOOTER STYLING
    ======================================== */

@@ -735,25 +735,28 @@ def bills_view(request):
         is_allocated = (template_type == 'allocated')
         
         # Main table columns (same for both project types)
+        # Updated 2026-02-14: Added Currency column for FX support
         if is_allocated:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '14%', 'sortable': True},
-                {'header': 'Bill #', 'width': '10%', 'sortable': True},
-                {'header': '$ Gross', 'width': '9%', 'sortable': True},
-                {'header': '$ Net', 'width': '9%', 'sortable': True},
-                {'header': '$ GST', 'width': '9%', 'sortable': True},
+                {'header': 'Supplier', 'width': '13%', 'sortable': True},
+                {'header': 'Bill #', 'width': '9%', 'sortable': True},
+                {'header': 'Curr', 'width': '5%', 'sortable': True},  # FX: Currency display
+                {'header': '$ Gross', 'width': '8%', 'sortable': True},
+                {'header': '$ Net', 'width': '8%', 'sortable': True},
+                {'header': '$ GST', 'width': '8%', 'sortable': True},
                 {'header': 'Progress Claim', 'width': '10%', 'class': 'col-action-first'},
-                {'header': 'Unallocate', 'width': '12%', 'class': 'col-action'},
-                {'header': 'Approve', 'width': '12%', 'class': 'col-action'},
+                {'header': 'Unallocate', 'width': '11%', 'class': 'col-action'},
+                {'header': 'Approve', 'width': '11%', 'class': 'col-action'},
                 {'header': 'Save', 'width': '9%', 'class': 'col-action'},
             ]
         else:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '22%', 'sortable': True},
-                {'header': 'Bill #', 'width': '15%', 'sortable': True},
-                {'header': '$ Gross', 'width': '14%', 'sortable': True},
-                {'header': '$ Net', 'width': '14%', 'sortable': True},
-                {'header': '$ GST', 'width': '14%', 'sortable': True},
+                {'header': 'Supplier', 'width': '20%', 'sortable': True},
+                {'header': 'Bill #', 'width': '13%', 'sortable': True},
+                {'header': 'Curr', 'width': '6%', 'sortable': True},  # FX: Currency display
+                {'header': '$ Gross', 'width': '12%', 'sortable': True},
+                {'header': '$ Net', 'width': '12%', 'sortable': True},
+                {'header': '$ GST', 'width': '12%', 'sortable': True},
                 {'header': 'Approve', 'width': '12%', 'class': 'col-action-first'},
                 {'header': 'Return', 'width': '7%', 'class': 'col-action'},
             ]
@@ -905,6 +908,13 @@ def get_project_bills(request, project_pk):
                 'pdf_url': pdf_url,
                 'attachment_url': attachment_url,
                 'bill_status': inv.bill_status,
+                # FX fields - added 2026-02-14
+                'currency': getattr(inv, 'currency', 'AUD') or 'AUD',
+                'foreign_amount': float(inv.foreign_amount) if getattr(inv, 'foreign_amount', None) else None,
+                'foreign_gst': float(inv.foreign_gst) if getattr(inv, 'foreign_gst', None) else None,
+                'exchange_rate': float(inv.exchange_rate) if getattr(inv, 'exchange_rate', None) else None,
+                'is_fx_fixed': getattr(inv, 'is_fx_fixed', False),
+                'is_fx_bill': getattr(inv, 'is_fx_bill', False),
             })
         
         # Get costing items for this project (include unit_name for construction mode)
@@ -970,6 +980,13 @@ def get_allocated_bills(request, project_pk):
                 'pdf_url': pdf_url,
                 'attachment_url': attachment_url,
                 'bill_status': inv.bill_status,
+                # FX fields - added 2026-02-14
+                'currency': getattr(inv, 'currency', 'AUD') or 'AUD',
+                'foreign_amount': float(inv.foreign_amount) if getattr(inv, 'foreign_amount', None) else None,
+                'foreign_gst': float(inv.foreign_gst) if getattr(inv, 'foreign_gst', None) else None,
+                'exchange_rate': float(inv.exchange_rate) if getattr(inv, 'exchange_rate', None) else None,
+                'is_fx_fixed': getattr(inv, 'is_fx_fixed', False),
+                'is_fx_bill': getattr(inv, 'is_fx_bill', False),
             })
         
         return JsonResponse({

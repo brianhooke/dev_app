@@ -1149,3 +1149,363 @@ debugStickyHeader.cleanup = function() {
 };
 
 window.debugStickyHeader = debugStickyHeader;
+
+// ============================================================================
+// FX (Foreign Currency) Utilities - Added 2026-02-14
+// See FX_IMPLEMENTATION_PLAN.md for full spec
+// ============================================================================
+
+/**
+ * Supported currencies for FX bills.
+ * ISO 4217 codes.
+ */
+var FX_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP', 'NZD', 'SGD'];
+
+/**
+ * Check if a bill is a foreign currency (FX) bill.
+ * @param {Object} bill - Bill object with currency field
+ * @returns {boolean} True if currency is not AUD
+ */
+function isFxBill(bill) {
+    return bill && bill.currency && bill.currency !== 'AUD';
+}
+
+/**
+ * Check if a bill is unfixed (FX bill that hasn't been fixed yet).
+ * @param {Object} bill - Bill object with currency and is_fx_fixed fields
+ * @returns {boolean} True if FX bill and not fixed
+ */
+function isUnfixedFxBill(bill) {
+    return isFxBill(bill) && !bill.is_fx_fixed;
+}
+
+/**
+ * Format currency amount with currency code.
+ * @param {number} amount - Amount to format
+ * @param {string} currency - ISO 4217 currency code (default: 'AUD')
+ * @returns {string} Formatted string like "$1,234.56 USD" or "$1,234.56"
+ */
+function formatFxAmount(amount, currency) {
+    var formatted = formatCurrency(amount);
+    if (currency && currency !== 'AUD') {
+        return formatted + ' ' + currency;
+    }
+    return formatted;
+}
+
+/**
+ * Calculate estimated AUD from foreign amount and exchange rate.
+ * @param {number} foreignAmount - Amount in foreign currency
+ * @param {number} exchangeRate - Exchange rate (1 foreign = X AUD)
+ * @returns {number|null} Estimated AUD amount or null if can't calculate
+ */
+function calculateEstimatedAud(foreignAmount, exchangeRate) {
+    if (foreignAmount && exchangeRate) {
+        return foreignAmount * exchangeRate;
+    }
+    return null;
+}
+
+/**
+ * Debug function to log FX state for a bill.
+ * Call from console: Utils.debugFxBill(billPk) or debugFxBill(billData)
+ * @param {number|Object} billOrPk - Bill PK or bill data object
+ */
+function debugFxBill(billOrPk) {
+    console.log('');
+    console.log('========== FX BILL DEBUG ==========');
+    
+    var bill = billOrPk;
+    if (typeof billOrPk === 'number' || typeof billOrPk === 'string') {
+        // Try to find bill in global data
+        var pk = parseInt(billOrPk);
+        if (window.billsInboxData && window.billsInboxData.bills) {
+            bill = window.billsInboxData.bills.find(function(b) { return b.bill_pk === pk; });
+        }
+        if (!bill && window.billsDirectData && window.billsDirectData.bills) {
+            bill = window.billsDirectData.bills.find(function(b) { return b.bill_pk === pk; });
+        }
+        if (!bill) {
+            console.log('Bill not found in global data. Pass bill object directly.');
+            console.log('==========================================');
+            return;
+        }
+    }
+    
+    console.log('Bill PK:', bill.bill_pk);
+    console.log('--- Core Fields ---');
+    console.log('  total_net:', bill.total_net);
+    console.log('  total_gst:', bill.total_gst);
+    console.log('  bill_status:', bill.bill_status);
+    console.log('');
+    console.log('--- FX Fields ---');
+    console.log('  currency:', bill.currency || 'AUD (default)');
+    console.log('  foreign_amount:', bill.foreign_amount);
+    console.log('  foreign_gst:', bill.foreign_gst);
+    console.log('  exchange_rate:', bill.exchange_rate);
+    console.log('  is_fx_fixed:', bill.is_fx_fixed);
+    console.log('  is_fx_bill:', bill.is_fx_bill);
+    console.log('');
+    console.log('--- Computed ---');
+    console.log('  isFxBill():', isFxBill(bill));
+    console.log('  isUnfixedFxBill():', isUnfixedFxBill(bill));
+    if (bill.foreign_amount && bill.exchange_rate) {
+        console.log('  estimated AUD net:', calculateEstimatedAud(bill.foreign_amount, bill.exchange_rate));
+    }
+    console.log('==========================================');
+    console.log('');
+    
+    return bill;
+}
+
+/**
+ * Debug function to show all FX bills in current data.
+ * Call from console: Utils.debugAllFxBills()
+ */
+function debugAllFxBills() {
+    console.log('');
+    console.log('========== ALL FX BILLS DEBUG ==========');
+    
+    var allBills = [];
+    if (window.billsInboxData && window.billsInboxData.bills) {
+        allBills = allBills.concat(window.billsInboxData.bills);
+    }
+    if (window.billsDirectData && window.billsDirectData.bills) {
+        allBills = allBills.concat(window.billsDirectData.bills);
+    }
+    
+    var fxBills = allBills.filter(isFxBill);
+    var unfixedFxBills = allBills.filter(isUnfixedFxBill);
+    
+    console.log('Total bills in memory:', allBills.length);
+    console.log('FX bills (non-AUD):', fxBills.length);
+    console.log('Unfixed FX bills:', unfixedFxBills.length);
+    console.log('');
+    
+    if (fxBills.length > 0) {
+        console.log('FX Bills:');
+        console.table(fxBills.map(function(b) {
+            return {
+                bill_pk: b.bill_pk,
+                currency: b.currency,
+                foreign_amount: b.foreign_amount,
+                exchange_rate: b.exchange_rate,
+                is_fx_fixed: b.is_fx_fixed,
+                supplier_bill_number: b.supplier_bill_number
+            };
+        }));
+    }
+    
+    // Group by currency
+    var byCurrency = {};
+    fxBills.forEach(function(b) {
+        var curr = b.currency || 'AUD';
+        if (!byCurrency[curr]) byCurrency[curr] = [];
+        byCurrency[curr].push(b);
+    });
+    
+    console.log('');
+    console.log('By Currency:');
+    Object.keys(byCurrency).forEach(function(curr) {
+        var bills = byCurrency[curr];
+        var unfixed = bills.filter(function(b) { return !b.is_fx_fixed; }).length;
+        console.log('  ' + curr + ': ' + bills.length + ' bills (' + unfixed + ' unfixed)');
+    });
+    
+    console.log('==========================================');
+    console.log('');
+    
+    return { fxBills: fxBills, unfixedFxBills: unfixedFxBills, byCurrency: byCurrency };
+}
+
+/**
+ * COMPREHENSIVE debug function to diagnose why FX rows aren't orange.
+ * Call from console: debugFxOrange() or debugFxOrange(67)
+ * @param {number} specificBillPk - Optional specific bill PK to focus on
+ */
+function debugFxOrange(specificBillPk) {
+    console.log('');
+    console.log('╔══════════════════════════════════════════════════════════════╗');
+    console.log('║         FX ORANGE HIGHLIGHTING DEBUG                         ║');
+    console.log('╚══════════════════════════════════════════════════════════════╝');
+    console.log('');
+    
+    // 1. Find all rows with fx-unfixed class
+    var fxUnfixedRows = $('tr.fx-unfixed');
+    console.log('=== STEP 1: Rows with .fx-unfixed class ===');
+    console.log('Count:', fxUnfixedRows.length);
+    
+    fxUnfixedRows.each(function(i) {
+        var row = $(this);
+        var billPk = row.attr('data-bill-pk') || row.attr('data-pk');
+        console.log('  Row', i + 1, '- bill_pk:', billPk);
+    });
+    console.log('');
+    
+    // 2. Check specific bill or all fx-unfixed rows
+    var rowsToCheck = fxUnfixedRows;
+    if (specificBillPk) {
+        var specificRow = $('tr[data-bill-pk="' + specificBillPk + '"], tr[data-pk="' + specificBillPk + '"]');
+        if (specificRow.length) {
+            rowsToCheck = specificRow;
+            console.log('=== Focusing on bill_pk:', specificBillPk, '===');
+        } else {
+            console.log('WARNING: No row found for bill_pk', specificBillPk);
+        }
+    }
+    
+    // 3. Analyze each row
+    console.log('=== STEP 2: Row-by-row CSS analysis ===');
+    rowsToCheck.each(function(i) {
+        var row = $(this);
+        var billPk = row.attr('data-bill-pk') || row.attr('data-pk');
+        var domElement = this;
+        
+        console.log('');
+        console.log('--- Row bill_pk:', billPk, '---');
+        
+        // Check classes
+        console.log('  Classes:', row.attr('class'));
+        console.log('  Has .fx-unfixed:', row.hasClass('fx-unfixed'));
+        
+        // Check inline style
+        var inlineStyle = row.attr('style') || '(none)';
+        console.log('  Inline style attr:', inlineStyle);
+        
+        // Check jQuery .css() values
+        console.log('  jQuery .css("background-color"):', row.css('background-color'));
+        console.log('  jQuery .css("background"):', row.css('background'));
+        
+        // Check computed style
+        var computed = window.getComputedStyle(domElement);
+        console.log('  Computed backgroundColor:', computed.backgroundColor);
+        console.log('  Computed background:', computed.background);
+        
+        // Check if any parent is overriding
+        var parent = row.parent();
+        var parentTag = parent.prop('tagName');
+        var parentComputed = window.getComputedStyle(parent[0]);
+        console.log('  Parent <' + parentTag + '> background:', parentComputed.backgroundColor);
+        
+        // Check table
+        var table = row.closest('table');
+        if (table.length) {
+            console.log('  Table classes:', table.attr('class'));
+            console.log('  Table ID:', table.attr('id'));
+        }
+        
+        // Check tbody
+        var tbody = row.closest('tbody');
+        if (tbody.length) {
+            console.log('  Tbody ID:', tbody.attr('id'));
+        }
+    });
+    console.log('');
+    
+    // 4. Check CSS rules
+    console.log('=== STEP 3: CSS Rule Check ===');
+    var stylesheets = document.styleSheets;
+    var fxRules = [];
+    
+    for (var i = 0; i < stylesheets.length; i++) {
+        try {
+            var rules = stylesheets[i].cssRules || stylesheets[i].rules;
+            if (rules) {
+                for (var j = 0; j < rules.length; j++) {
+                    var rule = rules[j];
+                    if (rule.selectorText && rule.selectorText.indexOf('fx-unfixed') !== -1) {
+                        fxRules.push({
+                            sheet: stylesheets[i].href || 'inline',
+                            selector: rule.selectorText,
+                            style: rule.style.cssText
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            // Cross-origin stylesheets will throw
+        }
+    }
+    
+    console.log('Found', fxRules.length, 'CSS rules mentioning fx-unfixed:');
+    fxRules.forEach(function(r, idx) {
+        console.log('  Rule', idx + 1 + ':');
+        console.log('    Sheet:', r.sheet);
+        console.log('    Selector:', r.selector);
+        console.log('    Style:', r.style);
+    });
+    console.log('');
+    
+    // 5. Check data in memory
+    console.log('=== STEP 4: Bill Data in Memory ===');
+    var allBills = [];
+    if (window.billsInboxData && window.billsInboxData.bills) {
+        console.log('  billsInboxData.bills:', window.billsInboxData.bills.length, 'bills');
+        allBills = allBills.concat(window.billsInboxData.bills);
+    }
+    if (window.billsDirectData && window.billsDirectData.bills) {
+        console.log('  billsDirectData.bills:', window.billsDirectData.bills.length, 'bills');
+        allBills = allBills.concat(window.billsDirectData.bills);
+    }
+    
+    var fxBillsInMemory = allBills.filter(function(b) {
+        return b.currency && b.currency !== 'AUD';
+    });
+    
+    console.log('  FX bills in memory:', fxBillsInMemory.length);
+    fxBillsInMemory.forEach(function(b) {
+        console.log('    bill_pk:', b.bill_pk, 'currency:', b.currency, 'is_fx_fixed:', b.is_fx_fixed, 'isUnfixedFxBill():', isUnfixedFxBill(b));
+    });
+    console.log('');
+    
+    // 6. Manual test - try to apply style directly
+    console.log('=== STEP 5: Manual Style Test ===');
+    if (fxUnfixedRows.length > 0) {
+        var testRow = fxUnfixedRows.first();
+        var testPk = testRow.attr('data-bill-pk') || testRow.attr('data-pk');
+        console.log('  Testing on row bill_pk:', testPk);
+        console.log('  BEFORE - computed bg:', window.getComputedStyle(testRow[0]).backgroundColor);
+        
+        // Try different methods
+        testRow[0].style.setProperty('background-color', 'rgba(255, 165, 0, 0.5)', 'important');
+        console.log('  AFTER style.setProperty() - computed bg:', window.getComputedStyle(testRow[0]).backgroundColor);
+        
+        console.log('  ^^^ If AFTER shows orange (rgb(255, 165, 0) or similar), the style IS working.');
+        console.log('  If AFTER is same as BEFORE, something is overriding at a higher level.');
+    }
+    
+    console.log('');
+    console.log('╔══════════════════════════════════════════════════════════════╗');
+    console.log('║         END DEBUG                                            ║');
+    console.log('╚══════════════════════════════════════════════════════════════╝');
+    
+    return {
+        fxUnfixedRows: fxUnfixedRows.length,
+        cssRules: fxRules,
+        fxBillsInMemory: fxBillsInMemory
+    };
+}
+
+// Make FX utilities globally available
+window.FX_CURRENCIES = FX_CURRENCIES;
+window.isFxBill = isFxBill;
+window.isUnfixedFxBill = isUnfixedFxBill;
+window.formatFxAmount = formatFxAmount;
+window.calculateEstimatedAud = calculateEstimatedAud;
+window.debugFxBill = debugFxBill;
+window.debugAllFxBills = debugAllFxBills;
+window.debugFxOrange = debugFxOrange;
+
+// Add to Utils namespace if it exists
+if (typeof Utils !== 'undefined') {
+    Utils.FX_CURRENCIES = FX_CURRENCIES;
+    Utils.isFxBill = isFxBill;
+    Utils.isUnfixedFxBill = isUnfixedFxBill;
+    Utils.formatFxAmount = formatFxAmount;
+    Utils.calculateEstimatedAud = calculateEstimatedAud;
+    Utils.debugFxBill = debugFxBill;
+    Utils.debugAllFxBills = debugAllFxBills;
+    Utils.debugFxOrange = debugFxOrange;
+}
+
+console.log('[FX] Foreign Currency utilities loaded. Debug: debugFxOrange(), debugFxBill(pk), debugAllFxBills()');

@@ -42,32 +42,36 @@ def bills_global_view(request):
     JavaScript handles toggling between sections.
     """
     # ===== INBOX SECTION COLUMNS =====
+    # Updated 2026-02-14: Added Currency column for FX support
     inbox_main_columns = [
-        {'header': 'Xero / Project', 'width': '13%'},
-        {'header': 'Supplier', 'width': '14%'},
-        {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Gross', 'width': '9%'},
-        {'header': '$ Net', 'width': '9%'},
-        {'header': '$ GST', 'width': '6%'},
+        {'header': 'Xero / Project', 'width': '12%'},
+        {'header': 'Supplier', 'width': '13%'},
+        {'header': 'Bill #', 'width': '9%'},
+        {'header': 'Curr', 'width': '6%'},  # FX: Currency selector
+        {'header': '$ Gross', 'width': '8%'},
+        {'header': '$ Net', 'width': '8%'},
+        {'header': '$ GST', 'width': '5%'},
         {'header': 'Date', 'width': '8%'},
         {'header': 'Due', 'width': '8%'},
-        {'header': 'Email', 'width': '6%', 'class': 'col-action-first'},
+        {'header': 'Email', 'width': '5%', 'class': 'col-action-first'},
         {'header': 'Send', 'width': '8%', 'class': 'col-action'},
         {'header': '', 'width': '5%', 'class': 'col-action'},
     ]
     inbox_alloc_columns = []  # Not used - allocations hidden for inbox
     
     # ===== DIRECT SECTION COLUMNS =====
+    # Updated 2026-02-14: Added Currency column for FX support
     direct_main_columns = [
-        {'header': 'Xero / Project', 'width': '12%'},
-        {'header': 'Supplier', 'width': '14%'},
-        {'header': 'Bill #', 'width': '10%'},
+        {'header': 'Xero / Project', 'width': '11%'},
+        {'header': 'Supplier', 'width': '13%'},
+        {'header': 'Bill #', 'width': '9%'},
+        {'header': 'Curr', 'width': '5%'},  # FX: Currency display (read-only)
         {'header': '$ Gross', 'width': '8%'},
         {'header': '$ Net', 'width': '8%'},
         {'header': '$ GST', 'width': '5%'},
-        {'header': 'Date', 'width': '8%'},
-        {'header': 'Due', 'width': '8%'},
-        {'header': 'Email', 'width': '6%', 'class': 'col-action-first'},
+        {'header': 'Date', 'width': '7%'},
+        {'header': 'Due', 'width': '7%'},
+        {'header': 'Email', 'width': '5%', 'class': 'col-action-first'},
         {'header': 'Approve', 'width': '9%', 'class': 'col-action'},
         {'header': 'Return', 'width': '6%', 'class': 'col-action'},
     ]
@@ -82,14 +86,16 @@ def bills_global_view(request):
     ]
     
     # ===== APPROVALS SECTION COLUMNS =====
+    # Updated 2026-02-14: Added Currency column for FX support
     approvals_main_columns = [
-        {'header': 'Project', 'width': '10%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '10%', 'sortable': True},
-        {'header': 'Supplier', 'width': '10%', 'sortable': True},
-        {'header': 'Bill #', 'width': '9%', 'sortable': True},
+        {'header': 'Project', 'width': '9%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '9%', 'sortable': True},
+        {'header': 'Supplier', 'width': '9%', 'sortable': True},
+        {'header': 'Bill #', 'width': '8%', 'sortable': True},
+        {'header': 'Curr', 'width': '4%', 'sortable': True},  # FX: Currency display (read-only)
         {'header': '$ Gross', 'width': '8%', 'sortable': True},
         {'header': '$ Net', 'width': '8%', 'sortable': True},
-        {'header': '$ GST', 'width': '7%', 'sortable': True},
+        {'header': '$ GST', 'width': '6%', 'sortable': True},
         {'header': 'Date', 'width': '7%', 'sortable': True},
         {'header': 'Due', 'width': '7%', 'sortable': True},
         {'header': 'Send', 'width': '7%', 'class': 'col-action-first'},
@@ -1337,6 +1343,13 @@ def get_bills_list(request):
                 'email_url': email_url,
                 'allocations': allocations,
                 'updated_at': invoice.updated_at.isoformat() if invoice.updated_at else None,
+                # FX fields - added 2026-02-14
+                'currency': getattr(invoice, 'currency', 'AUD') or 'AUD',
+                'foreign_amount': float(invoice.foreign_amount) if getattr(invoice, 'foreign_amount', None) else None,
+                'foreign_gst': float(invoice.foreign_gst) if getattr(invoice, 'foreign_gst', None) else None,
+                'exchange_rate': float(invoice.exchange_rate) if getattr(invoice, 'exchange_rate', None) else None,
+                'is_fx_fixed': getattr(invoice, 'is_fx_fixed', False),
+                'is_fx_bill': getattr(invoice, 'is_fx_bill', False),
             }
             bills_data.append(bill)
         except Exception as e:

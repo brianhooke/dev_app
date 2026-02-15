@@ -182,6 +182,8 @@ def send_bill(request):
         total_gst = data.get('total_gst')
         bill_date = data.get('bill_date')
         bill_due_date = data.get('bill_due_date')
+        # FX fields - added 2026-02-14
+        currency = data.get('currency', 'AUD')
         
         # Check all required fields
         if not all([bill_pk, xero_instance_or_project, supplier_pk, bill_number, total_net is not None, total_gst is not None, bill_date, bill_due_date]):
@@ -360,6 +362,13 @@ def send_bill(request):
             invoice.bill_due_date = bill_due_date
             invoice.bill_status = 2  # Set status to 2 (sent to Xero)
             invoice.bill_type = 1  # Direct Cost
+            # FX fields - added 2026-02-14
+            invoice.currency = currency
+            if currency != 'AUD':
+                invoice.foreign_amount = Decimal(str(total_net))
+                invoice.foreign_gst = Decimal(str(total_gst))
+                invoice.is_fx_fixed = False  # Unfixed until payment confirmed
+                logger.info(f"[FX] Bill {bill_pk} set as unfixed FX bill with currency {currency}")
             
             invoice.save()
             
@@ -387,6 +396,13 @@ def send_bill(request):
             invoice.bill_due_date = bill_due_date
             invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct or Stocktake)
             invoice.bill_type = 1  # Direct Cost
+            # FX fields - added 2026-02-14
+            invoice.currency = currency
+            if currency != 'AUD':
+                invoice.foreign_amount = Decimal(str(total_net))
+                invoice.foreign_gst = Decimal(str(total_gst))
+                invoice.is_fx_fixed = False  # Unfixed until payment confirmed
+                logger.info(f"[FX] Bill {bill_pk} set as unfixed FX bill with currency {currency}")
             
             invoice.save()
             
