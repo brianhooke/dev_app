@@ -338,7 +338,7 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 tenant_id = xero_instance.xero_tenant_id
                 
                 # Search for existing ACCPAY invoice with this number (URL encode the where clause)
-                from urllib.parse import quote
+                # Note: quote is imported at module level (line 30)
                 inv_num = invoice.supplier_bill_number.strip()
                 where_clause = f'Type=="ACCPAY" AND InvoiceNumber=="{inv_num}"'
                 encoded_where = quote(where_clause)
