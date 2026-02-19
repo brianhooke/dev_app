@@ -1765,11 +1765,11 @@ def _parse_xero_date(xero_date_str):
 def get_projects_for_allocation(request):
     """
     Get active projects for hour allocation dropdown.
-    Only returns projects with status=2 (execution).
+    Returns all non-archived projects.
     """
     try:
-        # Get all execution-phase, non-archived projects (no xero_instance filter for now)
-        projects = Projects.objects.filter(archived=0, project_status=2)
+        # Get all non-archived projects (any project_status)
+        projects = Projects.objects.filter(archived=0)
         
         projects_list = []
         for p in projects.order_by('project'):
