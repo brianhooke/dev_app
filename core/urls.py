@@ -65,7 +65,7 @@ from .views.staff_hours import (
     get_holiday_calendars, create_holiday_calendar, update_holiday_calendar,
     delete_holiday_calendar, get_calendar_holidays, create_holiday, update_holiday, delete_holiday,
     get_timesheets, get_leave_applications, get_employee_calendar_data, save_timesheet,
-    delete_timesheet_entry, delete_leave_application, get_allocation_super_summary
+    delete_timesheet_entry, delete_leave_application, get_allocation_super_summary, debug_allocations
 )
 # Dashboard views (moved from dashboard app)
 from .views.dashboard import (
@@ -388,6 +388,7 @@ urlpatterns = [
     path('staff_hours/allocations/save/', save_allocation, name='staff_hours_save_allocation'),
     path('staff_hours/allocations/<int:allocation_pk>/delete/', delete_allocation, name='staff_hours_delete_allocation'),
     path('staff_hours/allocations/super-summary/', get_allocation_super_summary, name='staff_hours_allocation_super_summary'),
+    path('staff_hours/debug_allocations/', debug_allocations, name='staff_hours_debug_allocations'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

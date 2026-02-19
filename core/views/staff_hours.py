@@ -2511,3 +2511,93 @@ def delete_leave_application(request):
     except Exception as e:
         logger.error(f"Error deleting leave application: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@login_required
+def debug_allocations(request):
+    """Debug endpoint to check StaffHours and StaffHoursAllocations records."""
+    try:
+        xero_instance_id = request.GET.get('xero_instance_id')
+        employee_id = request.GET.get('employee_id')
+        date_str = request.GET.get('date')
+        
+        result = {
+            'params': {
+                'xero_instance_id': xero_instance_id,
+                'employee_id': employee_id,
+                'date': date_str
+            }
+        }
+        
+        # Find employee
+        employee = Employee.objects.filter(
+            xero_instance_id=xero_instance_id,
+            xero_employee_id=employee_id
+        ).first()
+        
+        result['employee'] = {
+            'found': employee is not None,
+            'pk': employee.employee_pk if employee else None,
+            'name': employee.name if employee else None
+        }
+        
+        if employee and date_str:
+            from datetime import datetime
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            
+            # Check StaffHours record
+            staff_hours = StaffHours.objects.filter(employee=employee, date=target_date).first()
+            result['staff_hours'] = {
+                'found': staff_hours is not None,
+                'pk': staff_hours.staff_hours_pk if staff_hours else None,
+                'hours': float(staff_hours.hours) if staff_hours else None,
+                'date': str(staff_hours.date) if staff_hours else None
+            }
+            
+            # Check allocations
+            if staff_hours:
+                allocations = StaffHoursAllocations.objects.filter(staff_hours=staff_hours)
+                result['allocations'] = {
+                    'count': allocations.count(),
+                    'records': [
+                        {
+                            'pk': a.allocation_pk,
+                            'type': a.get_allocation_type_display(),
+                            'hours': float(a.hours),
+                            'project': a.project.project if a.project else None,
+                            'costing': a.costing.item if a.costing else None,
+                            'note': a.note
+                        }
+                        for a in allocations
+                    ]
+                }
+            else:
+                result['allocations'] = {'count': 0, 'records': [], 'reason': 'No StaffHours record found'}
+            
+            # Also check if ANY StaffHours exist for this employee
+            all_staff_hours = StaffHours.objects.filter(employee=employee).order_by('-date')[:5]
+            result['recent_staff_hours'] = [
+                {'date': str(sh.date), 'hours': float(sh.hours), 'pk': sh.staff_hours_pk}
+                for sh in all_staff_hours
+            ]
+            
+            # Check if ANY allocations exist for this employee
+            all_allocations = StaffHoursAllocations.objects.filter(
+                staff_hours__employee=employee
+            ).order_by('-staff_hours__date')[:5]
+            result['recent_allocations'] = [
+                {
+                    'pk': a.allocation_pk,
+                    'date': str(a.staff_hours.date),
+                    'hours': float(a.hours),
+                    'type': a.get_allocation_type_display()
+                }
+                for a in all_allocations
+            ]
+        
+        return JsonResponse(result)
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

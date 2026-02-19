@@ -595,69 +595,36 @@ Backend Endpoints:
                             </div>
                             
                             <!-- Day Details Panel (Right) -->
-                            <div class="calendar-right" style="width: 30%; min-width: 250px; display: flex; flex-direction: column; max-height: calc(100vh - 180px);">
-                                <div class="day-details-header" style="background: var(--manila-light); border-radius: 2px; padding: 6px 2px; text-align: center; font-weight: 600; font-size: 0.75rem; color: var(--manila-text); border-bottom: 2px solid var(--manila-border); margin-bottom: 0; margin-top: 47px; flex-shrink: 0;">Day Details</div>
-                                <div id="dayDetailsPanel" class="p-2 border rounded" style="background: var(--manila-paper); border-color: var(--manila-border); font-size: 15px; flex: 1; margin-top: 0; overflow-y: auto; min-height: 0;">
+                            <div class="calendar-right" style="width: 30%; min-width: 250px; display: flex; flex-direction: column; max-height: calc(100vh - 240px);">
+                                <div class="day-details-header" style="background: var(--manila-light); border-radius: 2px; padding: 4px 2px; text-align: center; font-weight: 600; font-size: 0.7rem; color: var(--manila-text); border-bottom: 2px solid var(--manila-border); margin-bottom: 0; margin-top: 47px; flex-shrink: 0;">Day Details</div>
+                                <div id="dayDetailsPanel" class="p-1 border rounded" style="background: var(--manila-paper); border-color: var(--manila-border); font-size: 12px; flex: 1; margin-top: 0; overflow-y: auto; min-height: 0;">
                                     <div id="dayDetailsEmpty" class="text-center text-muted py-3">
                                         <i class="fas fa-calendar-day mb-2"></i>
                                         <div>Click a day to view/edit</div>
                                     </div>
                                     <div id="dayDetailsContent" class="d-none">
-                                        <div class="fw-bold mb-2" id="selectedDayTitle">-</div>
-                                        <div class="mb-2">
-                                            <label class="text-muted small">Status</label>
-                                            <div id="selectedDayStatus">-</div>
-                                        </div>
+                                        <div class="fw-bold mb-1" id="selectedDayTitle" style="font-size: 13px;">-</div>
+                                        <!-- Status row removed to save space -->
+                                        <div id="selectedDayStatus" class="d-none">-</div>
                                         
                                         <!-- Combined Work + Leave Input Section -->
                                         <div id="dayInputSection" class="d-none">
+                                            <!-- Work Hours + Allocations grouped together -->
+                                            <div id="workAllocationsGroup" style="border: 1px solid #dee2e6; border-radius: 6px; padding: 6px; background: #fafafa;">
                                             <!-- Work Hours Section -->
-                                            <div class="mb-2" style="background: #f8f9fa; padding: 8px; border-radius: 4px;">
-                                                <div id="workRowsContainer">
-                                                    <!-- Work rows will be added here dynamically -->
+                                            <div class="mb-1">
+                                                <label class="text-muted small fw-bold mb-1 d-block">Work Hours</label>
+                                                <div class="work-rows-container" style="border: 1px solid var(--manila-border); border-radius: 4px; max-height: 100px; overflow-y: auto; background: #f8f9fa;">
+                                                    <div id="workRowsContainer" style="padding: 4px;">
+                                                        <!-- Work rows will be added here dynamically -->
+                                                    </div>
                                                 </div>
-                                                <button type="button" id="addWorkRowBtn" class="btn btn-sm btn-outline-success mt-1" style="font-size: 11px;">+ Add Work Row</button>
+                                                <button type="button" id="addWorkRowBtn" class="btn btn-sm btn-outline-success mt-1" style="font-size: 10px; padding: 2px 6px;">+ Add Work Row</button>
                                             </div>
-                                            
-                                            <!-- Leave Section -->
-                                            <div class="mb-2" style="background: #e8f4f8; padding: 8px; border-radius: 4px;">
-                                                <div id="leaveRowsContainer">
-                                                    <!-- Leave rows will be added here dynamically -->
-                                                </div>
-                                                <button type="button" id="addLeaveRowBtn" class="btn btn-sm btn-outline-info mt-1" style="font-size: 11px;">+ Add Leave Row</button>
-                                            </div>
-                                            
-                                            <!-- Total & Save -->
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div class="small">
-                                                    <span class="text-muted">Total:</span>
-                                                    <span id="dayTotalHours" class="fw-bold">0</span>h
-                                                </div>
-                                                <button id="saveDayBtn" class="btn btn-sm btn-primary" style="font-size: 11px;">Save Day</button>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Display Section (read-only for saved days) -->
-                                        <div id="dayDisplaySection" class="d-none">
-                                            <div id="workDisplayRow" class="mb-1 d-none">
-                                                <span class="text-muted small">Work:</span>
-                                                <span id="selectedDayRate" class="small">-</span> -
-                                                <span id="selectedDayHours" class="fw-bold">0</span>h
-                                                <span class="text-muted small">@ $<span id="selectedDayPayRate">0</span>/hr</span>
-                                                <button id="deleteWorkBtn" class="btn btn-sm btn-link text-danger p-0 ms-2" style="font-size: 11px;" title="Delete work hours"><i class="fas fa-trash-alt"></i></button>
-                                            </div>
-                                            <div id="leaveDisplayRow" class="mb-1 d-none">
-                                                <span class="text-muted small">Leave:</span>
-                                                <span id="selectedLeaveType" class="small">-</span> -
-                                                <span id="selectedLeaveHours" class="fw-bold">0</span>h
-                                                <button id="deleteLeaveBtn" class="btn btn-sm btn-link text-danger p-0 ms-2" style="font-size: 11px;" title="Delete leave"><i class="fas fa-trash-alt"></i></button>
-                                            </div>
-                                            <button id="editDayBtn" class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;">Edit</button>
-                                        </div>
-                                        <!-- Hours Allocation Section -->
-                                        <div id="hoursAllocationSection" class="d-none" style="border-top: 1px solid var(--manila-border); padding-top: 8px; margin-top: 8px;">
+                                        <!-- Hours Allocation Section (inside work group) -->
+                                        <div id="hoursAllocationSection" class="d-none" style="padding-top: 6px; margin-top: 6px; border-top: 1px dashed #ccc;">
                                             <label class="text-muted small fw-bold mb-1 d-block">Allocate Hours</label>
-                                            <div class="allocation-table-container" style="border: 1px solid var(--manila-border); border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                            <div class="allocation-table-container" style="border: 1px solid var(--manila-border); border-radius: 4px; max-height: 150px; overflow-y: auto;">
                                                 <table id="allocationTable" class="reusable-table w-100" style="font-size: 11px; margin-bottom: 0;">
                                                     <thead>
                                                         <tr>
@@ -673,13 +640,13 @@ Backend Endpoints:
                                                 </table>
                                             </div>
                                             <div id="allocationEditControls">
-                                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                                    <button id="addAllocationRowBtn" class="btn btn-sm p-1 px-2" style="font-size: 11px; background: #28a745; color: white; border: none;">+ Add Row</button>
+                                                <div class="d-flex justify-content-between align-items-center mt-1">
+                                                    <button id="addAllocationRowBtn" class="btn btn-sm p-1 px-2" style="font-size: 10px; background: #28a745; color: white; border: none;">+ Add Row</button>
                                                     <div class="small">
                                                         <span id="allocatedHours" class="fw-bold">0</span>/<span id="totalDayHours">0</span>h
                                                     </div>
                                                 </div>
-                                                <button id="saveAllocationsBtn" class="btn btn-sm w-100 mt-2" style="font-size: 12px; background: #6c757d; color: white; border: none;" disabled>Save Allocations</button>
+                                                <button id="saveAllocationsBtn" class="btn btn-sm w-100 mt-1" style="font-size: 11px; padding: 4px; background: #6c757d; color: white; border: none;" disabled>Save Allocations</button>
                                             </div>
                                             <div id="allocationDisplayControls" class="d-none">
                                                 <div class="d-flex justify-content-between align-items-center mt-2">
@@ -703,6 +670,47 @@ Backend Endpoints:
                                                     <span class="text-muted small fw-bold">Daily Total:</span>
                                                     <span id="dailyCostAmount" class="fw-bold" style="color: var(--manila-text);">$0.00</span>
                                                 </div>
+                                            </div>
+                                        </div>
+                                        </div><!-- Close workAllocationsGroup -->
+                                        </div><!-- Close dayInputSection -->
+                                        
+                                        <!-- Display Section (read-only for saved days) -->
+                                        <div id="dayDisplaySection" class="d-none">
+                                            <div id="workDisplayRow" class="mb-1 d-none">
+                                                <span class="text-muted small">Work:</span>
+                                                <span id="selectedDayRate" class="small">-</span> -
+                                                <span id="selectedDayHours" class="fw-bold">0</span>h
+                                                <span class="text-muted small">@ $<span id="selectedDayPayRate">0</span>/hr</span>
+                                                <button id="deleteWorkBtn" class="btn btn-sm btn-link text-danger p-0 ms-2" style="font-size: 11px;" title="Delete work hours"><i class="fas fa-trash-alt"></i></button>
+                                            </div>
+                                            <!-- Allocation Display (read-only) -->
+                                            <div id="allocationDisplaySection" class="mb-1 d-none" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 4px; background: #f8f9fa;">
+                                                <div class="text-muted small fw-bold mb-1">Allocations:</div>
+                                                <div id="allocationDisplayList" style="font-size: 11px;">
+                                                    <!-- Allocation items will be inserted here -->
+                                                </div>
+                                            </div>
+                                            <div id="leaveDisplayRow" class="mb-1 d-none">
+                                                <span class="text-muted small">Leave:</span>
+                                                <span id="selectedLeaveType" class="small">-</span> -
+                                                <span id="selectedLeaveHours" class="fw-bold">0</span>h
+                                                <button id="deleteLeaveBtn" class="btn btn-sm btn-link text-danger p-0 ms-2" style="font-size: 11px;" title="Delete leave"><i class="fas fa-trash-alt"></i></button>
+                                            </div>
+                                            <button id="editDayBtn" class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;">Edit</button>
+                                        </div>
+                                        
+                                        <!-- Leave Section (below allocations) -->
+                                        <div id="leaveSection" class="d-none" style="border-top: 1px solid var(--manila-border); padding-top: 4px; margin-top: 4px;">
+                                            <label class="text-muted small fw-bold mb-1 d-block">Leave</label>
+                                            <div class="leave-rows-container" style="border: 1px solid var(--manila-border); border-radius: 4px; max-height: 100px; overflow-y: auto; background: #e8f4f8;">
+                                                <div id="leaveRowsContainer" style="padding: 4px;">
+                                                    <!-- Leave rows will be added here dynamically -->
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-1">
+                                                <button type="button" id="addLeaveRowBtn" class="btn btn-sm p-1 px-2" style="font-size: 10px; background: #17a2b8; color: white; border: none;">+ Add Row</button>
+                                                <button id="saveLeaveBtn" class="btn btn-sm" style="font-size: 10px; padding: 2px 8px; background: #6c757d; color: white; border: none;" disabled>Save Leave</button>
                                             </div>
                                         </div>
                                     </div>
@@ -2168,10 +2176,11 @@ Backend Endpoints:
     const selectedDayStatus = document.getElementById('selectedDayStatus');
     const dayInputSection = document.getElementById('dayInputSection');
     const dayDisplaySection = document.getElementById('dayDisplaySection');
+    const leaveSection = document.getElementById('leaveSection');
     const workRowsContainer = document.getElementById('workRowsContainer');
     const leaveRowsContainer = document.getElementById('leaveRowsContainer');
     const dayTotalHours = document.getElementById('dayTotalHours');
-    const saveDayBtn = document.getElementById('saveDayBtn');
+    // saveDayBtn removed - work hours now saved via Save Allocations button
     const editDayBtn = document.getElementById('editDayBtn');
     const deleteWorkBtn = document.getElementById('deleteWorkBtn');
     const deleteLeaveBtn = document.getElementById('deleteLeaveBtn');
@@ -2215,26 +2224,21 @@ Backend Endpoints:
         return row;
     }
     
-    // Create a leave row element
+    // Create a leave row element (single-line layout matching allocation rows)
     function createLeaveRow(leaveTypeId = '', hours = 0, comment = '') {
         const rowId = `leave-row-${++leaveRowCounter}`;
         const row = document.createElement('div');
         row.id = rowId;
-        row.className = 'leave-row mb-1';
+        row.className = 'leave-row d-flex align-items-center mb-1';
+        row.style.cssText = 'gap: 4px;';
         row.innerHTML = `
-            <div class="d-flex align-items-center mb-1">
-                <label class="text-muted mb-0" style="width: 50px; font-size: 13px;">Leave:</label>
-                <select class="form-select form-select-sm leave-type-select" style="font-size: 13px; flex: 1; height: 31px; margin-right: 10px;">
-                    <option value="">Select leave...</option>
-                </select>
-                <input type="number" class="form-control form-control-sm leave-hours-input" min="0" max="24" step="0.5" value="${hours}" style="width: 60px; font-size: 13px; height: 31px;">
-                <span class="text-muted" style="font-size: 13px; margin-left: 6px; margin-right: 6px;">hrs</span>
-                <button type="button" class="btn btn-sm btn-link text-danger p-0 remove-leave-row" style="font-size: 11px;" title="Remove"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="d-flex align-items-center" style="padding-left: 50px;">
-                <input type="text" class="form-control form-control-sm leave-comment-input" placeholder="Comment..." value="${comment}" style="font-size: 11px; flex: 1;">
-                <span class="text-muted small ms-2">Bal: <span class="leave-balance">-</span></span>
-            </div>
+            <select class="form-select form-select-sm leave-type-select" style="font-size: 10px; padding: 2px; width: 100px; flex-shrink: 0;">
+                <option value="">Select...</option>
+            </select>
+            <input type="text" class="form-control form-control-sm leave-comment-input" placeholder="Note..." value="${comment}" style="font-size: 10px; padding: 2px 4px; flex: 1; min-width: 60px;">
+            <input type="number" class="form-control form-control-sm leave-hours-input" min="0" max="24" step="0.5" value="${hours}" style="width: 45px; font-size: 10px; padding: 2px; text-align: center;">
+            <span class="text-muted" style="font-size: 10px; white-space: nowrap;">(<span class="leave-balance">-</span>)</span>
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 remove-leave-row" style="font-size: 10px;" title="Remove"><i class="fas fa-times"></i></button>
         `;
         
         // Populate leave types dropdown
@@ -2242,13 +2246,18 @@ Backend Endpoints:
         populateLeaveTypeSelect(select, leaveTypeId);
         
         // Add event listeners
-        row.querySelector('.leave-hours-input').addEventListener('input', updateDayTotalHours);
+        row.querySelector('.leave-hours-input').addEventListener('input', function() {
+            updateDayTotalHours();
+            validateLeave();
+        });
         row.querySelector('.leave-type-select').addEventListener('change', function() {
             updateLeaveBalanceForRow(row);
+            validateLeave();
         });
         row.querySelector('.remove-leave-row').addEventListener('click', () => {
             row.remove();
             updateDayTotalHours();
+            validateLeave();
         });
         
         return row;
@@ -2340,9 +2349,19 @@ Backend Endpoints:
         const total = totalWork + totalLeave;
         if (dayTotalHours) dayTotalHours.textContent = total;
         
-        // Update allocation section target hours
+        // Update allocation section target hours (work hours only, not leave)
         const totalDayHoursEl = document.getElementById('totalDayHours');
         if (totalDayHoursEl) totalDayHoursEl.textContent = totalWork;
+        
+        // Also update the display version
+        const totalDayHoursDisplayEl = document.getElementById('totalDayHoursDisplay');
+        if (totalDayHoursDisplayEl) totalDayHoursDisplayEl.textContent = totalWork;
+        
+        // Re-validate allocations if section is visible
+        const allocationSection = document.getElementById('hoursAllocationSection');
+        if (allocationSection && !allocationSection.classList.contains('d-none')) {
+            validateAllocations();
+        }
     }
     
     // Add row button handlers
@@ -2522,6 +2541,7 @@ Backend Endpoints:
             // Switch to input section
             if (dayInputSection) dayInputSection.classList.remove('d-none');
             if (dayDisplaySection) dayDisplaySection.classList.add('d-none');
+            if (leaveSection) leaveSection.classList.remove('d-none');
             
             // Build work entries from existing data
             const workEntries = [];
@@ -2544,9 +2564,6 @@ Backend Endpoints:
             
             // Initialize rows with existing data
             initDayInputRows(workEntries, leaveEntries);
-            
-            // Set button text to Update
-            if (saveDayBtn) saveDayBtn.textContent = 'Update';
             
             // Show allocation section
             if (selectedDayData.workHours > 0) {
@@ -2599,107 +2616,8 @@ Backend Endpoints:
         });
     }
     
-    // Save Day Button Handler - saves both work hours and leave (supports multiple entries)
-    if (saveDayBtn) {
-        saveDayBtn.addEventListener('click', async function() {
-            const currentEmployeeId = calendarEmployeeSelect?.value;
-            if (!selectedDayData || !currentEmployeeId || !currentXeroInstanceId) {
-                alert('Please select an employee and day first');
-                return;
-            }
-            
-            const workEntries = gatherWorkEntries();
-            const leaveEntries = gatherLeaveEntries();
-            
-            // Validation
-            if (workEntries.length === 0 && leaveEntries.length === 0) {
-                alert('Please enter work hours or leave hours');
-                return;
-            }
-            
-            saveDayBtn.disabled = true;
-            saveDayBtn.textContent = 'Saving...';
-            
-            try {
-                const promises = [];
-                
-                // Save all work entries
-                for (const entry of workEntries) {
-                    promises.push(
-                        fetch('/core/staff_hours/timesheets/save/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                            },
-                            body: JSON.stringify({
-                                xero_instance_id: currentXeroInstanceId,
-                                employee_id: currentEmployeeId,
-                                date: selectedDayData.date,
-                                hours: entry.hours,
-                                earnings_rate_id: entry.earningsRateId
-                            })
-                        }).then(r => r.json())
-                    );
-                }
-                
-                // Save all leave entries
-                for (const entry of leaveEntries) {
-                    promises.push(
-                        fetch('/core/staff_hours/create_leave_application/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                            },
-                            body: JSON.stringify({
-                                xero_instance_id: currentXeroInstanceId,
-                                employee_id: currentEmployeeId,
-                                leave_type_id: entry.leaveTypeId,
-                                date: selectedDayData.date,
-                                hours: entry.hours,
-                                description: entry.comment
-                            })
-                        }).then(r => r.json())
-                    );
-                }
-                
-                const results = await Promise.all(promises);
-                console.log('Save day results:', results);
-                const errors = results.filter(r => r.status !== 'success');
-                
-                if (errors.length > 0) {
-                    const errorMsg = 'Some entries failed to save: ' + errors.map(e => e.message).join(', ');
-                    console.error('Save day errors:', errors);
-                    console.error(errorMsg);
-                    alert(errorMsg);
-                } else {
-                    // Also save allocations if work entries exist and allocation section is visible
-                    const allocationSection = document.getElementById('hoursAllocationSection');
-                    if (workEntries.length > 0 && allocationSection && !allocationSection.classList.contains('d-none')) {
-                        await saveAllocationsFromSaveDay();
-                    }
-                    
-                    console.log('Save day success - refreshing calendar');
-                    // Store the saved date before refreshing
-                    const savedDate = selectedDayData.date;
-                    // Refresh calendar to update visual styling and data
-                    await loadCalendarData();
-                    // Re-select the saved day to refresh the day details panel
-                    const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
-                    if (savedDayElement) {
-                        window.selectCalendarDay(savedDayElement);
-                    }
-                }
-            } catch (e) {
-                console.error('Error saving day:', e);
-                alert('Error saving: ' + e.message);
-            } finally {
-                saveDayBtn.disabled = false;
-                saveDayBtn.textContent = 'Save Day';
-            }
-        });
-    }
+    // Save Day button removed - work hours now saved via Save Allocations button
+    // Leave hours saved via Save Leave button
     
     // Legacy function - now handled by populateEarningsRateSelect for each row
     function populateEarningsRates() {
@@ -2756,12 +2674,10 @@ Backend Endpoints:
             // New entry - show input section immediately
             if (dayInputSection) dayInputSection.classList.remove('d-none');
             if (dayDisplaySection) dayDisplaySection.classList.add('d-none');
+            if (leaveSection) leaveSection.classList.remove('d-none');
             
             // Initialize with empty rows
             initDayInputRows([], []);
-            
-            // Set button text for new entry
-            if (saveDayBtn) saveDayBtn.textContent = 'Save Day';
             
             // Hide allocation section until work hours entered
             hideAllocationSection();
@@ -2769,6 +2685,7 @@ Backend Endpoints:
             // Already has data - show display section
             if (dayInputSection) dayInputSection.classList.add('d-none');
             if (dayDisplaySection) dayDisplaySection.classList.remove('d-none');
+            if (leaveSection) leaveSection.classList.add('d-none');
             
             // Show work row if worked
             if (workDisplayRow) {
@@ -2803,6 +2720,7 @@ Backend Endpoints:
             // Holiday or empty weekend - hide both sections
             if (dayInputSection) dayInputSection.classList.add('d-none');
             if (dayDisplaySection) dayDisplaySection.classList.add('d-none');
+            if (leaveSection) leaveSection.classList.add('d-none');
             hideAllocationSection();
         }
     };
@@ -2945,7 +2863,11 @@ Backend Endpoints:
     }
     
     function validateAllocations() {
-        const totalHours = parseFloat(selectedDayData?.hours) || 0;
+        // Calculate total work hours from current inputs (not saved data)
+        let totalHours = 0;
+        document.querySelectorAll('#workRowsContainer .work-hours-input').forEach(input => {
+            totalHours += parseFloat(input.value) || 0;
+        });
         const rows = document.querySelectorAll('#allocationRows tr');
         let sum = 0;
         let allValid = true;
@@ -3103,6 +3025,50 @@ Backend Endpoints:
         
         document.getElementById('allocationEditControls').classList.add('d-none');
         document.getElementById('allocationDisplayControls').classList.remove('d-none');
+        
+        // Also update the summary allocation display in dayDisplaySection
+        updateAllocationSummaryDisplay(allocations);
+    }
+    
+    // Update the allocation summary display in the read-only dayDisplaySection
+    function updateAllocationSummaryDisplay(allocations) {
+        const displaySection = document.getElementById('allocationDisplaySection');
+        const displayList = document.getElementById('allocationDisplayList');
+        
+        if (!displaySection || !displayList) return;
+        
+        if (allocations && allocations.length > 0) {
+            displayList.innerHTML = '';
+            allocations.forEach(a => {
+                const item = document.createElement('div');
+                item.className = 'd-flex justify-content-between align-items-center mb-1';
+                item.style.cssText = 'padding: 2px 0; border-bottom: 1px dotted #dee2e6;';
+                
+                let label = '';
+                if (a.allocation_type === 1 || a.allocation_type_display === 'Project') {
+                    // Project allocation
+                    label = `<span class="text-primary">${a.project_name || 'Project'}</span>`;
+                    if (a.costing_item) {
+                        label += ` <span class="text-muted">→ ${a.costing_item}</span>`;
+                    }
+                } else if (a.allocation_type === 2 || a.allocation_type_display === 'Unchargeable') {
+                    label = `<span class="text-secondary">Unchargeable</span>`;
+                    if (a.note) label += ` <span class="text-muted">(${a.note})</span>`;
+                } else {
+                    label = `<span class="text-info">Other Chargeable</span>`;
+                    if (a.note) label += ` <span class="text-muted">(${a.note})</span>`;
+                }
+                
+                item.innerHTML = `
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${label}</div>
+                    <div class="fw-bold ms-2" style="white-space: nowrap;">${parseFloat(a.hours).toFixed(1)}h</div>
+                `;
+                displayList.appendChild(item);
+            });
+            displaySection.classList.remove('d-none');
+        } else {
+            displaySection.classList.add('d-none');
+        }
     }
     
     function renderAllocationEditTable(allocations) {
@@ -3151,6 +3117,292 @@ Backend Endpoints:
             savedAllocations = [];
         }
     }
+    
+    // Debug function for diagnosing work hours / allocation issues
+    window.debugWorkHours = function() {
+        console.log('=== WORK HOURS DEBUG ===');
+        
+        // 1. Check workRowsContainer
+        const workRowsContainer = document.getElementById('workRowsContainer');
+        console.log('1. workRowsContainer element:', workRowsContainer ? 'FOUND' : 'NOT FOUND');
+        
+        // 2. Find all work rows
+        const workRows = document.querySelectorAll('#workRowsContainer .work-row');
+        console.log('2. Work rows found:', workRows.length);
+        
+        // 3. Find all work-hours-input elements
+        const workInputs = document.querySelectorAll('#workRowsContainer .work-hours-input');
+        console.log('3. Work hours inputs found:', workInputs.length);
+        
+        // 4. Get values from each input
+        let totalWork = 0;
+        workInputs.forEach((input, i) => {
+            const rawValue = input.value;
+            const parsedValue = parseFloat(rawValue) || 0;
+            totalWork += parsedValue;
+            console.log(`   Input ${i}: raw="${rawValue}", parsed=${parsedValue}, element:`, input);
+        });
+        console.log('4. Total work hours calculated:', totalWork);
+        
+        // 5. Check totalDayHours element
+        const totalDayHoursEl = document.getElementById('totalDayHours');
+        console.log('5. totalDayHours element:', totalDayHoursEl ? 'FOUND' : 'NOT FOUND');
+        console.log('   Current textContent:', totalDayHoursEl?.textContent);
+        
+        // 6. Check totalDayHoursDisplay element
+        const totalDayHoursDisplayEl = document.getElementById('totalDayHoursDisplay');
+        console.log('6. totalDayHoursDisplay element:', totalDayHoursDisplayEl ? 'FOUND' : 'NOT FOUND');
+        console.log('   Current textContent:', totalDayHoursDisplayEl?.textContent);
+        
+        // 7. Check dayTotalHours element (main display)
+        const dayTotalHoursEl = document.getElementById('dayTotalHours');
+        console.log('7. dayTotalHours element:', dayTotalHoursEl ? 'FOUND' : 'NOT FOUND');
+        console.log('   Current textContent:', dayTotalHoursEl?.textContent);
+        
+        // 8. Check allocation section visibility
+        const allocationSection = document.getElementById('hoursAllocationSection');
+        console.log('8. hoursAllocationSection:', allocationSection ? 'FOUND' : 'NOT FOUND');
+        console.log('   Has d-none class:', allocationSection?.classList.contains('d-none'));
+        
+        // 9. Check selectedDayData
+        console.log('9. selectedDayData:', typeof selectedDayData !== 'undefined' ? selectedDayData : 'UNDEFINED');
+        
+        // 10. Check if updateDayTotalHours function exists
+        console.log('10. updateDayTotalHours function:', typeof updateDayTotalHours);
+        
+        // 11. Try to manually update
+        console.log('');
+        console.log('=== ATTEMPTING MANUAL FIX ===');
+        if (totalDayHoursEl) {
+            totalDayHoursEl.textContent = totalWork;
+            console.log('Set totalDayHours to:', totalWork);
+        }
+        if (totalDayHoursDisplayEl) {
+            totalDayHoursDisplayEl.textContent = totalWork;
+            console.log('Set totalDayHoursDisplay to:', totalWork);
+        }
+        
+        // 12. Check event listeners (can't directly inspect, but we can test)
+        console.log('');
+        console.log('=== EVENT LISTENER TEST ===');
+        console.log('Try typing in a work hours input and check if this appears:');
+        console.log('  "[Allocation] Work hours input changed..." - if NOT, event listener not attached');
+        
+        return {
+            workRowsContainer: !!workRowsContainer,
+            workRowCount: workRows.length,
+            workInputCount: workInputs.length,
+            totalWorkHours: totalWork,
+            totalDayHoursEl: totalDayHoursEl?.textContent,
+            allocationVisible: allocationSection && !allocationSection.classList.contains('d-none'),
+            selectedDayData: typeof selectedDayData !== 'undefined' ? 'exists' : 'undefined'
+        };
+    };
+    
+    // Debug function for diagnosing scroll issues in dayDetailsPanel
+    window.debugScroll = function() {
+        console.log('=== SCROLL DEBUG ===');
+        
+        const panel = document.getElementById('dayDetailsPanel');
+        const content = document.getElementById('dayDetailsContent');
+        const calendarRight = document.querySelector('.calendar-right');
+        
+        console.log('1. dayDetailsPanel:');
+        if (panel) {
+            const panelRect = panel.getBoundingClientRect();
+            const panelStyles = window.getComputedStyle(panel);
+            console.log('   - offsetHeight:', panel.offsetHeight);
+            console.log('   - scrollHeight:', panel.scrollHeight);
+            console.log('   - clientHeight:', panel.clientHeight);
+            console.log('   - scrollTop:', panel.scrollTop);
+            console.log('   - getBoundingClientRect:', panelRect);
+            console.log('   - overflow-y:', panelStyles.overflowY);
+            console.log('   - max-height:', panelStyles.maxHeight);
+            console.log('   - height:', panelStyles.height);
+            console.log('   - flex:', panelStyles.flex);
+            console.log('   - CAN SCROLL:', panel.scrollHeight > panel.clientHeight);
+        } else {
+            console.log('   NOT FOUND');
+        }
+        
+        console.log('');
+        console.log('2. dayDetailsContent:');
+        if (content) {
+            console.log('   - offsetHeight:', content.offsetHeight);
+            console.log('   - scrollHeight:', content.scrollHeight);
+            console.log('   - has d-none:', content.classList.contains('d-none'));
+        } else {
+            console.log('   NOT FOUND');
+        }
+        
+        console.log('');
+        console.log('3. calendar-right container:');
+        if (calendarRight) {
+            const crRect = calendarRight.getBoundingClientRect();
+            const crStyles = window.getComputedStyle(calendarRight);
+            console.log('   - offsetHeight:', calendarRight.offsetHeight);
+            console.log('   - getBoundingClientRect:', crRect);
+            console.log('   - max-height:', crStyles.maxHeight);
+            console.log('   - display:', crStyles.display);
+            console.log('   - flex-direction:', crStyles.flexDirection);
+        } else {
+            console.log('   NOT FOUND');
+        }
+        
+        console.log('');
+        console.log('4. Viewport:');
+        console.log('   - window.innerHeight:', window.innerHeight);
+        console.log('   - document.body.scrollHeight:', document.body.scrollHeight);
+        
+        console.log('');
+        console.log('5. Content overflow check:');
+        if (panel && content) {
+            const overflow = content.offsetHeight - panel.clientHeight;
+            console.log('   - Content height:', content.offsetHeight);
+            console.log('   - Panel client height:', panel.clientHeight);
+            console.log('   - Overflow (content - panel):', overflow);
+            if (overflow > 0) {
+                console.log('   ⚠️ OVERFLOW DETECTED - content is', overflow, 'px taller than container');
+                if (panel.scrollHeight <= panel.clientHeight) {
+                    console.log('   ❌ BUT scrollHeight <= clientHeight - scroll is broken!');
+                    console.log('   LIKELY CAUSE: Parent container constraining height');
+                }
+            }
+        }
+        
+        console.log('');
+        console.log('=== ATTEMPTING FIX ===');
+        if (panel) {
+            panel.style.overflowY = 'auto';
+            panel.style.minHeight = '0';
+            console.log('Applied: overflowY=auto, minHeight=0');
+        }
+        if (calendarRight) {
+            calendarRight.style.minHeight = '0';
+            console.log('Applied to calendar-right: minHeight=0');
+        }
+        
+        return {
+            panelScrollable: panel ? panel.scrollHeight > panel.clientHeight : false,
+            contentHeight: content?.offsetHeight,
+            panelClientHeight: panel?.clientHeight,
+            overflow: content && panel ? content.offsetHeight - panel.clientHeight : 0
+        };
+    };
+    // Debug function for StaffHoursAllocations data
+    window.debugAllocations = async function() {
+        console.log('=== ALLOCATIONS DEBUG ===');
+        console.log('');
+        
+        // 1. Current state
+        console.log('1. CURRENT STATE:');
+        console.log('   currentXeroInstanceId:', currentXeroInstanceId);
+        console.log('   selectedDayData:', selectedDayData);
+        console.log('   savedAllocations (in memory):', savedAllocations);
+        console.log('   allocationEditMode:', allocationEditMode);
+        
+        // 2. Selected employee
+        const employeeSelect = document.getElementById('calendarEmployeeSelect');
+        const employeeId = employeeSelect?.value;
+        const employeeName = employeeSelect?.options[employeeSelect.selectedIndex]?.text;
+        console.log('');
+        console.log('2. SELECTED EMPLOYEE:');
+        console.log('   ID:', employeeId);
+        console.log('   Name:', employeeName);
+        
+        // 3. Selected date
+        const dateStr = selectedDayData?.date;
+        console.log('');
+        console.log('3. SELECTED DATE:', dateStr);
+        
+        // 4. Check if StaffHours record exists for this day
+        console.log('');
+        console.log('4. STAFF HOURS RECORD:');
+        if (selectedDayData) {
+            console.log('   Work hours:', selectedDayData.workHours);
+            console.log('   isWorked:', selectedDayData.isWorked);
+            console.log('   Full dayInfo:', selectedDayData);
+        } else {
+            console.log('   No selectedDayData - click on a calendar day first');
+        }
+        
+        // 5. Fetch allocations from API
+        console.log('');
+        console.log('5. FETCHING ALLOCATIONS FROM API...');
+        if (employeeId && dateStr) {
+            try {
+                const url = `/core/staff_hours/allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}&hours=${selectedDayData?.workHours || 0}`;
+                console.log('   URL:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                console.log('   Response status:', data.status);
+                console.log('   Allocations count:', data.allocations?.length || 0);
+                console.log('   Allocations data:', data.allocations);
+                console.log('   Total allocated:', data.total_allocated);
+                console.log('   Full response:', data);
+            } catch (e) {
+                console.error('   Error fetching:', e);
+            }
+        } else {
+            console.log('   Cannot fetch - missing employeeId or dateStr');
+        }
+        
+        // 6. Check Django debug endpoint (if exists)
+        console.log('');
+        console.log('6. CHECKING RAW DATABASE (debug endpoint)...');
+        let debugData = null;
+        if (employeeId && dateStr) {
+            try {
+                const debugUrl = `/core/staff_hours/debug_allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}`;
+                console.log('   URL:', debugUrl);
+                const response = await fetch(debugUrl);
+                if (response.ok) {
+                    debugData = await response.json();
+                    console.log('   Employee found:', debugData.employee?.found, debugData.employee?.name);
+                    console.log('   StaffHours found:', debugData.staff_hours?.found, 'pk:', debugData.staff_hours?.pk, 'hours:', debugData.staff_hours?.hours);
+                    console.log('   Allocations count:', debugData.allocations?.count);
+                    console.log('   Allocations records:', debugData.allocations?.records);
+                    console.log('   Allocations reason:', debugData.allocations?.reason || 'N/A');
+                    console.log('   Recent StaffHours (last 5):', debugData.recent_staff_hours);
+                    console.log('   Recent Allocations (last 5):', debugData.recent_allocations);
+                } else {
+                    console.log('   Debug endpoint not available (404) - this is expected');
+                    console.log('   To add debug endpoint, create view in views.py');
+                }
+            } catch (e) {
+                console.log('   Debug endpoint error:', e.message);
+            }
+        }
+        
+        // 7. DOM elements state
+        console.log('');
+        console.log('7. DOM ELEMENTS:');
+        const allocationDisplaySection = document.getElementById('allocationDisplaySection');
+        const allocationDisplayList = document.getElementById('allocationDisplayList');
+        const hoursAllocationSection = document.getElementById('hoursAllocationSection');
+        const allocationRows = document.getElementById('allocationRows');
+        console.log('   allocationDisplaySection:', allocationDisplaySection ? 'EXISTS' : 'MISSING', allocationDisplaySection?.classList.contains('d-none') ? '(hidden)' : '(visible)');
+        console.log('   allocationDisplayList innerHTML:', allocationDisplayList?.innerHTML || 'EMPTY');
+        console.log('   hoursAllocationSection:', hoursAllocationSection ? 'EXISTS' : 'MISSING', hoursAllocationSection?.classList.contains('d-none') ? '(hidden)' : '(visible)');
+        console.log('   allocationRows row count:', allocationRows?.querySelectorAll('tr').length || 0);
+        
+        console.log('');
+        console.log('=== END ALLOCATIONS DEBUG ===');
+        console.log('');
+        console.log('NEXT STEPS:');
+        console.log('- If allocations array is empty, check if records exist in StaffHoursAllocations table');
+        console.log('- Run in Django shell: StaffHoursAllocations.objects.filter(staff_hours__employee__employee_id="' + employeeId + '", staff_hours__date="' + dateStr + '")');
+        
+        return {
+            employeeId,
+            dateStr,
+            selectedDayData,
+            savedAllocations,
+            xeroInstanceId: currentXeroInstanceId
+        };
+    };
+    
+    console.log('[Staff Hours] Debug functions loaded. Run debugWorkHours(), debugScroll(), or debugAllocations() to diagnose.');
     
     // Helper function called from Save Day to save allocations silently
     async function saveAllocationsFromSaveDay() {
@@ -3250,61 +3502,78 @@ Backend Endpoints:
     }
     
     async function saveAllAllocations() {
-        console.log('=== saveAllAllocations START ===');
-        const rows = document.querySelectorAll('#allocationRows tr');
-        console.log('Found allocation rows:', rows.length);
-        const allocations = [];
-        
-        rows.forEach((row, rowIndex) => {
-            console.log(`Processing row ${rowIndex}:`, row);
-            const typeSelect = row.querySelector('.alloc-type');
-            const projectSelect = row.querySelector('.alloc-project');
-            const costingSelect = row.querySelector('.alloc-costing');
-            const noteInput = row.querySelector('.alloc-note');
-            const hoursInput = row.querySelector('.alloc-hours');
-            
-            console.log(`  Row ${rowIndex} elements:`, {
-                typeSelect: typeSelect?.value,
-                projectSelect: projectSelect?.value,
-                costingSelect: costingSelect?.value,
-                noteInput: noteInput?.value,
-                hoursInput: hoursInput?.value
-            });
-            
-            const allocType = parseInt(typeSelect?.value) || 1;
-            const alloc = {
-                allocation_type: allocType,
-                hours: parseFloat(hoursInput?.value) || 0
-            };
-            
-            if (allocType === 1) {
-                // Project allocation
-                alloc.project_id = projectSelect?.value;
-                alloc.project_name = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
-                alloc.costing_id = costingSelect?.value;
-                alloc.costing_item = costingSelect?.options[costingSelect.selectedIndex]?.text || '';
-                alloc.note = '';
-            } else {
-                // Unchargeable or Other Chargeable
-                alloc.project_id = null;
-                alloc.project_name = null;
-                alloc.costing_id = null;
-                alloc.costing_item = null;
-                alloc.note = noteInput?.value?.trim() || '';
-            }
-            alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
-            console.log(`  Row ${rowIndex} allocation object:`, alloc);
-            allocations.push(alloc);
-        });
-        
-        console.log('Total allocations to save:', allocations.length);
-        console.log('Allocations array:', JSON.stringify(allocations, null, 2));
+        console.log('=== saveAllAllocations START (Work Hours + Allocations) ===');
         
         const saveBtn = document.getElementById('saveAllocationsBtn');
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
         
         try {
+            // STEP 1: Save work hours to Xero first
+            const workEntries = gatherWorkEntries();
+            console.log('Work entries to save:', workEntries);
+            
+            if (workEntries.length > 0) {
+                console.log('Saving work hours to Xero...');
+                for (const entry of workEntries) {
+                    const response = await fetch('/core/staff_hours/timesheets/save/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify({
+                            xero_instance_id: currentXeroInstanceId,
+                            employee_id: calendarEmployeeSelect.value,
+                            date: selectedDayData.date,
+                            hours: entry.hours,
+                            earnings_rate_id: entry.earningsRateId
+                        })
+                    });
+                    const result = await response.json();
+                    console.log('Work hours save result:', result);
+                    if (result.status !== 'success') {
+                        throw new Error(result.message || 'Failed to save work hours');
+                    }
+                }
+            }
+            
+            // STEP 2: Save allocations to local DB
+            const rows = document.querySelectorAll('#allocationRows tr');
+            console.log('Found allocation rows:', rows.length);
+            const allocations = [];
+            
+            rows.forEach((row, rowIndex) => {
+                const typeSelect = row.querySelector('.alloc-type');
+                const projectSelect = row.querySelector('.alloc-project');
+                const costingSelect = row.querySelector('.alloc-costing');
+                const noteInput = row.querySelector('.alloc-note');
+                const hoursInput = row.querySelector('.alloc-hours');
+                
+                const allocType = parseInt(typeSelect?.value) || 1;
+                const alloc = {
+                    allocation_type: allocType,
+                    hours: parseFloat(hoursInput?.value) || 0
+                };
+                
+                if (allocType === 1) {
+                    alloc.project_id = projectSelect?.value;
+                    alloc.project_name = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
+                    alloc.costing_id = costingSelect?.value;
+                    alloc.costing_item = costingSelect?.options[costingSelect.selectedIndex]?.text || '';
+                    alloc.note = '';
+                } else {
+                    alloc.project_id = null;
+                    alloc.project_name = null;
+                    alloc.costing_id = null;
+                    alloc.costing_item = null;
+                    alloc.note = noteInput?.value?.trim() || '';
+                }
+                alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
+                allocations.push(alloc);
+            });
+            
+            console.log('Saving allocations:', allocations.length);
             for (let i = 0; i < allocations.length; i++) {
                 const alloc = allocations[i];
                 const payload = {
@@ -3316,9 +3585,8 @@ Backend Endpoints:
                     costing_id: alloc.costing_id,
                     hours: alloc.hours,
                     note: alloc.note,
-                    clear_existing: i === 0  // Clear on first save only
+                    clear_existing: i === 0
                 };
-                console.log(`Saving allocation ${i + 1}/${allocations.length}:`, JSON.stringify(payload, null, 2));
                 
                 const response = await fetch('/core/staff_hours/allocations/save/', {
                     method: 'POST',
@@ -3330,23 +3598,118 @@ Backend Endpoints:
                 });
                 
                 const responseData = await response.json();
-                console.log(`Allocation ${i + 1} response status:`, response.status);
-                console.log(`Allocation ${i + 1} response data:`, responseData);
+                console.log(`Allocation ${i + 1} saved:`, responseData);
             }
+            
             savedAllocations = allocations;
             console.log('=== saveAllAllocations COMPLETE ===');
             saveBtn.textContent = 'Saved!';
+            
+            // Refresh calendar to show updated data
+            const savedDate = selectedDayData.date;
+            await loadCalendarData();
+            const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
+            if (savedDayElement) {
+                window.selectCalendarDay(savedDayElement);
+            }
+            
             setTimeout(() => {
                 saveBtn.textContent = 'Save Allocations';
-                renderAllocationDisplayTable(savedAllocations);
             }, 1000);
         } catch (e) {
-            console.error('Error saving allocations:', e);
+            console.error('Error saving:', e);
             saveBtn.textContent = 'Error';
+            alert('Error saving: ' + e.message);
             setTimeout(() => {
                 saveBtn.textContent = 'Save Allocations';
                 validateAllocations();
             }, 1500);
+        }
+    }
+    
+    // Save leave entries independently
+    async function saveLeaveEntries() {
+        console.log('=== saveLeaveEntries START ===');
+        const leaveEntries = gatherLeaveEntries();
+        console.log('Leave entries to save:', leaveEntries);
+        
+        const saveBtn = document.getElementById('saveLeaveBtn');
+        if (!saveBtn) return;
+        
+        if (leaveEntries.length === 0) {
+            alert('Please enter leave hours with a leave type selected');
+            return;
+        }
+        
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            for (const entry of leaveEntries) {
+                const response = await fetch('/core/staff_hours/create_leave_application/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        xero_instance_id: currentXeroInstanceId,
+                        employee_id: calendarEmployeeSelect.value,
+                        leave_type_id: entry.leaveTypeId,
+                        date: selectedDayData.date,
+                        hours: entry.hours,
+                        description: entry.comment
+                    })
+                });
+                const result = await response.json();
+                console.log('Leave save result:', result);
+                if (result.status !== 'success') {
+                    throw new Error(result.message || 'Failed to save leave');
+                }
+            }
+            
+            console.log('=== saveLeaveEntries COMPLETE ===');
+            saveBtn.textContent = 'Saved!';
+            saveBtn.style.background = '#28a745';
+            
+            // Refresh calendar
+            const savedDate = selectedDayData.date;
+            await loadCalendarData();
+            const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
+            if (savedDayElement) {
+                window.selectCalendarDay(savedDayElement);
+            }
+            
+            setTimeout(() => {
+                saveBtn.textContent = 'Save Leave';
+                saveBtn.style.background = '#6c757d';
+                validateLeave();
+            }, 1000);
+        } catch (e) {
+            console.error('Error saving leave:', e);
+            saveBtn.textContent = 'Error';
+            saveBtn.style.background = '#dc3545';
+            alert('Error saving leave: ' + e.message);
+            setTimeout(() => {
+                saveBtn.textContent = 'Save Leave';
+                saveBtn.style.background = '#6c757d';
+                validateLeave();
+            }, 1500);
+        }
+    }
+    
+    // Validate leave entries and enable/disable save button
+    function validateLeave() {
+        const leaveEntries = gatherLeaveEntries();
+        const saveBtn = document.getElementById('saveLeaveBtn');
+        if (!saveBtn) return;
+        
+        if (leaveEntries.length > 0) {
+            saveBtn.disabled = false;
+            saveBtn.style.background = '#17a2b8';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.style.background = '#6c757d';
         }
     }
     
@@ -3356,7 +3719,8 @@ Backend Endpoints:
         validateAllocations();
     });
     document.getElementById('saveAllocationsBtn')?.addEventListener('click', saveAllAllocations);
-    document.getElementById('updateAllocationsBtn')?.addEventListener('click', switchToEditMode)
+    document.getElementById('updateAllocationsBtn')?.addEventListener('click', switchToEditMode);
+    document.getElementById('saveLeaveBtn')?.addEventListener('click', saveLeaveEntries);
     
     // Override renderEmployeesTable to also populate calendar dropdown
     const originalRenderEmployeesTable = renderEmployeesTable;

@@ -179,15 +179,19 @@ def create_project(request):
         )
         logger.info(f"Created Margin item for project {project.projects_pk}")
         
-        # Create Labour category for staff hours allocation
-        labour_category = Categories.objects.create(
-            project=project,
-            division=-5,
-            category='Labour',
-            invoice_category='Labour',
-            order_in_list=-1
-        )
-        logger.info(f"Created Labour category for project {project.projects_pk}")
+        # Create Labour category for staff hours allocation (only if not already copied from template)
+        existing_labour = Categories.objects.filter(project=project, category__iexact='Labour').first()
+        if not existing_labour:
+            labour_category = Categories.objects.create(
+                project=project,
+                division=-5,
+                category='Labour',
+                invoice_category='Labour',
+                order_in_list=-1
+            )
+            logger.info(f"Created Labour category for project {project.projects_pk}")
+        else:
+            logger.info(f"Labour category already exists from template for project {project.projects_pk} (pk={existing_labour.categories_pk})")
         
         # Return project data
         return JsonResponse({
