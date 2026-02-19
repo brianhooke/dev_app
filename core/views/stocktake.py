@@ -460,6 +460,53 @@ def calculate_stock_ledger_for_item(item_pk, as_of_date=None):
     }
 
 
+def calculate_avg_rate_from_stock_in(item_pk, as_of_date=None):
+    """
+    Calculate weighted average rate based ONLY on stock IN (opening + bills).
+    Does NOT deduct stock out - this gives the true average cost of inventory.
+    Used for calculating transfer-out rates.
+    """
+    from core.models import StocktakeOpeningBalance, StocktakeAllocations
+    from django.db.models import Sum, F
+    
+    if as_of_date is None:
+        as_of_date = date.today()
+    
+    total_qty = Decimal('0')
+    total_value = Decimal('0')
+    
+    # 1. Opening balance
+    opening = StocktakeOpeningBalance.objects.filter(
+        item_id=item_pk,
+        date__lte=as_of_date
+    ).order_by('-date').first()
+    
+    if opening:
+        total_qty += opening.qty
+        total_value += opening.qty * opening.rate
+    
+    # 2. Stock IN from approved stocktake bills
+    stock_in = StocktakeAllocations.objects.filter(
+        item_id=item_pk,
+        bill__is_stocktake=True,
+        bill__bill_status__gte=1,
+        bill__bill_date__lte=as_of_date
+    ).aggregate(
+        total_qty=Sum('qty'),
+        total_value=Sum(F('qty') * F('rate'))
+    )
+    
+    if stock_in['total_qty']:
+        total_qty += stock_in['total_qty']
+    if stock_in['total_value']:
+        total_value += stock_in['total_value']
+    
+    # Calculate weighted average rate (no stock out deduction)
+    avg_rate = (total_value / total_qty) if total_qty > 0 else Decimal('0')
+    
+    return float(avg_rate)
+
+
 def get_stock_entries_for_item(item_pk, as_of_date=None, exclude_snap_pk=None):
     """
     Get all stock entries for an item in chronological order for FIFO/LIFO calculation.
@@ -544,11 +591,12 @@ def calculate_rate_for_qty(item_pk, qty_needed, method='FIFO', as_of_date=None, 
     exclude_snap_pk: Exclude this snap's allocations from consumed calculation (prevents circular deduction).
     """
     if method == 'AVG':
-        ledger = calculate_stock_ledger_for_item(item_pk, as_of_date)
+        # For AVG, calculate based on stock IN only (not affected by previous transfers out)
+        avg_rate = calculate_avg_rate_from_stock_in(item_pk, as_of_date)
         return {
-            'rate': ledger['avg_rate'],
-            'total_amount': ledger['avg_rate'] * qty_needed,
-            'breakdown': [{'qty': qty_needed, 'rate': ledger['avg_rate']}]
+            'rate': avg_rate,
+            'total_amount': avg_rate * qty_needed,
+            'breakdown': [{'qty': qty_needed, 'rate': avg_rate}]
         }
     
     entries = get_stock_entries_for_item(item_pk, as_of_date, exclude_snap_pk)
@@ -684,9 +732,36 @@ def create_snap(request):
     try:
         from core.models import StocktakeSnap, StocktakeSnapItem, Costing
         
+        from datetime import datetime, timedelta
+        
         data = json.loads(request.body)
-        snap_date = data.get('date', date.today().strftime('%Y-%m-%d'))
-        costing_method = data.get('costing_method', 'FIFO')
+        costing_method = data.get('costing_method', 'AVG')
+        
+        # Get the latest finalised snap
+        latest_finalised = StocktakeSnap.objects.filter(
+            status__gte=StocktakeSnap.STATUS_FINALISED
+        ).order_by('-date').first()
+        
+        # Calculate default date: later of today or day after latest finalised snap
+        today = date.today()
+        if latest_finalised:
+            min_date = latest_finalised.date + timedelta(days=1)
+            default_date = max(today, min_date)
+        else:
+            default_date = today
+        
+        # Use provided date or calculated default
+        snap_date_str = data.get('date')
+        if snap_date_str:
+            snap_date = datetime.strptime(snap_date_str, '%Y-%m-%d').date()
+            # Validate provided date
+            if latest_finalised and snap_date <= latest_finalised.date:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Date must be after {latest_finalised.date.strftime("%d %b %Y")} (latest finalised snap)'
+                }, status=400)
+        else:
+            snap_date = default_date
         
         # Create snap
         snap = StocktakeSnap.objects.create(
@@ -788,6 +863,11 @@ def get_snap(request, snap_pk):
                     'amount': float(alloc.amount)
                 })
             
+            # Get avg_rate from stock IN only (not affected by previous transfers out)
+            item_avg_rate = 0
+            if snap_item.item_id:
+                item_avg_rate = calculate_avg_rate_from_stock_in(snap_item.item_id, snap.date)
+            
             # Get project type name (CharField, not FK)
             project_type_name = ''
             if snap_item.item and snap_item.item.project_type:
@@ -815,7 +895,8 @@ def get_snap(request, snap_pk):
                 'variance_qty': float(snap_item.variance_qty) if snap_item.variance_qty is not None else None,
                 'allocations': allocations,
                 'valid_projects': valid_projects,
-                'future_qty': future_qty
+                'future_qty': future_qty,
+                'avg_rate': item_avg_rate
             })
         
         # Check if this is the most recent snap
@@ -870,7 +951,21 @@ def update_snap(request, snap_pk):
             }, status=400)
         
         if 'date' in data:
-            snap.date = data['date']
+            from datetime import datetime
+            new_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            
+            # Get the latest finalised snap (excluding current snap)
+            latest_finalised = StocktakeSnap.objects.filter(
+                status__gte=StocktakeSnap.STATUS_FINALISED
+            ).exclude(snap_pk=snap_pk).order_by('-date').first()
+            
+            if latest_finalised and new_date <= latest_finalised.date:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Date must be after {latest_finalised.date.strftime("%d %b %Y")} (latest finalised snap)'
+                }, status=400)
+            
+            snap.date = new_date
         if 'costing_method' in data:
             snap.costing_method = data['costing_method']
         if 'notes' in data:
@@ -1023,11 +1118,11 @@ def create_snap_allocation(request):
                 'message': f'Project {project_pk} not found'
             }, status=404)
         
-        # Calculate rate based on snap's costing method (exclude current snap to avoid circular deduction)
+        # Calculate rate using AVG (average) costing method
         rate_info = calculate_rate_for_qty(
             snap_item.item_id,
             float(qty),
-            snap_item.snap.costing_method,
+            'AVG',  # Always use average costing
             snap_item.snap.date,
             exclude_snap_pk=snap_item.snap.snap_pk
         )
@@ -1100,11 +1195,11 @@ def update_snap_allocation(request, allocation_pk):
             qty = float(data['qty'])
             allocation.qty = Decimal(str(qty))
             
-            # Recalculate rate (exclude current snap to avoid circular deduction)
+            # Recalculate rate using AVG costing (exclude current snap to avoid circular deduction)
             rate_info = calculate_rate_for_qty(
                 allocation.snap_item.item_id,
                 qty,
-                allocation.snap_item.snap.costing_method,
+                'AVG',  # Always use average costing
                 allocation.snap_item.snap.date,
                 exclude_snap_pk=allocation.snap_item.snap.snap_pk
             )
@@ -1703,10 +1798,10 @@ def get_projects_for_allocation(request):
 def get_item_history(request, item_pk):
     """
     Get chronological history of an item's stock movements.
-    Includes opening balances and stocktake bill allocations.
+    Includes opening balances, stocktake bill allocations, and snap allocations (transfers out).
     """
     try:
-        from core.models import Costing, StocktakeOpeningBalance, StocktakeAllocations, Bills
+        from core.models import Costing, StocktakeOpeningBalance, StocktakeAllocations, Bills, StocktakeSnapAllocation, StocktakeSnap
         
         # Get the item
         try:
@@ -1760,6 +1855,29 @@ def get_item_history(request, item_pk):
                 'bill_number': bill.supplier_bill_number or f'Bill #{bill.bill_pk}',
                 'notes': alloc.notes or '',
                 'sort_key': (bill.bill_date.isoformat() if bill.bill_date else '9999-99-99') + '_1'
+            })
+        
+        # Get snap allocations (transfers out) from finalised snaps
+        snap_allocations = StocktakeSnapAllocation.objects.filter(
+            snap_item__item=item,
+            snap_item__snap__status__gte=StocktakeSnap.STATUS_FINALISED
+        ).select_related('snap_item__snap', 'project').order_by('snap_item__snap__date')
+        
+        for alloc in snap_allocations:
+            snap = alloc.snap_item.snap
+            project_name = alloc.project.project if alloc.project else 'Unknown Project'
+            
+            history.append({
+                'type': 'stock_out',
+                'date': snap.date.isoformat() if snap.date else None,
+                'date_display': snap.date.strftime('%d %b %Y') if snap.date else 'No date',
+                'qty': -float(alloc.qty) if alloc.qty else 0,  # Negative for stock out
+                'rate': float(alloc.rate) if alloc.rate else 0,
+                'amount': -float(alloc.amount) if alloc.amount else 0,  # Negative for stock out
+                'description': f'Transfer Out - {project_name}',
+                'project': project_name,
+                'snap_pk': snap.snap_pk,
+                'sort_key': (snap.date.isoformat() if snap.date else '9999-99-99') + '_2'  # After stock_in on same day
             })
         
         # Sort by date (and sort_key for same-day ordering)

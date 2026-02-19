@@ -570,7 +570,7 @@ Tabs:
         <div class="tab-content" id="stocktakeTabContent" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
             <!-- Allocations Tab -->
             <div class="tab-pane fade show active" id="stocktakeAllocations" role="tabpanel">
-                {% include 'core/components/allocations_layout.html' with section_id='stocktakeAlloc' main_table_columns=stocktake_main_columns allocations_columns=stocktake_alloc_columns allocations_title='Bill Allocations' viewer_placeholder_text='Select a bill to view the PDF' viewer_placeholder_icon='fas fa-file-pdf' %}
+                {% include 'core/components/allocations_layout.html' with section_id='stocktakeAlloc' main_table_columns=stocktake_main_columns allocations_columns=stocktake_alloc_columns allocations_title='Stocktake Allocations' viewer_placeholder_text='Select a bill to view the PDF' viewer_placeholder_icon='fas fa-file-pdf' %}
             </div>
 
             <!-- Snap Tab -->
@@ -651,11 +651,7 @@ Tabs:
                             </div>
                             <div>
                                 <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Costing Method</label>
-                                <select class="form-select form-select-sm" id="snapCostingMethod" style="width: 100px;">
-                                    <option value="FIFO" selected>FIFO</option>
-                                    <option value="LIFO">LIFO</option>
-                                    <option value="AVG">Average</option>
-                                </select>
+                                <span style="font-size: 13px; font-weight: 500; color: var(--manila-text); line-height: 28px;">Average</span>
                             </div>
                             <div>
                                 <label style="font-size: 11px; color: var(--manila-text-muted); margin-bottom: 2px; display: block;">Status</label>
@@ -2281,12 +2277,14 @@ window.debugStocktakeAllocations = function() {
             // Style based on type
             if (entry.type === 'opening_balance') {
                 row.css({'background': '#e8f5e9', 'font-weight': '500'});
+            } else if (entry.type === 'stock_out') {
+                row.css({'background': '#ffebee'});  // Light red for transfers out
             }
             
             // Date
             row.append($('<td>').text(entry.date_display));
             
-            // Description (with bill details for stock_in)
+            // Description (with bill details for stock_in, project for stock_out)
             var descCell = $('<td>');
             descCell.append($('<div>').text(entry.description));
             if (entry.bill_number) {
@@ -2297,15 +2295,29 @@ window.debugStocktakeAllocations = function() {
             }
             row.append(descCell);
             
-            // Qty
-            var qtyText = entry.type === 'opening_balance' ? formatNumber(entry.qty) : '+' + formatNumber(entry.qty);
-            row.append($('<td>').css('text-align', 'right').text(qtyText));
+            // Qty (show +/- based on type)
+            var qtyText;
+            var qtyStyle = {'text-align': 'right'};
+            if (entry.type === 'opening_balance') {
+                qtyText = formatNumber(entry.qty);
+            } else if (entry.type === 'stock_out') {
+                qtyText = formatNumber(entry.qty);  // Already negative from backend
+                qtyStyle.color = '#dc3545';  // Red for negative
+            } else {
+                qtyText = '+' + formatNumber(entry.qty);
+                qtyStyle.color = '#28a745';  // Green for positive
+            }
+            row.append($('<td>').css(qtyStyle).text(qtyText));
             
             // Rate
             row.append($('<td>').css('text-align', 'right').text(formatCurrency(entry.rate)));
             
-            // Amount
-            row.append($('<td>').css('text-align', 'right').text(formatCurrency(entry.amount)));
+            // Amount (show negative in red for stock_out)
+            var amtStyle = {'text-align': 'right'};
+            if (entry.type === 'stock_out') {
+                amtStyle.color = '#dc3545';
+            }
+            row.append($('<td>').css(amtStyle).text(formatCurrency(entry.amount)));
             
             // Running Qty
             row.append($('<td>').css({'text-align': 'right', 'font-weight': '500'}).text(formatNumber(entry.running_qty)));
@@ -2444,11 +2456,10 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        var isEditable = snap.status === 0 && snap.is_most_recent; // Draft and most recent
+        var isEditable = snap.status === 0; // Draft snaps are editable
         
         // Update header
         $('#snapDate').val(snap.date).prop('disabled', !isEditable);
-        $('#snapCostingMethod').val(snap.costing_method).prop('disabled', !isEditable);
         $('.snap-detail-header .badge').replaceWith(getStatusBadge(snap.status));
         
         // Render items table grouped by project type
@@ -2696,8 +2707,8 @@ window.debugStocktakeAllocations = function() {
         });
         row.append(qtyInput);
         
-        // Rate display
-        row.append($('<span style="font-size: 11px; color: var(--manila-text-muted); line-height: 28px;">').text('@ ' + formatCurrency(alloc.rate)));
+        // Rate display - use item's average rate (not alloc.rate which was FIFO-based)
+        row.append($('<span style="font-size: 11px; color: var(--manila-text-muted); line-height: 28px;">').text('@ ' + formatCurrency(item.avg_rate || 0)));
         
         // Delete button
         if (isEditable) {
@@ -2932,8 +2943,7 @@ window.debugStocktakeAllocations = function() {
             type: 'POST',
             contentType: 'application/json',
             data: JSON.stringify({
-                date: new Date().toISOString().split('T')[0],
-                costing_method: 'FIFO'
+                costing_method: 'AVG'  // Let backend calculate date (later of today or day after latest snap)
             }),
             success: function(response) {
                 if (response.status === 'success') {
@@ -2970,16 +2980,14 @@ window.debugStocktakeAllocations = function() {
         });
     });
     
-    // Auto-save snap date on change
-    $('#snapDate').on('change', function() {
+    // Auto-save snap date on blur (not change, to avoid mid-typing saves)
+    $('#snapDate').on('blur', function() {
         if (!snapData.currentSnap || snapData.currentSnap.status !== 0) return;
-        autoSaveSnap();
-    });
-    
-    // Auto-save costing method on change
-    $('#snapCostingMethod').on('change', function() {
-        if (!snapData.currentSnap || snapData.currentSnap.status !== 0) return;
-        autoSaveSnap();
+        // Only save if date is valid
+        var dateVal = $(this).val();
+        if (dateVal && dateVal !== snapData.currentSnap.date) {
+            autoSaveSnap();
+        }
     });
     
     // Auto-save snap function
@@ -2990,19 +2998,28 @@ window.debugStocktakeAllocations = function() {
             contentType: 'application/json',
             data: JSON.stringify({
                 date: $('#snapDate').val(),
-                costing_method: $('#snapCostingMethod').val()
+                costing_method: 'AVG'  // Fixed to Average costing
             }),
             success: function(response) {
                 if (response.status === 'success') {
                     // Update local data
                     snapData.currentSnap.date = $('#snapDate').val();
-                    snapData.currentSnap.costing_method = $('#snapCostingMethod').val();
+                    snapData.currentSnap.costing_method = 'AVG';
                     // Refresh snap list to show updated date
                     loadSnapList();
                 }
             },
             error: function(xhr, status, error) {
                 console.error('[Snap] Failed to auto-save snap:', error);
+                // Show validation error and revert date
+                var msg = 'Failed to save';
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp.message) msg = resp.message;
+                } catch(e) {}
+                alert(msg);
+                // Revert to original date
+                $('#snapDate').val(snapData.currentSnap.date);
             }
         });
     }
