@@ -1091,7 +1091,9 @@ $(document).ready(function() {
         
         var xeroInstanceOrProject = row.find('.xero-project-select').val();
         // Check both regular supplier select AND stocktake supplier dropdown
-        var supplierPk = row.find('.supplier-select').val() || row.find('.stocktake-supplier-dropdown').val();
+        var regularSupplierPk = row.find('.supplier-select').val();
+        var stocktakeSupplierPk = row.find('.stocktake-supplier-dropdown').val();
+        var supplierPk = regularSupplierPk || stocktakeSupplierPk;
         var billNumber = row.find('.bill-number-input').val();
         var totalNet = parseFloat(row.find('.net-input').val());
         var totalGst = parseFloat(row.find('.gst-input').val());
@@ -1099,26 +1101,70 @@ $(document).ready(function() {
         var billDueDate = row.find('.bill-due-date-input').val();
         var currency = row.find('.currency-select').val() || 'AUD';
         
+        // === STOCKTAKE SEND BILL DEBUG LOGGING ===
+        var isStocktake = xeroInstanceOrProject && xeroInstanceOrProject.startsWith('stocktake_');
+        console.log('=== [SendBill] Starting send_bill ===');
+        console.log('[SendBill] bill_pk:', billPk);
+        console.log('[SendBill] xero_instance_or_project:', xeroInstanceOrProject);
+        console.log('[SendBill] isStocktake:', isStocktake);
+        console.log('[SendBill] regularSupplierPk (from .supplier-select):', regularSupplierPk);
+        console.log('[SendBill] stocktakeSupplierPk (from .stocktake-supplier-dropdown):', stocktakeSupplierPk);
+        console.log('[SendBill] supplierPk (final):', supplierPk);
+        console.log('[SendBill] bill_number:', billNumber);
+        console.log('[SendBill] total_net:', totalNet);
+        console.log('[SendBill] total_gst:', totalGst);
+        console.log('[SendBill] bill_date:', billDate);
+        console.log('[SendBill] bill_due_date:', billDueDate);
+        console.log('[SendBill] currency:', currency);
+        
+        // Log supplier details from cached data if available
+        if (isStocktake && window.billsInboxData && window.billsInboxData.suppliers) {
+            var supplierData = window.billsInboxData.suppliers.find(function(s) { 
+                return s.contact_pk == supplierPk; 
+            });
+            if (supplierData) {
+                console.log('[SendBill] Supplier from cache:', {
+                    contact_pk: supplierData.contact_pk,
+                    name: supplierData.name,
+                    xero_contact_id: supplierData.xero_contact_id,
+                    xero_instance_id: supplierData.xero_instance_id
+                });
+            } else {
+                console.log('[SendBill] WARNING: Supplier not found in cached billsInboxData.suppliers for pk:', supplierPk);
+            }
+        }
+        
+        // Log the selected Xero instance for stocktake
+        if (isStocktake) {
+            var selectedXeroRadio = row.find('.stocktake-xero-radio:checked');
+            console.log('[SendBill] Stocktake selected Xero instance radio value:', selectedXeroRadio.val());
+        }
+        // === END DEBUG LOGGING ===
+        
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        var payload = {
+            bill_pk: parseInt(billPk),
+            xero_instance_or_project: xeroInstanceOrProject,
+            supplier_pk: parseInt(supplierPk),
+            bill_number: billNumber,
+            total_net: totalNet,
+            total_gst: totalGst,
+            bill_date: billDate,
+            bill_due_date: billDueDate,
+            // FX fields
+            currency: currency
+        };
+        console.log('[SendBill] Payload being sent:', JSON.stringify(payload, null, 2));
         
         $.ajax({
             url: '/core/send_bill/',
             type: 'POST',
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             contentType: 'application/json',
-            data: JSON.stringify({
-                bill_pk: parseInt(billPk),
-                xero_instance_or_project: xeroInstanceOrProject,
-                supplier_pk: parseInt(supplierPk),
-                bill_number: billNumber,
-                total_net: totalNet,
-                total_gst: totalGst,
-                bill_date: billDate,
-                bill_due_date: billDueDate,
-                // FX fields
-                currency: currency
-            }),
+            data: JSON.stringify(payload),
             success: function(response) {
+                console.log('[SendBill] Success response:', response);
                 if (response.status === 'success') {
                     // Get next row (or previous if no next) before fade
                     var nextRow = row.next('tr');
@@ -1140,11 +1186,21 @@ $(document).ready(function() {
                         }
                     });
                 } else {
+                    console.error('[SendBill] Error in response:', response.message);
                     alert('Error: ' + response.message);
                     button.prop('disabled', false).text('Send');
                 }
             },
-            error: function(xhr) {
+            error: function(xhr, status, error) {
+                console.error('[SendBill] AJAX Error:', {
+                    status: status,
+                    error: error,
+                    responseStatus: xhr.status,
+                    responseText: xhr.responseText
+                });
+                if (xhr.responseJSON) {
+                    console.error('[SendBill] Error response JSON:', xhr.responseJSON);
+                }
                 var errorMsg = 'Failed to send bill. Please try again.';
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     errorMsg = xhr.responseJSON.message;

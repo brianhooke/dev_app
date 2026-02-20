@@ -185,8 +185,22 @@ def send_bill(request):
         # FX fields - added 2026-02-14
         currency = data.get('currency', 'AUD')
         
+        # === STOCKTAKE SEND BILL DEBUG LOGGING ===
+        is_stocktake_request = xero_instance_or_project and xero_instance_or_project.startswith('stocktake_')
+        logger.info(f"[SendBill] === Received send_bill request ===")
+        logger.info(f"[SendBill] bill_pk: {bill_pk}")
+        logger.info(f"[SendBill] xero_instance_or_project: {xero_instance_or_project}")
+        logger.info(f"[SendBill] is_stocktake: {is_stocktake_request}")
+        logger.info(f"[SendBill] supplier_pk: {supplier_pk}")
+        logger.info(f"[SendBill] bill_number: {bill_number}")
+        logger.info(f"[SendBill] total_net: {total_net}, total_gst: {total_gst}")
+        logger.info(f"[SendBill] bill_date: {bill_date}, bill_due_date: {bill_due_date}")
+        logger.info(f"[SendBill] currency: {currency}")
+        # === END DEBUG LOGGING ===
+        
         # Check all required fields
         if not all([bill_pk, xero_instance_or_project, supplier_pk, bill_number, total_net is not None, total_gst is not None, bill_date, bill_due_date]):
+            logger.error(f"[SendBill] Missing required fields - bill_pk:{bill_pk}, xero:{xero_instance_or_project}, supplier:{supplier_pk}, bill_number:{bill_number}, net:{total_net}, gst:{total_gst}, date:{bill_date}, due:{bill_due_date}")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Missing required fields'
@@ -195,7 +209,9 @@ def send_bill(request):
         # Get the invoice
         try:
             invoice = Bills.objects.get(bill_pk=bill_pk)
+            logger.info(f"[SendBill] Found invoice: bill_pk={invoice.bill_pk}")
         except Bills.DoesNotExist:
+            logger.error(f"[SendBill] Invoice not found: bill_pk={bill_pk}")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Invoice not found'
@@ -204,7 +220,9 @@ def send_bill(request):
         # Get supplier
         try:
             supplier = Contacts.objects.get(contact_pk=supplier_pk)
+            logger.info(f"[SendBill] Found supplier: contact_pk={supplier.contact_pk}, name={supplier.name}, xero_contact_id={supplier.xero_contact_id}, xero_instance_id={supplier.xero_instance_id if hasattr(supplier, 'xero_instance_id') else 'N/A'}")
         except Contacts.DoesNotExist:
+            logger.error(f"[SendBill] Supplier not found: contact_pk={supplier_pk}")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Supplier not found'
@@ -248,11 +266,22 @@ def send_bill(request):
             project = None
             xero_instance = XeroInstances.objects.first()
             if not xero_instance:
+                logger.error(f"[SendBill] No Xero Instance available for Stocktake")
                 return JsonResponse({
                     'status': 'error',
                     'message': 'No Xero Instance available for Stocktake'
                 }, status=400)
             instance_pk = xero_instance.xero_instance_pk
+            logger.info(f"[SendBill] Stocktake: Using Xero instance pk={instance_pk}, name={xero_instance.xero_name}")
+            
+            # CRITICAL: Check if supplier belongs to this Xero instance
+            supplier_xero_instance = getattr(supplier, 'xero_instance', None)
+            if supplier_xero_instance:
+                logger.info(f"[SendBill] Supplier's xero_instance: pk={supplier_xero_instance.xero_instance_pk}, name={supplier_xero_instance.xero_name}")
+                if supplier_xero_instance.xero_instance_pk != instance_pk:
+                    logger.warning(f"[SendBill] MISMATCH! Supplier xero_instance ({supplier_xero_instance.xero_instance_pk}) != stocktake xero_instance ({instance_pk})")
+            else:
+                logger.info(f"[SendBill] Supplier has no xero_instance FK set")
         else:
             return JsonResponse({
                 'status': 'error',
@@ -265,10 +294,13 @@ def send_bill(request):
         # Check if allocations exist - this determines the workflow
         if allocations.exists():
             # Bills - Direct workflow: Validate allocations and send to Xero
-            logger.info(f"Bills - Direct: Validating allocations and sending to Xero for invoice {bill_pk}")
+            logger.info(f"[SendBill] Bills - Direct: Validating allocations and sending to Xero for invoice {bill_pk}")
+            logger.info(f"[SendBill] Allocations count: {allocations.count()}")
             
             # Check supplier has Xero contact ID (required for Xero API)
+            logger.info(f"[SendBill] Checking supplier xero_contact_id: '{supplier.xero_contact_id}'")
             if not supplier.xero_contact_id:
+                logger.error(f"[SendBill] Supplier {supplier.contact_pk} ({supplier.name}) has no xero_contact_id!")
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Supplier does not have a Xero Contact ID. Please sync contacts first.'
@@ -332,10 +364,15 @@ def send_bill(request):
             
             # Check response
             if response.status_code != 200:
+                logger.error(f"[SendBill] Xero API returned status {response.status_code}")
+                logger.error(f"[SendBill] Xero API raw response: {response.text}")
+                logger.error(f"[SendBill] Payload that was sent: {json.dumps(invoice_payload, indent=2)}")
+                logger.error(f"[SendBill] Supplier details: contact_pk={supplier.contact_pk}, name={supplier.name}, xero_contact_id={supplier.xero_contact_id}")
+                logger.error(f"[SendBill] Xero instance used: pk={instance_pk}, tenant_id={tenant_id}")
                 error_msg = parse_xero_validation_errors(response)
                 if not error_msg:
                     error_msg = f'Xero API error: {response.status_code} - {response.text}'
-                logger.error(f"Xero API error: {error_msg}")
+                logger.error(f"[SendBill] Final error message: {error_msg}")
                 return JsonResponse({
                     'status': 'error',
                     'message': error_msg
