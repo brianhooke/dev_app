@@ -1090,6 +1090,15 @@ $(document).ready(function() {
         var billPk = button.attr('data-bill-pk');
         
         var xeroInstanceOrProject = row.find('.xero-project-select').val();
+        
+        // For stocktake bills, use the selected Xero instance radio button value
+        if (xeroInstanceOrProject && xeroInstanceOrProject.startsWith('stocktake_')) {
+            var selectedXeroRadio = row.find('.stocktake-xero-radio:checked');
+            if (selectedXeroRadio.length && selectedXeroRadio.val()) {
+                xeroInstanceOrProject = 'stocktake_' + selectedXeroRadio.val();
+            }
+        }
+        
         // Check both regular supplier select AND stocktake supplier dropdown
         var regularSupplierPk = row.find('.supplier-select').val();
         var stocktakeSupplierPk = row.find('.stocktake-supplier-dropdown').val();
