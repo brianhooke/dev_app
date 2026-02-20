@@ -1118,8 +1118,9 @@ $(document).ready(function() {
         console.log('[SendBill] currency:', currency);
         
         // Log supplier details from cached data if available
-        if (isStocktake && window.billsInboxData && window.billsInboxData.suppliers) {
-            var supplierData = window.billsInboxData.suppliers.find(function(s) { 
+        var supplierData = null;
+        if (window.billsInboxData && window.billsInboxData.suppliers) {
+            supplierData = window.billsInboxData.suppliers.find(function(s) { 
                 return s.contact_pk == supplierPk; 
             });
             if (supplierData) {
@@ -1140,6 +1141,13 @@ $(document).ready(function() {
             console.log('[SendBill] Stocktake selected Xero instance radio value:', selectedXeroRadio.val());
         }
         // === END DEBUG LOGGING ===
+        
+        // Validate supplier has xero_contact_id before sending
+        if (supplierData && !supplierData.xero_contact_id) {
+            alert('Error: Supplier "' + supplierData.name + '" does not have a Xero Contact ID. Please sync contacts from Xero first.');
+            console.error('[SendBill] Supplier missing xero_contact_id:', supplierData);
+            return;
+        }
         
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
         
@@ -1677,11 +1685,12 @@ $(document).ready(function() {
                 // Store data globally
                 window.billsDirectData = response;
                 
-                // Filter for Direct bills (status = 0, xero_instance set, no project)
+                // Filter for Direct bills (status = 0, xero_instance set, no project, NOT stocktake)
                 var directBills = response.bills.filter(function(bill) {
                     return bill.bill_status === 0 && 
                            bill.xero_instance_id !== null && 
-                           bill.project_pk === null;
+                           bill.project_pk === null &&
+                           !bill.is_stocktake;
                 });
                 
                 // Populate table
