@@ -896,121 +896,127 @@ Tabs:
 </div>
 
 <script>
-// Comprehensive debug function for stocktake allocations table
-window.debugStocktakeAllocations = function() {
-    var results = {};
-    
-    // Helper to get all computed styles that matter
-    function getStyles(el, name) {
-        if (!el || !el.length) return { error: 'NOT FOUND' };
-        var computed = window.getComputedStyle(el[0]);
-        return {
-            element: el[0],
-            width: computed.width,
-            minWidth: computed.minWidth,
-            maxWidth: computed.maxWidth,
-            padding: computed.padding,
-            margin: computed.margin,
-            display: computed.display,
-            position: computed.position,
-            overflow: computed.overflow,
-            overflowX: computed.overflowX,
-            overflowY: computed.overflowY,
-            boxSizing: computed.boxSizing,
-            tableLayout: computed.tableLayout,
-            flexGrow: computed.flexGrow,
-            flexShrink: computed.flexShrink,
-            flexBasis: computed.flexBasis
-        };
-    }
-    
-    // Get all parent elements up the chain
-    var allocTbody = $('#stocktakeAllocAllocationsTableBody');
-    var allocTable = $('#stocktakeAllocAllocationsTable');
-    var tableWrapper = allocTable.parent(); // div wrapping table
-    var allocSection = $('#stocktakeAllocAllocationsSection');
-    var sectionDivider = $('.stocktakeAlloc-section-divider');
-    var leftPanel = $('.stocktakeAlloc-left-panel');
-    var container = $('.stocktakeAlloc-container');
-    
-    console.log('=== COMPREHENSIVE DEBUG: Stocktake Allocations ===');
-    
-    console.log('\n1. CONTAINER (.stocktakeAlloc-container):');
-    results.container = getStyles(container, 'container');
-    console.log(results.container);
-    
-    console.log('\n2. LEFT PANEL (.stocktakeAlloc-left-panel):');
-    results.leftPanel = getStyles(leftPanel, 'leftPanel');
-    console.log(results.leftPanel);
-    
-    console.log('\n3. SECTION DIVIDER (.stocktakeAlloc-section-divider):');
-    results.sectionDivider = getStyles(sectionDivider, 'sectionDivider');
-    console.log(results.sectionDivider);
-    
-    console.log('\n4. ALLOCATIONS SECTION (#stocktakeAllocAllocationsSection):');
-    results.allocSection = getStyles(allocSection, 'allocSection');
-    console.log(results.allocSection);
-    
-    console.log('\n5. TABLE WRAPPER (div around table):');
-    results.tableWrapper = getStyles(tableWrapper, 'tableWrapper');
-    console.log(results.tableWrapper);
-    
-    console.log('\n6. ALLOCATIONS TABLE (#stocktakeAllocAllocationsTable):');
-    results.allocTable = getStyles(allocTable, 'allocTable');
-    console.log(results.allocTable);
-    
-    console.log('\n7. THEAD:');
-    var thead = allocTable.find('thead');
-    results.thead = getStyles(thead, 'thead');
-    console.log(results.thead);
-    
-    console.log('\n8. THEAD TR:');
-    var theadTr = thead.find('tr');
-    results.theadTr = getStyles(theadTr, 'theadTr');
-    console.log(results.theadTr);
-    
-    console.log('\n9. TBODY (#stocktakeAllocAllocationsTableBody):');
-    results.tbody = getStyles(allocTbody, 'tbody');
-    console.log(results.tbody);
-    
-    console.log('\n10. FIRST TBODY TR:');
-    var tbodyTr = allocTbody.find('tr').first();
-    results.tbodyTr = getStyles(tbodyTr, 'tbodyTr');
-    console.log(results.tbodyTr);
-    
-    console.log('\n11. FIRST TD in first row:');
-    var firstTd = tbodyTr.find('td').first();
-    results.firstTd = getStyles(firstTd, 'firstTd');
-    console.log(results.firstTd);
-    
-    // Check colgroup
-    console.log('\n12. COLGROUP COLS:');
-    var cols = allocTable.find('colgroup col');
-    results.cols = [];
-    cols.each(function(i) {
-        var colStyle = window.getComputedStyle(this);
-        results.cols.push({ index: i, width: colStyle.width });
-        console.log('  col ' + i + ': ' + colStyle.width);
-    });
-    
-    // Check for any CSS that might be overriding
-    console.log('\n13. INLINE STYLES:');
-    console.log('  tbody inline:', allocTbody.attr('style'));
-    console.log('  table inline:', allocTable.attr('style'));
-    console.log('  allocSection inline:', allocSection.attr('style'));
-    
-    // Check actual bounding rects
-    console.log('\n14. BOUNDING CLIENT RECTS:');
-    if (allocTable.length) console.log('  table:', allocTable[0].getBoundingClientRect());
-    if (allocTbody.length) console.log('  tbody:', allocTbody[0].getBoundingClientRect());
-    if (theadTr.length) console.log('  thead tr:', theadTr[0].getBoundingClientRect());
-    if (tbodyTr.length) console.log('  tbody tr:', tbodyTr[0].getBoundingClientRect());
-    
-    return results;
-};
-
 (function() {
     'use strict';
+    
+    // Status constants
+    var SNAP_STATUS = {
+        DRAFT: 0,
+        FINALISED: 1,
+        SENT: 2
+    };
+    
+    var BILL_STATUS = {
+        PENDING: 0,
+        APPROVED: 1,
+        SENT: 2
+    };
+    
+    // AJAX wrapper for standardized API calls
+    // Usage: stocktakeAjax(url, 'GET', null, onSuccess, onError)
+    //        stocktakeAjax(url, 'POST', {data}, onSuccess, onError)
+    function stocktakeAjax(url, method, data, onSuccess, onError) {
+        var config = {
+            url: url,
+            type: method
+        };
+        
+        if (method === 'POST') {
+            config.headers = { 'X-CSRFToken': Utils.getCSRFToken() };
+            if (data) {
+                config.contentType = 'application/json';
+                config.data = JSON.stringify(data);
+            }
+        } else if (data) {
+            config.data = data;
+        }
+        
+        if (onSuccess) config.success = onSuccess;
+        if (onError) {
+            config.error = onError;
+        } else {
+            config.error = function(xhr, status, error) {
+                console.error('[Stocktake] AJAX error:', url, error);
+            };
+        }
+        
+        return $.ajax(config);
+    }
+    
+    // Reusable collapsible group header builder
+    // Options: { headerClass, indicatorClass, colspan, groupKey, groupLabel, showDragHandle, onCollapse, onExpand }
+    function createCollapsibleGroupHeader(options) {
+        var headerRow = $('<tr>').addClass(options.headerClass || 'collapsible-group-header');
+        headerRow.attr('data-' + (options.groupKey || 'group'), options.groupValue);
+        headerRow.css({
+            'background': '#f8f9fa',
+            'cursor': 'pointer',
+            'font-size': '13px',
+            'font-weight': '600',
+            'line-height': '1',
+            'border-bottom': '1px solid #dee2e6'
+        });
+        
+        var headerCell = $('<td>').attr('colspan', options.colspan || 4).css('padding', '6px');
+        
+        // Collapse indicator
+        var indicator = $('<span>').addClass(options.indicatorClass || 'collapse-indicator')
+            .css({
+                'display': 'inline-block',
+                'width': '14px',
+                'font-size': '10px',
+                'color': '#6c757d',
+                'transform': 'rotate(90deg)',
+                'transition': 'transform 0.2s'
+            }).text('▶');
+        headerCell.append(indicator);
+        
+        // Optional drag handle
+        if (options.showDragHandle !== false) {
+            var dragHandle = $('<span>').css({
+                'color': '#6c757d',
+                'cursor': 'grab',
+                'margin': '0 6px'
+            }).text('⋮⋮');
+            headerCell.append(dragHandle);
+        }
+        
+        // Group label
+        headerCell.append($('<span>').text(options.groupLabel));
+        headerRow.append(headerCell);
+        
+        // Click handler for collapse/expand
+        headerRow.on('click', function() {
+            var $header = $(this);
+            var $indicator = $header.find('.' + (options.indicatorClass || 'collapse-indicator'));
+            var isExpanded = $indicator.css('transform').indexOf('90') > -1 || 
+                             $indicator.css('transform') === 'matrix(0, 1, -1, 0, 0, 0)';
+            
+            if (isExpanded) {
+                // Collapse
+                $indicator.css('transform', 'rotate(0deg)');
+                if (options.onCollapse) options.onCollapse($header);
+            } else {
+                // Expand
+                $indicator.css('transform', 'rotate(90deg)');
+                if (options.onExpand) options.onExpand($header);
+            }
+        });
+        
+        return headerRow;
+    }
+    
+    // Helper to extract error message from XHR response
+    function getErrorMessage(xhr, defaultMsg) {
+        if (xhr.responseJSON && xhr.responseJSON.message) {
+            return xhr.responseJSON.message;
+        }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.message) return resp.message;
+        } catch(e) {}
+        return defaultMsg || 'An error occurred';
+    }
     
     var stocktakeInitialized = false;
     
@@ -1019,31 +1025,24 @@ window.debugStocktakeAllocations = function() {
         var tbody = $('#stocktakeAllocAllocationsTableBody');
         tbody.empty();
         
-        $.ajax({
-            url: '/core/get_stocktake_allocations/' + billPk + '/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success') {
-                    var allocations = response.allocations || [];
-                    if (allocations.length === 0 && window.stocktakeFilterMode !== 'approved') {
-                        addNewStocktakeAllocationRow();
-                    } else if (allocations.length > 0) {
-                        allocations.forEach(function(alloc) {
-                            var row = createStocktakeAllocationRow(alloc);
-                            tbody.append(row);
-                        });
-                    }
-                    updateStocktakeStillToAllocate();
-                    // Show Add Row button only for unallocated bills (not approved)
-                    if (window.stocktakeFilterMode !== 'approved') {
-                        $('#stocktakeAllocAddAllocationBtn').show();
-                    } else {
-                        $('#stocktakeAllocAddAllocationBtn').hide();
-                    }
+        stocktakeAjax('/core/get_stocktake_allocations/' + billPk + '/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                var allocations = response.allocations || [];
+                if (allocations.length === 0 && window.stocktakeFilterMode !== 'approved') {
+                    addNewStocktakeAllocationRow();
+                } else if (allocations.length > 0) {
+                    allocations.forEach(function(alloc) {
+                        var row = createStocktakeAllocationRow(alloc);
+                        tbody.append(row);
+                    });
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake] Failed to load allocations:', error);
+                updateStocktakeStillToAllocate();
+                // Show Add Row button only for unallocated bills (not approved)
+                if (window.stocktakeFilterMode !== 'approved') {
+                    $('#stocktakeAllocAddAllocationBtn').show();
+                } else {
+                    $('#stocktakeAllocAddAllocationBtn').hide();
+                }
             }
         });
     }
@@ -1103,7 +1102,7 @@ window.debugStocktakeAllocations = function() {
                     var actionTd = $('<td>').addClass('col-action');
                     if (window.stocktakeFilterMode === 'approved') {
                         // Show approval date
-                        var approvalDate = bill.updated_at ? formatStocktakeDate(bill.updated_at) : '-';
+                        var approvalDate = bill.updated_at ? Utils.formatDateDMY(bill.updated_at) : '-';
                         actionTd.text(approvalDate).css('font-size', '11px');
                     } else {
                         var approveBtn = $('<button>')
@@ -1124,8 +1123,8 @@ window.debugStocktakeAllocations = function() {
                     // Read net/gst from row data attributes (set in renderRow)
                     window.currentSelectedBill = {
                         bill_pk: pk,
-                        total_net: parseFloat(row.attr('data-total-net')) || 0,
-                        total_gst: parseFloat(row.attr('data-total-gst')) || 0
+                        total_net: Utils.parseFloatSafe(row.attr('data-total-net')),
+                        total_gst: Utils.parseFloatSafe(row.attr('data-total-gst'))
                     };
                     cfg.data.currentItem = window.currentSelectedBill;
                     AllocationsManager.setEditMode('stocktakeAlloc', true);
@@ -1184,15 +1183,10 @@ window.debugStocktakeAllocations = function() {
             callback(stocktakeData.costingsByType[projectType]);
             return;
         }
-        $.ajax({
-            url: '/core/get_categories_and_items/',
-            type: 'GET',
-            data: { project_type: projectType },
-            success: function(response) {
-                if (response.status === 'success') {
-                    stocktakeData.costingsByType[projectType] = response.items || [];
-                    callback(stocktakeData.costingsByType[projectType]);
-                }
+        stocktakeAjax('/core/get_categories_and_items/', 'GET', { project_type: projectType }, function(response) {
+            if (response.status === 'success') {
+                stocktakeData.costingsByType[projectType] = response.items || [];
+                callback(stocktakeData.costingsByType[projectType]);
             }
         });
     }
@@ -1332,8 +1326,8 @@ window.debugStocktakeAllocations = function() {
     // Calculate Amount and GST
     function calculateAmountAndGst(row) {
         var cls = 'stocktake-alloc';
-        var qty = parseFloat(row.find('.' + cls + '-qty-input').val()) || 0;
-        var rate = parseFloat(row.find('.' + cls + '-rate-input').val()) || 0;
+        var qty = Utils.parseFloatSafe(row.find('.' + cls + '-qty-input').val());
+        var rate = Utils.parseFloatSafe(row.find('.' + cls + '-rate-input').val());
         var amount = qty * rate;
         row.find('.' + cls + '-amount-input').val(amount.toFixed(2));
         
@@ -1357,23 +1351,16 @@ window.debugStocktakeAllocations = function() {
                 project_type: row.find('.' + cls + '-project-type-select').val() || null,
                 item_pk: row.find('.' + cls + '-item-select').val() || null,
                 unit: row.find('.' + cls + '-unit-input').val() || '',
-                qty: parseFloat(row.find('.' + cls + '-qty-input').val()) || 0,
-                rate: parseFloat(row.find('.' + cls + '-rate-input').val()) || 0,
-                amount: parseFloat(row.find('.' + cls + '-amount-input').val()) || 0,
-                gst_amount: parseFloat(row.find('.' + cls + '-gst-input').val()) || 0,
+                qty: Utils.parseFloatSafe(row.find('.' + cls + '-qty-input').val()),
+                rate: Utils.parseFloatSafe(row.find('.' + cls + '-rate-input').val()),
+                amount: Utils.parseFloatSafe(row.find('.' + cls + '-amount-input').val()),
+                gst_amount: Utils.parseFloatSafe(row.find('.' + cls + '-gst-input').val()),
                 notes: row.find('.' + cls + '-notes-input').val() || ''
             };
             
-            $.ajax({
-                url: '/core/update_stocktake_allocation/' + pk + '/',
-                type: 'POST',
-                contentType: 'application/json',
-                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response.status === 'success') {
-                        updateStocktakeStillToAllocate();
-                    }
+            stocktakeAjax('/core/update_stocktake_allocation/' + pk + '/', 'POST', data, function(response) {
+                if (response.status === 'success') {
+                    updateStocktakeStillToAllocate();
                 }
             });
         }, 500);
@@ -1383,22 +1370,15 @@ window.debugStocktakeAllocations = function() {
     function addNewStocktakeAllocationRow() {
         if (!window.currentSelectedBill) return;
         
-        $.ajax({
-            url: '/core/create_stocktake_allocation/',
-            type: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            data: JSON.stringify({ bill_pk: window.currentSelectedBill.bill_pk }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    var row = createStocktakeAllocationRow({
-                        allocation_pk: response.allocation_pk,
-                        project_type: null, item_pk: null, unit: '',
-                        qty: null, rate: null, amount: 0, gst_amount: 0, notes: ''
-                    });
-                    $('#stocktakeAllocAllocationsTableBody').append(row);
-                    updateStocktakeStillToAllocate();
-                }
+        stocktakeAjax('/core/create_stocktake_allocation/', 'POST', { bill_pk: window.currentSelectedBill.bill_pk }, function(response) {
+            if (response.status === 'success') {
+                var row = createStocktakeAllocationRow({
+                    allocation_pk: response.allocation_pk,
+                    project_type: null, item_pk: null, unit: '',
+                    qty: null, rate: null, amount: 0, gst_amount: 0, notes: ''
+                });
+                $('#stocktakeAllocAllocationsTableBody').append(row);
+                updateStocktakeStillToAllocate();
             }
         });
     }
@@ -1408,17 +1388,12 @@ window.debugStocktakeAllocations = function() {
         var pk = row.attr('data-allocation-pk');
         if (!pk) { row.remove(); return; }
         
-        $.ajax({
-            url: '/core/delete_stocktake_allocation/' + pk + '/',
-            type: 'POST',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            success: function(response) {
-                if (response.status === 'success') {
-                    row.fadeOut(200, function() { 
-                        row.remove(); 
-                        updateStocktakeStillToAllocate();
-                    });
-                }
+        stocktakeAjax('/core/delete_stocktake_allocation/' + pk + '/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                row.fadeOut(200, function() { 
+                    row.remove(); 
+                    updateStocktakeStillToAllocate();
+                });
             }
         });
     }
@@ -1430,8 +1405,8 @@ window.debugStocktakeAllocations = function() {
         var cls = 'stocktake-alloc';
         var totalNet = 0, totalGst = 0;
         $('#stocktakeAllocAllocationsTableBody tr').each(function() {
-            totalNet += parseFloat($(this).find('.' + cls + '-amount-input').val()) || 0;
-            totalGst += parseFloat($(this).find('.' + cls + '-gst-input').val()) || 0;
+            totalNet += Utils.parseFloatSafe($(this).find('.' + cls + '-amount-input').val());
+            totalGst += Utils.parseFloatSafe($(this).find('.' + cls + '-gst-input').val());
         });
         
         var remainingNet = window.currentSelectedBill.total_net - totalNet;
@@ -1464,7 +1439,7 @@ window.debugStocktakeAllocations = function() {
         var cls = 'stocktake-alloc';
         $('#stocktakeAllocAllocationsTableBody tr').each(function() {
             var itemVal = $(this).find('.' + cls + '-item-select').val();
-            var amountVal = parseFloat($(this).find('.' + cls + '-amount-input').val()) || 0;
+            var amountVal = Utils.parseFloatSafe($(this).find('.' + cls + '-amount-input').val());
             if (amountVal > 0 && !itemVal) { allItemsSelected = false; return false; }
         });
         
@@ -1486,51 +1461,44 @@ window.debugStocktakeAllocations = function() {
         var originalText = btn.text();
         btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
         
-        $.ajax({
-            url: '/core/approve_stocktake_bill/' + billPk + '/',
-            type: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Update bill_status in frontend data so it shows in "approved" filter
-                    if (window.stocktakeData && window.stocktakeData.bills) {
-                        var bill = window.stocktakeData.bills.find(function(b) { 
-                            return b.bill_pk == billPk; 
-                        });
-                        if (bill) {
-                            bill.bill_status = 2; // Approved status
-                        }
+        stocktakeAjax('/core/approve_stocktake_bill/' + billPk + '/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                // Update bill_status in frontend data so it shows in "approved" filter
+                if (window.stocktakeData && window.stocktakeData.bills) {
+                    var bill = window.stocktakeData.bills.find(function(b) { 
+                        return b.bill_pk == billPk; 
+                    });
+                    if (bill) {
+                        bill.bill_status = 2; // Approved status
                     }
-                    
-                    btn.html('<i class="fas fa-check"></i>').addClass('btn-success');
-                    setTimeout(function() {
-                        row.fadeOut(300, function() {
-                            $(this).remove(); // Use $(this) to ensure correct element
-                            $('#stocktakeAllocAllocationsTableBody').empty();
-                            window.currentSelectedBill = null;
-                            window.currentSelectedBillPk = null;
-                            
-                            // Recalculate footer totals after row is fully removed from DOM
-                            setTimeout(function() {
-                                AllocationsManager.recalculateFooterTotals('stocktakeAlloc');
-                            }, 10);
-                            
-                            var firstRow = $('#stocktakeAllocMainTableBody tr').first();
-                            if (firstRow.length && firstRow.attr('data-pk')) {
-                                AllocationsManager.selectRow('stocktakeAlloc', firstRow);
-                            }
-                        });
-                    }, 500);
-                } else {
-                    btn.prop('disabled', false).text(originalText).addClass('btn-success');
-                    alert('Failed to approve: ' + response.message);
                 }
-            },
-            error: function() {
+                
+                btn.html('<i class="fas fa-check"></i>').addClass('btn-success');
+                setTimeout(function() {
+                    row.fadeOut(300, function() {
+                        $(this).remove(); // Use $(this) to ensure correct element
+                        $('#stocktakeAllocAllocationsTableBody').empty();
+                        window.currentSelectedBill = null;
+                        window.currentSelectedBillPk = null;
+                        
+                        // Recalculate footer totals after row is fully removed from DOM
+                        setTimeout(function() {
+                            AllocationsManager.recalculateFooterTotals('stocktakeAlloc');
+                        }, 10);
+                        
+                        var firstRow = $('#stocktakeAllocMainTableBody tr').first();
+                        if (firstRow.length && firstRow.attr('data-pk')) {
+                            AllocationsManager.selectRow('stocktakeAlloc', firstRow);
+                        }
+                    });
+                }, 500);
+            } else {
                 btn.prop('disabled', false).text(originalText).addClass('btn-success');
-                alert('Failed to approve bill. Please try again.');
+                alert('Failed to approve: ' + response.message);
             }
+        }, function() {
+            btn.prop('disabled', false).text(originalText).addClass('btn-success');
+            alert('Failed to approve bill. Please try again.');
         });
     });
     
@@ -1546,49 +1514,41 @@ window.debugStocktakeAllocations = function() {
     window.loadStocktakeBills = function() {
         if (!$('#stocktakeAllocMainTableBody').length) return;
         
-        $.ajax({
-            url: '{% url "core:get_bills_list" %}',
-            type: 'GET',
-            success: function(response) {
-                window.stocktakeData = response;
-                
-                var stocktakeBills;
-                if (window.stocktakeFilterMode === 'approved') {
-                    // Show approved/allocated bills (status 1, 2, 3, or 4)
-                    stocktakeBills = response.bills.filter(function(bill) {
-                        return bill.is_stocktake === true && [1, 2, 3, 4].indexOf(bill.bill_status) !== -1;
-                    });
-                } else {
-                    // Default: show unallocated bills (status 0)
-                    stocktakeBills = response.bills.filter(function(bill) {
-                        return bill.is_stocktake === true && bill.bill_status === 0;
-                    });
-                }
-                
-                stocktakeBills.forEach(function(bill) {
-                    if (bill.contact_pk && response.suppliers) {
-                        var supplier = response.suppliers.find(function(s) { return s.contact_pk === bill.contact_pk; });
-                        if (supplier) bill.supplier_name = supplier.name;
-                    }
+        stocktakeAjax('{% url "core:get_bills_list" %}', 'GET', null, function(response) {
+            window.stocktakeData = response;
+            
+            var stocktakeBills;
+            if (window.stocktakeFilterMode === 'approved') {
+                // Show approved/allocated bills (status 1, 2, 3, or 4)
+                stocktakeBills = response.bills.filter(function(bill) {
+                    return bill.is_stocktake === true && [1, 2, 3, 4].indexOf(bill.bill_status) !== -1;
                 });
-                
-                AllocationsManager.populateMainTable('stocktakeAlloc', stocktakeBills);
-                Utils.addTruncationTooltips('stocktakeAllocMainTable');
-                
-                // Initialize sortable columns
-                if (typeof Utils !== 'undefined' && Utils.initSortableTable) {
-                    Utils.initSortableTable('stocktakeAllocMainTable');
+            } else {
+                // Default: show unallocated bills (status 0)
+                stocktakeBills = response.bills.filter(function(bill) {
+                    return bill.is_stocktake === true && bill.bill_status === BILL_STATUS.PENDING;
+                });
+            }
+            
+            stocktakeBills.forEach(function(bill) {
+                if (bill.contact_pk && response.suppliers) {
+                    var supplier = response.suppliers.find(function(s) { return s.contact_pk === bill.contact_pk; });
+                    if (supplier) bill.supplier_name = supplier.name;
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake] Failed to load bills:', error);
+            });
+            
+            AllocationsManager.populateMainTable('stocktakeAlloc', stocktakeBills);
+            Utils.addTruncationTooltips('stocktakeAllocMainTable');
+            
+            // Initialize sortable columns
+            if (typeof Utils !== 'undefined' && Utils.initSortableTable) {
+                Utils.initSortableTable('stocktakeAllocMainTable');
             }
         });
     };
     
     // Initialize Stocktake Section (called when user clicks Stocktake nav link)
     window.initStocktakeSection = function() {
-        console.log('[Stocktake] Initializing stocktake section');
         initAllocationsManager();
         
         // Add toggle switch above main table (only once)
@@ -1634,7 +1594,6 @@ window.debugStocktakeAllocations = function() {
             window.loadStocktakeBills();
         });
         initSetupTab();
-        console.log('[Stocktake] Section initialized');
     };
     
     // Update table header for pending/approved mode
@@ -1647,16 +1606,7 @@ window.debugStocktakeAllocations = function() {
         }
     }
     
-    // Format date for stocktake display (dd-mmm-yy)
-    function formatStocktakeDate(dateString) {
-        if (!dateString) return '-';
-        var date = new Date(dateString);
-        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        var day = date.getDate();
-        var month = months[date.getMonth()];
-        var year = String(date.getFullYear()).slice(-2);
-        return day + '-' + month + '-' + year;
-    }
+    // formatStocktakeDate removed - use Utils.formatDateDMY() instead
     
     // Toggle switch click handler
     $(document).on('click', '#stocktakeToggleSwitch, .stocktake-toggle-label', function() {
@@ -1741,19 +1691,14 @@ window.debugStocktakeAllocations = function() {
     
     // Load Xero instances for stocktake setup
     function loadXeroInstances() {
-        $.ajax({
-            url: '/core/get_xero_instances_list/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success' || response.xero_instances) {
-                    setupData.xeroInstances = response.xero_instances || [];
-                    renderXeroInstances();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake Setup] Failed to load Xero instances:', error);
-                $('#stocktakeXeroInstancesBody').html('<tr><td colspan="2" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
+        stocktakeAjax('/core/get_xero_instances_list/', 'GET', null, function(response) {
+            if (response.status === 'success' || response.xero_instances) {
+                setupData.xeroInstances = response.xero_instances || [];
+                renderXeroInstances();
             }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake Setup] Failed to load Xero instances:', error);
+            $('#stocktakeXeroInstancesBody').html('<tr><td colspan="2" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
         });
     }
     
@@ -1793,30 +1738,22 @@ window.debugStocktakeAllocations = function() {
     
     // Toggle Xero instance stocktake inclusion
     function toggleXeroInstanceStocktake(xeroInstancePk, included, row) {
-        $.ajax({
-            url: '/core/toggle_xero_instance_stocktake/',
-            type: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            data: JSON.stringify({
-                xero_instance_pk: xeroInstancePk,
-                included: included
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    row.removeClass('stocktake-included stocktake-excluded');
-                    row.addClass(included ? 'stocktake-included' : 'stocktake-excluded');
-                } else {
-                    console.error('[Stocktake] Toggle failed:', response.message);
-                    // Revert checkbox
-                    row.find('input[type="checkbox"]').prop('checked', !included);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake] Toggle error:', error);
+        stocktakeAjax('/core/toggle_xero_instance_stocktake/', 'POST', {
+            xero_instance_pk: xeroInstancePk,
+            included: included
+        }, function(response) {
+            if (response.status === 'success') {
+                row.removeClass('stocktake-included stocktake-excluded');
+                row.addClass(included ? 'stocktake-included' : 'stocktake-excluded');
+            } else {
+                console.error('[Stocktake] Toggle failed:', response.message);
                 // Revert checkbox
                 row.find('input[type="checkbox"]').prop('checked', !included);
             }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake] Toggle error:', error);
+            // Revert checkbox
+            row.find('input[type="checkbox"]').prop('checked', !included);
         });
     }
     
@@ -1826,21 +1763,16 @@ window.debugStocktakeAllocations = function() {
     }
     
     function loadProjectTypes(callback) {
-        $.ajax({
-            url: '/core/get_project_types/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success' || response.project_types) {
-                    setupData.projectTypes = response.project_types || response;
-                    renderProjectTypes();
-                    if (callback) callback();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake Setup] Failed to load project types:', error);
-                $('#stocktakeProjectTypesBody').html('<tr><td colspan="2" class="text-danger text-center py-3">Failed to load</td></tr>');
+        stocktakeAjax('/core/get_project_types/', 'GET', null, function(response) {
+            if (response.status === 'success' || response.project_types) {
+                setupData.projectTypes = response.project_types || response;
+                renderProjectTypes();
                 if (callback) callback();
             }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake Setup] Failed to load project types:', error);
+            $('#stocktakeProjectTypesBody').html('<tr><td colspan="2" class="text-danger text-center py-3">Failed to load</td></tr>');
+            if (callback) callback();
         });
     }
     
@@ -1904,23 +1836,17 @@ window.debugStocktakeAllocations = function() {
         $('#stocktakeCostingsSubtitle').text(projectType);
         $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-muted text-center py-3">Loading...</td></tr>');
         
-        $.ajax({
-            url: '/core/get_categories_and_items/',
-            type: 'GET',
-            data: { project_type: projectType },
-            success: function(response) {
-                if (response.status === 'success') {
-                    setupData.categories = response.categories || [];
-                    setupData.costings = response.items || [];
-                    renderCostingsTable();
-                } else {
-                    $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake Setup] Failed to load costings:', error);
+        stocktakeAjax('/core/get_categories_and_items/', 'GET', { project_type: projectType }, function(response) {
+            if (response.status === 'success') {
+                setupData.categories = response.categories || [];
+                setupData.costings = response.items || [];
+                renderCostingsTable();
+            } else {
                 $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
             }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake Setup] Failed to load costings:', error);
+            $('#stocktakeCostingsBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
         });
     }
     
@@ -2009,24 +1935,13 @@ window.debugStocktakeAllocations = function() {
     
     // Toggle stocktake inclusion via AJAX
     function toggleStocktakeInclusion(type, pk, included) {
-        $.ajax({
-            url: '/core/toggle_stocktake_inclusion/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                type: type,
-                pk: pk,
-                included: included
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    console.log('[Stocktake Setup] Updated ' + type + ' ' + pk + ' to ' + included);
-                } else {
-                    console.error('[Stocktake Setup] Failed to update:', response.message);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Stocktake Setup] Failed to toggle stocktake:', error);
+        stocktakeAjax('/core/toggle_stocktake_inclusion/', 'POST', {
+            type: type,
+            pk: pk,
+            included: included
+        }, function(response) {
+            if (response.status !== 'success') {
+                console.error('[Stocktake Setup] Failed to update:', response.message);
             }
         });
     }
@@ -2047,7 +1962,6 @@ window.debugStocktakeAllocations = function() {
     
     // Load all snap data
     function loadSnapData() {
-        console.log('[Snap] Loading data...');
         snapDataLoaded = true;
         
         loadStockLedger().catch(function(err) {
@@ -2067,24 +1981,17 @@ window.debugStocktakeAllocations = function() {
     
     // Load stock ledger
     function loadStockLedger() {
-        console.log('[Snap] Loading stock ledger...');
-        return $.ajax({
-            url: '/core/stocktake/ledger/',
-            type: 'GET',
-            success: function(response) {
-                console.log('[Snap] Stock ledger response:', response);
-                if (response.status === 'success') {
-                    snapData.ledger = response.ledger || [];
-                    renderStockLedger();
-                } else {
-                    console.error('[Snap] Ledger error:', response.message);
-                    $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Error loading</td></tr>');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to load stock ledger:', error);
-                $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Failed to load</td></tr>');
+        return stocktakeAjax('/core/stocktake/ledger/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                snapData.ledger = response.ledger || [];
+                renderStockLedger();
+            } else {
+                console.error('[Snap] Ledger error:', response.message);
+                $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Error loading</td></tr>');
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to load stock ledger:', error);
+            $('#stockLedgerBody').html('<tr><td colspan="5" class="text-danger text-center py-3">Failed to load</td></tr>');
         });
     }
     
@@ -2119,49 +2026,30 @@ window.debugStocktakeAllocations = function() {
         Object.keys(grouped).sort().forEach(function(projectType) {
             var group = grouped[projectType];
             
-            // Project Type header row (clickable to collapse) - styled like rates.html
-            var headerRow = $('<tr class="stock-ledger-group-header">');
-            headerRow.attr('data-project-type', projectType);
-            headerRow.css({
-                'background': '#f8f9fa',
-                'cursor': 'pointer',
-                'font-size': '13px',
-                'font-weight': '600',
-                'line-height': '1',
-                'border-bottom': '1px solid #dee2e6'
-            });
-            
-            var headerCell = $('<td colspan="4">');
-            headerCell.css({'padding': '6px'});
-            headerCell.html(
-                '<span class="ledger-collapse-indicator" style="display: inline-block; width: 14px; font-size: 10px; color: #6c757d; transform: rotate(90deg); transition: transform 0.2s;">▶</span>' +
-                '<span style="color: #6c757d; cursor: grab; margin: 0 6px;">⋮⋮</span>' +
-                '<span>' + projectType + '</span>'
-            );
-            headerRow.append(headerCell);
-            
-            // Total cell - hidden when expanded, shown when collapsed
-            var totalCell = $('<td>').css({'text-align': 'right', 'padding': '6px', 'font-weight': '600', 'color': '#6c757d'});
-            totalCell.addClass('group-total-cell').text('');  // Empty when expanded
-            headerRow.append(totalCell);
-            
-            // Toggle collapse on click
-            headerRow.on('click', function() {
-                var pt = $(this).data('project-type');
-                var itemRows = tbody.find('tr.stock-ledger-row[data-project-type="' + pt + '"]');
-                var indicator = $(this).find('.ledger-collapse-indicator');
-                var totalCell = $(this).find('.group-total-cell');
-                
-                if (itemRows.first().is(':visible')) {
-                    itemRows.hide();
-                    indicator.css('transform', 'rotate(0deg)');
-                    totalCell.text(formatCurrency(group.total));  // Show total when collapsed
-                } else {
-                    itemRows.show();
-                    indicator.css('transform', 'rotate(90deg)');
-                    totalCell.text('');  // Hide total when expanded
+            // Create collapsible header using reusable function
+            var headerRow = createCollapsibleGroupHeader({
+                headerClass: 'stock-ledger-group-header',
+                indicatorClass: 'ledger-collapse-indicator',
+                colspan: 4,
+                groupKey: 'project-type',
+                groupValue: projectType,
+                groupLabel: projectType,
+                onCollapse: function($header) {
+                    var pt = $header.data('project-type');
+                    tbody.find('tr.stock-ledger-row[data-project-type="' + pt + '"]').hide();
+                    $header.find('.group-total-cell').text(formatCurrency(group.total));
+                },
+                onExpand: function($header) {
+                    var pt = $header.data('project-type');
+                    tbody.find('tr.stock-ledger-row[data-project-type="' + pt + '"]').show();
+                    $header.find('.group-total-cell').text('');
                 }
             });
+            
+            // Add total cell - hidden when expanded, shown when collapsed
+            var totalCell = $('<td>').css({'text-align': 'right', 'padding': '6px', 'font-weight': '600', 'color': '#6c757d'});
+            totalCell.addClass('group-total-cell').text('');
+            headerRow.append(totalCell);
             
             tbody.append(headerRow);
             
@@ -2234,19 +2122,14 @@ window.debugStocktakeAllocations = function() {
         // Load item history
         $('#itemHistoryBody').html('<tr><td colspan="7" class="text-muted text-center py-4">Loading...</td></tr>');
         
-        $.ajax({
-            url: '/core/stocktake/item/' + itemPk + '/history/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success') {
-                    renderItemHistory(response);
-                } else {
-                    $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Error: ' + response.message + '</td></tr>');
-                }
-            },
-            error: function(xhr, status, error) {
-                $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Failed to load history</td></tr>');
+        stocktakeAjax('/core/stocktake/item/' + itemPk + '/history/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                renderItemHistory(response);
+            } else {
+                $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Error: ' + response.message + '</td></tr>');
             }
+        }, function(xhr, status, error) {
+            $('#itemHistoryBody').html('<tr><td colspan="7" class="text-danger text-center py-4">Failed to load history</td></tr>');
         });
     }
     
@@ -2337,33 +2220,26 @@ window.debugStocktakeAllocations = function() {
     
     // Load snap list
     function loadSnapList() {
-        console.log('[Snap] Loading snap list...');
-        return $.ajax({
-            url: '/core/stocktake/snaps/',
-            type: 'GET',
-            success: function(response) {
-                console.log('[Snap] Snap list response:', response);
-                if (response.status === 'success') {
-                    snapData.snaps = response.snaps || [];
-                    renderSnapList();
-                    // Load the first draft snap if available
-                    var draftSnap = snapData.snaps.find(function(s) { return s.status === 0; });
-                    if (draftSnap) {
-                        loadSnap(draftSnap.snap_pk);
-                    } else if (snapData.snaps.length > 0) {
-                        loadSnap(snapData.snaps[0].snap_pk);
-                    } else {
-                        renderEmptySnapDetail();
-                    }
+        return stocktakeAjax('/core/stocktake/snaps/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                snapData.snaps = response.snaps || [];
+                renderSnapList();
+                // Load the first draft snap if available
+                var draftSnap = snapData.snaps.find(function(s) { return s.status === SNAP_STATUS.DRAFT; });
+                if (draftSnap) {
+                    loadSnap(draftSnap.snap_pk);
+                } else if (snapData.snaps.length > 0) {
+                    loadSnap(snapData.snaps[0].snap_pk);
                 } else {
-                    console.error('[Snap] Snap list error:', response.message);
-                    $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Error loading</td></tr>');
+                    renderEmptySnapDetail();
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to load snap list:', error);
-                $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
+            } else {
+                console.error('[Snap] Snap list error:', response.message);
+                $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Error loading</td></tr>');
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to load snap list:', error);
+            $('#snapHistoryBody').html('<tr><td colspan="3" class="text-danger text-center py-3">Failed to load</td></tr>');
         });
     }
     
@@ -2400,25 +2276,18 @@ window.debugStocktakeAllocations = function() {
     // Get status badge HTML
     function getStatusBadge(status) {
         switch(status) {
-            case 0: return '<span class="badge bg-warning text-dark">Draft</span>';
-            case 1: return '<span class="badge bg-info">Finalised</span>';
-            case 2: return '<span class="badge bg-success">Sent</span>';
+            case SNAP_STATUS.DRAFT: return '<span class="badge bg-warning text-dark">Draft</span>';
+            case SNAP_STATUS.FINALISED: return '<span class="badge bg-info">Finalised</span>';
+            case SNAP_STATUS.SENT: return '<span class="badge bg-success">Sent</span>';
             default: return '<span class="badge bg-secondary">Unknown</span>';
         }
     }
     
     // Load projects for allocation dropdown
     function loadProjects() {
-        return $.ajax({
-            url: '/core/stocktake/projects/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success') {
-                    snapData.projects = response.projects;
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to load projects:', error);
+        return stocktakeAjax('/core/stocktake/projects/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                snapData.projects = response.projects;
             }
         });
     }
@@ -2430,20 +2299,13 @@ window.debugStocktakeAllocations = function() {
         $('#openingBalancesView').hide();
         $('#snapDetailsView').css('display', 'flex');
         
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapPk + '/',
-            type: 'GET',
-            success: function(response) {
-                if (response.status === 'success') {
-                    snapData.currentSnap = response.snap;
-                    renderSnapDetail();
-                    // Update selected row in history
-                    $('.snap-history-row').removeClass('selected');
-                    $('.snap-history-row[data-snap-pk="' + snapPk + '"]').addClass('selected');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to load snap:', error);
+        stocktakeAjax('/core/stocktake/snaps/' + snapPk + '/', 'GET', null, function(response) {
+            if (response.status === 'success') {
+                snapData.currentSnap = response.snap;
+                renderSnapDetail();
+                // Update selected row in history
+                $('.snap-history-row').removeClass('selected');
+                $('.snap-history-row[data-snap-pk="' + snapPk + '"]').addClass('selected');
             }
         });
     }
@@ -2456,7 +2318,7 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        var isEditable = snap.status === 0; // Draft snaps are editable
+        var isEditable = snap.status === SNAP_STATUS.DRAFT; // Draft snaps are editable
         
         // Update header
         $('#snapDate').val(snap.date).prop('disabled', !isEditable);
@@ -2480,56 +2342,22 @@ window.debugStocktakeAllocations = function() {
         Object.keys(groupedItems).sort().forEach(function(projectType) {
             var items = groupedItems[projectType];
             
-            // Group header row
-            var headerRow = $('<tr class="snap-items-group-header">');
-            headerRow.attr('data-project-type', projectType);
-            headerRow.css({
-                'background': '#f8f9fa',
-                'cursor': 'pointer',
-                'font-size': '13px',
-                'font-weight': '600',
-                'line-height': '1',
-                'border-bottom': '1px solid #dee2e6'
-            });
-            
-            var headerCell = $('<td colspan="6">').css('padding', '6px');
-            var collapseIndicator = $('<span class="snap-collapse-indicator">')
-                .css({
-                    'display': 'inline-block',
-                    'width': '14px',
-                    'font-size': '10px',
-                    'color': '#6c757d',
-                    'transform': 'rotate(90deg)',
-                    'transition': 'transform 0.2s'
-                })
-                .text('▶');
-            var dragHandle = $('<span>').css({
-                'color': '#6c757d',
-                'cursor': 'grab',
-                'margin': '0 6px'
-            }).text('⋮⋮');
-            
-            headerCell.append(collapseIndicator, dragHandle, $('<span>').text(projectType));
-            headerRow.append(headerCell);
-            tbody.append(headerRow);
-            
-            // Add click to collapse
-            headerRow.on('click', function() {
-                var $header = $(this);
-                var pt = $header.data('project-type');
-                var $indicator = $header.find('.snap-collapse-indicator');
-                var isCollapsed = $indicator.css('transform') === 'none' || $indicator.css('transform') === 'matrix(1, 0, 0, 1, 0, 0)';
-                
-                if (isCollapsed) {
-                    // Expand
-                    $indicator.css('transform', 'rotate(90deg)');
-                    $header.nextUntil('.snap-items-group-header').show();
-                } else {
-                    // Collapse
-                    $indicator.css('transform', 'rotate(0deg)');
+            // Create collapsible header using reusable function
+            var headerRow = createCollapsibleGroupHeader({
+                headerClass: 'snap-items-group-header',
+                indicatorClass: 'snap-collapse-indicator',
+                colspan: 6,
+                groupKey: 'project-type',
+                groupValue: projectType,
+                groupLabel: projectType,
+                onCollapse: function($header) {
                     $header.nextUntil('.snap-items-group-header').hide();
+                },
+                onExpand: function($header) {
+                    $header.nextUntil('.snap-items-group-header').show();
                 }
             });
+            tbody.append(headerRow);
             
             // Item rows
             items.forEach(function(item) {
@@ -2617,7 +2445,7 @@ window.debugStocktakeAllocations = function() {
             // Calculate still to allocate for row highlighting
             var totalAllocated = 0;
             item.allocations.forEach(function(alloc) {
-                totalAllocated += parseFloat(alloc.qty) || 0;
+                totalAllocated += Utils.parseFloatSafe(alloc.qty);
             });
             var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
             if (stillToAllocate > 0.001) {
@@ -2644,7 +2472,7 @@ window.debugStocktakeAllocations = function() {
         // Calculate still to allocate
         var totalAllocated = 0;
         item.allocations.forEach(function(alloc) {
-            totalAllocated += parseFloat(alloc.qty) || 0;
+            totalAllocated += Utils.parseFloatSafe(alloc.qty);
         });
         var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
         
@@ -2703,7 +2531,7 @@ window.debugStocktakeAllocations = function() {
             .val(alloc.qty)
             .prop('disabled', !isEditable);
         qtyInput.on('change', function() {
-            updateAllocation(alloc.allocation_pk, { qty: parseFloat($(this).val()) || 0 });
+            updateAllocation(alloc.allocation_pk, { qty: Utils.parseFloatSafe($(this).val()) });
         });
         row.append(qtyInput);
         
@@ -2724,32 +2552,23 @@ window.debugStocktakeAllocations = function() {
     
     // Update snap item count
     function updateSnapItemCount(snapItemPk, countedQty, row) {
-        $.ajax({
-            url: '/core/stocktake/snap-items/' + snapItemPk + '/update/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ counted_qty: countedQty }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    var variance = response.variance_qty;
-                    // If variance is non-zero (negative = stock consumed), auto-add one allocation
-                    if (variance !== null && variance < 0) {
-                        // Check if this item already has allocations
-                        var currentItem = snapData.currentSnap.items.find(function(i) {
-                            return i.snap_item_pk === snapItemPk;
-                        });
-                        if (currentItem && currentItem.allocations.length === 0) {
-                            // Auto-create first allocation (pass the item for valid_projects)
-                            autoCreateFirstAllocation(currentItem);
-                            return;
-                        }
+        stocktakeAjax('/core/stocktake/snap-items/' + snapItemPk + '/update/', 'POST', { counted_qty: countedQty }, function(response) {
+            if (response.status === 'success') {
+                var variance = response.variance_qty;
+                // If variance is non-zero (negative = stock consumed), auto-add one allocation
+                if (variance !== null && variance < 0) {
+                    // Check if this item already has allocations
+                    var currentItem = snapData.currentSnap.items.find(function(i) {
+                        return i.snap_item_pk === snapItemPk;
+                    });
+                    if (currentItem && currentItem.allocations.length === 0) {
+                        // Auto-create first allocation (pass the item for valid_projects)
+                        autoCreateFirstAllocation(currentItem);
+                        return;
                     }
-                    // Reload the snap to update variance and allocations UI
-                    loadSnap(snapData.currentSnap.snap_pk);
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to update count:', error);
+                // Reload the snap to update variance and allocations UI
+                loadSnap(snapData.currentSnap.snap_pk);
             }
         });
     }
@@ -2762,22 +2581,15 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        $.ajax({
-            url: '/core/stocktake/snap-allocations/create/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                snap_item_pk: item.snap_item_pk,
-                project_pk: validProjects[0].project_pk,
-                qty: 1
-            }),
-            success: function(response) {
-                loadSnap(snapData.currentSnap.snap_pk);
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to auto-create allocation:', error);
-                loadSnap(snapData.currentSnap.snap_pk);
-            }
+        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', {
+            snap_item_pk: item.snap_item_pk,
+            project_pk: validProjects[0].project_pk,
+            qty: 1
+        }, function(response) {
+            loadSnap(snapData.currentSnap.snap_pk);
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to auto-create allocation:', error);
+            loadSnap(snapData.currentSnap.snap_pk);
         });
     }
     
@@ -2789,59 +2601,34 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        $.ajax({
-            url: '/core/stocktake/snap-allocations/create/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                snap_item_pk: item.snap_item_pk,
-                project_pk: validProjects[0].project_pk,
-                qty: 1
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Reload snap to show new allocation
-                    loadSnap(snapData.currentSnap.snap_pk);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to create allocation:', error);
+        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', {
+            snap_item_pk: item.snap_item_pk,
+            project_pk: validProjects[0].project_pk,
+            qty: 1
+        }, function(response) {
+            if (response.status === 'success') {
+                // Reload snap to show new allocation
+                loadSnap(snapData.currentSnap.snap_pk);
             }
         });
     }
     
     // Update allocation
     function updateAllocation(allocationPk, data) {
-        $.ajax({
-            url: '/core/stocktake/snap-allocations/' + allocationPk + '/update/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(data),
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Reload to update rates
-                    loadSnap(snapData.currentSnap.snap_pk);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to update allocation:', error);
+        stocktakeAjax('/core/stocktake/snap-allocations/' + allocationPk + '/update/', 'POST', data, function(response) {
+            if (response.status === 'success') {
+                // Reload to update rates
+                loadSnap(snapData.currentSnap.snap_pk);
             }
         });
     }
     
     // Delete allocation
     function deleteAllocation(allocationPk, row) {
-        $.ajax({
-            url: '/core/stocktake/snap-allocations/' + allocationPk + '/delete/',
-            type: 'POST',
-            success: function(response) {
-                if (response.status === 'success') {
-                    row.remove();
-                    updateSnapSummary();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to delete allocation:', error);
+        stocktakeAjax('/core/stocktake/snap-allocations/' + allocationPk + '/delete/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                row.remove();
+                updateSnapSummary();
             }
         });
     }
@@ -2877,9 +2664,9 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        var isDraft = snap.status === 0;
-        var isFinalised = snap.status === 1;
-        var isSentToXero = snap.status === 2;
+        var isDraft = snap.status === SNAP_STATUS.DRAFT;
+        var isFinalised = snap.status === SNAP_STATUS.FINALISED;
+        var isSentToXero = snap.status === SNAP_STATUS.SENT;
         var isMostRecent = snap.is_most_recent;
         
         // Check if all items with variance are fully allocated
@@ -2918,7 +2705,7 @@ window.debugStocktakeAllocations = function() {
             if (item.variance_qty !== null && item.variance_qty < 0) {
                 var totalAllocated = 0;
                 item.allocations.forEach(function(alloc) {
-                    totalAllocated += parseFloat(alloc.qty) || 0;
+                    totalAllocated += Utils.parseFloatSafe(alloc.qty);
                 });
                 var stillToAllocate = Math.abs(item.variance_qty) - totalAllocated;
                 if (stillToAllocate > 0.001) {
@@ -2938,24 +2725,17 @@ window.debugStocktakeAllocations = function() {
     
     // New Snap button
     $('#newSnapBtn').on('click', function() {
-        $.ajax({
-            url: '/core/stocktake/snaps/create/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                costing_method: 'AVG'  // Let backend calculate date (later of today or day after latest snap)
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    loadSnapList().then(function() {
-                        loadSnap(response.snap_pk);
-                    });
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to create snap:', error);
-                alert('Failed to create snap: ' + error);
+        stocktakeAjax('/core/stocktake/snaps/create/', 'POST', {
+            costing_method: 'AVG'  // Let backend calculate date (later of today or day after latest snap)
+        }, function(response) {
+            if (response.status === 'success') {
+                loadSnapList().then(function() {
+                    loadSnap(response.snap_pk);
+                });
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to create snap:', error);
+            alert('Failed to create snap: ' + error);
         });
     });
     
@@ -2964,25 +2744,20 @@ window.debugStocktakeAllocations = function() {
         if (!snapData.currentSnap) return;
         if (!confirm('Delete this draft snap?')) return;
         
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/delete/',
-            type: 'POST',
-            success: function(response) {
-                if (response.status === 'success') {
-                    snapData.currentSnap = null;
-                    loadSnapList();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to delete snap:', error);
-                alert('Failed to delete snap');
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/delete/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                snapData.currentSnap = null;
+                loadSnapList();
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to delete snap:', error);
+            alert('Failed to delete snap');
         });
     });
     
     // Auto-save snap date on blur (not change, to avoid mid-typing saves)
     $('#snapDate').on('blur', function() {
-        if (!snapData.currentSnap || snapData.currentSnap.status !== 0) return;
+        if (!snapData.currentSnap || snapData.currentSnap.status !== SNAP_STATUS.DRAFT) return;
         // Only save if date is valid
         var dateVal = $(this).val();
         if (dateVal && dateVal !== snapData.currentSnap.date) {
@@ -2992,35 +2767,22 @@ window.debugStocktakeAllocations = function() {
     
     // Auto-save snap function
     function autoSaveSnap() {
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/update/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                date: $('#snapDate').val(),
-                costing_method: 'AVG'  // Fixed to Average costing
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Update local data
-                    snapData.currentSnap.date = $('#snapDate').val();
-                    snapData.currentSnap.costing_method = 'AVG';
-                    // Refresh snap list to show updated date
-                    loadSnapList();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to auto-save snap:', error);
-                // Show validation error and revert date
-                var msg = 'Failed to save';
-                try {
-                    var resp = JSON.parse(xhr.responseText);
-                    if (resp.message) msg = resp.message;
-                } catch(e) {}
-                alert(msg);
-                // Revert to original date
-                $('#snapDate').val(snapData.currentSnap.date);
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/update/', 'POST', {
+            date: $('#snapDate').val(),
+            costing_method: 'AVG'  // Fixed to Average costing
+        }, function(response) {
+            if (response.status === 'success') {
+                // Update local data
+                snapData.currentSnap.date = $('#snapDate').val();
+                snapData.currentSnap.costing_method = 'AVG';
+                // Refresh snap list to show updated date
+                loadSnapList();
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to auto-save snap:', error);
+            alert(getErrorMessage(xhr, 'Failed to save'));
+            // Revert to original date
+            $('#snapDate').val(snapData.currentSnap.date);
         });
     }
     
@@ -3029,24 +2791,14 @@ window.debugStocktakeAllocations = function() {
         if (!snapData.currentSnap) return;
         if (!confirm('This will unfinalise the snap and allow editing. Continue?')) return;
         
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/unfinalise/',
-            type: 'POST',
-            success: function(response) {
-                if (response.status === 'success') {
-                    loadSnapList();
-                    loadSnap(snapData.currentSnap.snap_pk);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to unfinalise:', error);
-                var msg = 'Failed to unfinalise snap';
-                try {
-                    var resp = JSON.parse(xhr.responseText);
-                    if (resp.message) msg = resp.message;
-                } catch(e) {}
-                alert(msg);
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/unfinalise/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                loadSnapList();
+                loadSnap(snapData.currentSnap.snap_pk);
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to unfinalise:', error);
+            alert(getErrorMessage(xhr, 'Failed to unfinalise snap'));
         });
     });
     
@@ -3055,32 +2807,22 @@ window.debugStocktakeAllocations = function() {
         if (!snapData.currentSnap) return;
         if (!confirm('Finalise this snap? This will lock it from editing.')) return;
         
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/finalise/',
-            type: 'POST',
-            success: function(response) {
-                if (response.status === 'success') {
-                    loadSnapList();
-                    loadSnap(snapData.currentSnap.snap_pk);
-                    alert('Snap finalised. You can now send it to Xero.');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to finalise:', error);
-                var msg = 'Failed to finalise snap';
-                try {
-                    var resp = JSON.parse(xhr.responseText);
-                    if (resp.message) msg = resp.message;
-                } catch(e) {}
-                alert(msg);
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/finalise/', 'POST', null, function(response) {
+            if (response.status === 'success') {
+                loadSnapList();
+                loadSnap(snapData.currentSnap.snap_pk);
+                alert('Snap finalised. You can now send it to Xero.');
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to finalise:', error);
+            alert(getErrorMessage(xhr, 'Failed to finalise snap'));
         });
     });
     
     // Send to Xero button
     $('#sendSnapToXeroBtn').on('click', function() {
         if (!snapData.currentSnap) return;
-        if (snapData.currentSnap.status < 1) {
+        if (snapData.currentSnap.status < SNAP_STATUS.FINALISED) {
             alert('Please finalise the snap first');
             return;
         }
@@ -3095,31 +2837,19 @@ window.debugStocktakeAllocations = function() {
         
         if (!confirm('Send this snap to Xero as a manual journal?')) return;
         
-        $.ajax({
-            url: '/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/send-to-xero/',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                xero_instance_pk: parseInt(xeroInstancePk),
-                stock_account_code: stockAccountCode
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    loadSnapList();
-                    loadSnap(snapData.currentSnap.snap_pk);
-                    loadStockLedger(); // Refresh ledger as stock has changed
-                    alert('Snap sent to Xero successfully!\nJournal ID: ' + response.xero_journal_id);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('[Snap] Failed to send to Xero:', error);
-                var msg = 'Failed to send to Xero';
-                try {
-                    var resp = JSON.parse(xhr.responseText);
-                    if (resp.message) msg = resp.message;
-                } catch(e) {}
-                alert(msg);
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/send-to-xero/', 'POST', {
+            xero_instance_pk: parseInt(xeroInstancePk),
+            stock_account_code: stockAccountCode
+        }, function(response) {
+            if (response.status === 'success') {
+                loadSnapList();
+                loadSnap(snapData.currentSnap.snap_pk);
+                loadStockLedger(); // Refresh ledger as stock has changed
+                alert('Snap sent to Xero successfully!\nJournal ID: ' + response.xero_journal_id);
             }
+        }, function(xhr, status, error) {
+            console.error('[Snap] Failed to send to Xero:', error);
+            alert(getErrorMessage(xhr, 'Failed to send to Xero'));
         });
     });
     
@@ -3158,8 +2888,8 @@ window.debugStocktakeAllocations = function() {
         
         // Load both stocktake items and existing balances
         Promise.all([
-            $.ajax({ url: '/core/stocktake/ledger/', type: 'GET' }),
-            $.ajax({ url: '/core/stocktake/opening-balances/', type: 'GET' })
+            stocktakeAjax('/core/stocktake/ledger/', 'GET', null),
+            stocktakeAjax('/core/stocktake/opening-balances/', 'GET', null)
         ]).then(function(results) {
             var ledgerResponse = results[0];
             var balancesResponse = results[1];
@@ -3305,8 +3035,8 @@ window.debugStocktakeAllocations = function() {
             .attr('data-item-pk', item.item_pk)
             .val(existingBal.qty)
             .on('input', function() {
-                var qty = parseFloat($(this).val()) || 0;
-                var rate = parseFloat(row.find('.opening-rate-input').val()) || 0;
+                var qty = Utils.parseFloatSafe($(this).val());
+                var rate = Utils.parseFloatSafe(row.find('.opening-rate-input').val());
                 totalCell.text(formatCurrency(qty * rate));
             });
         qtyCell.append(qtyInput);
@@ -3319,8 +3049,8 @@ window.debugStocktakeAllocations = function() {
             .attr('data-item-pk', item.item_pk)
             .val(existingBal.rate)
             .on('input', function() {
-                var qty = parseFloat(row.find('.opening-qty-input').val()) || 0;
-                var rate = parseFloat($(this).val()) || 0;
+                var qty = Utils.parseFloatSafe(row.find('.opening-qty-input').val());
+                var rate = Utils.parseFloatSafe($(this).val());
                 totalCell.text(formatCurrency(qty * rate));
             });
         rateCell.append(rateInput);
@@ -3355,45 +3085,33 @@ window.debugStocktakeAllocations = function() {
             return;
         }
         
-        $.ajax({
-            url: '/core/stocktake/opening-balances/' + balancePk + '/update/',
-            type: 'POST',
-            headers: { 'X-CSRFToken': getCSRFToken() },
-            contentType: 'application/json',
-            data: JSON.stringify({
-                qty: qty,
-                rate: rate
-            }),
-            success: function(response) {
-                if (response.status === 'success') {
-                    // Update local data and re-render
-                    var itemPk = row.data('item-pk');
-                    if (openingBalancesData.balances[itemPk]) {
-                        openingBalancesData.balances[itemPk].qty = qty;
-                        openingBalancesData.balances[itemPk].rate = rate;
-                    }
-                    renderOpeningBalancesTable();
-                    // Refresh stock ledger
-                    getStockLedger();
-                } else {
-                    alert('Error: ' + response.message);
+        stocktakeAjax('/core/stocktake/opening-balances/' + balancePk + '/update/', 'POST', {
+            qty: qty,
+            rate: rate
+        }, function(response) {
+            if (response.status === 'success') {
+                // Update local data and re-render
+                var itemPk = row.data('item-pk');
+                if (openingBalancesData.balances[itemPk]) {
+                    openingBalancesData.balances[itemPk].qty = qty;
+                    openingBalancesData.balances[itemPk].rate = rate;
                 }
-            },
-            error: function(xhr) {
-                var msg = 'Failed to update opening balance';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    msg = xhr.responseJSON.message;
-                }
-                alert(msg);
+                renderOpeningBalancesTable();
+                // Refresh stock ledger
+                getStockLedger();
+            } else {
+                alert('Error: ' + response.message);
             }
+        }, function(xhr) {
+            alert(getErrorMessage(xhr, 'Failed to update opening balance'));
         });
     }
     
     // Update row total when qty or rate changes
     function updateOpeningBalanceRowTotal() {
         var row = $(this).closest('tr');
-        var qty = parseFloat(row.find('.opening-qty-input').val()) || 0;
-        var rate = parseFloat(row.find('.opening-rate-input').val()) || 0;
+        var qty = Utils.parseFloatSafe(row.find('.opening-qty-input').val());
+        var rate = Utils.parseFloatSafe(row.find('.opening-rate-input').val());
         var total = qty * rate;
         row.find('.opening-total').text(formatCurrency(total));
         updateOpeningBalancesTotal();
@@ -3405,7 +3123,7 @@ window.debugStocktakeAllocations = function() {
         $('#openingBalancesBody tr.opening-balance-row').each(function() {
             // Get total from the total cell (handles both fixed and editable rows)
             var totalText = $(this).find('.opening-total').text();
-            var total = parseFloat(totalText.replace(/[$,]/g, '')) || 0;
+            var total = Utils.parseFloatSafe(totalText.replace(/[$,]/g, ''));
             grandTotal += total;
         });
         $('#openingBalancesTotal').html('<strong>Total Value:</strong> ' + formatCurrency(grandTotal));
@@ -3460,24 +3178,12 @@ window.debugStocktakeAllocations = function() {
             }
             
             var bal = toSave[idx];
-            $.ajax({
-                url: '/core/stocktake/opening-balances/save/',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(bal),
-                success: function(response) {
-                    saved++;
-                    saveNext(idx + 1);
-                },
-                error: function(xhr) {
-                    var errMsg = 'Item ' + bal.item_pk;
-                    try {
-                        var resp = JSON.parse(xhr.responseText);
-                        if (resp.message) errMsg += ': ' + resp.message;
-                    } catch(e) {}
-                    errors.push(errMsg);
-                    saveNext(idx + 1);
-                }
+            stocktakeAjax('/core/stocktake/opening-balances/save/', 'POST', bal, function(response) {
+                saved++;
+                saveNext(idx + 1);
+            }, function(xhr) {
+                errors.push('Item ' + bal.item_pk + ': ' + getErrorMessage(xhr, 'Unknown error'));
+                saveNext(idx + 1);
             });
         }
         
@@ -3497,31 +3203,6 @@ window.debugStocktakeAllocations = function() {
     
     // Load snap data on page load
     loadSnapData();
-    
-    // Debug function to extract rates table styling (call getRatesStyles() in console)
-    window.getRatesStyles = function() {
-        var results = {};
-        var category = document.querySelector('.rates-flex-category');
-        if (category) {
-            var catStyles = window.getComputedStyle(category);
-            results.category = { fontSize: catStyles.fontSize, fontWeight: catStyles.fontWeight, backgroundColor: catStyles.backgroundColor, padding: catStyles.padding };
-            var indicator = category.querySelector('.rates-collapse-indicator');
-            if (indicator) { var s = window.getComputedStyle(indicator); results.collapseIndicator = { fontSize: s.fontSize, width: s.width, color: s.color, marginRight: s.marginRight }; }
-            var dragHandle = category.querySelector('.rates-drag-handle');
-            if (dragHandle) { var s = window.getComputedStyle(dragHandle); results.dragHandle = { content: dragHandle.textContent, fontSize: s.fontSize, color: s.color, marginRight: s.marginRight }; }
-            var catName = category.querySelector('.name-display');
-            if (catName) { var s = window.getComputedStyle(catName); results.categoryName = { fontSize: s.fontSize, fontWeight: s.fontWeight }; }
-        }
-        var item = document.querySelector('.rates-flex-item');
-        if (item) {
-            var itemStyles = window.getComputedStyle(item);
-            results.item = { fontSize: itemStyles.fontSize, fontWeight: itemStyles.fontWeight, padding: itemStyles.padding, paddingLeft: itemStyles.paddingLeft };
-            var colName = item.querySelector('.col-name');
-            if (colName) { var s = window.getComputedStyle(colName); results.itemColName = { paddingLeft: s.paddingLeft }; }
-        }
-        console.log(JSON.stringify(results, null, 2));
-        return results;
-    };
     
 })();
 </script>

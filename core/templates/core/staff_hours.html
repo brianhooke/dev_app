@@ -817,316 +817,56 @@ Backend Endpoints:
     const mainContent = document.getElementById('mainContent');
     const statusFilter = document.getElementById('statusFilter');
     
-    // Debug function for holidays tab layout
-    window.debugHolidaysLayout = function() {
-        console.log('=== HOLIDAYS TAB LAYOUT DEBUG ===');
-        console.log('Viewport height:', window.innerHeight);
-        
-        const holidaysTab = document.getElementById('holidays');
-        const holidaysContainer = holidaysTab?.querySelector('div[style*="display: flex"]');
-        const leftCol = holidaysContainer?.querySelector('div[style*="width: 35%"]');
-        const rightCol = holidaysContainer?.querySelector('div[style*="width: 65%"]');
-        const addCalendarRow = document.querySelector('#holidays div[style*="margin-top: 8px"]');
-        const addHolidayRow = document.getElementById('addHolidayRow');
-        
-        const elements = [
-            { name: 'holidaysTab', el: holidaysTab },
-            { name: 'holidaysContainer', el: holidaysContainer },
-            { name: 'leftCol', el: leftCol },
-            { name: 'rightCol', el: rightCol },
-            { name: 'addCalendarRow', el: addCalendarRow },
-            { name: 'addHolidayRow', el: addHolidayRow }
-        ];
-        
-        elements.forEach(({name, el}) => {
-            if (!el) { console.log(name + ': NOT FOUND'); return; }
-            const rect = el.getBoundingClientRect();
-            const s = window.getComputedStyle(el);
-            console.log('\n' + name + ':');
-            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
-            console.log('  height:', s.height, '| max-height:', s.maxHeight);
-        });
-        
-        // Check staffTabContent
-        const stc = document.getElementById('staffTabContent');
-        if (stc) {
-            const rect = stc.getBoundingClientRect();
-            console.log('\nstaffTabContent:');
-            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
-            console.log('  IDEAL holidaysContainer height: ' + (rect.height - 32) + 'px (minus padding)');
-        }
-        
-        // Check what value calc(100vh - 280px) resolves to
-        console.log('\n=== CALC VALUES ===');
-        console.log('100vh - 280px =', (window.innerHeight - 280) + 'px');
-        console.log('100vh - 220px =', (window.innerHeight - 220) + 'px');
-        console.log('100vh - 180px =', (window.innerHeight - 180) + 'px');
-        
-        if (holidaysContainer) {
-            const rect = holidaysContainer.getBoundingClientRect();
-            const stcRect = stc?.getBoundingClientRect();
-            if (stcRect) {
-                const gap = stcRect.bottom - rect.bottom - 16; // minus padding
-                console.log('\nGAP below holidaysContainer:', gap.toFixed(0) + 'px');
-                console.log('SUGGESTION: Change calc offset from 280 to', (280 - gap).toFixed(0));
-            }
-        }
+    // Allocation type constants
+    const ALLOC_TYPE = {
+        PROJECT: 1,
+        UNCHARGEABLE: 2,
+        OTHER_CHARGEABLE: 3
     };
     
-    // Debug function for vertical layout - focus on staffTabContent
-    window.debugVerticalLayout = function() {
-        console.log('=== VERTICAL LAYOUT DEBUG v2 ===');
-        console.log('Viewport height:', window.innerHeight);
-        
-        // Walk the chain from staffTabContent up to body
-        const staffTabContent = document.getElementById('staffTabContent');
-        if (!staffTabContent) { console.log('staffTabContent NOT FOUND'); return; }
-        
-        console.log('\n=== ANCESTOR CHAIN (staffTabContent to body) ===');
-        let el = staffTabContent;
-        let depth = 0;
-        while (el && el !== document.body && depth < 10) {
-            const rect = el.getBoundingClientRect();
-            const s = window.getComputedStyle(el);
-            const id = el.id || '';
-            const cls = el.className ? el.className.toString().slice(0,30) : '';
-            const tag = el.tagName;
-            
-            console.log('\n[' + depth + '] ' + tag + (id ? '#' + id : '') + (cls ? '.' + cls.replace(/\s+/g, '.') : ''));
-            console.log('  RECT: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0) + ' height=' + rect.height.toFixed(0));
-            console.log('  height:', s.height, '| max-height:', s.maxHeight, '| min-height:', s.minHeight);
-            console.log('  display:', s.display, '| flex:', s.flex);
-            console.log('  overflow:', s.overflow, '| overflow-y:', s.overflowY);
-            
-            el = el.parentElement;
-            depth++;
-        }
-        
-        // Space analysis
-        const rect = staffTabContent.getBoundingClientRect();
-        const containerFluid = document.querySelector('#staffHoursSection > .container-fluid');
-        const cfRect = containerFluid ? containerFluid.getBoundingClientRect() : null;
-        
-        console.log('\n=== SPACE ANALYSIS ===');
-        console.log('staffTabContent: top=' + rect.top.toFixed(0) + ' bottom=' + rect.bottom.toFixed(0));
-        if (cfRect) {
-            console.log('container-fluid: top=' + cfRect.top.toFixed(0) + ' bottom=' + cfRect.bottom.toFixed(0));
-            console.log('GAP: container-fluid.bottom - staffTabContent.bottom = ' + (cfRect.bottom - rect.bottom).toFixed(0) + 'px');
-        }
-        console.log('UNUSED from viewport: ' + (window.innerHeight - rect.bottom).toFixed(0) + 'px');
-        
-        // Check what's constraining staffTabContent height
-        const stcStyle = window.getComputedStyle(staffTabContent);
-        console.log('\n=== staffTabContent CONSTRAINTS ===');
-        console.log('height:', stcStyle.height);
-        console.log('max-height:', stcStyle.maxHeight);
-        console.log('min-height:', stcStyle.minHeight);
-        console.log('flex:', stcStyle.flex);
-        console.log('flex-grow:', stcStyle.flexGrow);
-        console.log('flex-shrink:', stcStyle.flexShrink);
-        console.log('align-self:', stcStyle.alignSelf);
-    };
+    // Standardized error message extraction
+    function getErrorMessage(error, fallback = 'An error occurred') {
+        if (!error) return fallback;
+        if (typeof error === 'string') return error;
+        if (error.message) return error.message;
+        if (error.error) return error.error;
+        return fallback;
+    }
     
-    // Debug function for tab border alignment
-    window.debugTabBorders = function() {
-        console.log('=== TAB BORDER DEBUG ===');
-        
-        const staffTabs = document.getElementById('staffTabs');
-        const staffTabContent = document.getElementById('staffTabContent');
-        const activeTab = document.querySelector('#staffTabs .nav-link.active');
-        const navItems = document.querySelectorAll('#staffTabs .nav-item');
-        
-        if (staffTabs) {
-            const rect = staffTabs.getBoundingClientRect();
-            const style = window.getComputedStyle(staffTabs);
-            console.log('\n#staffTabs:');
-            console.log('  RECT: top=' + rect.top.toFixed(1) + ' bottom=' + rect.bottom.toFixed(1) + ' height=' + rect.height.toFixed(1));
-            console.log('  border-bottom:', style.borderBottom);
-            console.log('  margin-bottom:', style.marginBottom);
-            console.log('  padding-bottom:', style.paddingBottom);
+    // Standardized fetch wrapper with CSRF handling
+    async function staffHoursApi(url, options = {}) {
+        const config = {
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+        };
+        if (options.method && options.method !== 'GET') {
+            config.headers['X-CSRFToken'] = Utils.getCSRFToken();
         }
-        
-        if (activeTab) {
-            const rect = activeTab.getBoundingClientRect();
-            const style = window.getComputedStyle(activeTab);
-            console.log('\n.nav-link.active:');
-            console.log('  RECT: top=' + rect.top.toFixed(1) + ' bottom=' + rect.bottom.toFixed(1) + ' height=' + rect.height.toFixed(1));
-            console.log('  border:', style.border);
-            console.log('  border-bottom:', style.borderBottom);
-            console.log('  border-radius:', style.borderRadius);
-            console.log('  margin-bottom:', style.marginBottom);
-            console.log('  padding:', style.padding);
+        if (options.body && typeof options.body === 'object') {
+            config.body = JSON.stringify(options.body);
         }
-        
-        navItems.forEach((item, i) => {
-            const rect = item.getBoundingClientRect();
-            const style = window.getComputedStyle(item);
-            console.log('\n.nav-item[' + i + ']:');
-            console.log('  RECT: bottom=' + rect.bottom.toFixed(1));
-            console.log('  margin-bottom:', style.marginBottom);
-            console.log('  z-index:', style.zIndex);
-        });
-        
-        if (staffTabContent) {
-            const rect = staffTabContent.getBoundingClientRect();
-            const style = window.getComputedStyle(staffTabContent);
-            console.log('\n#staffTabContent:');
-            console.log('  RECT: top=' + rect.top.toFixed(1));
-            console.log('  border-top:', style.borderTop);
-            console.log('  margin-top:', style.marginTop);
-            console.log('  border-radius:', style.borderRadius);
-        }
-        
-        // Calculate gap
-        if (activeTab && staffTabContent) {
-            const tabBottom = activeTab.getBoundingClientRect().bottom;
-            const contentTop = staffTabContent.getBoundingClientRect().top;
-            console.log('\n=== GAP ANALYSIS ===');
-            console.log('Tab bottom:', tabBottom.toFixed(1));
-            console.log('Content top:', contentTop.toFixed(1));
-            console.log('GAP (should be ~0):', (contentTop - tabBottom).toFixed(1) + 'px');
-        }
-    };
-    
-    // Debug function for employee/state selector spacing
-    window.debugSelectorSpacing = function() {
-        console.log('=== SELECTOR SPACING DEBUG ===');
-        
-        const container = document.getElementById('calendarEmployeeSelect')?.parentElement;
-        if (!container) {
-            console.log('Container NOT FOUND');
-            return;
-        }
-        
-        const containerStyle = window.getComputedStyle(container);
-        console.log('\nContainer (.d-flex.gap-3):');
-        console.log('  gap:', containerStyle.gap);
-        console.log('  column-gap:', containerStyle.columnGap);
-        console.log('  display:', containerStyle.display);
-        
-        const children = container.children;
-        console.log('\nChildren (' + children.length + ' elements):');
-        
-        Array.from(children).forEach((child, i) => {
-            const rect = child.getBoundingClientRect();
-            const style = window.getComputedStyle(child);
-            const tagName = child.tagName.toLowerCase();
-            const id = child.id || '';
-            const text = child.textContent?.trim().substring(0, 20) || '';
-            
-            console.log('\n[' + i + '] ' + tagName + (id ? '#' + id : '') + ' "' + text + '"');
-            console.log('  RECT: left=' + rect.left.toFixed(0) + ' right=' + rect.right.toFixed(0) + ' width=' + rect.width.toFixed(0));
-            console.log('  margin: ' + style.marginTop + ' ' + style.marginRight + ' ' + style.marginBottom + ' ' + style.marginLeft);
-            console.log('  padding: ' + style.paddingTop + ' ' + style.paddingRight + ' ' + style.paddingBottom + ' ' + style.paddingLeft);
-            console.log('  classes:', child.className);
-        });
-        
-        // Calculate gaps between elements
-        console.log('\n=== GAPS BETWEEN ELEMENTS ===');
-        for (let i = 0; i < children.length - 1; i++) {
-            const current = children[i].getBoundingClientRect();
-            const next = children[i + 1].getBoundingClientRect();
-            const gap = next.left - current.right;
-            console.log('Gap [' + i + '] to [' + (i+1) + ']: ' + gap.toFixed(1) + 'px');
-        }
-    };
-    
-    // Debug function for sticky header issue - comprehensive
-    window.debugStickyHeaders = function() {
-        console.log('=== STICKY HEADER DEBUG v2 ===');
-        
-        const tables = ['holidayCalendarsTable', 'holidaysTable'];
-        
-        tables.forEach(tableId => {
-            const table = document.getElementById(tableId);
-            if (!table) { console.log(tableId + ': NOT FOUND'); return; }
-            
-            const thead = table.querySelector('thead');
-            const th = table.querySelector('thead th');
-            
-            console.log('\n========== ' + tableId + ' ==========');
-            
-            // Log TH computed styles
-            if (th) {
-                const ths = window.getComputedStyle(th);
-                console.log('TH computed styles:');
-                console.log('  position:', ths.position);
-                console.log('  top:', ths.top);
-                console.log('  z-index:', ths.zIndex);
-                console.log('  background:', ths.backgroundColor);
-            }
-            
-            // Walk up ALL ancestors and log overflow
-            console.log('\nALL ANCESTORS (table to document):');
-            let el = table;
-            let depth = 0;
-            while (el && el !== document.body && depth < 15) {
-                const s = window.getComputedStyle(el);
-                const id = el.id || '';
-                const cls = el.className ? el.className.toString().slice(0,40) : '';
-                const tag = el.tagName;
-                console.log(
-                    '[' + depth + '] ' + tag + 
-                    (id ? '#' + id : '') + 
-                    (cls ? '.' + cls.replace(/\s+/g, '.') : '') +
-                    ' | overflow: ' + s.overflow + 
-                    ' | overflow-y: ' + s.overflowY +
-                    ' | position: ' + s.position +
-                    ' | height: ' + s.height
-                );
-                el = el.parentElement;
-                depth++;
-            }
-            
-            // Check if table container is the actual scroll container
-            const container = table.closest('.holiday-table-wrapper');
-            if (container) {
-                console.log('\nScroll container check:');
-                console.log('  scrollHeight:', container.scrollHeight);
-                console.log('  clientHeight:', container.clientHeight);
-                console.log('  scrollTop:', container.scrollTop);
-                console.log('  Is scrollable:', container.scrollHeight > container.clientHeight);
-            }
-        });
-        
-        console.log('\n=== CSS Rules Check ===');
-        // Check if the CSS rule is actually applied
-        const testTh = document.querySelector('.holiday-table-wrapper thead th');
-        if (testTh) {
-            const rules = window.getComputedStyle(testTh);
-            console.log('holiday-table-wrapper thead th:');
-            console.log('  position:', rules.position, '(should be sticky)');
-            console.log('  top:', rules.top, '(should be 0px)');
-        }
-    };
+        const response = await fetch(url, config);
+        return response.json();
+    }
     
     // Initialize Staff Hours section - called when section is shown
     window.initStaffHoursSection = function() {
-        console.log('=== STAFF HOURS INIT START ===');
-        
         // Apply manila theme to parent container
         const dynamicContentArea = document.getElementById('dynamicContentArea');
         if (dynamicContentArea) {
             dynamicContentArea.style.background = 'linear-gradient(135deg, #f5efe5 0%, #faf7f2 100%)';
         }
-        console.log('[INIT] Manila theme applied');
         
         // Populate xero instances dropdown from dashboard's global data
         // Only show instances where staff_hours_tracking=1
-        console.log('[INIT] window.xeroInstancesData:', window.xeroInstancesData);
-        console.log('[INIT] xeroInstanceSelect element:', xeroInstanceSelect);
-        
         if (window.xeroInstancesData && xeroInstanceSelect) {
             // Clear existing options
             xeroInstanceSelect.innerHTML = '';
-            console.log('[INIT] Cleared dropdown options');
             
             // Filter to only instances with staff_hours_tracking=1
             const staffHoursInstances = window.xeroInstancesData.filter(
                 instance => instance.staff_hours_tracking === 1
             );
-            console.log('[INIT] Staff hours instances (staff_hours_tracking=1):', staffHoursInstances);
-            console.log('[INIT] All instances staff_hours_tracking values:', window.xeroInstancesData.map(i => ({name: i.xero_name, tracking: i.staff_hours_tracking})));
             
             // Add filtered instances to dropdown
             staffHoursInstances.forEach(function(instance) {
@@ -1135,25 +875,16 @@ Backend Endpoints:
                 option.textContent = instance.xero_name;
                 xeroInstanceSelect.appendChild(option);
             });
-            console.log('[INIT] Added', staffHoursInstances.length, 'instances to dropdown');
             
             // Setup event listeners first
-            console.log('[INIT] Setting up event listeners...');
             setupEventListeners();
-            console.log('[INIT] Event listeners setup complete');
             
             // Auto-select first instance and load its data
             if (staffHoursInstances.length > 0) {
-                console.log('[INIT] Auto-selecting first instance:', staffHoursInstances[0].xero_name);
                 xeroInstanceSelect.value = staffHoursInstances[0].xero_instance_pk;
                 xeroInstanceSelect.dispatchEvent(new Event('change'));
-            } else {
-                console.warn('[INIT] ⚠️ NO INSTANCES WITH staff_hours_tracking=1 FOUND');
             }
-        } else {
-            console.error('[INIT] ❌ MISSING: window.xeroInstancesData=', !!window.xeroInstancesData, 'xeroInstanceSelect=', !!xeroInstanceSelect);
         }
-        console.log('=== STAFF HOURS INIT END ===');
     };
     
     function setupEventListeners() {
@@ -1181,50 +912,14 @@ Backend Endpoints:
         // Xero instance change
         xeroInstanceSelect.addEventListener('change', function() {
             currentXeroInstanceId = this.value;
-            console.log('=== XERO INSTANCE SELECTED ===');
-            console.log('Instance ID:', currentXeroInstanceId);
-            console.log('Instance Name:', this.options[this.selectedIndex].text);
             if (currentXeroInstanceId) {
                 refreshDataBtn.disabled = false;
-                // First test the auth/permissions
-                testPayrollPermissions();
                 loadAllData();
             } else {
                 refreshDataBtn.disabled = true;
                 showNoInstanceMessage();
             }
         });
-        
-        // Test payroll permissions
-        async function testPayrollPermissions() {
-            console.log('=== TESTING PAYROLL API PERMISSIONS ===');
-            const url = `/core/staff_hours/employees/?xero_instance_id=${currentXeroInstanceId}&status=ACTIVE`;
-            console.log('Test URL:', url);
-            
-            try {
-                const response = await fetch(url);
-                console.log('Response Status:', response.status);
-                console.log('Response OK:', response.ok);
-                
-                const data = await response.json();
-                console.log('Response Data:', data);
-                
-                if (response.status === 401) {
-                    console.error('❌ AUTH FAILED (401) - Token may be expired or missing payroll scopes');
-                    console.error('Error details:', data);
-                } else if (response.status === 403) {
-                    console.error('❌ FORBIDDEN (403) - Payroll scopes not authorized');
-                    console.error('Error details:', data);
-                } else if (response.ok) {
-                    console.log('✅ PAYROLL API ACCESS GRANTED');
-                    console.log('Employees found:', data.count || 0);
-                } else {
-                    console.warn('⚠️ Unexpected response:', response.status, data);
-                }
-            } catch (error) {
-                console.error('❌ FETCH ERROR:', error);
-            }
-        }
         
         // Refresh button
         refreshDataBtn.addEventListener('click', function() {
@@ -1260,81 +955,45 @@ Backend Endpoints:
     }
     
     async function loadAllData() {
-        console.log('[LOAD] loadAllData() called');
         showLoading();
         
         try {
-            console.log('[LOAD] Starting parallel data fetch...');
             await Promise.all([
                 loadEmployees(),
                 loadPayItems(),
                 loadPublicHolidays()
             ]);
-            console.log('[LOAD] All data fetched successfully');
             
             hideLoading();
             showMainContent();
-            console.log('[LOAD] Main content shown');
         } catch (error) {
-            console.error('[LOAD] ❌ Error loading data:', error);
             hideLoading();
             alert('Error loading data from Xero. Please try again.');
         }
     }
     
     async function loadEmployees() {
-        console.log('[EMPLOYEES] loadEmployees() called');
         const status = statusFilter.value;
         const url = `/core/staff_hours/employees/?xero_instance_id=${currentXeroInstanceId}&status=${status}`;
-        console.log('[EMPLOYEES] Fetching:', url);
         
-        try {
-            const response = await fetch(url);
-            console.log('[EMPLOYEES] Response status:', response.status);
-            const data = await response.json();
-            console.log('[EMPLOYEES] Response data status:', data.status);
-            
-            if (data.status === 'success') {
-                employeesData = data.employees;
-                console.log('=== EMPLOYEE DATA FROM API ===');
-                console.log('First employee:', employeesData[0]);
-                console.log('Leave balances:', employeesData[0]?.leave_balances);
-                renderEmployeesTable();
-                updateEmployeeStats();
-                
-                // Also extract leave data
-                extractLeaveData();
-                
-                // Populate calendar employee dropdown
-                console.log('[EMPLOYEES] Populating calendar dropdown...');
-                populateCalendarEmployeeDropdown();
-                console.log('[EMPLOYEES] Calendar dropdown populated');
-                
-                // Sync pay rates to local database
-                syncPayRates();
-            } else {
-                console.error('[EMPLOYEES] ❌ Error:', data.message);
-            }
-        } catch (error) {
-            console.error('[EMPLOYEES] ❌ Fetch error:', error);
-            throw error;
+        const data = await staffHoursApi(url);
+        if (data.status === 'success') {
+            employeesData = data.employees;
+            renderEmployeesTable();
+            extractLeaveData();
+            populateCalendarEmployeeDropdown();
+            syncPayRates();
         }
     }
     
     async function syncPayRates() {
         try {
-            const response = await fetch('/core/staff_hours/sync_pay_rates/', {
+            await staffHoursApi('/core/staff_hours/sync_pay_rates/', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                },
-                body: JSON.stringify({ xero_instance_id: currentXeroInstanceId })
+                body: { xero_instance_id: currentXeroInstanceId }
             });
-            const data = await response.json();
-            console.log('Pay rates sync result:', data);
         } catch (error) {
-            console.error('Error syncing pay rates:', error);
+            // Silently fail - pay rate sync is non-critical
         }
     }
     
@@ -1395,30 +1054,15 @@ Backend Endpoints:
     }
     
     async function loadPayItems() {
-        console.log('[PAYITEMS] loadPayItems() called');
         const url = `/core/staff_hours/pay_items/?xero_instance_id=${currentXeroInstanceId}`;
-        console.log('[PAYITEMS] Fetching:', url);
-        
-        try {
-            const response = await fetch(url);
-            console.log('[PAYITEMS] Response status:', response.status);
-            const data = await response.json();
-            console.log('[PAYITEMS] Response data status:', data.status);
-            
-            if (data.status === 'success') {
-                payItemsData = {
-                    earnings_rates: data.earnings_rates || [],
-                    deduction_types: data.deduction_types || [],
-                    leave_types: data.leave_types || []
-                };
-                console.log('[PAYITEMS] Loaded', payItemsData.earnings_rates.length, 'earnings rates');
-                renderPayItemsTable();
-            } else {
-                console.error('[PAYITEMS] ❌ Error:', data.message);
-            }
-        } catch (error) {
-            console.error('[PAYITEMS] ❌ Fetch error:', error);
-            throw error;
+        const data = await staffHoursApi(url);
+        if (data.status === 'success') {
+            payItemsData = {
+                earnings_rates: data.earnings_rates || [],
+                deduction_types: data.deduction_types || [],
+                leave_types: data.leave_types || []
+            };
+            renderPayItemsTable();
         }
     }
     
@@ -1474,20 +1118,14 @@ Backend Endpoints:
     }
     
     async function loadSuperFunds() {
-        const url = `/core/staff_hours/super_funds/?xero_instance_id=${currentXeroInstanceId}`;
-        
         try {
-            const response = await fetch(url);
-            const data = await response.json();
-            
+            const data = await staffHoursApi(`/core/staff_hours/super_funds/?xero_instance_id=${currentXeroInstanceId}`);
             if (data.status === 'success') {
                 superFundsData = data.super_funds || [];
                 renderSuperFundsTable();
-            } else {
-                console.error('Error loading super funds:', data.message);
             }
         } catch (error) {
-            console.error('Error loading super funds:', error);
+            // Silently fail
         }
     }
     
@@ -1522,46 +1160,41 @@ Backend Endpoints:
     let selectedCalendarPk = null;
     
     async function loadPublicHolidays() {
-        console.log('[HOLIDAYS] loadPublicHolidays() called');
-        // Load holiday calendars instead of flat holiday list
         loadHolidayCalendars();
     }
     
-    function loadHolidayCalendars() {
+    async function loadHolidayCalendars() {
         const tbody = document.getElementById('holidayCalendarsTableBody');
         
-        fetch('/core/staff_hours/holiday_calendars/')
-            .then(response => response.json())
-            .then(response => {
-                holidayCalendarsLoaded = true;
-                tbody.innerHTML = '';
-                
-                if (!response.calendars || response.calendars.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No calendars. Add one below.</td></tr>';
-                    return;
-                }
-                
-                response.calendars.forEach(cal => {
-                    const row = document.createElement('tr');
-                    row.dataset.calendarPk = cal.calendar_pk;
-                    row.style.cursor = 'pointer';
-                    row.innerHTML = `
-                        <td>${escapeHtml(cal.name)} <span style="color: var(--manila-text-muted); font-size: 0.85em;">(${cal.holiday_count})</span></td>
-                        <td>${cal.state}</td>
-                        <td style="text-align: center;">${cal.is_default ? '<i class="fas fa-check text-success"></i>' : '<button class="btn btn-xs btn-outline-secondary set-default-btn" data-calendar-pk="' + cal.calendar_pk + '">Set</button>'}</td>
-                        <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-calendar-btn" data-calendar-pk="${cal.calendar_pk}" data-calendar-name="${escapeHtml(cal.name)}"><i class="fas fa-times"></i></button></td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                
-                // Select first calendar by default if none selected
-                if (!selectedCalendarPk && response.calendars.length > 0) {
-                    selectCalendar(response.calendars[0].calendar_pk, response.calendars[0].name);
-                }
-            })
-            .catch(() => {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading calendars</td></tr>';
+        try {
+            const response = await staffHoursApi('/core/staff_hours/holiday_calendars/');
+            holidayCalendarsLoaded = true;
+            tbody.innerHTML = '';
+            
+            if (!response.calendars || response.calendars.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No calendars. Add one below.</td></tr>';
+                return;
+            }
+            
+            response.calendars.forEach(cal => {
+                const row = document.createElement('tr');
+                row.dataset.calendarPk = cal.calendar_pk;
+                row.style.cursor = 'pointer';
+                row.innerHTML = `
+                    <td>${Utils.escapeHtml(cal.name)} <span style="color: var(--manila-text-muted); font-size: 0.85em;">(${cal.holiday_count})</span></td>
+                    <td>${cal.state}</td>
+                    <td style="text-align: center;">${cal.is_default ? '<i class="fas fa-check text-success"></i>' : '<button class="btn btn-xs btn-outline-secondary set-default-btn" data-calendar-pk="' + cal.calendar_pk + '">Set</button>'}</td>
+                    <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-calendar-btn" data-calendar-pk="${cal.calendar_pk}" data-calendar-name="${Utils.escapeHtml(cal.name)}"><i class="fas fa-times"></i></button></td>
+                `;
+                tbody.appendChild(row);
             });
+            
+            if (!selectedCalendarPk && response.calendars.length > 0) {
+                selectCalendar(response.calendars[0].calendar_pk, response.calendars[0].name);
+            }
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading calendars</td></tr>';
+        }
     }
     
     function selectCalendar(calendarPk, calendarName) {
@@ -1577,51 +1210,39 @@ Backend Endpoints:
         loadCalendarHolidays(calendarPk);
     }
     
-    function loadCalendarHolidays(calendarPk) {
+    async function loadCalendarHolidays(calendarPk) {
         const tbody = document.getElementById('holidaysTableBody');
         tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>';
         
-        fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/holidays/`)
-            .then(response => response.json())
-            .then(response => {
-                tbody.innerHTML = '';
+        try {
+            const response = await staffHoursApi(`/core/staff_hours/holiday_calendars/${calendarPk}/holidays/`);
+            tbody.innerHTML = '';
+            
+            if (!response.holidays || response.holidays.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No holidays. Add one below.</td></tr>';
+                return;
+            }
+            
+            response.holidays.forEach(h => {
+                const date = new Date(h.date);
+                const dayName = date.toLocaleDateString('en-AU', { weekday: 'long' });
+                const dateFormatted = date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
                 
-                if (!response.holidays || response.holidays.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--manila-text-muted);">No holidays. Add one below.</td></tr>';
-                    return;
-                }
-                
-                response.holidays.forEach(h => {
-                    const date = new Date(h.date);
-                    const dayName = date.toLocaleDateString('en-AU', { weekday: 'long' });
-                    const dateFormatted = date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-                    
-                    const row = document.createElement('tr');
-                    row.dataset.holidayPk = h.holiday_pk;
-                    row.innerHTML = `
-                        <td>${escapeHtml(h.name)}</td>
-                        <td>${dateFormatted}</td>
-                        <td>${dayName}</td>
-                        <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-holiday-btn" data-holiday-pk="${h.holiday_pk}" data-holiday-name="${escapeHtml(h.name)}"><i class="fas fa-times"></i></button></td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            })
-            .catch(() => {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading holidays</td></tr>';
+                const row = document.createElement('tr');
+                row.dataset.holidayPk = h.holiday_pk;
+                row.innerHTML = `
+                    <td>${Utils.escapeHtml(h.name)}</td>
+                    <td>${dateFormatted}</td>
+                    <td>${dayName}</td>
+                    <td style="text-align: center;"><button class="btn btn-xs btn-danger delete-holiday-btn" data-holiday-pk="${h.holiday_pk}" data-holiday-name="${Utils.escapeHtml(h.name)}"><i class="fas fa-times"></i></button></td>
+                `;
+                tbody.appendChild(row);
             });
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545; padding: 20px;">Error loading holidays</td></tr>';
+        }
     }
     
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    function getCSRFToken() {
-        const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
-        return cookie ? cookie.split('=')[1] : '';
-    }
     
     // Calendar row click handler
     document.addEventListener('click', function(e) {
@@ -1639,17 +1260,14 @@ Backend Endpoints:
             const btn = e.target.closest('.set-default-btn');
             const calendarPk = btn.dataset.calendarPk;
             
-            fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/update/`, {
+            staffHoursApi(`/core/staff_hours/holiday_calendars/${calendarPk}/update/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ is_default: 1 })
-            })
-            .then(response => response.json())
-            .then(response => {
+                body: { is_default: 1 }
+            }).then(response => {
                 if (response.status === 'success') {
                     loadHolidayCalendars();
                 } else {
-                    alert('Error: ' + response.message);
+                    alert('Error: ' + getErrorMessage(response));
                 }
             });
         }
@@ -1662,12 +1280,9 @@ Backend Endpoints:
             
             if (!confirm(`Delete calendar "${calendarName}" and all its holidays?`)) return;
             
-            fetch(`/core/staff_hours/holiday_calendars/${calendarPk}/delete/`, {
-                method: 'DELETE',
-                headers: { 'X-CSRFToken': getCSRFToken() }
-            })
-            .then(response => response.json())
-            .then(response => {
+            staffHoursApi(`/core/staff_hours/holiday_calendars/${calendarPk}/delete/`, {
+                method: 'DELETE'
+            }).then(response => {
                 if (response.status === 'success') {
                     if (selectedCalendarPk == calendarPk) {
                         selectedCalendarPk = null;
@@ -1677,7 +1292,7 @@ Backend Endpoints:
                     }
                     loadHolidayCalendars();
                 } else {
-                    alert('Error: ' + response.message);
+                    alert('Error: ' + getErrorMessage(response));
                 }
             });
         }
@@ -1690,18 +1305,15 @@ Backend Endpoints:
             
             if (!confirm(`Delete holiday "${holidayName}"?`)) return;
             
-            fetch(`/core/staff_hours/holidays/${holidayPk}/delete/`, {
-                method: 'DELETE',
-                headers: { 'X-CSRFToken': getCSRFToken() }
-            })
-            .then(response => response.json())
-            .then(response => {
+            staffHoursApi(`/core/staff_hours/holidays/${holidayPk}/delete/`, {
+                method: 'DELETE'
+            }).then(response => {
                 if (response.status === 'success') {
                     loadCalendarHolidays(selectedCalendarPk);
                     holidayCalendarsLoaded = false;
                     loadHolidayCalendars();
                 } else {
-                    alert('Error: ' + response.message);
+                    alert('Error: ' + getErrorMessage(response));
                 }
             });
         }
@@ -1719,19 +1331,16 @@ Backend Endpoints:
                 return;
             }
             
-            fetch('/core/staff_hours/holiday_calendars/create/', {
+            staffHoursApi('/core/staff_hours/holiday_calendars/create/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ name: name, state: state })
-            })
-            .then(response => response.json())
-            .then(response => {
+                body: { name: name, state: state }
+            }).then(response => {
                 if (response.status === 'success') {
                     document.getElementById('newCalendarName').value = '';
                     loadHolidayCalendars();
                     selectCalendar(response.calendar.calendar_pk, response.calendar.name);
                 } else {
-                    alert('Error: ' + response.message);
+                    alert('Error: ' + getErrorMessage(response));
                 }
             });
         });
@@ -1754,13 +1363,10 @@ Backend Endpoints:
                 return;
             }
             
-            fetch(`/core/staff_hours/holiday_calendars/${selectedCalendarPk}/holidays/create/`, {
+            staffHoursApi(`/core/staff_hours/holiday_calendars/${selectedCalendarPk}/holidays/create/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ name: name, date: date })
-            })
-            .then(response => response.json())
-            .then(response => {
+                body: { name: name, date: date }
+            }).then(response => {
                 if (response.status === 'success') {
                     document.getElementById('newHolidayName').value = '';
                     document.getElementById('newHolidayDate').value = '';
@@ -1768,18 +1374,10 @@ Backend Endpoints:
                     holidayCalendarsLoaded = false;
                     loadHolidayCalendars();
                 } else {
-                    alert('Error: ' + response.message);
+                    alert('Error: ' + getErrorMessage(response));
                 }
             });
         });
-    }
-    
-    function updateEmployeeStats() {
-        // Stats cards removed - function kept for compatibility
-    }
-    
-    function updateHolidayStats() {
-        // Stats cards removed - function kept for compatibility
     }
     
     // Utility functions
@@ -1840,8 +1438,7 @@ Backend Endpoints:
                 this.textContent = 'Calculating...';
                 
                 try {
-                    const response = await fetch(`/core/staff_hours/allocations/super-summary/?xero_instance_id=${currentXeroInstanceId}`);
-                    const data = await response.json();
+                    const data = await staffHoursApi(`/core/staff_hours/allocations/super-summary/?xero_instance_id=${currentXeroInstanceId}`);
                     
                     if (data.status === 'success') {
                         alert(`Super Recalculation Complete!\n\n` +
@@ -1852,11 +1449,10 @@ Backend Endpoints:
                             `Total Cost (incl. super): $${data.total_cost.toLocaleString('en-AU', {minimumFractionDigits: 2})}\n\n` +
                             `All project labour costs now include superannuation.`);
                     } else {
-                        alert('Error: ' + data.message);
+                        alert('Error: ' + getErrorMessage(data));
                     }
                 } catch (e) {
-                    console.error('Error recalculating super:', e);
-                    alert('Error recalculating super: ' + e.message);
+                    alert('Error: ' + getErrorMessage(e, 'Failed to recalculate super'));
                 } finally {
                     this.disabled = false;
                     this.textContent = 'Recalc Super';
@@ -1974,30 +1570,19 @@ Backend Endpoints:
         const url = `/core/staff_hours/employee_calendar/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&year=${calendarYear}&month=${calendarMonth}&state=${state}`;
         
         try {
-            const response = await fetch(url);
-            const data = await response.json();
-            
+            const data = await staffHoursApi(url);
             if (data.status === 'success') {
                 calendarData = data;
                 calendarLeaveTypes = data.leave_types || {};
-                renderCalendar();
-                showCalendarGrid();
-                autoSelectToday();
             } else {
-                console.error('Error loading calendar data:', data.message);
-                // Still render calendar with empty data
                 calendarData = { public_holidays: [], worked_days: [], leave_days: [] };
-                renderCalendar();
-                showCalendarGrid();
-                autoSelectToday();
             }
         } catch (error) {
-            console.error('Error loading calendar data:', error);
             calendarData = { public_holidays: [], worked_days: [], leave_days: [] };
-            renderCalendar();
-            showCalendarGrid();
-            autoSelectToday();
         }
+        renderCalendar();
+        showCalendarGrid();
+        autoSelectToday();
     }
     
     // Auto-select today's date if visible in current month
@@ -2006,6 +1591,13 @@ Backend Endpoints:
         if (todayElement && todayElement.dataset.dayinfo) {
             window.selectCalendarDay(todayElement);
         }
+    }
+    
+    // Refresh calendar and re-select the same day
+    async function refreshCalendarAndSelectDay(dateStr) {
+        await loadCalendarData();
+        const dayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${dateStr}"']`);
+        if (dayElement) window.selectCalendarDay(dayElement);
     }
     
     function renderCalendar() {
@@ -2434,16 +2026,6 @@ Backend Endpoints:
         return entries;
     }
     
-    // Legacy function - kept for compatibility but now handled by populateLeaveTypeSelect for each row
-    function populateLeaveTypes() {
-        // No longer needed - leave types are populated per row via populateLeaveTypeSelect
-    }
-    
-    // Legacy function - kept for compatibility
-    function updateLeaveBalanceDisplay() {
-        // No longer needed - leave balances are shown per row via updateLeaveBalanceForRow
-    }
-    
     // Delete Work Hours Handler
     if (deleteWorkBtn) {
         deleteWorkBtn.addEventListener('click', async function() {
@@ -2456,31 +2038,22 @@ Backend Endpoints:
             deleteWorkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             
             try {
-                const response = await fetch('/core/staff_hours/timesheets/delete/', {
+                const data = await staffHoursApi('/core/staff_hours/timesheets/delete/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                    },
-                    body: JSON.stringify({
+                    body: {
                         xero_instance_id: currentXeroInstanceId,
                         employee_id: currentEmployeeId,
                         date: selectedDayData.date
-                    })
+                    }
                 });
-                const data = await response.json();
                 
                 if (data.status === 'success') {
-                    const savedDate = selectedDayData.date;
-                    await loadCalendarData();
-                    const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
-                    if (savedDayElement) window.selectCalendarDay(savedDayElement);
+                    await refreshCalendarAndSelectDay(selectedDayData.date);
                 } else {
-                    alert('Error deleting: ' + data.message);
+                    alert('Error: ' + getErrorMessage(data, 'Failed to delete'));
                 }
             } catch (e) {
-                console.error('Error deleting work hours:', e);
-                alert('Error deleting work hours');
+                alert('Error: ' + getErrorMessage(e, 'Failed to delete work hours'));
             } finally {
                 deleteWorkBtn.disabled = false;
                 deleteWorkBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -2500,32 +2073,23 @@ Backend Endpoints:
             deleteLeaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             
             try {
-                const response = await fetch('/core/staff_hours/leave/delete/', {
+                const data = await staffHoursApi('/core/staff_hours/leave/delete/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                    },
-                    body: JSON.stringify({
+                    body: {
                         xero_instance_id: currentXeroInstanceId,
                         employee_id: currentEmployeeId,
                         date: selectedDayData.date,
                         leave_type_id: selectedDayData.leaveTypeId
-                    })
+                    }
                 });
-                const data = await response.json();
                 
                 if (data.status === 'success') {
-                    const savedDate = selectedDayData.date;
-                    await loadCalendarData();
-                    const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
-                    if (savedDayElement) window.selectCalendarDay(savedDayElement);
+                    await refreshCalendarAndSelectDay(selectedDayData.date);
                 } else {
-                    alert('Error deleting: ' + data.message);
+                    alert('Error: ' + getErrorMessage(data, 'Failed to delete'));
                 }
             } catch (e) {
-                console.error('Error deleting leave:', e);
-                alert('Error deleting leave');
+                alert('Error: ' + getErrorMessage(e, 'Failed to delete leave'));
             } finally {
                 deleteLeaveBtn.disabled = false;
                 deleteLeaveBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -2618,11 +2182,6 @@ Backend Endpoints:
     
     // Save Day button removed - work hours now saved via Save Allocations button
     // Leave hours saved via Save Leave button
-    
-    // Legacy function - now handled by populateEarningsRateSelect for each row
-    function populateEarningsRates() {
-        // No longer needed - earnings rates are populated per row via populateEarningsRateSelect
-    }
     
     window.selectCalendarDay = function(element) {
         // Remove selection from other days
@@ -2732,13 +2291,12 @@ Backend Endpoints:
     
     async function loadAllocationProjects() {
         try {
-            const response = await fetch(`/core/staff_hours/projects/?xero_instance_id=${currentXeroInstanceId}`);
-            const data = await response.json();
+            const data = await staffHoursApi(`/core/staff_hours/projects/?xero_instance_id=${currentXeroInstanceId}`);
             if (data.status === 'success') {
                 allocationProjects = data.projects;
             }
         } catch (e) {
-            console.error('Error loading projects:', e);
+            // Silently fail
         }
     }
     
@@ -2753,14 +2311,13 @@ Backend Endpoints:
             return;
         }
         try {
-            const response = await fetch(`/core/staff_hours/costings/?project_id=${projectId}`);
-            const data = await response.json();
+            const data = await staffHoursApi(`/core/staff_hours/costings/?project_id=${projectId}`);
             if (data.status === 'success') {
                 allocationCostings[projectId] = data.costings;
                 populateCostingSelect(selectElement, data.costings);
             }
         } catch (e) {
-            console.error('Error loading costings:', e);
+            // Silently fail
         }
     }
     
@@ -2778,7 +2335,7 @@ Backend Endpoints:
         tr.id = `alloc-row-${rowId}`;
         tr.dataset.allocationId = existingData?.id || '';
         
-        const allocType = existingData?.allocation_type || 1;
+        const allocType = existingData?.allocation_type || ALLOC_TYPE.PROJECT;
         
         // Project select options
         let projectOptions = '<option value="">Project...</option>';
@@ -2799,13 +2356,13 @@ Backend Endpoints:
         tr.innerHTML = `
             <td style="padding: 2px; width: 85px;">
                 <select class="form-select form-select-sm alloc-type" style="font-size: 10px; padding: 2px; width: 100%; max-width: 81px;" data-row="${rowId}">
-                    <option value="1" ${allocType == 1 ? 'selected' : ''}>Project</option>
-                    <option value="2" ${allocType == 2 ? 'selected' : ''}>Unchargeable</option>
-                    <option value="3" ${allocType == 3 ? 'selected' : ''}>Other Chargeable</option>
+                    <option value="${ALLOC_TYPE.PROJECT}" ${allocType == ALLOC_TYPE.PROJECT ? 'selected' : ''}>Project</option>
+                    <option value="${ALLOC_TYPE.UNCHARGEABLE}" ${allocType == ALLOC_TYPE.UNCHARGEABLE ? 'selected' : ''}>Unchargeable</option>
+                    <option value="${ALLOC_TYPE.OTHER_CHARGEABLE}" ${allocType == ALLOC_TYPE.OTHER_CHARGEABLE ? 'selected' : ''}>Other Chargeable</option>
                 </select>
             </td>
             <td style="padding: 2px;">
-                <div class="alloc-project-fields" style="display: ${allocType == 1 ? 'flex' : 'none'}; gap: 2px;">
+                <div class="alloc-project-fields" style="display: ${allocType == ALLOC_TYPE.PROJECT ? 'flex' : 'none'}; gap: 2px;">
                     <select class="form-select form-select-sm alloc-project" style="font-size: 10px; padding: 2px; width: 50%;" data-row="${rowId}">
                         ${projectOptions}
                     </select>
@@ -2813,7 +2370,7 @@ Backend Endpoints:
                         ${costingOptions}
                     </select>
                 </div>
-                <div class="alloc-note-field" style="${allocType != 1 ? '' : 'display:none;'}">
+                <div class="alloc-note-field" style="${allocType != ALLOC_TYPE.PROJECT ? '' : 'display:none;'}">
                     <input type="text" class="form-control form-control-sm alloc-note" style="font-size: 10px; padding: 2px; width: 100%;" 
                            placeholder="Note (required)..." value="${existingData?.note || ''}" data-row="${rowId}">
                 </div>
@@ -2873,13 +2430,13 @@ Backend Endpoints:
         let allValid = true;
         
         rows.forEach(row => {
-            const allocType = row.querySelector('.alloc-type')?.value || '1';
+            const allocType = row.querySelector('.alloc-type')?.value || String(ALLOC_TYPE.PROJECT);
             const hours = parseFloat(row.querySelector('.alloc-hours')?.value) || 0;
             sum += hours;
             
             if (hours <= 0) {
                 allValid = false;
-            } else if (allocType === '1') {
+            } else if (allocType === String(ALLOC_TYPE.PROJECT)) {
                 // Project type: need project and costing
                 const project = row.querySelector('.alloc-project')?.value;
                 const costing = row.querySelector('.alloc-costing')?.value;
@@ -2910,13 +2467,9 @@ Backend Endpoints:
     let savedAllocations = [];
     
     async function loadAllocations(employeeId, dateStr, hours = 0) {
-        console.log('loadAllocations called:', { employeeId, dateStr, hours, xeroInstanceId: currentXeroInstanceId });
         try {
             const url = `/core/staff_hours/allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}&hours=${hours}`;
-            console.log('Fetching allocations from:', url);
-            const response = await fetch(url);
-            const data = await response.json();
-            console.log('Allocations response:', data);
+            const data = await staffHoursApi(url);
             savedAllocations = data.allocations || [];
             
             // Update daily cost display (with wages, super, and total) and pay rate
@@ -2937,7 +2490,6 @@ Backend Endpoints:
                 renderAllocationEditTable([]);
             }
         } catch (e) {
-            console.error('Error loading allocations:', e);
             renderAllocationEditTable([]);
             updateDailyCostDisplay(null);
         }
@@ -2987,11 +2539,11 @@ Backend Endpoints:
     
     function createDisplayRow(allocation) {
         const tr = document.createElement('tr');
-        const allocType = allocation.allocation_type || 1;
-        const typeName = allocation.allocation_type_display || (allocType === 1 ? 'Project' : allocType === 2 ? 'Unchargeable' : 'Other Chargeable');
+        const allocType = allocation.allocation_type || ALLOC_TYPE.PROJECT;
+        const typeName = allocation.allocation_type_display || (allocType === ALLOC_TYPE.PROJECT ? 'Project' : allocType === ALLOC_TYPE.UNCHARGEABLE ? 'Unchargeable' : 'Other Chargeable');
         
         let details = '';
-        if (allocType === 1) {
+        if (allocType === ALLOC_TYPE.PROJECT) {
             const projectName = allocationProjects.find(p => p.id == allocation.project_id)?.name || allocation.project_name || '-';
             const costingName = allocation.costing_item || '-';
             details = `${projectName} / ${costingName}`;
@@ -3045,13 +2597,13 @@ Backend Endpoints:
                 item.style.cssText = 'padding: 2px 0; border-bottom: 1px dotted #dee2e6;';
                 
                 let label = '';
-                if (a.allocation_type === 1 || a.allocation_type_display === 'Project') {
+                if (a.allocation_type === ALLOC_TYPE.PROJECT || a.allocation_type_display === 'Project') {
                     // Project allocation
                     label = `<span class="text-primary">${a.project_name || 'Project'}</span>`;
                     if (a.costing_item) {
                         label += ` <span class="text-muted">→ ${a.costing_item}</span>`;
                     }
-                } else if (a.allocation_type === 2 || a.allocation_type_display === 'Unchargeable') {
+                } else if (a.allocation_type === ALLOC_TYPE.UNCHARGEABLE || a.allocation_type_display === 'Unchargeable') {
                     label = `<span class="text-secondary">Unchargeable</span>`;
                     if (a.note) label += ` <span class="text-muted">(${a.note})</span>`;
                 } else {
@@ -3098,7 +2650,6 @@ Backend Endpoints:
         const section = document.getElementById('hoursAllocationSection');
         if (!section) return;
         
-        console.log('showAllocationSection called for:', dayInfo.date, 'employee:', calendarEmployeeSelect.value, 'hours:', dayInfo.hours);
         section.classList.remove('d-none');
         
         // Clear existing data immediately
@@ -3118,465 +2669,57 @@ Backend Endpoints:
         }
     }
     
-    // Debug function for diagnosing work hours / allocation issues
-    window.debugWorkHours = function() {
-        console.log('=== WORK HOURS DEBUG ===');
-        
-        // 1. Check workRowsContainer
-        const workRowsContainer = document.getElementById('workRowsContainer');
-        console.log('1. workRowsContainer element:', workRowsContainer ? 'FOUND' : 'NOT FOUND');
-        
-        // 2. Find all work rows
-        const workRows = document.querySelectorAll('#workRowsContainer .work-row');
-        console.log('2. Work rows found:', workRows.length);
-        
-        // 3. Find all work-hours-input elements
-        const workInputs = document.querySelectorAll('#workRowsContainer .work-hours-input');
-        console.log('3. Work hours inputs found:', workInputs.length);
-        
-        // 4. Get values from each input
-        let totalWork = 0;
-        workInputs.forEach((input, i) => {
-            const rawValue = input.value;
-            const parsedValue = parseFloat(rawValue) || 0;
-            totalWork += parsedValue;
-            console.log(`   Input ${i}: raw="${rawValue}", parsed=${parsedValue}, element:`, input);
-        });
-        console.log('4. Total work hours calculated:', totalWork);
-        
-        // 5. Check totalDayHours element
-        const totalDayHoursEl = document.getElementById('totalDayHours');
-        console.log('5. totalDayHours element:', totalDayHoursEl ? 'FOUND' : 'NOT FOUND');
-        console.log('   Current textContent:', totalDayHoursEl?.textContent);
-        
-        // 6. Check totalDayHoursDisplay element
-        const totalDayHoursDisplayEl = document.getElementById('totalDayHoursDisplay');
-        console.log('6. totalDayHoursDisplay element:', totalDayHoursDisplayEl ? 'FOUND' : 'NOT FOUND');
-        console.log('   Current textContent:', totalDayHoursDisplayEl?.textContent);
-        
-        // 7. Check dayTotalHours element (main display)
-        const dayTotalHoursEl = document.getElementById('dayTotalHours');
-        console.log('7. dayTotalHours element:', dayTotalHoursEl ? 'FOUND' : 'NOT FOUND');
-        console.log('   Current textContent:', dayTotalHoursEl?.textContent);
-        
-        // 8. Check allocation section visibility
-        const allocationSection = document.getElementById('hoursAllocationSection');
-        console.log('8. hoursAllocationSection:', allocationSection ? 'FOUND' : 'NOT FOUND');
-        console.log('   Has d-none class:', allocationSection?.classList.contains('d-none'));
-        
-        // 9. Check selectedDayData
-        console.log('9. selectedDayData:', typeof selectedDayData !== 'undefined' ? selectedDayData : 'UNDEFINED');
-        
-        // 10. Check if updateDayTotalHours function exists
-        console.log('10. updateDayTotalHours function:', typeof updateDayTotalHours);
-        
-        // 11. Try to manually update
-        console.log('');
-        console.log('=== ATTEMPTING MANUAL FIX ===');
-        if (totalDayHoursEl) {
-            totalDayHoursEl.textContent = totalWork;
-            console.log('Set totalDayHours to:', totalWork);
-        }
-        if (totalDayHoursDisplayEl) {
-            totalDayHoursDisplayEl.textContent = totalWork;
-            console.log('Set totalDayHoursDisplay to:', totalWork);
-        }
-        
-        // 12. Check event listeners (can't directly inspect, but we can test)
-        console.log('');
-        console.log('=== EVENT LISTENER TEST ===');
-        console.log('Try typing in a work hours input and check if this appears:');
-        console.log('  "[Allocation] Work hours input changed..." - if NOT, event listener not attached');
-        
-        return {
-            workRowsContainer: !!workRowsContainer,
-            workRowCount: workRows.length,
-            workInputCount: workInputs.length,
-            totalWorkHours: totalWork,
-            totalDayHoursEl: totalDayHoursEl?.textContent,
-            allocationVisible: allocationSection && !allocationSection.classList.contains('d-none'),
-            selectedDayData: typeof selectedDayData !== 'undefined' ? 'exists' : 'undefined'
-        };
-    };
-    
-    // Debug function for diagnosing scroll issues in dayDetailsPanel
-    window.debugScroll = function() {
-        console.log('=== SCROLL DEBUG ===');
-        
-        const panel = document.getElementById('dayDetailsPanel');
-        const content = document.getElementById('dayDetailsContent');
-        const calendarRight = document.querySelector('.calendar-right');
-        
-        console.log('1. dayDetailsPanel:');
-        if (panel) {
-            const panelRect = panel.getBoundingClientRect();
-            const panelStyles = window.getComputedStyle(panel);
-            console.log('   - offsetHeight:', panel.offsetHeight);
-            console.log('   - scrollHeight:', panel.scrollHeight);
-            console.log('   - clientHeight:', panel.clientHeight);
-            console.log('   - scrollTop:', panel.scrollTop);
-            console.log('   - getBoundingClientRect:', panelRect);
-            console.log('   - overflow-y:', panelStyles.overflowY);
-            console.log('   - max-height:', panelStyles.maxHeight);
-            console.log('   - height:', panelStyles.height);
-            console.log('   - flex:', panelStyles.flex);
-            console.log('   - CAN SCROLL:', panel.scrollHeight > panel.clientHeight);
-        } else {
-            console.log('   NOT FOUND');
-        }
-        
-        console.log('');
-        console.log('2. dayDetailsContent:');
-        if (content) {
-            console.log('   - offsetHeight:', content.offsetHeight);
-            console.log('   - scrollHeight:', content.scrollHeight);
-            console.log('   - has d-none:', content.classList.contains('d-none'));
-        } else {
-            console.log('   NOT FOUND');
-        }
-        
-        console.log('');
-        console.log('3. calendar-right container:');
-        if (calendarRight) {
-            const crRect = calendarRight.getBoundingClientRect();
-            const crStyles = window.getComputedStyle(calendarRight);
-            console.log('   - offsetHeight:', calendarRight.offsetHeight);
-            console.log('   - getBoundingClientRect:', crRect);
-            console.log('   - max-height:', crStyles.maxHeight);
-            console.log('   - display:', crStyles.display);
-            console.log('   - flex-direction:', crStyles.flexDirection);
-        } else {
-            console.log('   NOT FOUND');
-        }
-        
-        console.log('');
-        console.log('4. Viewport:');
-        console.log('   - window.innerHeight:', window.innerHeight);
-        console.log('   - document.body.scrollHeight:', document.body.scrollHeight);
-        
-        console.log('');
-        console.log('5. Content overflow check:');
-        if (panel && content) {
-            const overflow = content.offsetHeight - panel.clientHeight;
-            console.log('   - Content height:', content.offsetHeight);
-            console.log('   - Panel client height:', panel.clientHeight);
-            console.log('   - Overflow (content - panel):', overflow);
-            if (overflow > 0) {
-                console.log('   ⚠️ OVERFLOW DETECTED - content is', overflow, 'px taller than container');
-                if (panel.scrollHeight <= panel.clientHeight) {
-                    console.log('   ❌ BUT scrollHeight <= clientHeight - scroll is broken!');
-                    console.log('   LIKELY CAUSE: Parent container constraining height');
-                }
-            }
-        }
-        
-        console.log('');
-        console.log('=== ATTEMPTING FIX ===');
-        if (panel) {
-            panel.style.overflowY = 'auto';
-            panel.style.minHeight = '0';
-            console.log('Applied: overflowY=auto, minHeight=0');
-        }
-        if (calendarRight) {
-            calendarRight.style.minHeight = '0';
-            console.log('Applied to calendar-right: minHeight=0');
-        }
-        
-        return {
-            panelScrollable: panel ? panel.scrollHeight > panel.clientHeight : false,
-            contentHeight: content?.offsetHeight,
-            panelClientHeight: panel?.clientHeight,
-            overflow: content && panel ? content.offsetHeight - panel.clientHeight : 0
-        };
-    };
-    // Debug function for StaffHoursAllocations data
-    window.debugAllocations = async function() {
-        console.log('=== ALLOCATIONS DEBUG ===');
-        console.log('');
-        
-        // 1. Current state
-        console.log('1. CURRENT STATE:');
-        console.log('   currentXeroInstanceId:', currentXeroInstanceId);
-        console.log('   selectedDayData:', selectedDayData);
-        console.log('   savedAllocations (in memory):', savedAllocations);
-        console.log('   allocationEditMode:', allocationEditMode);
-        
-        // 2. Selected employee
-        const employeeSelect = document.getElementById('calendarEmployeeSelect');
-        const employeeId = employeeSelect?.value;
-        const employeeName = employeeSelect?.options[employeeSelect.selectedIndex]?.text;
-        console.log('');
-        console.log('2. SELECTED EMPLOYEE:');
-        console.log('   ID:', employeeId);
-        console.log('   Name:', employeeName);
-        
-        // 3. Selected date
-        const dateStr = selectedDayData?.date;
-        console.log('');
-        console.log('3. SELECTED DATE:', dateStr);
-        
-        // 4. Check if StaffHours record exists for this day
-        console.log('');
-        console.log('4. STAFF HOURS RECORD:');
-        if (selectedDayData) {
-            console.log('   Work hours:', selectedDayData.workHours);
-            console.log('   isWorked:', selectedDayData.isWorked);
-            console.log('   Full dayInfo:', selectedDayData);
-        } else {
-            console.log('   No selectedDayData - click on a calendar day first');
-        }
-        
-        // 5. Fetch allocations from API
-        console.log('');
-        console.log('5. FETCHING ALLOCATIONS FROM API...');
-        if (employeeId && dateStr) {
-            try {
-                const url = `/core/staff_hours/allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}&hours=${selectedDayData?.workHours || 0}`;
-                console.log('   URL:', url);
-                const response = await fetch(url);
-                const data = await response.json();
-                console.log('   Response status:', data.status);
-                console.log('   Allocations count:', data.allocations?.length || 0);
-                console.log('   Allocations data:', data.allocations);
-                console.log('   Total allocated:', data.total_allocated);
-                console.log('   Full response:', data);
-            } catch (e) {
-                console.error('   Error fetching:', e);
-            }
-        } else {
-            console.log('   Cannot fetch - missing employeeId or dateStr');
-        }
-        
-        // 6. Check Django debug endpoint (if exists)
-        console.log('');
-        console.log('6. CHECKING RAW DATABASE (debug endpoint)...');
-        let debugData = null;
-        if (employeeId && dateStr) {
-            try {
-                const debugUrl = `/core/staff_hours/debug_allocations/?xero_instance_id=${currentXeroInstanceId}&employee_id=${employeeId}&date=${dateStr}`;
-                console.log('   URL:', debugUrl);
-                const response = await fetch(debugUrl);
-                if (response.ok) {
-                    debugData = await response.json();
-                    console.log('   Employee found:', debugData.employee?.found, debugData.employee?.name);
-                    console.log('   StaffHours found:', debugData.staff_hours?.found, 'pk:', debugData.staff_hours?.pk, 'hours:', debugData.staff_hours?.hours);
-                    console.log('   Allocations count:', debugData.allocations?.count);
-                    console.log('   Allocations records:', debugData.allocations?.records);
-                    console.log('   Allocations reason:', debugData.allocations?.reason || 'N/A');
-                    console.log('   Recent StaffHours (last 5):', debugData.recent_staff_hours);
-                    console.log('   Recent Allocations (last 5):', debugData.recent_allocations);
-                } else {
-                    console.log('   Debug endpoint not available (404) - this is expected');
-                    console.log('   To add debug endpoint, create view in views.py');
-                }
-            } catch (e) {
-                console.log('   Debug endpoint error:', e.message);
-            }
-        }
-        
-        // 7. DOM elements state
-        console.log('');
-        console.log('7. DOM ELEMENTS:');
-        const allocationDisplaySection = document.getElementById('allocationDisplaySection');
-        const allocationDisplayList = document.getElementById('allocationDisplayList');
-        const hoursAllocationSection = document.getElementById('hoursAllocationSection');
-        const allocationRows = document.getElementById('allocationRows');
-        console.log('   allocationDisplaySection:', allocationDisplaySection ? 'EXISTS' : 'MISSING', allocationDisplaySection?.classList.contains('d-none') ? '(hidden)' : '(visible)');
-        console.log('   allocationDisplayList innerHTML:', allocationDisplayList?.innerHTML || 'EMPTY');
-        console.log('   hoursAllocationSection:', hoursAllocationSection ? 'EXISTS' : 'MISSING', hoursAllocationSection?.classList.contains('d-none') ? '(hidden)' : '(visible)');
-        console.log('   allocationRows row count:', allocationRows?.querySelectorAll('tr').length || 0);
-        
-        console.log('');
-        console.log('=== END ALLOCATIONS DEBUG ===');
-        console.log('');
-        console.log('NEXT STEPS:');
-        console.log('- If allocations array is empty, check if records exist in StaffHoursAllocations table');
-        console.log('- Run in Django shell: StaffHoursAllocations.objects.filter(staff_hours__employee__employee_id="' + employeeId + '", staff_hours__date="' + dateStr + '")');
-        
-        return {
-            employeeId,
-            dateStr,
-            selectedDayData,
-            savedAllocations,
-            xeroInstanceId: currentXeroInstanceId
-        };
-    };
-    
-    console.log('[Staff Hours] Debug functions loaded. Run debugWorkHours(), debugScroll(), or debugAllocations() to diagnose.');
-    
-    // Helper function called from Save Day to save allocations silently
-    async function saveAllocationsFromSaveDay() {
-        console.log('=== saveAllocationsFromSaveDay START ===');
+    // Gather allocation data from DOM rows
+    function gatherAllocationsFromRows(includeDisplayInfo = false) {
         const rows = document.querySelectorAll('#allocationRows tr');
-        console.log('Found allocation rows:', rows.length);
-        if (rows.length === 0) {
-            console.log('No rows found, returning early');
-            return;
-        }
-        
         const allocations = [];
-        rows.forEach((row, rowIndex) => {
-            console.log(`Processing row ${rowIndex}:`, row);
+        
+        rows.forEach(row => {
             const typeSelect = row.querySelector('.alloc-type');
             const projectSelect = row.querySelector('.alloc-project');
             const costingSelect = row.querySelector('.alloc-costing');
             const noteInput = row.querySelector('.alloc-note');
             const hoursInput = row.querySelector('.alloc-hours');
             
-            console.log(`  Row ${rowIndex} elements:`, {
-                typeSelect: typeSelect?.value,
-                projectSelect: projectSelect?.value,
-                costingSelect: costingSelect?.value,
-                noteInput: noteInput?.value,
-                hoursInput: hoursInput?.value
-            });
-            
-            const allocType = parseInt(typeSelect?.value) || 1;
+            const allocType = parseInt(typeSelect?.value) || ALLOC_TYPE.PROJECT;
             const hours = parseFloat(hoursInput?.value) || 0;
-            console.log(`  Row ${rowIndex} parsed: allocType=${allocType}, hours=${hours}`);
             
-            if (hours <= 0) {
-                console.log(`  Row ${rowIndex} SKIPPED - hours <= 0`);
-                return; // Skip empty rows
-            }
+            if (hours <= 0) return;
             
-            const alloc = {
-                allocation_type: allocType,
-                hours: hours
-            };
+            const alloc = { allocation_type: allocType, hours: hours };
             
-            if (allocType === 1) {
+            if (allocType === ALLOC_TYPE.PROJECT) {
                 alloc.project_id = projectSelect?.value;
                 alloc.costing_id = costingSelect?.value;
                 alloc.note = '';
+                if (includeDisplayInfo) {
+                    alloc.project_name = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
+                    alloc.costing_item = costingSelect?.options[costingSelect.selectedIndex]?.text || '';
+                }
             } else {
                 alloc.project_id = null;
                 alloc.costing_id = null;
                 alloc.note = noteInput?.value?.trim() || '';
+                if (includeDisplayInfo) {
+                    alloc.project_name = null;
+                    alloc.costing_item = null;
+                }
             }
-            console.log(`  Row ${rowIndex} allocation object:`, alloc);
+            if (includeDisplayInfo) {
+                alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
+            }
             allocations.push(alloc);
         });
-        
-        console.log('Total allocations to save:', allocations.length);
-        console.log('Allocations array:', JSON.stringify(allocations, null, 2));
-        
-        if (allocations.length === 0) {
-            console.log('No valid allocations, returning early');
-            return;
-        }
-        
-        try {
-            for (let i = 0; i < allocations.length; i++) {
-                const alloc = allocations[i];
-                const payload = {
-                    xero_instance_id: currentXeroInstanceId,
-                    employee_id: calendarEmployeeSelect.value,
-                    date: selectedDayData.date,
-                    allocation_type: alloc.allocation_type,
-                    project_id: alloc.project_id,
-                    costing_id: alloc.costing_id,
-                    hours: alloc.hours,
-                    note: alloc.note,
-                    clear_existing: i === 0  // Clear on first save only
-                };
-                console.log(`Saving allocation ${i + 1}/${allocations.length}:`, JSON.stringify(payload, null, 2));
-                
-                const response = await fetch('/core/staff_hours/allocations/save/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                const responseData = await response.json();
-                console.log(`Allocation ${i + 1} response status:`, response.status);
-                console.log(`Allocation ${i + 1} response data:`, responseData);
-            }
-            console.log('=== saveAllocationsFromSaveDay COMPLETE ===');
-        } catch (e) {
-            console.error('Error saving allocations:', e);
-        }
+        return allocations;
     }
     
-    async function saveAllAllocations() {
-        console.log('=== saveAllAllocations START (Work Hours + Allocations) ===');
-        
-        const saveBtn = document.getElementById('saveAllocationsBtn');
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
-        
-        try {
-            // STEP 1: Save work hours to Xero first
-            const workEntries = gatherWorkEntries();
-            console.log('Work entries to save:', workEntries);
-            
-            if (workEntries.length > 0) {
-                console.log('Saving work hours to Xero...');
-                for (const entry of workEntries) {
-                    const response = await fetch('/core/staff_hours/timesheets/save/', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                        },
-                        body: JSON.stringify({
-                            xero_instance_id: currentXeroInstanceId,
-                            employee_id: calendarEmployeeSelect.value,
-                            date: selectedDayData.date,
-                            hours: entry.hours,
-                            earnings_rate_id: entry.earningsRateId
-                        })
-                    });
-                    const result = await response.json();
-                    console.log('Work hours save result:', result);
-                    if (result.status !== 'success') {
-                        throw new Error(result.message || 'Failed to save work hours');
-                    }
-                }
-            }
-            
-            // STEP 2: Save allocations to local DB
-            const rows = document.querySelectorAll('#allocationRows tr');
-            console.log('Found allocation rows:', rows.length);
-            const allocations = [];
-            
-            rows.forEach((row, rowIndex) => {
-                const typeSelect = row.querySelector('.alloc-type');
-                const projectSelect = row.querySelector('.alloc-project');
-                const costingSelect = row.querySelector('.alloc-costing');
-                const noteInput = row.querySelector('.alloc-note');
-                const hoursInput = row.querySelector('.alloc-hours');
-                
-                const allocType = parseInt(typeSelect?.value) || 1;
-                const alloc = {
-                    allocation_type: allocType,
-                    hours: parseFloat(hoursInput?.value) || 0
-                };
-                
-                if (allocType === 1) {
-                    alloc.project_id = projectSelect?.value;
-                    alloc.project_name = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
-                    alloc.costing_id = costingSelect?.value;
-                    alloc.costing_item = costingSelect?.options[costingSelect.selectedIndex]?.text || '';
-                    alloc.note = '';
-                } else {
-                    alloc.project_id = null;
-                    alloc.project_name = null;
-                    alloc.costing_id = null;
-                    alloc.costing_item = null;
-                    alloc.note = noteInput?.value?.trim() || '';
-                }
-                alloc.allocation_type_display = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
-                allocations.push(alloc);
-            });
-            
-            console.log('Saving allocations:', allocations.length);
-            for (let i = 0; i < allocations.length; i++) {
-                const alloc = allocations[i];
-                const payload = {
+    // Save allocations to backend
+    async function saveAllocationsToBackend(allocations) {
+        for (let i = 0; i < allocations.length; i++) {
+            const alloc = allocations[i];
+            await staffHoursApi('/core/staff_hours/allocations/save/', {
+                method: 'POST',
+                body: {
                     xero_instance_id: currentXeroInstanceId,
                     employee_id: calendarEmployeeSelect.value,
                     date: selectedDayData.date,
@@ -3586,40 +2729,65 @@ Backend Endpoints:
                     hours: alloc.hours,
                     note: alloc.note,
                     clear_existing: i === 0
-                };
-                
-                const response = await fetch('/core/staff_hours/allocations/save/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                const responseData = await response.json();
-                console.log(`Allocation ${i + 1} saved:`, responseData);
+                }
+            });
+        }
+    }
+    
+    // Helper function called from Save Day to save allocations silently
+    async function saveAllocationsFromSaveDay() {
+        const allocations = gatherAllocationsFromRows();
+        if (allocations.length === 0) return;
+        
+        try {
+            await saveAllocationsToBackend(allocations);
+        } catch (e) {
+            // Silently fail
+        }
+    }
+    
+    async function saveAllAllocations() {
+        const saveBtn = document.getElementById('saveAllocationsBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            // STEP 1: Save work hours to Xero first
+            const workEntries = gatherWorkEntries();
+            
+            if (workEntries.length > 0) {
+                for (const entry of workEntries) {
+                    const result = await staffHoursApi('/core/staff_hours/timesheets/save/', {
+                        method: 'POST',
+                        body: {
+                            xero_instance_id: currentXeroInstanceId,
+                            employee_id: calendarEmployeeSelect.value,
+                            date: selectedDayData.date,
+                            hours: entry.hours,
+                            earnings_rate_id: entry.earningsRateId
+                        }
+                    });
+                    if (result.status !== 'success') {
+                        throw new Error(result.message || 'Failed to save work hours');
+                    }
+                }
             }
             
+            // STEP 2: Save allocations to local DB
+            const allocations = gatherAllocationsFromRows(true);
+            await saveAllocationsToBackend(allocations);
             savedAllocations = allocations;
-            console.log('=== saveAllAllocations COMPLETE ===');
             saveBtn.textContent = 'Saved!';
             
             // Refresh calendar to show updated data
-            const savedDate = selectedDayData.date;
-            await loadCalendarData();
-            const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
-            if (savedDayElement) {
-                window.selectCalendarDay(savedDayElement);
-            }
+            await refreshCalendarAndSelectDay(selectedDayData.date);
             
             setTimeout(() => {
                 saveBtn.textContent = 'Save Allocations';
             }, 1000);
         } catch (e) {
-            console.error('Error saving:', e);
             saveBtn.textContent = 'Error';
-            alert('Error saving: ' + e.message);
+            alert('Error: ' + getErrorMessage(e, 'Failed to save'));
             setTimeout(() => {
                 saveBtn.textContent = 'Save Allocations';
                 validateAllocations();
@@ -3629,9 +2797,7 @@ Backend Endpoints:
     
     // Save leave entries independently
     async function saveLeaveEntries() {
-        console.log('=== saveLeaveEntries START ===');
         const leaveEntries = gatherLeaveEntries();
-        console.log('Leave entries to save:', leaveEntries);
         
         const saveBtn = document.getElementById('saveLeaveBtn');
         if (!saveBtn) return;
@@ -3646,39 +2812,27 @@ Backend Endpoints:
         
         try {
             for (const entry of leaveEntries) {
-                const response = await fetch('/core/staff_hours/create_leave_application/', {
+                const result = await staffHoursApi('/core/staff_hours/create_leave_application/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
-                    body: JSON.stringify({
+                    body: {
                         xero_instance_id: currentXeroInstanceId,
                         employee_id: calendarEmployeeSelect.value,
                         leave_type_id: entry.leaveTypeId,
                         date: selectedDayData.date,
                         hours: entry.hours,
                         description: entry.comment
-                    })
+                    }
                 });
-                const result = await response.json();
-                console.log('Leave save result:', result);
                 if (result.status !== 'success') {
                     throw new Error(result.message || 'Failed to save leave');
                 }
             }
             
-            console.log('=== saveLeaveEntries COMPLETE ===');
             saveBtn.textContent = 'Saved!';
             saveBtn.style.background = '#28a745';
             
             // Refresh calendar
-            const savedDate = selectedDayData.date;
-            await loadCalendarData();
-            const savedDayElement = document.querySelector(`.calendar-day[data-dayinfo*='"date":"${savedDate}"']`);
-            if (savedDayElement) {
-                window.selectCalendarDay(savedDayElement);
-            }
+            await refreshCalendarAndSelectDay(selectedDayData.date);
             
             setTimeout(() => {
                 saveBtn.textContent = 'Save Leave';
@@ -3686,10 +2840,9 @@ Backend Endpoints:
                 validateLeave();
             }, 1000);
         } catch (e) {
-            console.error('Error saving leave:', e);
             saveBtn.textContent = 'Error';
             saveBtn.style.background = '#dc3545';
-            alert('Error saving leave: ' + e.message);
+            alert('Error: ' + getErrorMessage(e, 'Failed to save leave'));
             setTimeout(() => {
                 saveBtn.textContent = 'Save Leave';
                 saveBtn.style.background = '#6c757d';
@@ -3730,143 +2883,6 @@ Backend Endpoints:
     };
     
 })();
-
-// Debug function for calendar card styling
-window.debugCalendarStyling = function() {
-    const elements = {
-        cardBody: document.querySelector('.card-body'),
-        calendarLeft: document.querySelector('.calendar-left'),
-        calendarRight: document.querySelector('.calendar-right'),
-        monthNav: document.querySelector('.calendar-left > .d-flex'),
-        calendarContainer: document.getElementById('calendarContainer'),
-        calendarGrid: document.getElementById('calendarGrid'),
-        calendarHeader: document.querySelector('.calendar-header'),
-        dayHeaders: document.querySelectorAll('.calendar-day-header'),
-        dayDetailsHeader: document.querySelector('.day-details-header'),
-        dayDetailsPanel: document.getElementById('dayDetailsPanel'),
-        calendarBody: document.querySelector('.calendar-body')
-    };
-    
-    console.log('=== CALENDAR CARD STYLING DEBUG ===\n');
-    
-    Object.entries(elements).forEach(([name, el]) => {
-        if (!el || (el.length !== undefined && el.length === 0)) {
-            console.log(`${name}: NOT FOUND`);
-            return;
-        }
-        
-        const target = el.length !== undefined ? el[0] : el;
-        const rect = target.getBoundingClientRect();
-        const styles = window.getComputedStyle(target);
-        
-        console.log(`=== ${name.toUpperCase()} ===`);
-        console.log('Position:', { top: rect.top.toFixed(1), bottom: rect.bottom.toFixed(1), height: rect.height.toFixed(1) });
-        console.log('Borders:', {
-            top: styles.borderTopWidth + ' ' + styles.borderTopStyle + ' ' + styles.borderTopColor,
-            bottom: styles.borderBottomWidth + ' ' + styles.borderBottomStyle + ' ' + styles.borderBottomColor,
-            left: styles.borderLeftWidth + ' ' + styles.borderLeftStyle,
-            right: styles.borderRightWidth + ' ' + styles.borderRightStyle
-        });
-        console.log('Box Shadow:', styles.boxShadow);
-        console.log('Margins:', { top: styles.marginTop, bottom: styles.marginBottom });
-        console.log('Padding:', { top: styles.paddingTop, bottom: styles.paddingBottom });
-        console.log('Background:', styles.background.substring(0, 80) + '...');
-        console.log('');
-    });
-    
-    // Check first row of calendar days
-    const firstCalendarRow = document.querySelector('.calendar-body .calendar-row');
-    if (firstCalendarRow) {
-        const rowStyles = window.getComputedStyle(firstCalendarRow);
-        const rowRect = firstCalendarRow.getBoundingClientRect();
-        console.log('=== FIRST CALENDAR ROW ===');
-        console.log('Position:', { top: rowRect.top.toFixed(1), bottom: rowRect.bottom.toFixed(1) });
-        console.log('Margins:', { top: rowStyles.marginTop, bottom: rowStyles.marginBottom });
-        console.log('Gap from header:', (rowRect.top - document.querySelector('.calendar-header').getBoundingClientRect().bottom).toFixed(1) + 'px');
-    }
-    
-    return 'Debug complete - check console output above';
-};
-
-// Debug function for header alignment
-window.debugHeaderAlignment = function() {
-    const dayDetailsHeader = document.querySelector('.day-details-header');
-    const calendarHeader = document.querySelector('.calendar-header');
-    
-    if (!dayDetailsHeader || !calendarHeader) {
-        console.log('Headers not found');
-        return;
-    }
-    
-    const ddRect = dayDetailsHeader.getBoundingClientRect();
-    const chRect = calendarHeader.getBoundingClientRect();
-    const ddStyles = window.getComputedStyle(dayDetailsHeader);
-    const chStyles = window.getComputedStyle(calendarHeader);
-    
-    console.log('=== DAY DETAILS HEADER ===');
-    console.log('Bounding rect:', { top: ddRect.top, bottom: ddRect.bottom, height: ddRect.height });
-    console.log('Styles:', {
-        marginTop: ddStyles.marginTop,
-        marginBottom: ddStyles.marginBottom,
-        paddingTop: ddStyles.paddingTop,
-        paddingBottom: ddStyles.paddingBottom,
-        height: ddStyles.height,
-        lineHeight: ddStyles.lineHeight,
-        fontSize: ddStyles.fontSize,
-        display: ddStyles.display,
-        position: ddStyles.position
-    });
-    
-    console.log('=== CALENDAR HEADER ===');
-    console.log('Bounding rect:', { top: chRect.top, bottom: chRect.bottom, height: chRect.height });
-    console.log('Styles:', {
-        marginTop: chStyles.marginTop,
-        marginBottom: chStyles.marginBottom,
-        paddingTop: chStyles.paddingTop,
-        paddingBottom: chStyles.paddingBottom,
-        height: chStyles.height,
-        lineHeight: chStyles.lineHeight,
-        fontSize: chStyles.fontSize,
-        display: chStyles.display,
-        position: chStyles.position
-    });
-    
-    // Check parents
-    console.log('=== PARENT CONTAINERS ===');
-    const ddParent = dayDetailsHeader.parentElement;
-    const chParent = calendarHeader.parentElement;
-    const ddParentStyles = window.getComputedStyle(ddParent);
-    const chParentStyles = window.getComputedStyle(chParent);
-    
-    console.log('Day Details parent:', ddParent.className || ddParent.id);
-    console.log('DD parent rect:', ddParent.getBoundingClientRect());
-    console.log('DD parent styles:', {
-        paddingTop: ddParentStyles.paddingTop,
-        marginTop: ddParentStyles.marginTop,
-        display: ddParentStyles.display,
-        flexDirection: ddParentStyles.flexDirection
-    });
-    
-    console.log('Calendar parent:', chParent.className || chParent.id);
-    console.log('CH parent rect:', chParent.getBoundingClientRect());
-    console.log('CH parent styles:', {
-        paddingTop: chParentStyles.paddingTop,
-        marginTop: chParentStyles.marginTop,
-        display: chParentStyles.display,
-        flexDirection: chParentStyles.flexDirection
-    });
-    
-    // Alignment difference
-    console.log('=== ALIGNMENT DIFFERENCE ===');
-    console.log('Top difference (DD - CH):', ddRect.top - chRect.top, 'px');
-    console.log('Bottom difference (DD - CH):', ddRect.bottom - chRect.bottom, 'px');
-    
-    return {
-        dayDetailsHeader: { rect: ddRect, marginTop: ddStyles.marginTop },
-        calendarHeader: { rect: chRect, marginTop: chStyles.marginTop },
-        topDiff: ddRect.top - chRect.top
-    };
-};
 </script>
 
 <style>
