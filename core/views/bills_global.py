@@ -1875,3 +1875,140 @@ def delete_bill_allocation(request):
     except Exception as e:
         logger.error(f"Error deleting invoice allocation: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_bill_to_stocktake(request):
+    """
+    Send a bill from Inbox to Stocktake section.
+    This does NOT send to Xero - it simply updates the bill record.
+    
+    Flow: Inbox -> Stocktake (this endpoint) -> Stocktake section -> Xero (later)
+    
+    Expected POST data:
+    - bill_pk: int (primary key of the bill)
+    - xero_instance_pk: int (FK to XeroInstances)
+    - supplier_pk: int (FK to Contacts, maps to contact_pk field)
+    - bill_number: str (maps to supplier_bill_number field)
+    - total_net: decimal
+    - total_gst: decimal
+    - bill_date: str (YYYY-MM-DD)
+    - bill_due_date: str (YYYY-MM-DD)
+    - currency: str (ISO 4217, default 'AUD')
+    
+    Updates:
+    - is_stocktake = True
+    - xero_instance = FK to XeroInstances
+    - bill_status = 0 (ready for stocktake allocation)
+    - project = None (stocktake bills have no project)
+    - contact_pk = FK to Contacts
+    - supplier_bill_number = bill_number
+    - bill_date, bill_due_date, total_net, total_gst, currency
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Extract and validate required fields
+        bill_pk = data.get('bill_pk')
+        xero_instance_pk = data.get('xero_instance_pk')
+        supplier_pk = data.get('supplier_pk')
+        bill_number = data.get('bill_number')
+        total_net = data.get('total_net')
+        total_gst = data.get('total_gst')
+        bill_date = data.get('bill_date')
+        bill_due_date = data.get('bill_due_date')
+        currency = data.get('currency', 'AUD')
+        
+        logger.info(f"[SendToStocktake] Received request: bill_pk={bill_pk}, xero_instance_pk={xero_instance_pk}, supplier_pk={supplier_pk}")
+        
+        # Validate required fields
+        missing = []
+        if not bill_pk:
+            missing.append('bill_pk')
+        if not xero_instance_pk:
+            missing.append('xero_instance_pk')
+        if not supplier_pk:
+            missing.append('supplier_pk')
+        if not bill_number:
+            missing.append('bill_number')
+        if total_net is None:
+            missing.append('total_net')
+        if total_gst is None:
+            missing.append('total_gst')
+        if not bill_date:
+            missing.append('bill_date')
+        if not bill_due_date:
+            missing.append('bill_due_date')
+        
+        if missing:
+            logger.error(f"[SendToStocktake] Missing required fields: {missing}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Missing required fields: {", ".join(missing)}'
+            }, status=400)
+        
+        # Get the bill
+        try:
+            bill = Bills.objects.get(bill_pk=bill_pk)
+        except Bills.DoesNotExist:
+            logger.error(f"[SendToStocktake] Bill not found: {bill_pk}")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Bill not found'
+            }, status=404)
+        
+        # Get the Xero instance
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+        except XeroInstances.DoesNotExist:
+            logger.error(f"[SendToStocktake] Xero instance not found: {xero_instance_pk}")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Xero instance not found'
+            }, status=404)
+        
+        # Get the supplier (contact)
+        try:
+            supplier = Contacts.objects.get(contact_pk=supplier_pk)
+        except Contacts.DoesNotExist:
+            logger.error(f"[SendToStocktake] Supplier not found: {supplier_pk}")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Supplier not found'
+            }, status=404)
+        
+        # Update the bill
+        bill.is_stocktake = True
+        bill.xero_instance = xero_instance
+        bill.bill_status = 0  # Ready for stocktake allocation
+        bill.project = None  # Stocktake bills have no project
+        bill.contact_pk = supplier
+        bill.supplier_bill_number = bill_number
+        bill.bill_date = bill_date
+        bill.bill_due_date = bill_due_date
+        bill.total_net = Decimal(str(total_net))
+        bill.total_gst = Decimal(str(total_gst))
+        bill.currency = currency
+        bill.save()
+        
+        logger.info(f"[SendToStocktake] Successfully updated bill {bill_pk}: is_stocktake=True, xero_instance={xero_instance_pk}, supplier={supplier_pk}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Bill sent to stocktake',
+            'bill_pk': bill_pk
+        })
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"[SendToStocktake] Invalid JSON: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"[SendToStocktake] Error: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

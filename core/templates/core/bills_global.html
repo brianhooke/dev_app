@@ -1160,22 +1160,44 @@ $(document).ready(function() {
         
         button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
         
-        var payload = {
-            bill_pk: parseInt(billPk),
-            xero_instance_or_project: xeroInstanceOrProject,
-            supplier_pk: parseInt(supplierPk),
-            bill_number: billNumber,
-            total_net: totalNet,
-            total_gst: totalGst,
-            bill_date: billDate,
-            bill_due_date: billDueDate,
-            // FX fields
-            currency: currency
-        };
+        // Determine endpoint and payload based on bill type
+        var endpoint, payload;
+        
+        if (isStocktake) {
+            // Stocktake bills use dedicated endpoint - just updates DB, no Xero API call
+            var xeroInstancePk = row.find('.stocktake-xero-radio:checked').val();
+            endpoint = '/core/send_bill_to_stocktake/';
+            payload = {
+                bill_pk: parseInt(billPk),
+                xero_instance_pk: parseInt(xeroInstancePk),
+                supplier_pk: parseInt(supplierPk),
+                bill_number: billNumber,
+                total_net: totalNet,
+                total_gst: totalGst,
+                bill_date: billDate,
+                bill_due_date: billDueDate,
+                currency: currency
+            };
+            console.log('[SendBill] Using stocktake endpoint:', endpoint);
+        } else {
+            // Regular bills use existing send_bill endpoint
+            endpoint = '/core/send_bill/';
+            payload = {
+                bill_pk: parseInt(billPk),
+                xero_instance_or_project: xeroInstanceOrProject,
+                supplier_pk: parseInt(supplierPk),
+                bill_number: billNumber,
+                total_net: totalNet,
+                total_gst: totalGst,
+                bill_date: billDate,
+                bill_due_date: billDueDate,
+                currency: currency
+            };
+        }
         console.log('[SendBill] Payload being sent:', JSON.stringify(payload, null, 2));
         
         $.ajax({
-            url: '/core/send_bill/',
+            url: endpoint,
             type: 'POST',
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             contentType: 'application/json',

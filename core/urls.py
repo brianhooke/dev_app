@@ -11,7 +11,8 @@ from .views.bills_global import (
     get_bills_list, archive_bill, return_to_inbox, 
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
     create_bill_allocation, update_bill_allocation, delete_bill_allocation,
-    get_tracking_categories_by_instance
+    get_tracking_categories_by_instance,
+    send_bill_to_stocktake
 )
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
@@ -182,6 +183,7 @@ urlpatterns = [
     path('create_bill_allocation/', create_bill_allocation, name='create_bill_allocation'),
     path('update_bill_allocation/', update_bill_allocation, name='update_bill_allocation'),
     path('delete_bill_allocation/', delete_bill_allocation, name='delete_bill_allocation'),
+    path('send_bill_to_stocktake/', send_bill_to_stocktake, name='send_bill_to_stocktake'),
     path('update_bill/', update_bill, name='update_bill'),
     path('null_allocation_xero_fields/', null_allocation_xero_fields, name='null_allocation_xero_fields'),
     path('get_approved_bills/', get_approved_bills, name='get_approved_bills'),
