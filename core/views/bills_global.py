@@ -329,23 +329,26 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
             'message': f'This bill was already sent to Xero (Xero ID: {invoice.bill_xero_id}). Cannot send again.'
         }, status=400)
     
-    # Pre-check: Search Xero for existing invoice with same InvoiceNumber (unless force_update)
+    # Pre-check: Search Xero for existing invoice with same InvoiceNumber AND same Contact (unless force_update)
+    # Note: Different suppliers can have the same invoice number, so we must filter by Contact
     if invoice.supplier_bill_number and not force_update:
         xero_instance = invoice.xero_instance
-        if xero_instance:
+        supplier_contact_id = invoice.contact_pk.xero_contact_id if invoice.contact_pk else None
+        if xero_instance and supplier_contact_id:
             try:
                 access_token = xero_instance.get_valid_access_token()
                 tenant_id = xero_instance.xero_tenant_id
                 
-                # Search for existing ACCPAY invoice with this number (URL encode the where clause)
+                # Search for existing ACCPAY invoice with this number FROM THE SAME SUPPLIER
                 # Note: quote is imported at module level (line 30)
                 inv_num = invoice.supplier_bill_number.strip()
-                where_clause = f'Type=="ACCPAY" AND InvoiceNumber=="{inv_num}"'
+                where_clause = f'Type=="ACCPAY" AND InvoiceNumber=="{inv_num}" AND Contact.ContactID==Guid("{supplier_contact_id}")'
                 encoded_where = quote(where_clause)
                 search_url = f'https://api.xero.com/api.xro/2.0/Invoices?where={encoded_where}'
                 
                 logger.info(f"=== PRE-CHECK: Searching Xero for existing invoice ===")
                 logger.info(f"  supplier_bill_number: '{inv_num}'")
+                logger.info(f"  supplier_contact_id: '{supplier_contact_id}'")
                 logger.info(f"  where_clause: {where_clause}")
                 logger.info(f"  search_url: {search_url}")
                 
