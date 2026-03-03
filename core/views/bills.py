@@ -575,10 +575,21 @@ def get_approved_bills(request):
             # Get allocations - use StocktakeAllocations for stocktake bills, Bill_allocations otherwise
             allocations = []
             if invoice.is_stocktake:
+                # Look up XeroAccounts by account_code for display names
+                xero_inst = invoice.xero_instance or (invoice.project.xero_instance if invoice.project else None)
+                account_cache = {}
+                if xero_inst:
+                    for xa in XeroAccounts.objects.filter(xero_instance=xero_inst):
+                        account_cache[xa.account_code] = xa.account_name
+                
                 for alloc in invoice.stocktake_allocations.all():
+                    # Resolve account code to account name
+                    acct_code = alloc.item.xero_account_code if alloc.item else ''
+                    acct_name = account_cache.get(acct_code, acct_code) if acct_code else '-'
+                    
                     allocations.append({
                         'allocation_pk': alloc.allocation_pk,
-                        'xero_account_name': alloc.item.xero_account_code if alloc.item else '-',
+                        'xero_account_name': acct_name,
                         'tracking_category_name': alloc.item.xero_tracking_category if alloc.item and alloc.item.xero_tracking_category else '-',
                         'costing_name': alloc.item.item if alloc.item else '-',
                         'amount': float(alloc.amount) if alloc.amount else 0,
