@@ -19,8 +19,7 @@ Xero Instance Management:
 
 Xero Contact Endpoints:
 10. pull_xero_contacts - Pull contacts from Xero API
-11. pull_xero_tracking_categories - Pull tracking categories from Xero API
-12. create_contact - Create contact in Xero + local DB
+11. create_contact - Create contact in Xero + local DB
 13. create_supplier - Create supplier (minimal contact) in Xero + local DB
 14. update_contact_details - Update contact details in Xero
 15. update_contact_status - Archive/unarchive contact in Xero
@@ -30,7 +29,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from ..models import XeroInstances, Contacts, XeroTrackingCategories
+from ..models import XeroInstances, Contacts
 import json
 import base64
 import requests
@@ -773,116 +772,6 @@ def pull_xero_contacts(request, instance_pk):
                 'contacts_updated': updated_contacts_count,
                 'contacts_unchanged': unchanged_contacts_count,
                 'contact_person_updates': contact_person_updates
-            }
-        })
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': 'Only POST method is allowed'
-    }, status=405)
-
-
-@csrf_exempt
-@handle_xero_request_errors
-def pull_xero_tracking_categories(request, instance_pk):
-    """
-    Pull tracking categories from Xero API for a specific instance.
-    Inserts new tracking categories and options, updates existing ones.
-    """
-    if request.method == 'POST':
-        # Get Xero authentication
-        xero_instance, access_token, tenant_id = get_xero_auth(instance_pk)
-        if not xero_instance:
-            return access_token  # This is the error response
-        
-        logger.info(f"Pulling tracking categories for instance: {xero_instance.xero_name}")
-        
-        # Fetch tracking categories from Xero API
-        response = requests.get(
-            'https://api.xero.com/api.xro/2.0/TrackingCategories',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Failed to fetch tracking categories from Xero: {response.status_code}'
-            }, status=400)
-        
-        tracking_data = response.json()
-        xero_categories = tracking_data.get('TrackingCategories', [])
-        
-        logger.info(f"Received {len(xero_categories)} tracking categories from Xero API")
-        
-        # Process tracking categories and their options
-        new_count = 0
-        updated_count = 0
-        unchanged_count = 0
-        
-        for xero_category in xero_categories:
-            tracking_category_id = xero_category.get('TrackingCategoryID')
-            category_name = xero_category.get('Name', '')
-            category_status = xero_category.get('Status', '')
-            options = xero_category.get('Options', [])
-            
-            # Process each option within the category
-            for option in options:
-                option_id = option.get('TrackingOptionID')
-                option_name = option.get('Name', '')
-                
-                try:
-                    # Check if this category+option already exists
-                    existing = XeroTrackingCategories.objects.get(
-                        xero_instance=xero_instance,
-                        tracking_category_id=tracking_category_id,
-                        option_id=option_id
-                    )
-                    
-                    # Check if any fields need updating
-                    updated = False
-                    if existing.name != category_name:
-                        existing.name = category_name
-                        updated = True
-                    if existing.status != category_status:
-                        existing.status = category_status
-                        updated = True
-                    if existing.option_name != option_name:
-                        existing.option_name = option_name
-                        updated = True
-                    
-                    if updated:
-                        existing.save()
-                        updated_count += 1
-                    else:
-                        unchanged_count += 1
-                        
-                except XeroTrackingCategories.DoesNotExist:
-                    # Create new tracking category option
-                    XeroTrackingCategories.objects.create(
-                        xero_instance=xero_instance,
-                        tracking_category_id=tracking_category_id,
-                        name=category_name,
-                        status=category_status,
-                        option_id=option_id,
-                        option_name=option_name
-                    )
-                    new_count += 1
-        
-        logger.info(f"Tracking categories sync complete: {new_count} new, {updated_count} updated, {unchanged_count} unchanged")
-        
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Successfully pulled tracking categories from Xero',
-            'details': {
-                'total_categories': len(xero_categories),
-                'new_added': new_count,
-                'updated': updated_count,
-                'unchanged': unchanged_count
             }
         })
     

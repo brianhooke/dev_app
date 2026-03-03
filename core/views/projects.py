@@ -21,17 +21,15 @@ def create_project(request):
     - project_name: str (required)
     - project_type: str (required)
     - xero_sales_account: str (optional)
-    - xero_tracking_category: str (optional)
     
     xero_instance is set from ProjectTypes.xero_instance for the selected project_type.
-    Xero account/tracking category for BOM lines are copied from template Costings.
+    Xero account for BOM lines are copied from template Costings.
     """
     try:
         # Get form data
         project_name = request.POST.get('project_name', '').strip()
         project_type = request.POST.get('project_type', '')
         xero_sales_account = request.POST.get('xero_sales_account')
-        xero_tracking_category = request.POST.get('xero_tracking_category', '').strip() or None
         manager = request.POST.get('manager', '').strip() or None
         manager_email = request.POST.get('manager_email', '').strip() or None
         contracts_admin_emails = request.POST.get('contracts_admin_emails', '').strip() or None
@@ -67,7 +65,6 @@ def create_project(request):
             project_type=project_type_obj,
             xero_instance=xero_instance,
             xero_sales_account=xero_sales_account,
-            xero_tracking_category=xero_tracking_category,
             manager=manager,
             manager_email=manager_email,
             contracts_admin_emails=contracts_admin_emails,
@@ -127,7 +124,6 @@ def create_project(request):
                     operator=template_item.operator,
                     operator_value=template_item.operator_value,
                     xero_account_code=template_item.xero_account_code or '',
-                    xero_tracking_category=template_item.xero_tracking_category,
                     contract_budget=0,
                     uncommitted_amount=0,
                     fixed_on_site=0,
@@ -170,7 +166,6 @@ def create_project(request):
             item='Margin',
             order_in_list=1,
             xero_account_code='',
-            xero_tracking_category=None,
             contract_budget=0,
             uncommitted_amount=0,
             fixed_on_site=0,
@@ -205,7 +200,6 @@ def create_project(request):
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
-                'xero_tracking_category': project.xero_tracking_category or '',
                 'project_status': project.project_status
             }
         })
@@ -258,7 +252,6 @@ def get_projects(request):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
-                'xero_tracking_category': project.xero_tracking_category or '',
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
@@ -288,7 +281,6 @@ def update_project(request, project_pk):
     - project_name: str (optional)
     - project_type: str (optional) - if changed, xero_instance is updated from ProjectTypes
     - xero_sales_account: str (optional)
-    - xero_tracking_category: str (optional)
     - manager: str (optional)
     - manager_email: str (optional)
     - contracts_admin_emails: str (optional)
@@ -323,13 +315,6 @@ def update_project(request, project_pk):
         elif 'xero_sales_account' in request.POST:
             # Empty string provided, clear the field
             project.xero_sales_account = None
-        
-        # Update tracking category if provided
-        xero_tracking_category = request.POST.get('xero_tracking_category', '').strip()
-        if xero_tracking_category:
-            project.xero_tracking_category = xero_tracking_category
-        elif 'xero_tracking_category' in request.POST:
-            project.xero_tracking_category = None
         
         # Update manager fields if provided
         manager = request.POST.get('manager', '').strip()
@@ -380,7 +365,6 @@ def update_project(request, project_pk):
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
                 'xero_sales_account_display': sales_account_display,
-                'xero_tracking_category': project.xero_tracking_category or '',
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',

@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import F
 from django.views.decorators.csrf import csrf_exempt
 
-from core.models import Categories, Costing, Units, Projects, ProjectTypes, XeroAccounts, XeroTrackingCategories
+from core.models import Categories, Costing, Units, Projects, ProjectTypes, XeroAccounts
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def get_rates_data(request):
             'costing_pk', 'item', 'order_in_list', 'rate',
             'category__categories_pk', 'category__category',
             'unit__unit_name', 'operator', 'operator_value',
-            'xero_account_code', 'xero_tracking_category'
+            'xero_account_code'
         )
         items_count = items.count()
         logger.info(f"[get_rates_data] Found {items_count} items")
@@ -110,8 +110,7 @@ def get_rates_data(request):
                 'rate': float(i['rate']) if i['rate'] is not None else None,
                 'operator': i['operator'],
                 'operator_value': float(i['operator_value']) if i['operator_value'] is not None else None,
-                'xero_account_code': i['xero_account_code'] or '',
-                'xero_tracking_category': i['xero_tracking_category'] or ''
+                'xero_account_code': i['xero_account_code'] or ''
             }
             for i in items
         ]
@@ -1210,36 +1209,9 @@ def get_xero_dropdown_data(request):
                 for acc in accounts_by_type[acc_type]:
                     accounts_list.append(acc)
         
-        # Get tracking categories - unique "name - option_name" combinations, sorted alphabetically
-        # Only include ACTIVE status
-        tracking_categories_list = []
-        if xero_instance:
-            categories = XeroTrackingCategories.objects.filter(
-                xero_instance=xero_instance,
-                status='ACTIVE'
-            ).order_by('name', 'option_name')
-            
-            # Get unique "name - option_name" combinations
-            seen_combos = set()
-            for cat in categories:
-                if cat.name and cat.option_name:
-                    combo = f"{cat.name} - {cat.option_name}"
-                    if combo not in seen_combos:
-                        tracking_categories_list.append({
-                            'tracking_category_pk': cat.tracking_category_pk,
-                            'name': combo,  # "name - option_name" format
-                            'category_name': cat.name,
-                            'option_name': cat.option_name,
-                        })
-                        seen_combos.add(combo)
-            
-            # Sort alphabetically by the combo name
-            tracking_categories_list.sort(key=lambda x: x['name'].lower())
-        
         return JsonResponse({
             'status': 'success',
             'xero_accounts': accounts_list,
-            'tracking_categories': tracking_categories_list,
             'xero_instance_pk': xero_instance.xero_instance_pk if xero_instance else None
         })
         
@@ -1350,46 +1322,3 @@ def update_item_xero_account(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@csrf_exempt
-@login_required
-@require_http_methods(["POST"])
-def update_item_tracking_category(request):
-    """
-    Update the xero_tracking_category for a Costing (Item).
-    
-    Expected JSON payload:
-    {
-        "item_pk": 123,
-        "xero_tracking_category": "Region A" (or empty string/null to clear)
-    }
-    """
-    try:
-        data = json.loads(request.body)
-        
-        item_pk = data.get('item_pk')
-        xero_tracking_category = data.get('xero_tracking_category', '')
-        
-        if not item_pk:
-            return JsonResponse({'status': 'error', 'message': 'item_pk is required'}, status=400)
-        
-        try:
-            item = Costing.objects.get(costing_pk=item_pk)
-        except Costing.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
-        
-        # Allow null/empty to clear the value
-        item.xero_tracking_category = xero_tracking_category if xero_tracking_category else None
-        item.save()
-        
-        logger.info(f"[update_item_tracking_category] Updated item {item_pk} xero_tracking_category to '{xero_tracking_category}'")
-        
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Tracking category updated successfully'
-        })
-    
-    except json.JSONDecodeError:
-        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        logger.error(f"[update_item_tracking_category] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

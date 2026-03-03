@@ -11,7 +11,6 @@ from .views.bills_global import (
     get_bills_list, archive_bill, return_to_inbox, 
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
     create_bill_allocation, update_bill_allocation, delete_bill_allocation,
-    get_tracking_categories_by_instance,
     send_bill_to_stocktake
 )
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
@@ -33,7 +32,7 @@ from .views.documents import get_project_folders, create_folder, rename_folder, 
 from .views.xero import (
     get_xero_instances, create_xero_instance, update_xero_instance, update_staff_hours_tracking, delete_xero_instance, 
     test_xero_connection, migrate_xero_to_ssm,
-    pull_xero_contacts, pull_xero_tracking_categories, create_contact, create_supplier,
+    pull_xero_contacts, create_contact, create_supplier,
     update_contact_details, update_contact_status
 )
 from .views.xero_oauth import xero_oauth_authorize, xero_oauth_callback
@@ -42,10 +41,10 @@ from .views.contacts import verify_contact_details, get_contacts_by_instance
 from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
-from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, update_item_tracking_category, get_xero_dropdown_data, get_xero_sales_accounts
+from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
 from .views.stocktake import (
-    toggle_stocktake_inclusion, toggle_xero_instance_stocktake, get_stocktake_allocations,
+    toggle_stocktake_inclusion, toggle_xero_instance_stocktake, update_xero_stocktake_account, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
     delete_stocktake_allocation, approve_stocktake_bill,
     # Snap APIs
@@ -179,7 +178,6 @@ urlpatterns = [
     path('pull_xero_accounts_and_divisions/', pull_xero_accounts_and_divisions, name='pull_xero_accounts_and_divisions'),
     path('pull_xero_accounts/<int:instance_pk>/', pull_xero_accounts, name='pull_xero_accounts'),
     path('get_xero_accounts/<int:instance_pk>/', get_xero_accounts_by_instance, name='get_xero_accounts_by_instance'),
-    path('get_tracking_categories/<int:instance_pk>/', get_tracking_categories_by_instance, name='get_tracking_categories_by_instance'),
     path('create_bill_allocation/', create_bill_allocation, name='create_bill_allocation'),
     path('update_bill_allocation/', update_bill_allocation, name='update_bill_allocation'),
     path('delete_bill_allocation/', delete_bill_allocation, name='delete_bill_allocation'),
@@ -267,7 +265,6 @@ urlpatterns = [
     
     # Dashboard routes (moved from dashboard app)
     path('pull_xero_contacts/<int:instance_pk>/', pull_xero_contacts, name='pull_xero_contacts'),
-    path('pull_xero_tracking_categories/<int:instance_pk>/', pull_xero_tracking_categories, name='pull_xero_tracking_categories'),
     path('get_contacts_by_instance/<int:instance_pk>/', get_contacts_by_instance, name='get_contacts_by_instance'),
     path('create_contact/<int:instance_pk>/', create_contact, name='create_contact'),
     path('create_supplier/', create_supplier, name='create_supplier'),
@@ -289,6 +286,7 @@ urlpatterns = [
     path('get_categories_and_items/', get_categories_and_items_by_type, name='get_categories_and_items'),
     path('toggle_stocktake_inclusion/', toggle_stocktake_inclusion, name='toggle_stocktake_inclusion'),
     path('toggle_xero_instance_stocktake/', toggle_xero_instance_stocktake, name='toggle_xero_instance_stocktake'),
+    path('update_xero_stocktake_account/', update_xero_stocktake_account, name='update_xero_stocktake_account'),
     path('get_stocktake_allocations/<int:bill_pk>/', get_stocktake_allocations, name='get_stocktake_allocations'),
     path('create_stocktake_allocation/', create_stocktake_allocation, name='create_stocktake_allocation'),
     path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),
@@ -335,7 +333,6 @@ urlpatterns = [
     path('update_unit_name/', update_unit_name, name='update_unit_name'),
     path('update_unit_order/', update_unit_order, name='update_unit_order'),
     path('update_item_xero_account/', update_item_xero_account, name='update_item_xero_account'),
-    path('update_item_tracking_category/', update_item_tracking_category, name='update_item_tracking_category'),
     path('get_xero_dropdown_data/', get_xero_dropdown_data, name='get_xero_dropdown_data'),
     path('get_xero_sales_accounts/', get_xero_sales_accounts, name='get_xero_sales_accounts'),
     path('add_unit/', add_unit, name='add_unit'),

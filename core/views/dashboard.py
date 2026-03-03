@@ -568,7 +568,6 @@ def get_project_items(request, project_pk):
                 'uncommitted_rate': float(item.uncommitted_rate) if item.uncommitted_rate else None,
                 'uncommitted_notes': item.uncommitted_notes or '',
                 'xero_account_code': item.xero_account_code or '',
-                'xero_tracking_category': item.xero_tracking_category or '',
                 'fixed_on_site': float(item.fixed_on_site) if item.fixed_on_site else 0,
             })
         

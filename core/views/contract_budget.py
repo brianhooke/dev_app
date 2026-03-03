@@ -638,7 +638,6 @@ def validate_fix_contract_budget(request, project_pk):
     Validate that a project's costing items are ready to fix the contract budget.
     Checks:
     1. All Costing.xero_account_code must be not null (mandatory)
-    2. All Costing.xero_tracking_category should be not null (warning only)
     """
     try:
         project = get_object_or_404(Projects, pk=project_pk)
@@ -647,7 +646,6 @@ def validate_fix_contract_budget(request, project_pk):
         costing_items = Costing.objects.filter(project=project, tender_or_execution=1)
         
         missing_xero_account_codes = []
-        missing_xero_tracking_categories = []
         
         for item in costing_items:
             if not item.xero_account_code or item.xero_account_code.strip() == '':
@@ -655,16 +653,10 @@ def validate_fix_contract_budget(request, project_pk):
                     'costing_pk': item.costing_pk,
                     'item': item.item
                 })
-            if not item.xero_tracking_category or item.xero_tracking_category.strip() == '':
-                missing_xero_tracking_categories.append({
-                    'costing_pk': item.costing_pk,
-                    'item': item.item
-                })
         
         return JsonResponse({
             'status': 'success',
-            'missing_xero_account_codes': missing_xero_account_codes,
-            'missing_xero_tracking_categories': missing_xero_tracking_categories
+            'missing_xero_account_codes': missing_xero_account_codes
         })
         
     except Exception as e:
@@ -760,7 +752,6 @@ def fix_contract_budget(request, project_pk):
                     item=tender_costing.item,
                     order_in_list=tender_costing.order_in_list,
                     xero_account_code=tender_costing.xero_account_code,
-                    xero_tracking_category=tender_costing.xero_tracking_category,
                     contract_budget=new_contract_budget,
                     unit=tender_costing.unit,
                     rate=tender_costing.rate,

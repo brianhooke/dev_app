@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    Categories, Projects, ProjectTypes, XeroInstances, XeroAccounts, XeroTrackingCategories, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
+    Categories, Projects, ProjectTypes, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
     SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
@@ -110,12 +110,6 @@ class XeroAccountsAdmin(admin.ModelAdmin):
     list_filter = ('xero_instance', 'account_type', 'account_status')
     search_fields = ('account_code', 'account_name', 'account_id')
 
-class XeroTrackingCategoriesAdmin(admin.ModelAdmin):
-    list_display = ("tracking_category_pk", "xero_instance", "tracking_category_id", "name", "status", "option_id", "option_name")
-    list_filter = ('xero_instance', 'status', 'name')
-    search_fields = ('name', 'option_name', 'tracking_category_id')
-
-
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
     list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived", "project_status")
@@ -133,7 +127,7 @@ class QuotesAdmin(admin.ModelAdmin):
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "xero_tracking_category", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution", "stocktake")
+    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution", "stocktake")
     list_filter = ('project', 'project_type', 'category', 'tender_or_execution', 'stocktake')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
@@ -193,7 +187,7 @@ class BillsAdmin(admin.ModelAdmin):
     search_fields = ('supplier_bill_number', 'contact_pk__name', 'bill_xero_id')
 class BillAllocationsAdmin(admin.ModelAdmin):
     form = BillAllocationsForm
-    list_display = ("bill_allocation_pk", "bill", "item", "xero_account", "tracking_category", "amount", "gst_amount", "notes", "allocation_type")
+    list_display = ("bill_allocation_pk", "bill", "item", "xero_account", "amount", "gst_amount", "notes", "allocation_type")
     list_filter = ('bill__bill_status', 'allocation_type', 'xero_account')
     search_fields = ('bill__supplier_bill_number', 'notes')
 
@@ -217,7 +211,6 @@ admin.site.register(Units, UnitsAdmin)
 admin.site.register(ProjectTypes, ProjectTypesAdmin)
 admin.site.register(XeroInstances, XeroInstancesAdmin)
 admin.site.register(XeroAccounts, XeroAccountsAdmin)
-admin.site.register(XeroTrackingCategories, XeroTrackingCategoriesAdmin)
 admin.site.register(Projects, ProjectsAdmin)
 admin.site.register(Contacts, ContactsAdmin)
 admin.site.register(Quotes, QuotesAdmin)

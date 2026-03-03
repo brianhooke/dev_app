@@ -140,6 +140,69 @@ def toggle_xero_instance_stocktake(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_xero_stocktake_account(request):
+    """
+    Update the xero_stocktake_account for a Xero instance.
+    
+    Expected POST data:
+    - xero_instance_pk: int
+    - xero_account_pk: int or null (to clear)
+    """
+    try:
+        from core.models import XeroInstances, XeroAccounts
+        
+        data = json.loads(request.body)
+        xero_instance_pk = data.get('xero_instance_pk')
+        xero_account_pk = data.get('xero_account_pk')
+        
+        if not xero_instance_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'xero_instance_pk is required'
+            }, status=400)
+        
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'XeroInstance with pk {xero_instance_pk} not found'
+            }, status=404)
+        
+        if xero_account_pk:
+            try:
+                xero_account = XeroAccounts.objects.get(xero_account_pk=xero_account_pk, xero_instance=xero_instance)
+                xero_instance.xero_stocktake_account = xero_account
+            except XeroAccounts.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'XeroAccount with pk {xero_account_pk} not found for this instance'
+                }, status=404)
+        else:
+            xero_instance.xero_stocktake_account = None
+        
+        xero_instance.save(update_fields=['xero_stocktake_account', 'updated_at'])
+        logger.info(f"Updated XeroInstance {xero_instance_pk} xero_stocktake_account to {xero_account_pk}")
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Xero stocktake account updated'
+        })
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error updating Xero stocktake account: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def get_stocktake_allocations(request, bill_pk):
     """

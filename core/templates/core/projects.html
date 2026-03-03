@@ -664,14 +664,6 @@
                             <small class="text-danger project-type-alert" style="display: none;"><i class="fas fa-exclamation-triangle"></i> Select a Project Type</small>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Tracking Category</label>
-                            <select class="form-control" id="modalTrackingCategory" disabled>
-                                <option value="">Select Project Type first...</option>
-                            </select>
-                        </div>
-                    </div>
                 </div>
                             </div>
             <div class="project-modal-footer">
@@ -1065,7 +1057,6 @@ $(document).ready(function() {
                 $('#modalManagerEmail').val('');
                 $('#modalContractsAdminEmails').val('');
                 $('#modalSalesAccount').html('<option value="">Select Project Type first...</option>');
-                $('#modalTrackingCategory').html('<option value="">Select Project Type first...</option>');
                 
                 // Show project type alert
                 $('.project-type-alert').show();
@@ -1096,7 +1087,6 @@ $(document).ready(function() {
             if (project.xero_instance_pk) {
                 loadXeroDropdownData(project.xero_instance_pk).then(function() {
                     $('#modalSalesAccount').val(project.xero_sales_account || '');
-                    $('#modalTrackingCategory').val(project.xero_tracking_category || '');
                 });
             }
             
@@ -1186,14 +1176,12 @@ $(document).ready(function() {
             
             const combinedData = {
                 sales_accounts: salesResponse.status === 'success' ? salesResponse.accounts : [],
-                tracking_categories: dropdownResponse.status === 'success' ? dropdownResponse.tracking_categories : []
             };
             
             xeroDropdownCache[xeroInstancePk] = combinedData;
             populateXeroDropdowns(combinedData);
         }).catch(function() {
             $('#modalSalesAccount').html('<option value="">Error loading accounts</option>');
-            $('#modalTrackingCategory').html('<option value="">Error loading categories</option>');
         });
     }
     
@@ -1206,13 +1194,6 @@ $(document).ready(function() {
             salesSelect.append(`<option value="${acc.account_code}">${acc.account_code} - ${acc.account_name}</option>`);
         });
         
-        // Populate tracking categories (name - option_name format)
-        const trackingSelect = $('#modalTrackingCategory');
-        trackingSelect.prop('disabled', false);
-        trackingSelect.html('<option value="">Select Tracking Category...</option>');
-        (data.tracking_categories || []).forEach(function(cat) {
-            trackingSelect.append(`<option value="${cat.option_name}">${cat.name}</option>`);
-        });
     }
     
     // Project type change handler - load sales accounts and tracking categories
@@ -1228,13 +1209,11 @@ $(document).ready(function() {
                 loadXeroDropdownData(pt.xero_instance_pk);
             } else {
                 $('#modalSalesAccount').html('<option value="">No Xero Instance for this Project Type</option>');
-                $('#modalTrackingCategory').html('<option value="">No Xero Instance for this Project Type</option>');
             }
         } else {
             // Show alert
             $('.project-type-alert').show();
             $('#modalSalesAccount').html('<option value="">Select Project Type first...</option>');
-            $('#modalTrackingCategory').html('<option value="">Select Project Type first...</option>');
         }
     });
     
@@ -1246,7 +1225,6 @@ $(document).ready(function() {
         $('#modalManagerEmail').prop('disabled', !enable);
         $('#modalContractsAdminEmails').prop('disabled', !enable);
         $('#modalSalesAccount').prop('disabled', !enable);
-        $('#modalTrackingCategory').prop('disabled', !enable);
     }
     
     // Form Validation
@@ -1302,7 +1280,6 @@ $(document).ready(function() {
         formData.append('manager_email', $('#modalManagerEmail').val().trim());
         formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
         formData.append('xero_sales_account', $('#modalSalesAccount').val());
-        formData.append('xero_tracking_category', $('#modalTrackingCategory').val());
         
         $.ajax({
             url: `/core/update_project/${currentModalProject.projects_pk}/`,
@@ -1341,7 +1318,6 @@ $(document).ready(function() {
         formData.append('manager_email', $('#modalManagerEmail').val().trim());
         formData.append('contracts_admin_emails', $('#modalContractsAdminEmails').val().trim());
         formData.append('xero_sales_account', $('#modalSalesAccount').val());
-        formData.append('xero_tracking_category', $('#modalTrackingCategory').val());
         
         $.ajax({
             url: '/core/create_project/',

@@ -1762,13 +1762,6 @@ Column Behaviors:
                     return;
                 }
                 
-                // Check for missing xero_tracking_category (optional warning)
-                if (response.missing_xero_tracking_categories && response.missing_xero_tracking_categories.length > 0) {
-                    if (!confirm('Some Contract Budget Items Do Not Have an Associated Xero Tracking Category. Return to BOM if required.\n\nClick OK to proceed anyway, or Cancel to return.')) {
-                        btn.prop('disabled', false).text('Fix Contract Budget');
-                        return;
-                    }
-                }
                 
                 // Final confirmation
                 if (!confirm('Fixing the Contract Budget is Irreversible. Proceed?')) {

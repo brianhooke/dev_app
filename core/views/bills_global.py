@@ -29,7 +29,7 @@ import logging
 import requests
 from urllib.parse import quote
 
-from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts, StocktakeAllocations, XeroTrackingCategories
+from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts, StocktakeAllocations
 from .xero import get_xero_auth, parse_xero_validation_errors, handle_xero_request_errors
 
 logger = logging.getLogger(__name__)
@@ -76,12 +76,11 @@ def bills_global_view(request):
         {'header': 'Return', 'width': '6%', 'class': 'col-action'},
     ]
     direct_alloc_columns = [
-        {'header': 'Xero Account', 'width': '23%'},
-        {'header': 'Tracking', 'width': '18%'},
-        {'header': '$ Gross', 'width': '11%', 'still_to_allocate_id': 'RemainingGross'},
-        {'header': '$ Net', 'width': '11%', 'still_to_allocate_id': 'RemainingNet'},
-        {'header': '$ GST', 'width': '11%', 'still_to_allocate_id': 'RemainingGst'},
-        {'header': 'Notes', 'width': '21%'},
+        {'header': 'Xero Account', 'width': '28%'},
+        {'header': '$ Gross', 'width': '12%', 'still_to_allocate_id': 'RemainingGross'},
+        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'RemainingNet'},
+        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'RemainingGst'},
+        {'header': 'Notes', 'width': '31%'},
         {'header': '', 'width': '5%', 'class': 'col-action-first'},  # Delete button
     ]
     
@@ -103,13 +102,12 @@ def bills_global_view(request):
         {'header': 'Return', 'width': '5%', 'class': 'col-action'},
     ]
     approvals_alloc_columns = [
-        {'header': 'Xero Account', 'width': '18%'},
-        {'header': 'Tracking Category', 'width': '18%'},
-        {'header': 'Costing Item', 'width': '14%'},
+        {'header': 'Xero Account', 'width': '22%'},
+        {'header': 'Costing Item', 'width': '18%'},
         {'header': '$ Gross', 'width': '12%', 'still_to_allocate_id': 'TotalGross'},
         {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
         {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
-        {'header': 'Notes', 'width': '14%'},
+        {'header': 'Notes', 'width': '24%'},
     ]
     
     context = {
@@ -438,7 +436,7 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
         
         logger.info(f"=== STOCKTAKE ALLOCATIONS ({allocations.count()}) ===")
         for i, alloc in enumerate(allocations):
-            logger.info(f"  [{i}] pk={alloc.allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, item={alloc.item.item if alloc.item else 'None'}, account_code={alloc.item.xero_account_code if alloc.item else 'None'}")
+            logger.info(f"  [{i}] pk={alloc.allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, item={alloc.item.item if alloc.item else 'None'}")
         
         if not allocations.exists():
             return JsonResponse({
@@ -446,16 +444,18 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 'message': 'No stocktake allocations found for this invoice'
             }, status=400)
         
-        # Check all stocktake allocations have items with xero_account_code
-        for alloc in allocations:
-            if not alloc.item or not alloc.item.xero_account_code:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'All stocktake allocations must have a costing item with a Xero Account Code'
-                }, status=400)
+        # Get xero_stocktake_account from the XeroInstance
+        stocktake_account = xero_instance.xero_stocktake_account if xero_instance else None
+        if not stocktake_account:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No Xero Stocktake Account configured for this Xero instance. Set it in Stocktake > Setup.'
+            }, status=400)
+        stocktake_account_code = stocktake_account.account_code
+        logger.info(f"  Stocktake account: {stocktake_account_code} - {stocktake_account.account_name}")
     else:
         allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
-            'xero_account', 'tracking_category', 'item'
+            'xero_account', 'item'
         )
         
         logger.info(f"=== ALLOCATIONS ({allocations.count()}) ===")
@@ -529,26 +529,21 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
             qty = float(alloc.qty) if alloc.qty else 1
             unit_amount = float(alloc.amount) / qty if alloc.amount else 0
             
+            # Build description as "Item | Qty | Rate | Notes"
+            item_name = alloc.item.item if alloc.item else ''
+            rate_str = str(float(alloc.rate)) if alloc.rate else ''
+            notes_str = alloc.notes or ''
+            desc_parts = [item_name, str(qty), rate_str, notes_str]
+            description = ' | '.join(p for p in desc_parts if p)
+            
             line_item = {
-                "Description": alloc.notes or (alloc.item.item if alloc.item else "No description"),
+                "Description": description or "No description",
                 "Quantity": qty,
                 "UnitAmount": unit_amount,
-                "AccountCode": alloc.item.xero_account_code,
+                "AccountCode": stocktake_account_code,
                 "TaxType": "INPUT" if alloc.gst_amount and alloc.gst_amount > 0 else "NONE",
                 "TaxAmount": float(alloc.gst_amount) if alloc.gst_amount else 0
             }
-            
-            # Look up tracking category from costing item's xero_tracking_category field
-            if alloc.item.xero_tracking_category:
-                tracking = XeroTrackingCategories.objects.filter(
-                    xero_instance=xero_instance,
-                    option_name=alloc.item.xero_tracking_category
-                ).first()
-                if tracking:
-                    line_item["Tracking"] = [{
-                        "Name": tracking.name,
-                        "Option": tracking.option_name
-                    }]
             
             line_items.append(line_item)
     else:
@@ -565,13 +560,6 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
                 "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
             }
-            
-            # Add tracking category if set
-            if allocation.tracking_category:
-                line_item["Tracking"] = [{
-                    "Name": allocation.tracking_category.name,
-                    "Option": allocation.tracking_category.option_name
-                }]
             
             line_items.append(line_item)
     
@@ -965,7 +953,7 @@ def send_bill_direct(request):
             }, status=404)
         
         # Validate frontend amounts match database amounts (detect unsaved changes)
-        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account', 'tracking_category')
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related('xero_account')
         frontend_allocations = data.get('allocations', [])
         
         if frontend_allocations:
@@ -1574,28 +1562,6 @@ def _pull_xero_accounts_for_instance(instance_pk):
         ).update(account_status='DELETED_IN_XERO')
         logger.info(f"Marked {accounts_deleted} accounts as DELETED_IN_XERO for {xero_instance.xero_name}")
     
-    # Fetch Tracking Categories (Divisions) from Xero
-    tracking_response = requests.get(
-        'https://api.xero.com/api.xro/2.0/TrackingCategories',
-        headers={
-            'Authorization': f'Bearer {access_token}',
-            'Accept': 'application/json',
-            'Xero-tenant-id': tenant_id
-        },
-        timeout=30
-    )
-    
-    if tracking_response.status_code != 200:
-        logger.warning(f"Failed to fetch tracking categories for {xero_instance.xero_name}: {tracking_response.status_code}")
-        return {
-            'instance_name': xero_instance.xero_name,
-            'status': 'partial',
-            'message': f'Accounts synced but tracking categories failed: {tracking_response.status_code}',
-            'accounts_added': accounts_added,
-            'accounts_updated': accounts_updated,
-            'tracking_categories_found': 0
-        }
-    
     return {
         'instance_name': xero_instance.xero_name,
         'status': 'success',
@@ -1754,52 +1720,6 @@ def get_xero_accounts_by_instance(request, instance_pk):
 
 
 @csrf_exempt
-def get_tracking_categories_by_instance(request, instance_pk):
-    """
-    Get all Xero tracking categories for a specific Xero instance.
-    Used to populate the Tracking Category dropdown in bill allocations.
-    Returns "name - option_name" format for display.
-    """
-    try:
-        from core.models import XeroTrackingCategories
-        
-        categories = XeroTrackingCategories.objects.filter(
-            xero_instance_id=instance_pk,
-            status='ACTIVE'
-        ).order_by('name', 'option_name')
-        
-        # Build list with "name - option_name" format
-        tracking_list = []
-        seen_combos = set()
-        for cat in categories:
-            if cat.name and cat.option_name:
-                combo = f"{cat.name} - {cat.option_name}"
-                if combo not in seen_combos:
-                    tracking_list.append({
-                        'tracking_category_pk': cat.tracking_category_pk,
-                        'name': combo,
-                        'category_name': cat.name,
-                        'option_name': cat.option_name,
-                    })
-                    seen_combos.add(combo)
-        
-        # Sort alphabetically
-        tracking_list.sort(key=lambda x: x['name'].lower())
-        
-        return JsonResponse({
-            'status': 'success',
-            'tracking_categories': tracking_list
-        })
-        
-    except Exception as e:
-        logger.error(f"Error fetching tracking categories for instance {instance_pk}: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Error: {str(e)}'
-        }, status=500)
-
-
-@csrf_exempt
 def create_bill_allocation(request):
     """
     Create a new invoice allocation entry.
@@ -1881,9 +1801,6 @@ def update_bill_allocation(request):
         if 'xero_account_pk' in data:
             logger.info(f"  - Setting xero_account_id: {data['xero_account_pk']}")
             allocation.xero_account_id = data['xero_account_pk'] if data['xero_account_pk'] else None
-        if 'tracking_category_pk' in data:
-            logger.info(f"  - Setting tracking_category_id: {data['tracking_category_pk']}")
-            allocation.tracking_category_id = data['tracking_category_pk'] if data['tracking_category_pk'] else None
         
         allocation.save()
         

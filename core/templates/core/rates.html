@@ -326,10 +326,8 @@
                 // Load Xero dropdown data
                 if (xeroResult && xeroResult.status === 'success') {
                     ratesData.xeroAccounts = xeroResult.xero_accounts || [];
-                    ratesData.trackingCategories = xeroResult.tracking_categories || [];
                 } else {
                     ratesData.xeroAccounts = [];
-                    ratesData.trackingCategories = [];
                 }
                 
                 renderRatesInputFormsUI();
@@ -389,8 +387,7 @@
                     rate: item.rate,
                     operator: item.operator,
                     operator_value: item.operator_value,
-                    xero_account_code: item.xero_account_code || '',
-                    xero_tracking_category: item.xero_tracking_category || ''
+                    xero_account_code: item.xero_account_code || ''
                 };
             });
             

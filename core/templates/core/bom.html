@@ -311,11 +311,9 @@ $(document).ready(function() {
                     success: function(response) {
                         if (response.status === 'success') {
                             window.itemsXeroAccounts = response.xero_accounts || [];
-                            window.itemsTrackingCategories = response.tracking_categories || [];
                         } else {
                             console.error('Error loading Xero dropdown data:', response.message);
                             window.itemsXeroAccounts = [];
-                            window.itemsTrackingCategories = [];
                         }
                         renderItemsInputForms();
                         renderItemsTable();
@@ -323,7 +321,6 @@ $(document).ready(function() {
                     error: function(xhr, status, error) {
                         console.error('Failed to load Xero dropdown data:', error);
                         window.itemsXeroAccounts = [];
-                        window.itemsTrackingCategories = [];
                         renderItemsInputForms();
                         renderItemsTable();
                     }

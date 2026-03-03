@@ -10,7 +10,7 @@ Endpoints:
 - POST /core/verify_contact_details/{contact_pk}/ - Save verified details
 
 Note: Xero API functions (pull_xero_contacts, create_contact, create_supplier,
-update_contact_details, update_contact_status, pull_xero_tracking_categories)
+update_contact_details, update_contact_status)
 have been moved to xero.py.
 """
 

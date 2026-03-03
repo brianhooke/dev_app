@@ -826,7 +826,7 @@ Tabs:
             <!-- Setup Tab -->
             <div class="tab-pane fade" id="stocktakeSetup" role="tabpanel" style="flex-direction: row !important; gap: 16px; padding: 12px 0;">
                 <!-- LHS: Xero Instances + Project Types List -->
-                <div class="stocktake-setup-left" style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 12px;">
+                <div class="stocktake-setup-left" style="width: 400px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 12px;">
                     <!-- Xero Instances Section -->
                     <div style="flex-shrink: 0;">
                         <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
@@ -836,12 +836,13 @@ Tabs:
                             <table class="reusable-table" id="stocktakeXeroInstancesTable" style="margin: 0;">
                                 <thead>
                                     <tr>
-                                        <th style="width: 60%;">Instance</th>
-                                        <th style="width: 40%; text-align: center;">Included</th>
+                                        <th style="width: 30%;">Instance</th>
+                                        <th style="width: 20%; text-align: center;">Included</th>
+                                        <th style="width: 50%;">Xero Account</th>
                                     </tr>
                                 </thead>
                                 <tbody id="stocktakeXeroInstancesBody">
-                                    <tr><td colspan="2" class="text-muted text-center py-2" style="font-size: 12px;">Loading...</td></tr>
+                                    <tr><td colspan="3" class="text-muted text-center py-2" style="font-size: 12px;">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1698,7 +1699,7 @@ Tabs:
             }
         }, function(xhr, status, error) {
             console.error('[Stocktake Setup] Failed to load Xero instances:', error);
-            $('#stocktakeXeroInstancesBody').html('<tr><td colspan="2" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
+            $('#stocktakeXeroInstancesBody').html('<tr><td colspan="3" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
         });
     }
     
@@ -1708,7 +1709,7 @@ Tabs:
         tbody.empty();
         
         if (setupData.xeroInstances.length === 0) {
-            tbody.html('<tr><td colspan="2" class="text-muted text-center py-2" style="font-size: 12px;">No Xero instances found</td></tr>');
+            tbody.html('<tr><td colspan="3" class="text-muted text-center py-2" style="font-size: 12px;">No Xero instances found</td></tr>');
             return;
         }
         
@@ -1732,7 +1733,48 @@ Tabs:
             });
             row.append($('<td style="text-align: center;">').append(checkbox));
             
+            // Xero Account dropdown
+            var select = $('<select class="form-control-sm xero-stocktake-account-select" style="font-size: 11px; width: 100%; padding: 1px 3px; height: 22px;">')
+                .attr('data-xero-instance-pk', xi.xero_instance_pk);
+            select.append($('<option>').val('').text('— None —'));
+            if (xi.xero_accounts && xi.xero_accounts.length > 0) {
+                xi.xero_accounts.forEach(function(acct) {
+                    var opt = $('<option>').val(acct.xero_account_pk).text(acct.account_name);
+                    if (xi.xero_stocktake_account_pk === acct.xero_account_pk) {
+                        opt.prop('selected', true);
+                    }
+                    select.append(opt);
+                });
+            }
+            select.on('change', function(e) {
+                e.stopPropagation();
+                var selectedPk = $(this).val() || null;
+                updateXeroStocktakeAccount(xi.xero_instance_pk, selectedPk, $(this));
+                // Update local data
+                xi.xero_stocktake_account_pk = selectedPk ? parseInt(selectedPk) : null;
+            });
+            row.append($('<td>').append(select));
+            
             tbody.append(row);
+        });
+    }
+    
+    // Update Xero stocktake account for an instance
+    function updateXeroStocktakeAccount(xeroInstancePk, xeroAccountPk, selectEl) {
+        stocktakeAjax('/core/update_xero_stocktake_account/', 'POST', {
+            xero_instance_pk: xeroInstancePk,
+            xero_account_pk: xeroAccountPk
+        }, function(response) {
+            if (response.status === 'success') {
+                selectEl.css('border-color', '#28a745');
+                setTimeout(function() { selectEl.css('border-color', ''); }, 1500);
+            } else {
+                console.error('[Stocktake] Update stocktake account failed:', response.message);
+                selectEl.css('border-color', '#dc3545');
+            }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake] Update stocktake account error:', error);
+            selectEl.css('border-color', '#dc3545');
         });
     }
     

@@ -66,11 +66,29 @@ def get_xero_instances_list(request):
     Get all Xero instances for dropdown selection.
     """
     try:
-        instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name', 'stocktake')
+        from core.models import XeroAccounts
+        
+        instances = XeroInstances.objects.select_related('xero_stocktake_account').all()
+        
+        instances_data = []
+        for inst in instances:
+            # Get accounts for this instance (for stocktake account dropdown)
+            accounts = list(XeroAccounts.objects.filter(
+                xero_instance=inst
+            ).order_by('account_name').values('xero_account_pk', 'account_name', 'account_code'))
+            
+            instances_data.append({
+                'xero_instance_pk': inst.xero_instance_pk,
+                'xero_name': inst.xero_name,
+                'stocktake': inst.stocktake,
+                'xero_stocktake_account_pk': inst.xero_stocktake_account.xero_account_pk if inst.xero_stocktake_account else None,
+                'xero_stocktake_account_name': inst.xero_stocktake_account.account_name if inst.xero_stocktake_account else None,
+                'xero_accounts': accounts,
+            })
         
         return JsonResponse({
             'status': 'success',
-            'xero_instances': list(instances)
+            'xero_instances': instances_data
         })
         
     except Exception as e:

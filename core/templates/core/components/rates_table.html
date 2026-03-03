@@ -100,8 +100,7 @@
         padding: 0 6px;
     }
     
-    .rates-flex-header-row1 .col-xero-acc,
-    .rates-flex-header-row1 .col-tracking-cat {
+    .rates-flex-header-row1 .col-xero-acc {
         width: 125px;
         min-width: 125px;
         padding: 0 6px;
@@ -146,8 +145,7 @@
         padding: 0 6px;
     }
     
-    .rates-flex-header-row2 .col-xero-acc,
-    .rates-flex-header-row2 .col-tracking-cat {
+    .rates-flex-header-row2 .col-xero-acc {
         width: 125px;
         min-width: 125px;
         padding: 0 6px;
@@ -239,8 +237,7 @@
         gap: 8px;
     }
     
-    .rates-flex-category .col-xero-acc,
-    .rates-flex-category .col-tracking-cat {
+    .rates-flex-category .col-xero-acc {
         width: 125px;
         min-width: 125px;
         padding: 0 6px;
@@ -322,8 +319,7 @@
         padding: 0 6px 0 30px; /* indent for hierarchy */
     }
     
-    .rates-flex-item .col-xero-acc,
-    .rates-flex-item .col-tracking-cat {
+    .rates-flex-item .col-xero-acc {
         width: 125px;
         min-width: 125px;
         padding: 0 6px;
@@ -334,8 +330,7 @@
     }
     
     /* Xero Account dropdown styling */
-    .rates-flex-item .xero-acc-select,
-    .rates-flex-item .tracking-cat-select {
+    .rates-flex-item .xero-acc-select {
         width: 100%;
         padding: 2px 4px;
         font-size: 10px;
@@ -346,21 +341,18 @@
         cursor: pointer;
     }
     
-    .rates-flex-item .xero-acc-select:hover,
-    .rates-flex-item .tracking-cat-select:hover {
+    .rates-flex-item .xero-acc-select:hover {
         border-color: var(--onyx-blue);
     }
     
-    .rates-flex-item .xero-acc-select:focus,
-    .rates-flex-item .tracking-cat-select:focus {
+    .rates-flex-item .xero-acc-select:focus {
         outline: none;
         border-color: var(--onyx-blue);
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
     }
     
-    /* Display spans for xero account and tracking category */
-    .xero-acc-display,
-    .tracking-cat-display {
+    /* Display spans for xero account */
+    .xero-acc-display {
         cursor: pointer;
         display: inline-block;
         padding: 2px 4px;
@@ -375,8 +367,7 @@
         white-space: nowrap;
     }
     
-    .xero-acc-display:hover,
-    .tracking-cat-display:hover {
+    .xero-acc-display:hover {
         background: var(--color-bg-muted);
         border-color: var(--color-border);
     }
@@ -463,8 +454,7 @@
         padding: 0 6px;
     }
     
-    .rates-flex-footer .col-xero-acc,
-    .rates-flex-footer .col-tracking-cat {
+    .rates-flex-footer .col-xero-acc {
         width: 125px;
         min-width: 125px;
         padding: 0 6px;
@@ -1017,7 +1007,6 @@
         headerRow1.append('<div class="col-checkbox"><input type="checkbox" class="rates-select-all" title="Select all"></div>');
         headerRow1.append('<div class="col-name">Category / Item</div>');
         headerRow1.append('<div class="col-xero-acc">Xero Account</div>');
-        headerRow1.append('<div class="col-tracking-cat">Tracking Category</div>');
         headerRow1.append('<div class="col-rate">' + (showQuantityColumn ? 'Rate ($/Qty)' : 'Rate ($)') + '</div>');
         headerRow1.append('<div class="col-bom-group">BOM Calculation Inputs</div>');
         if (showQuantityColumn) {
@@ -1031,7 +1020,6 @@
         headerRow2.append('<div class="col-checkbox"></div>');
         headerRow2.append('<div class="col-name"></div>');
         headerRow2.append('<div class="col-xero-acc"></div>');
-        headerRow2.append('<div class="col-tracking-cat"></div>');
         headerRow2.append('<div class="col-rate"></div>');
         headerRow2.append('<div class="col-unit">Unit</div>');
         headerRow2.append('<div class="col-operator">Operator</div>');
@@ -1125,7 +1113,6 @@
             
             // Empty cells for category rows (categories don't have values)
             categoryRow.append('<div class="col-xero-acc"></div>');
-            categoryRow.append('<div class="col-tracking-cat"></div>');
             categoryRow.append('<div class="col-rate"></div>');
             categoryRow.append('<div class="col-unit"></div>');
             categoryRow.append('<div class="col-operator"></div>');
@@ -1215,22 +1202,6 @@
                 xeroAccCell.append(xeroAccDisplay);
                 xeroAccCell.append(xeroAccSelect);
                 itemRow.append(xeroAccCell);
-                
-                // Tracking Category cell - click to show dropdown (format: "name - option_name")
-                var trackingCatCell = $('<div class="col-tracking-cat"></div>');
-                var trackingCatDisplayText = item.xero_tracking_category || '';
-                var trackingCatDisplay = $('<span class="tracking-cat-display" data-item-pk="' + item.costing_pk + '"></span>').text(trackingCatDisplayText);
-                if (trackingCatDisplayText) trackingCatDisplay.attr('title', trackingCatDisplayText);
-                var trackingCatSelect = $('<select class="tracking-cat-select" data-item-pk="' + item.costing_pk + '" style="display:none;"></select>');
-                trackingCatSelect.append('<option value=""></option>');
-                trackingCategories.forEach(function(cat) {
-                    // Match by the full "name - option_name" string or just option_name for backwards compatibility
-                    var selected = (item.xero_tracking_category === cat.name || item.xero_tracking_category === cat.option_name) ? ' selected' : '';
-                    trackingCatSelect.append('<option value="' + cat.name + '"' + selected + '>' + cat.name + '</option>');
-                });
-                trackingCatCell.append(trackingCatDisplay);
-                trackingCatCell.append(trackingCatSelect);
-                itemRow.append(trackingCatCell);
                 
                 // Rate cell - click to edit
                 var rateCell = $('<div class="col-rate"></div>');
@@ -1721,52 +1692,6 @@
             $display.show();
         });
         
-        // Tracking Category display click handler - show dropdown (using event delegation)
-        container.off('click', '.tracking-cat-display').on('click', '.tracking-cat-display', function(e) {
-            e.stopPropagation();
-            var $display = $(this);
-            var $select = $display.siblings('.tracking-cat-select');
-            $display.hide();
-            $select.show().focus();
-        });
-        
-        // Tracking Category select change/blur handler (using event delegation)
-        container.off('change blur', '.tracking-cat-select').on('change blur', '.tracking-cat-select', function(e) {
-            var $select = $(this);
-            var $display = $select.siblings('.tracking-cat-display');
-            var itemPk = $select.attr('data-item-pk');
-            var trackingCat = $select.val() || '';
-            
-            if (e.type === 'change') {
-                $.ajax({
-                    url: '/core/update_item_tracking_category/',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    headers: { 'X-CSRFToken': getCSRFToken() },
-                    data: JSON.stringify({
-                        item_pk: itemPk,
-                        xero_tracking_category: trackingCat
-                    }),
-                    success: function(response) {
-                        if (response.status === 'success') {
-                            $display.text(trackingCat);
-                            $display.attr('title', trackingCat || '');
-                        } else {
-                            alert('Error: ' + response.message);
-                        }
-                    },
-                    error: function(xhr) {
-                        var msg = 'Failed to update tracking category';
-                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
-                        alert(msg);
-                    }
-                });
-            }
-            
-            $select.hide();
-            $display.show();
-        });
-        
         // Operator display click handler - show dropdown (using event delegation)
         container.off('click', '.operator-display').on('click', '.operator-display', function(e) {
             e.stopPropagation();
@@ -2088,17 +2013,6 @@
             var $display = $(this).find('.xero-acc-display');
             if ($display.length) {
                 $display.trigger('click');
-            }
-        });
-        
-        // Tracking Category cell click handler - make whole cell clickable (using event delegation)
-        container.off('click', '.col-tracking-cat').on('click', '.col-tracking-cat', function(e) {
-            if ($(e.target).hasClass('tracking-cat-select')) return;
-            var $display = $(this).find('.tracking-cat-display');
-            var $select = $(this).find('.tracking-cat-select');
-            if ($display.length && $select.length) {
-                $display.hide();
-                $select.show().focus();
             }
         });
         

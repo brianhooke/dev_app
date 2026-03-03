@@ -51,7 +51,7 @@ Note: Uses helper functions from xero.py:
 import csv
 from decimal import Decimal, InvalidOperation
 from django.http import HttpResponse, JsonResponse
-from ..models import Contacts, Costing, Bills, Bill_allocations, Projects, XeroAccounts, XeroTrackingCategories
+from ..models import Contacts, Costing, Bills, Bill_allocations, Projects, XeroAccounts
 import json
 from django.shortcuts import render
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
@@ -532,7 +532,8 @@ def get_approved_bills(request):
     invoices = Bills.objects.filter(
         bill_status__in=[2, 103]
     ).select_related(
-        'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
+        'contact_pk', 'project', 'xero_instance', 'xero_instance__xero_stocktake_account',
+        'project__xero_instance', 'project__xero_instance__xero_stocktake_account', 'email_attachment'
     ).prefetch_related(
         'bill_allocations__xero_account', 'bill_allocations__item',
         'stocktake_allocations__item', 'stocktake_allocations__item__category'
@@ -575,22 +576,16 @@ def get_approved_bills(request):
             # Get allocations - use StocktakeAllocations for stocktake bills, Bill_allocations otherwise
             allocations = []
             if invoice.is_stocktake:
-                # Look up XeroAccounts by account_code for display names
+                # Use xero_stocktake_account from the XeroInstance for all stocktake allocations
                 xero_inst = invoice.xero_instance or (invoice.project.xero_instance if invoice.project else None)
-                account_cache = {}
-                if xero_inst:
-                    for xa in XeroAccounts.objects.filter(xero_instance=xero_inst):
-                        account_cache[xa.account_code] = xa.account_name
+                stocktake_acct_name = '-'
+                if xero_inst and xero_inst.xero_stocktake_account:
+                    stocktake_acct_name = xero_inst.xero_stocktake_account.account_name
                 
                 for alloc in invoice.stocktake_allocations.all():
-                    # Resolve account code to account name
-                    acct_code = alloc.item.xero_account_code if alloc.item else ''
-                    acct_name = account_cache.get(acct_code, acct_code) if acct_code else '-'
-                    
                     allocations.append({
                         'allocation_pk': alloc.allocation_pk,
-                        'xero_account_name': acct_name,
-                        'tracking_category_name': alloc.item.xero_tracking_category if alloc.item and alloc.item.xero_tracking_category else '-',
+                        'xero_account_name': stocktake_acct_name,
                         'costing_name': alloc.item.item if alloc.item else '-',
                         'amount': float(alloc.amount) if alloc.amount else 0,
                         'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
@@ -601,7 +596,6 @@ def get_approved_bills(request):
                     allocations.append({
                         'allocation_pk': allocation.bill_allocation_pk,
                         'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
-                        'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
                         'costing_name': allocation.item.item if allocation.item else '-',
                         'amount': float(allocation.amount) if allocation.amount else 0,
                         'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
@@ -697,7 +691,6 @@ def get_sent_bills(request):
                 allocations.append({
                     'allocation_pk': allocation.bill_allocation_pk,
                     'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
-                    'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
                     'costing_name': allocation.item.item if allocation.item else '-',
                     'amount': float(allocation.amount) if allocation.amount else 0,
                     'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
@@ -1135,7 +1128,7 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
             allocation.item_id = item_pk
             logger.info(f'  Setting item_id to: {allocation.item_id}')
             
-            # If item is set, apply Costing's xero_account_code and xero_tracking_category
+            # If item is set, apply Costing's xero_account_code
             if item_pk:
                 try:
                     costing_item = Costing.objects.get(costing_pk=item_pk)
@@ -1149,39 +1142,11 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
                         ).first()
                         allocation.xero_account = xero_account
                         logger.info(f'  Setting xero_account to: {xero_account}')
-                    
-                    # Set tracking_category from Costing.xero_tracking_category
-                    if costing_item.xero_tracking_category and xero_instance_id:
-                        tracking_value = costing_item.xero_tracking_category
-                        logger.info(f'  Looking for tracking_category: "{tracking_value}" in xero_instance_id={xero_instance_id}')
-                        
-                        # Try matching by option_name first
-                        tracking_cat = XeroTrackingCategories.objects.filter(
-                            xero_instance_id=xero_instance_id,
-                            option_name=tracking_value
-                        ).first()
-                        
-                        # If not found and value contains " - ", try splitting to get option_name
-                        if not tracking_cat and ' - ' in tracking_value:
-                            # Format is "Category - Option", extract just the option
-                            parts = tracking_value.split(' - ', 1)
-                            if len(parts) == 2:
-                                category_name, option_name = parts
-                                tracking_cat = XeroTrackingCategories.objects.filter(
-                                    xero_instance_id=xero_instance_id,
-                                    name=category_name,
-                                    option_name=option_name
-                                ).first()
-                                logger.info(f'  Tried name="{category_name}", option_name="{option_name}", found: {tracking_cat}')
-                        
-                        allocation.tracking_category = tracking_cat
-                        logger.info(f'  Setting tracking_category to: {tracking_cat}')
                 except Costing.DoesNotExist:
                     logger.warning(f'  Costing item {item_pk} not found')
             else:
                 # Clear xero fields if item is cleared
                 allocation.xero_account = None
-                allocation.tracking_category = None
                 
         if 'amount' in data:
             allocation.amount = data['amount'] or 0

@@ -32,6 +32,7 @@ class XeroInstances(models.Model):
     oauth_tenant_id = models.CharField(max_length=255, null=True, blank=True)
     staff_hours_tracking = models.IntegerField(default=0)  # 0=no, 1=yes
     stocktake = models.IntegerField(default=0)  # 0=not included, 1=included in stocktake
+    xero_stocktake_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='stocktake_xero_instances')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -225,33 +226,6 @@ class XeroAccounts(models.Model):
         unique_together = ['xero_instance', 'account_code']
     def __str__(self):
         return f"{self.account_code} - {self.account_name}"
-
-# SERVICE: xero
-class XeroTrackingCategories(models.Model):
-    tracking_category_pk = models.AutoField(primary_key=True)
-    xero_instance = models.ForeignKey(
-        XeroInstances,
-        on_delete=models.CASCADE,
-        related_name='xero_tracking_categories'
-    )
-    tracking_category_id = models.CharField(max_length=255)  # Xero's TrackingCategoryID
-    name = models.CharField(max_length=255)
-    status = models.CharField(max_length=50, null=True, blank=True)  # ACTIVE, ARCHIVED
-    option_id = models.CharField(max_length=255, null=True, blank=True)  # Xero's TrackingOptionID
-    option_name = models.CharField(max_length=255, null=True, blank=True)  # Option name within category
-    created_at = models.DateTimeField(auto_now_add=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True)
-    
-    class Meta:
-        db_table = 'xero_tracking_categories'
-        verbose_name = 'Xero Tracking Category'
-        verbose_name_plural = 'Xero Tracking Categories'
-        unique_together = ['xero_instance', 'tracking_category_id', 'option_id']
-    
-    def __str__(self):
-        if self.option_name:
-            return f"{self.name} - {self.option_name}"
-        return self.name
 
 # SERVICE: projects
 class ProjectTypes(models.Model):
@@ -530,7 +504,6 @@ class Projects(models.Model):
         XeroInstances, on_delete=models.SET_NULL, null=True, blank=True, related_name='projects'
     )
     xero_sales_account = models.CharField(max_length=255, null=True, blank=True)
-    xero_tracking_category = models.CharField(max_length=255, null=True, blank=True)
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
     project_status = models.IntegerField(default=1)  # 1=tender, 2=execution
@@ -684,7 +657,6 @@ class Costing(models.Model):
     item = models.CharField(max_length=100)
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0, default=1)
     xero_account_code = models.CharField(max_length=100) #per app line item, either to an MDG acc like loan-decora '753.8' or a mb account
-    xero_tracking_category = models.CharField(max_length=255, null=True, blank=True)  # Xero tracking category option name
     contract_budget = models.DecimalField(max_digits=10, decimal_places=2)
     unit = models.ForeignKey(Units, on_delete=models.SET_NULL, null=True, blank=True)
     rate = models.DecimalField(max_digits=15, decimal_places=5, null=True, blank=True)
@@ -867,7 +839,6 @@ class Bill_allocations(models.Model):
         (1, "direct cost in progress claim")
     ])
     xero_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_allocations')
-    tracking_category = models.ForeignKey('XeroTrackingCategories', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_allocations')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
