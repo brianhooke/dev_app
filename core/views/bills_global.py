@@ -29,7 +29,7 @@ import logging
 import requests
 from urllib.parse import quote
 
-from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts
+from ..models import Bills, Bill_allocations, Contacts, Projects, XeroInstances, XeroAccounts, StocktakeAllocations, XeroTrackingCategories
 from .xero import get_xero_auth, parse_xero_validation_errors, handle_xero_request_errors
 
 logger = logging.getLogger(__name__)
@@ -430,28 +430,51 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"  xero_name: {xero_instance.xero_name}")
     logger.info(f"  xero_client_id: {xero_instance.xero_client_id[:20]}..." if xero_instance.xero_client_id else "  xero_client_id: None")
     
-    # Get allocations
-    allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
-        'xero_account', 'tracking_category', 'item'
-    )
+    # Get allocations - use StocktakeAllocations for stocktake bills, Bill_allocations otherwise
+    is_stocktake = invoice.is_stocktake
     
-    logger.info(f"=== ALLOCATIONS ({allocations.count()}) ===")
-    for i, alloc in enumerate(allocations):
-        logger.info(f"  [{i}] pk={alloc.bill_allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, account={alloc.xero_account.account_code if alloc.xero_account else 'None'}")
-    
-    if not allocations.exists():
-        return JsonResponse({
-            'status': 'error',
-            'message': 'No allocations found for this invoice'
-        }, status=400)
-    
-    # Check all allocations have Xero accounts
-    for allocation in allocations:
-        if not allocation.xero_account:
+    if is_stocktake:
+        allocations = StocktakeAllocations.objects.filter(bill=invoice).select_related('item', 'item__category')
+        
+        logger.info(f"=== STOCKTAKE ALLOCATIONS ({allocations.count()}) ===")
+        for i, alloc in enumerate(allocations):
+            logger.info(f"  [{i}] pk={alloc.allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, item={alloc.item.item if alloc.item else 'None'}, account_code={alloc.item.xero_account_code if alloc.item else 'None'}")
+        
+        if not allocations.exists():
             return JsonResponse({
                 'status': 'error',
-                'message': 'All allocations must have a Xero Account selected'
+                'message': 'No stocktake allocations found for this invoice'
             }, status=400)
+        
+        # Check all stocktake allocations have items with xero_account_code
+        for alloc in allocations:
+            if not alloc.item or not alloc.item.xero_account_code:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'All stocktake allocations must have a costing item with a Xero Account Code'
+                }, status=400)
+    else:
+        allocations = Bill_allocations.objects.filter(bill=invoice).select_related(
+            'xero_account', 'tracking_category', 'item'
+        )
+        
+        logger.info(f"=== ALLOCATIONS ({allocations.count()}) ===")
+        for i, alloc in enumerate(allocations):
+            logger.info(f"  [{i}] pk={alloc.bill_allocation_pk}, amount={alloc.amount}, gst={alloc.gst_amount}, account={alloc.xero_account.account_code if alloc.xero_account else 'None'}")
+        
+        if not allocations.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No allocations found for this invoice'
+            }, status=400)
+        
+        # Check all allocations have Xero accounts
+        for allocation in allocations:
+            if not allocation.xero_account:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'All allocations must have a Xero Account selected'
+                }, status=400)
     
     # Get Xero authentication
     xero_inst, access_token, tenant_id = get_xero_auth(xero_instance.xero_instance_pk)
@@ -501,28 +524,56 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     
     # Build line items from allocations
     line_items = []
-    for allocation in allocations:
-        # Use qty if available (approvals workflow), otherwise default to 1
-        qty = float(allocation.qty) if allocation.qty else 1
-        unit_amount = float(allocation.amount) / qty if allocation.amount else 0
-        
-        line_item = {
-            "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
-            "Quantity": qty,
-            "UnitAmount": unit_amount,
-            "AccountCode": allocation.xero_account.account_code,
-            "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
-            "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
-        }
-        
-        # Add tracking category if set
-        if allocation.tracking_category:
-            line_item["Tracking"] = [{
-                "Name": allocation.tracking_category.name,
-                "Option": allocation.tracking_category.option_name
-            }]
-        
-        line_items.append(line_item)
+    if is_stocktake:
+        for alloc in allocations:
+            qty = float(alloc.qty) if alloc.qty else 1
+            unit_amount = float(alloc.amount) / qty if alloc.amount else 0
+            
+            line_item = {
+                "Description": alloc.notes or (alloc.item.item if alloc.item else "No description"),
+                "Quantity": qty,
+                "UnitAmount": unit_amount,
+                "AccountCode": alloc.item.xero_account_code,
+                "TaxType": "INPUT" if alloc.gst_amount and alloc.gst_amount > 0 else "NONE",
+                "TaxAmount": float(alloc.gst_amount) if alloc.gst_amount else 0
+            }
+            
+            # Look up tracking category from costing item's xero_tracking_category field
+            if alloc.item.xero_tracking_category:
+                tracking = XeroTrackingCategories.objects.filter(
+                    xero_instance=xero_instance,
+                    option_name=alloc.item.xero_tracking_category
+                ).first()
+                if tracking:
+                    line_item["Tracking"] = [{
+                        "Name": tracking.name,
+                        "Option": tracking.option_name
+                    }]
+            
+            line_items.append(line_item)
+    else:
+        for allocation in allocations:
+            # Use qty if available (approvals workflow), otherwise default to 1
+            qty = float(allocation.qty) if allocation.qty else 1
+            unit_amount = float(allocation.amount) / qty if allocation.amount else 0
+            
+            line_item = {
+                "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
+                "Quantity": qty,
+                "UnitAmount": unit_amount,
+                "AccountCode": allocation.xero_account.account_code,
+                "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
+                "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
+            }
+            
+            # Add tracking category if set
+            if allocation.tracking_category:
+                line_item["Tracking"] = [{
+                    "Name": allocation.tracking_category.name,
+                    "Option": allocation.tracking_category.option_name
+                }]
+            
+            line_items.append(line_item)
     
     # Build invoice payload for Xero
     # === DATE FORMAT DEBUG ===

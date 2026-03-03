@@ -526,14 +526,17 @@ def get_approved_bills(request):
     Get list of approved invoices ready to send to Xero (status 2 or 103).
     Used by the Approvals section in Bills.
     """
-    from core.models import XeroInstances, Projects, XeroAccounts
+    from core.models import XeroInstances, Projects, XeroAccounts, StocktakeAllocations
     
     # Get invoices with status 2 (approved) or 103 (PO approved, invoice uploaded & approved)
     invoices = Bills.objects.filter(
         bill_status__in=[2, 103]
     ).select_related(
         'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
-    ).prefetch_related('bill_allocations__xero_account', 'bill_allocations__item').order_by('-created_at')
+    ).prefetch_related(
+        'bill_allocations__xero_account', 'bill_allocations__item',
+        'stocktake_allocations__item', 'stocktake_allocations__item__category'
+    ).order_by('-created_at')
     
     # Prepare invoices data
     invoices_data = []
@@ -569,22 +572,35 @@ def get_approved_bills(request):
             elif invoice.email_attachment:
                 pdf_url = invoice.email_attachment.get_download_url() or ''
             
-            # Get allocations
+            # Get allocations - use StocktakeAllocations for stocktake bills, Bill_allocations otherwise
             allocations = []
-            for allocation in invoice.bill_allocations.all():
-                allocations.append({
-                    'allocation_pk': allocation.bill_allocation_pk,
-                    'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
-                    'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
-                    'costing_name': allocation.item.item if allocation.item else '-',
-                    'amount': float(allocation.amount) if allocation.amount else 0,
-                    'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
-                    'notes': allocation.notes or '',
-                })
+            if invoice.is_stocktake:
+                for alloc in invoice.stocktake_allocations.all():
+                    allocations.append({
+                        'allocation_pk': alloc.allocation_pk,
+                        'xero_account_name': alloc.item.xero_account_code if alloc.item else '-',
+                        'tracking_category_name': alloc.item.xero_tracking_category if alloc.item and alloc.item.xero_tracking_category else '-',
+                        'costing_name': alloc.item.item if alloc.item else '-',
+                        'amount': float(alloc.amount) if alloc.amount else 0,
+                        'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
+                        'notes': alloc.notes or '',
+                    })
+            else:
+                for allocation in invoice.bill_allocations.all():
+                    allocations.append({
+                        'allocation_pk': allocation.bill_allocation_pk,
+                        'xero_account_name': allocation.xero_account.account_name if allocation.xero_account else '-',
+                        'tracking_category_name': str(allocation.tracking_category) if allocation.tracking_category else '-',
+                        'costing_name': allocation.item.item if allocation.item else '-',
+                        'amount': float(allocation.amount) if allocation.amount else 0,
+                        'gst_amount': float(allocation.gst_amount) if allocation.gst_amount else 0,
+                        'notes': allocation.notes or '',
+                    })
             
             invoice_data = {
                 'bill_pk': invoice.bill_pk,
                 'bill_status': invoice.bill_status,
+                'is_stocktake': invoice.is_stocktake,
                 'project_name': project_name,
                 'project_pk': invoice.project.projects_pk if invoice.project else None,
                 'xero_instance_name': xero_instance_name,
