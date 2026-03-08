@@ -1503,6 +1503,7 @@ var AllocationsManager = (function() {
         var alloc = options.allocation || {};
         var sectionId = options.sectionId || 'bill';  // Default to 'bill' for backwards compatibility
         var isConstruction = options.isConstruction || false;
+        var showGst = options.showGst !== undefined ? options.showGst : true;  // Default true for backwards compat
         var costingItems = options.costingItems || [];
         var onUpdate = options.onUpdate || function() {};
         var api = options.api || {};
@@ -1695,7 +1696,7 @@ var AllocationsManager = (function() {
             row.append($('<td>').append(itemSelect));
             
             // 2. $ Gross (calculated: Net + GST) - only for bills with GST
-            if (sectionId !== 'quote') {
+            if (sectionId !== 'quote' && showGst) {
                 var allocNetVal = parseFloat(alloc.amount) || 0;
                 var allocGstVal = parseFloat(alloc.gst_amount) || 0;
                 var grossCell = $('<td>').addClass(cls + '-gross-cell').text('$' + Utils.formatMoney(allocNetVal + allocGstVal));
@@ -1721,8 +1722,8 @@ var AllocationsManager = (function() {
                             $(this).val(parseFloat(value).toFixed(2));
                         }
                     }
-                    // Only calculate GST for bills, not quotes
-                    if (sectionId !== 'quote') {
+                    // Only calculate GST for bills with GST enabled
+                    if (sectionId !== 'quote' && showGst) {
                         var r = $(this).closest('tr');
                         var gstInputEl = r.find('.' + cls + '-gst-input');
                         if (!gstInputEl.data('manually-edited')) {
@@ -1741,8 +1742,8 @@ var AllocationsManager = (function() {
                 });
             row.append($('<td>').append(netInput));
             
-            // 3. GST input only for bills, not quotes
-            if (sectionId !== 'quote') {
+            // 3. GST input only for bills with GST enabled
+            if (sectionId !== 'quote' && showGst) {
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')

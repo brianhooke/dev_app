@@ -233,7 +233,6 @@ def send_bill(request):
         project = None
         instance_pk = None
         
-        is_stocktake = False
         if xero_instance_or_project.startswith('xero_'):
             xero_instance_id = int(xero_instance_or_project.replace('xero_', ''))
             try:
@@ -261,27 +260,12 @@ def send_bill(request):
                     'message': 'Project not found'
                 }, status=404)
         elif xero_instance_or_project.startswith('stocktake_'):
-            # Stocktake bill - use first available Xero instance
-            is_stocktake = True
-            project = None
-            xero_instance = XeroInstances.objects.first()
-            if not xero_instance:
-                logger.error(f"[SendBill] No Xero Instance available for Stocktake")
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'No Xero Instance available for Stocktake'
-                }, status=400)
-            instance_pk = xero_instance.xero_instance_pk
-            logger.info(f"[SendBill] Stocktake: Using Xero instance pk={instance_pk}, name={xero_instance.xero_name}")
-            
-            # CRITICAL: Check if supplier belongs to this Xero instance
-            supplier_xero_instance = getattr(supplier, 'xero_instance', None)
-            if supplier_xero_instance:
-                logger.info(f"[SendBill] Supplier's xero_instance: pk={supplier_xero_instance.xero_instance_pk}, name={supplier_xero_instance.xero_name}")
-                if supplier_xero_instance.xero_instance_pk != instance_pk:
-                    logger.warning(f"[SendBill] MISMATCH! Supplier xero_instance ({supplier_xero_instance.xero_instance_pk}) != stocktake xero_instance ({instance_pk})")
-            else:
-                logger.info(f"[SendBill] Supplier has no xero_instance FK set")
+            # Stocktake bills must use the dedicated /core/send_bill_to_stocktake/ endpoint
+            logger.error(f"[SendBill] Stocktake bill routed to old send_bill endpoint - this is a bug. Use /core/send_bill_to_stocktake/ instead.")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Stocktake bills must use the dedicated stocktake endpoint'
+            }, status=400)
         else:
             return JsonResponse({
                 'status': 'error',
@@ -390,7 +374,7 @@ def send_bill(request):
             # Update invoice in database - only now that Xero succeeded
             invoice.xero_instance = xero_instance
             invoice.project = project
-            invoice.is_stocktake = is_stocktake
+            invoice.is_stocktake = False
             invoice.contact_pk = supplier
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
@@ -424,7 +408,7 @@ def send_bill(request):
             # Update invoice in database
             invoice.xero_instance = xero_instance
             invoice.project = project
-            invoice.is_stocktake = is_stocktake
+            invoice.is_stocktake = False
             invoice.contact_pk = supplier
             invoice.supplier_bill_number = bill_number
             invoice.total_net = Decimal(str(total_net))
