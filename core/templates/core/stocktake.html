@@ -692,9 +692,6 @@ Tabs:
                             </span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="btn btn-outline-info btn-sm" id="checkXeroMatchBtn" title="Check Xero Instance Matching">
-                                <i class="fas fa-search"></i> Check Xero Matching
-                            </button>
                             <button class="btn btn-outline-primary btn-sm" id="editSnapBtn" style="display: none;">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
@@ -2984,78 +2981,6 @@ Tabs:
         }, function(xhr, status, error) {
             console.error('[Snap] Failed to create snap:', error);
             alert('Failed to create snap: ' + error);
-        });
-    });
-    
-    // Check Xero Instance Matching button
-    $('#checkXeroMatchBtn').on('click', function() {
-        var btn = $(this);
-        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
-        
-        stocktakeAjax('/core/stocktake/check-xero-matching/', 'GET', null, function(response) {
-            btn.prop('disabled', false).html('<i class="fas fa-search"></i> Check Xero Matching');
-            
-            if (response.status !== 'success') {
-                alert('Error: ' + (response.message || 'Unknown error'));
-                return;
-            }
-            
-            var rows = response.rows || [];
-            var mismatches = response.mismatches || 0;
-            
-            // Build modal HTML
-            var html = '<div id="xeroMatchModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">';
-            html += '<div style="background: white; border-radius: 8px; max-width: 900px; width: 95%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">';
-            html += '<div style="padding: 16px 20px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">';
-            html += '<div><strong>Xero Instance Matching Check</strong>';
-            html += '<span style="margin-left: 12px; font-size: 12px; color: #6c757d;">' + rows.length + ' allocations, ';
-            html += mismatches > 0 ? '<span style="color: #dc3545; font-weight: 600;">' + mismatches + ' mismatches</span>' : '<span style="color: #28a745;">0 mismatches</span>';
-            html += '</span></div>';
-            html += '<button id="closeXeroMatchModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #6c757d;">&times;</button>';
-            html += '</div>';
-            html += '<div style="overflow-y: auto; flex: 1; padding: 0;">';
-            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
-            html += '<thead style="position: sticky; top: 0; background: #f8f9fa;"><tr>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Bill PK</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Bill Xero Instance</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Project Type</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">PT Xero Instance</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Item</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: right;">Amount</th>';
-            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: center;">Match</th>';
-            html += '</tr></thead><tbody>';
-            
-            if (rows.length === 0) {
-                html += '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #6c757d;">No stocktake allocations found.</td></tr>';
-            } else {
-                rows.forEach(function(r) {
-                    var bgColor = r.is_match ? '' : 'background: #fff3cd;';
-                    html += '<tr style="' + bgColor + '">';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.bill_pk + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.bill_xero_instance_name + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.project_type + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.pt_xero_instance_name + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.item_name + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right;">' + Utils.formatCurrency(r.amount) + '</td>';
-                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: center;">';
-                    html += r.is_match ? '<i class="fas fa-check-circle" style="color: #28a745;"></i>' : '<i class="fas fa-times-circle" style="color: #dc3545;"></i>';
-                    html += '</td></tr>';
-                });
-            }
-            
-            html += '</tbody></table></div></div></div>';
-            
-            $('body').append(html);
-            
-            // Close modal handlers
-            $('#closeXeroMatchModal, #xeroMatchModal').on('click', function(e) {
-                if (e.target === this || this.id === 'closeXeroMatchModal') {
-                    $('#xeroMatchModal').remove();
-                }
-            });
-        }, function(xhr, status, error) {
-            btn.prop('disabled', false).html('<i class="fas fa-search"></i> Check Xero Matching');
-            alert('Failed to check matching: ' + error);
         });
     });
     

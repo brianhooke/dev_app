@@ -56,8 +56,6 @@ from .views.stocktake import (
     get_opening_balances, save_opening_balance, update_opening_balance, delete_opening_balance,
     # Item History API
     get_item_history,
-    # Xero Instance Matching Check
-    check_xero_instance_matching
 )
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
@@ -316,7 +314,6 @@ urlpatterns = [
     path('stocktake/opening-balances/<int:balance_pk>/update/', update_opening_balance, name='update_opening_balance'),
     path('stocktake/opening-balances/<int:balance_pk>/delete/', delete_opening_balance, name='delete_opening_balance'),
     path('stocktake/item/<int:item_pk>/history/', get_item_history, name='get_item_history'),
-    path('stocktake/check-xero-matching/', check_xero_instance_matching, name='check_xero_instance_matching'),
     path('dashboard_create_category/<int:project_pk>/', dashboard_create_category, name='dashboard_create_category'),
     path('dashboard_create_item/<int:project_pk>/', dashboard_create_item, name='dashboard_create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', reorder_category, name='reorder_category'),

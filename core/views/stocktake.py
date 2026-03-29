@@ -933,7 +933,7 @@ def get_snap(request, snap_pk):
     Get a snap with all its items and allocations.
     """
     try:
-        from core.models import StocktakeSnap, Costing, Projects, StocktakeAllocations
+        from core.models import StocktakeSnap, Costing, Projects, StocktakeAllocations, XeroInstances
         
         try:
             snap = StocktakeSnap.objects.get(snap_pk=snap_pk)
@@ -2138,66 +2138,6 @@ def get_item_history(request, item_pk):
         
     except Exception as e:
         logger.error(f"Error getting item history: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Error: {str(e)}'
-        }, status=500)
-
-
-@require_http_methods(["GET"])
-def check_xero_instance_matching(request):
-    """
-    Returns all StocktakeAllocations with their project_type's xero instance
-    vs the bill's xero instance, for visual mismatch checking.
-    """
-    try:
-        from core.models import StocktakeAllocations, ProjectTypes, XeroInstances
-        
-        allocations = StocktakeAllocations.objects.select_related(
-            'bill', 'bill__xero_instance', 'item'
-        ).all().order_by('bill__bill_pk', 'allocation_pk')
-        
-        # Build project_type -> xero_instance lookup
-        pt_xero_lookup = {}
-        for pt in ProjectTypes.objects.select_related('xero_instance').all():
-            pt_xero_lookup[pt.project_type] = {
-                'xero_instance_pk': pt.xero_instance.xero_instance_pk if pt.xero_instance else None,
-                'xero_instance_name': pt.xero_instance.xero_name if pt.xero_instance else None,
-            }
-        
-        rows = []
-        for alloc in allocations:
-            bill_xi_pk = alloc.bill.xero_instance_id if alloc.bill.xero_instance_id else None
-            bill_xi_name = alloc.bill.xero_instance.xero_name if alloc.bill.xero_instance else None
-            
-            pt_info = pt_xero_lookup.get(alloc.project_type, {})
-            pt_xi_pk = pt_info.get('xero_instance_pk')
-            pt_xi_name = pt_info.get('xero_instance_name')
-            
-            is_match = bill_xi_pk == pt_xi_pk if (bill_xi_pk and pt_xi_pk) else False
-            
-            rows.append({
-                'allocation_pk': alloc.allocation_pk,
-                'bill_pk': alloc.bill.bill_pk,
-                'bill_xero_instance_pk': bill_xi_pk,
-                'bill_xero_instance_name': bill_xi_name or '—',
-                'project_type': alloc.project_type or '—',
-                'pt_xero_instance_pk': pt_xi_pk,
-                'pt_xero_instance_name': pt_xi_name or '—',
-                'item_name': alloc.item.item if alloc.item else '—',
-                'amount': float(alloc.amount) if alloc.amount else 0,
-                'is_match': is_match,
-            })
-        
-        return JsonResponse({
-            'status': 'success',
-            'rows': rows,
-            'total': len(rows),
-            'mismatches': sum(1 for r in rows if not r['is_match']),
-        })
-        
-    except Exception as e:
-        logger.error(f"Error checking xero instance matching: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': f'Error: {str(e)}'
