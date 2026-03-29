@@ -1011,7 +1011,14 @@ Tabs:
     // Helper to extract error message from XHR response
     function getErrorMessage(xhr, defaultMsg) {
         if (xhr.responseJSON && xhr.responseJSON.message) {
-            return xhr.responseJSON.message;
+            var msg = xhr.responseJSON.message;
+            var pj = xhr.responseJSON.partial_journals;
+            if (pj && pj.length) {
+                msg += ' Some journals were already posted: ' + pj.map(function(j) {
+                    return (j.xero_name || j.xero_instance_pk) + '=' + (j.journal_id || '?');
+                }).join('; ');
+            }
+            return msg;
         }
         try {
             var resp = JSON.parse(xhr.responseText);
@@ -3072,25 +3079,24 @@ Tabs:
             return;
         }
         
-        // Prompt for Xero instance and stock account
-        // For now, use defaults - in production, show a modal to select these
-        var xeroInstancePk = prompt('Enter Xero Instance PK:', '1');
-        if (!xeroInstancePk) return;
+        if (!confirm('Send this snap to Xero? One manual journal will be created per Xero organisation that has allocations.')) return;
         
-        var stockAccountCode = prompt('Enter Stock Account Code (credit account for reducing inventory):', '630');
-        if (!stockAccountCode) return;
-        
-        if (!confirm('Send this snap to Xero as a manual journal?')) return;
-        
-        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/send-to-xero/', 'POST', {
-            xero_instance_pk: parseInt(xeroInstancePk),
-            stock_account_code: stockAccountCode
-        }, function(response) {
+        stocktakeAjax('/core/stocktake/snaps/' + snapData.currentSnap.snap_pk + '/send-to-xero/', 'POST', {}, function(response) {
             if (response.status === 'success') {
                 loadSnapList();
                 loadSnap(snapData.currentSnap.snap_pk);
                 loadStockLedger(); // Refresh ledger as stock has changed
-                alert('Snap sent to Xero successfully!\nJournal ID: ' + response.xero_journal_id);
+                var journals = response.xero_journals || [];
+                var msg = 'Snap sent to Xero successfully.';
+                if (journals.length === 1) {
+                    msg += '\nJournal ID: ' + (journals[0].journal_id || response.xero_journal_id);
+                } else if (journals.length > 1) {
+                    msg += '\n' + journals.length + ' journals created:';
+                    journals.forEach(function(j) {
+                        msg += '\n• ' + (j.xero_name || j.xero_instance_pk) + ': ' + (j.journal_id || '—');
+                    });
+                }
+                alert(msg);
             }
         }, function(xhr, status, error) {
             console.error('[Snap] Failed to send to Xero:', error);

@@ -356,11 +356,21 @@ class StocktakeSnapItemInline(admin.TabularInline):
     readonly_fields = ('item', 'book_qty', 'counted_qty', 'variance_qty')
 
 class StocktakeSnapAdmin(admin.ModelAdmin):
-    list_display = ('snap_pk', 'date', 'costing_method', 'status', 'xero_journal_id', 'notes', 'created_at')
+    list_display = (
+        'snap_pk', 'date', 'costing_method', 'status',
+        'xero_journal_summary', 'notes', 'created_at',
+    )
     list_filter = ('status', 'costing_method', 'date')
     search_fields = ('notes', 'xero_journal_id')
     date_hierarchy = 'date'
+    readonly_fields = ('xero_journal_id', 'xero_journals')
     inlines = [StocktakeSnapItemInline]
+
+    @admin.display(description='Xero journals')
+    def xero_journal_summary(self, obj):
+        if obj.xero_journals:
+            return f'{len(obj.xero_journals)} org(s)'
+        return obj.xero_journal_id or '—'
 
 class StocktakeSnapItemAdmin(admin.ModelAdmin):
     list_display = ('snap_item_pk', 'snap', 'item', 'book_qty', 'counted_qty', 'variance_qty', 'created_at')

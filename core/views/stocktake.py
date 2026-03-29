@@ -1053,6 +1053,8 @@ def get_snap(request, snap_pk):
                 'status': snap.status,
                 'status_display': snap.get_status_display(),
                 'notes': snap.notes or '',
+                'xero_journal_id': snap.xero_journal_id or '',
+                'xero_journals': snap.xero_journals if snap.xero_journals else [],
                 'items': items,
                 'is_most_recent': is_most_recent,
                 'writeoff_options': writeoff_options
@@ -1566,28 +1568,62 @@ def unfinalise_snap(request, snap_pk):
         }, status=500)
 
 
+def _project_types_by_project_type_string():
+    from core.models import ProjectTypes
+    return {
+        pt.project_type: pt
+        for pt in ProjectTypes.objects.select_related('xero_instance').all()
+    }
+
+
+def _expense_account_code_for_item_on_instance(costing_item, xero_instance):
+    """
+    Resolve expense account code from Costing.xero_account_code, verified against
+    XeroAccounts for the given Xero instance.
+    """
+    from core.models import XeroAccounts
+
+    if not costing_item:
+        return None, 'Missing costing item on snap line'
+    code = (costing_item.xero_account_code or '').strip()
+    if not code:
+        return None, (
+            f'Costing item "{costing_item.item}" has no xero_account_code; '
+            'set it to a code that exists in the correct Xero organisation.'
+        )
+    acct = XeroAccounts.objects.filter(
+        xero_instance=xero_instance,
+        account_code=code,
+    ).first()
+    if not acct:
+        return None, (
+            f'No Xero account with code "{code}" in "{xero_instance.xero_name}" '
+            f'(item "{costing_item.item}"). Pull chart of accounts or fix the code.'
+        )
+    return acct.account_code, None
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def send_snap_to_xero(request, snap_pk):
     """
-    Send a finalised snap to Xero as a manual journal.
-    
-    Journal structure:
-    - DEBIT: Project expense accounts (materials consumed)
-    - CREDIT: Stock/inventory account (stock reduction)
-    
-    Requires the snap to be finalised first.
+    Send a finalised snap to Xero as one manual journal per XeroInstance.
+
+    Regular allocations: XeroInstance comes from Costing.project_type → ProjectTypes.xero_instance;
+    expense AccountCode must exist in XeroAccounts for that instance.
+
+    Write-offs: XeroInstance is writeoff_xero_instance; debit uses that instance's
+    stocktake write-offs account.
+
+    Each journal credits that instance's xero_stocktake_account (inventory reduction).
     """
     import requests
+    from decimal import Decimal
     from .xero import get_xero_auth
-    
+
     try:
-        from core.models import StocktakeSnap, XeroInstances, XeroAccounts
-        
-        data = json.loads(request.body) if request.body else {}
-        xero_instance_pk = data.get('xero_instance_pk')
-        stock_account_code = data.get('stock_account_code')  # Credit account for stock
-        
+        from core.models import StocktakeSnap
+
         try:
             snap = StocktakeSnap.objects.get(snap_pk=snap_pk)
         except StocktakeSnap.DoesNotExist:
@@ -1595,151 +1631,228 @@ def send_snap_to_xero(request, snap_pk):
                 'status': 'error',
                 'message': f'Snap {snap_pk} not found'
             }, status=404)
-        
+
         if snap.status < StocktakeSnap.STATUS_FINALISED:
             return JsonResponse({
                 'status': 'error',
                 'message': 'Snap must be finalised before sending to Xero'
             }, status=400)
-        
+
         if snap.status >= StocktakeSnap.STATUS_SENT_TO_XERO:
             return JsonResponse({
                 'status': 'error',
                 'message': 'Snap has already been sent to Xero'
             }, status=400)
-        
-        if not xero_instance_pk:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'xero_instance_pk is required'
-            }, status=400)
-        
-        if not stock_account_code:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'stock_account_code is required (credit account for stock reduction)'
-            }, status=400)
-        
-        # Get Xero authentication
-        xero_instance, access_token, tenant_id = get_xero_auth(xero_instance_pk)
-        if not xero_instance:
-            return access_token  # This is the error response
-        
-        # Build journal lines
-        journal_lines = []
-        total_amount = Decimal('0')
-        
-        # Get all allocations with project expense accounts
+
+        pt_map = _project_types_by_project_type_string()
+
+        # xero_instance_pk -> {'instance': XeroInstances, 'debits': [...], 'subtotal': Decimal}
+        groups = {}
+
+        def ensure_group(xi):
+            pk = xi.xero_instance_pk
+            if pk not in groups:
+                groups[pk] = {
+                    'instance': xi,
+                    'debits': [],
+                    'subtotal': Decimal('0'),
+                }
+            return groups[pk]
+
         for snap_item in snap.snap_items.select_related('item').prefetch_related(
-            'allocations__project', 'allocations__writeoff_xero_instance',
-            'allocations__writeoff_xero_instance__xero_stocktake_writeoffs_account'
+            'allocations__project',
+            'allocations__writeoff_xero_instance',
+            'allocations__writeoff_xero_instance__xero_stocktake_writeoffs_account',
         ):
+            item = snap_item.item
             for alloc in snap_item.allocations.all():
                 amount = float(alloc.amount)
-                total_amount += Decimal(str(amount))
-                
-                if alloc.is_writeoff and alloc.writeoff_xero_instance:
-                    # Write-off allocation: use the instance's writeoffs account
-                    writeoffs_acct = alloc.writeoff_xero_instance.xero_stocktake_writeoffs_account
-                    if writeoffs_acct:
-                        writeoff_account_code = writeoffs_acct.account_code
-                    else:
-                        writeoff_account_code = '300'  # Fallback
-                    
-                    journal_lines.append({
-                        "AccountCode": writeoff_account_code,
-                        "Description": f"Stocktake Write Off: {snap_item.item.item if snap_item.item else 'Unknown'} - {alloc.writeoff_xero_instance.xero_name}",
-                        "LineAmount": amount,
-                        "TaxType": "NONE"
+                item_label = item.item if item else 'Unknown'
+
+                if alloc.is_writeoff:
+                    xi = alloc.writeoff_xero_instance
+                    if not xi:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': (
+                                'Write-off allocation is missing writeoff Xero instance. '
+                                'Select a write-off instance for each write-off line.'
+                            ),
+                        }, status=400)
+                    wacct = xi.xero_stocktake_writeoffs_account
+                    if not wacct:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': (
+                                f'Xero instance "{xi.xero_name}" has no stocktake write-offs account configured.'
+                            ),
+                        }, status=400)
+                    grp = ensure_group(xi)
+                    grp['debits'].append({
+                        'AccountCode': wacct.account_code,
+                        'Description': (
+                            f'Stocktake Write Off: {item_label} - {xi.xero_name}'
+                        ),
+                        'LineAmount': amount,
+                        'TaxType': 'NONE',
                     })
+                    grp['subtotal'] += Decimal(str(amount))
                 else:
-                    # Regular project allocation
-                    expense_account_code = None
-                    
-                    # Try to get account from the item's xero_account
-                    if snap_item.item and hasattr(snap_item.item, 'xero_account_code') and snap_item.item.xero_account_code:
-                        expense_account_code = snap_item.item.xero_account_code
-                    
-                    if not expense_account_code:
-                        # Use a default expense account - this should be configured
-                        expense_account_code = '300'  # Default cost of goods sold account
-                    
-                    # DEBIT line (positive) - expense to project
-                    journal_lines.append({
-                        "AccountCode": expense_account_code,
-                        "Description": f"Stocktake: {snap_item.item.item if snap_item.item else 'Unknown'} - {alloc.project.project if alloc.project else 'Unknown project'}",
-                        "LineAmount": amount,
-                        "TaxType": "NONE"
+                    if not item:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'Snap line has no costing item; cannot resolve Xero instance.',
+                        }, status=400)
+                    if not item.project_type:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': (
+                                f'Costing item "{item.item}" has no project_type; '
+                                'cannot determine which Xero organisation to use.'
+                            ),
+                        }, status=400)
+                    pt = pt_map.get(item.project_type)
+                    if not pt:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': (
+                                f'No project type row for "{item.project_type}" '
+                                f'(item "{item.item}"). Add it under settings.'
+                            ),
+                        }, status=400)
+                    if not pt.xero_instance_id:
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': (
+                                f'Project type "{pt.project_type}" has no Xero instance assigned '
+                                f'(item "{item.item}").'
+                            ),
+                        }, status=400)
+                    xi = pt.xero_instance
+                    code, err = _expense_account_code_for_item_on_instance(item, xi)
+                    if err:
+                        return JsonResponse({'status': 'error', 'message': err}, status=400)
+                    grp = ensure_group(xi)
+                    proj_name = (
+                        alloc.project.project if alloc.project else 'Unknown project'
+                    )
+                    grp['debits'].append({
+                        'AccountCode': code,
+                        'Description': f'Stocktake: {item_label} - {proj_name}',
+                        'LineAmount': amount,
+                        'TaxType': 'NONE',
                     })
-        
-        if not journal_lines:
+                    grp['subtotal'] += Decimal(str(amount))
+
+        if not groups:
             return JsonResponse({
                 'status': 'error',
                 'message': 'No allocations to send to Xero'
             }, status=400)
-        
-        # CREDIT line (negative) - reduce stock
-        journal_lines.append({
-            "AccountCode": stock_account_code,
-            "Description": f"Stocktake snap {snap.date.strftime('%d %b %Y')} - Stock consumed",
-            "LineAmount": -float(total_amount),  # Negative for credit
-            "TaxType": "NONE"
-        })
-        
-        # Build journal payload
-        journal_payload = {
-            "Narration": f"Stocktake Snap - {snap.date.strftime('%d %b %Y')}",
-            "Date": snap.date.strftime('%Y-%m-%d'),
-            "JournalLines": journal_lines,
-            "Status": "POSTED"
-        }
-        
-        logger.info(f"Sending journal to Xero: {json.dumps(journal_payload, indent=2)}")
-        
-        # Send to Xero API
-        response = requests.post(
-            'https://api.xero.com/api.xro/2.0/ManualJournals',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Xero-tenant-id': tenant_id
-            },
-            json={"ManualJournals": [journal_payload]},
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            error_text = response.text
-            logger.error(f"Xero API error: {response.status_code} - {error_text}")
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Xero API error: {response.status_code}',
-                'details': error_text
-            }, status=response.status_code)
-        
-        # Success - parse response
-        xero_response = response.json()
-        logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
-        
-        # Extract journal ID
-        journal_id = None
-        if 'ManualJournals' in xero_response and len(xero_response['ManualJournals']) > 0:
-            journal_id = xero_response['ManualJournals'][0].get('ManualJournalID')
-        
-        # Update snap status
+
+        for pk, grp in groups.items():
+            xi = grp['instance']
+            stock_acct = xi.xero_stocktake_account
+            if not stock_acct:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f'Xero instance "{xi.xero_name}" has no stocktake stock account '
+                        f'(credit / inventory) configured. Set it on the Xero instance.'
+                    ),
+                }, status=400)
+
+        date_str = snap.date.strftime('%Y-%m-%d')
+        narration_date = snap.date.strftime('%d %b %Y')
+        created_journals = []
+
+        for pk, grp in sorted(groups.items(), key=lambda x: x[0]):
+            xi = grp['instance']
+            stock_acct = xi.xero_stocktake_account
+            journal_lines = list(grp['debits'])
+            journal_lines.append({
+                'AccountCode': stock_acct.account_code,
+                'Description': f'Stocktake snap {narration_date} - Stock consumed',
+                'LineAmount': -float(grp['subtotal']),
+                'TaxType': 'NONE',
+            })
+            journal_payload = {
+                'Narration': f'Stocktake Snap - {narration_date} ({xi.xero_name})',
+                'Date': date_str,
+                'JournalLines': journal_lines,
+                'Status': 'POSTED',
+            }
+            logger.info(
+                f"Sending manual journal to Xero instance {pk} ({xi.xero_name}): "
+                f"{json.dumps(journal_payload, indent=2)}"
+            )
+
+            xero_instance, access_token, tenant_id = get_xero_auth(pk)
+            if not xero_instance:
+                return access_token
+
+            response = requests.post(
+                'https://api.xero.com/api.xro/2.0/ManualJournals',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Xero-tenant-id': tenant_id,
+                },
+                json={'ManualJournals': [journal_payload]},
+                timeout=30,
+            )
+
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(
+                    f'Xero API error for instance {pk} ({xi.xero_name}): '
+                    f'{response.status_code} - {error_text}'
+                )
+                payload = {
+                    'status': 'error',
+                    'message': (
+                        f'Xero API error for "{xi.xero_name}": {response.status_code}'
+                    ),
+                    'details': error_text,
+                }
+                if created_journals:
+                    payload['partial_journals'] = created_journals
+                    payload['message'] += (
+                        '. Earlier journal(s) may already exist in Xero; check partial_journals.'
+                    )
+                return JsonResponse(payload, status=response.status_code)
+
+            xero_response = response.json()
+            logger.info(f'Xero response ({xi.xero_name}): {json.dumps(xero_response, indent=2)}')
+            journal_id = None
+            if (
+                'ManualJournals' in xero_response
+                and len(xero_response['ManualJournals']) > 0
+            ):
+                journal_id = xero_response['ManualJournals'][0].get('ManualJournalID')
+            created_journals.append({
+                'xero_instance_pk': pk,
+                'xero_name': xi.xero_name,
+                'journal_id': journal_id,
+            })
+
         snap.status = StocktakeSnap.STATUS_SENT_TO_XERO
-        snap.xero_journal_id = journal_id
+        snap.xero_journals = created_journals
+        snap.xero_journal_id = (
+            created_journals[0]['journal_id'] if created_journals else None
+        )
         snap.save()
-        
-        logger.info(f"Snap {snap_pk} sent to Xero with journal ID: {journal_id}")
-        
+
+        logger.info(f'Snap {snap_pk} sent to Xero: {created_journals}')
+
         return JsonResponse({
             'status': 'success',
             'snap_pk': snap.snap_pk,
-            'xero_journal_id': journal_id
+            'xero_journals': created_journals,
+            'xero_journal_id': snap.xero_journal_id,
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'status': 'error',

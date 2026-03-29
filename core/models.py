@@ -935,6 +935,9 @@ class StocktakeSnap(models.Model):
     costing_method = models.CharField(max_length=10, choices=COSTING_METHOD_CHOICES, default='FIFO')
     status = models.IntegerField(choices=STATUS_CHOICES, default=STATUS_DRAFT)
     xero_journal_id = models.CharField(max_length=255, null=True, blank=True)
+    # One entry per Xero org when a snap spans multiple instances:
+    # [{"xero_instance_pk": 1, "xero_name": "...", "journal_id": "uuid"}, ...]
+    xero_journals = models.JSONField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
