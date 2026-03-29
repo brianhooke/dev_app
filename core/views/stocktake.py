@@ -1612,20 +1612,39 @@ def _human_summary_from_xero_error(parsed, raw_text):
     """Short string for user-facing message from Xero error JSON."""
     if not parsed:
         return (raw_text or '')[:2000]
-    msg = parsed.get('Message') or parsed.get('message') or parsed.get('Title')
-    if msg:
-        return msg
-    # Validation-style payloads
     elems = parsed.get('Elements')
+    journal_msgs = []
     if isinstance(elems, list) and elems:
         first = elems[0]
         if isinstance(first, dict):
             vs = first.get('ValidationErrors')
             if isinstance(vs, list) and vs:
-                v0 = vs[0]
-                if isinstance(v0, dict) and v0.get('Message'):
-                    return v0['Message']
+                for v in vs:
+                    if isinstance(v, dict) and v.get('Message'):
+                        journal_msgs.append(v['Message'])
+    if journal_msgs:
+        seen = set()
+        unique = []
+        for m in journal_msgs:
+            if m not in seen:
+                seen.add(m)
+                unique.append(m)
+        return '; '.join(unique[:5])
+    msg = parsed.get('Message') or parsed.get('message') or parsed.get('Title')
+    if msg:
+        return msg
     return (raw_text or '')[:2000]
+
+
+def _skip_allocation_for_xero_manual_journal(alloc):
+    """Xero rejects manual journal lines with LineAmount 0 or empty."""
+    from decimal import Decimal
+    if alloc.amount is None:
+        return True
+    try:
+        return abs(Decimal(str(alloc.amount))) < Decimal('0.005')
+    except Exception:
+        return True
 
 
 def _expense_account_code_for_item_on_instance(costing_item, xero_instance):
@@ -1718,6 +1737,8 @@ def send_snap_to_xero(request, snap_pk):
         ):
             item = snap_item.item
             for alloc in snap_item.allocations.all():
+                if _skip_allocation_for_xero_manual_journal(alloc):
+                    continue
                 amount = float(alloc.amount)
                 item_label = item.item if item else 'Unknown'
 
@@ -1783,7 +1804,10 @@ def send_snap_to_xero(request, snap_pk):
         if not groups:
             return JsonResponse({
                 'status': 'error',
-                'message': 'No allocations to send to Xero'
+                'message': (
+                    'No journal lines to send to Xero: there are no allocations, or every '
+                    'allocation is $0 (Xero rejects manual journal lines with zero amount).'
+                ),
             }, status=400)
 
         for pk, grp in groups.items():
