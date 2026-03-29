@@ -692,6 +692,9 @@ Tabs:
                             </span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
+                            <button class="btn btn-outline-info btn-sm" id="checkXeroMatchBtn" title="Check Xero Instance Matching">
+                                <i class="fas fa-search"></i> Check Xero Matching
+                            </button>
                             <button class="btn btn-outline-primary btn-sm" id="editSnapBtn" style="display: none;">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
@@ -826,7 +829,7 @@ Tabs:
             <!-- Setup Tab -->
             <div class="tab-pane fade" id="stocktakeSetup" role="tabpanel" style="flex-direction: row !important; gap: 16px; padding: 12px 0;">
                 <!-- LHS: Xero Instances + Project Types List -->
-                <div class="stocktake-setup-left" style="width: 400px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 12px;">
+                <div class="stocktake-setup-left" style="width: 550px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 12px;">
                     <!-- Xero Instances Section -->
                     <div style="flex-shrink: 0;">
                         <div class="setup-panel-header" style="padding: 8px 12px; background: var(--manila-light); border: 1px solid var(--manila-border); border-bottom: none; border-radius: 6px 6px 0 0; font-weight: 600; color: var(--manila-text);">
@@ -836,13 +839,14 @@ Tabs:
                             <table class="reusable-table" id="stocktakeXeroInstancesTable" style="margin: 0;">
                                 <thead>
                                     <tr>
-                                        <th style="width: 30%;">Instance</th>
-                                        <th style="width: 20%; text-align: center;">Included</th>
-                                        <th style="width: 50%;">Xero Account</th>
+                                        <th style="width: 20%;">Instance</th>
+                                        <th style="width: 10%; text-align: center;">Included</th>
+                                        <th style="width: 35%;">Xero Account</th>
+                                        <th style="width: 35%;">Write Offs Account</th>
                                     </tr>
                                 </thead>
                                 <tbody id="stocktakeXeroInstancesBody">
-                                    <tr><td colspan="3" class="text-muted text-center py-2" style="font-size: 12px;">Loading...</td></tr>
+                                    <tr><td colspan="4" class="text-muted text-center py-2" style="font-size: 12px;">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1076,9 +1080,9 @@ Tabs:
                 emptyMessage: 'No stocktake bills found.',
                 showFooter: true,
                 footerTotals: [
-                    { colIndex: 3, valueKey: 'total_gross' },
-                    { colIndex: 4, valueKey: 'total_net' },
-                    { colIndex: 5, valueKey: 'total_gst' }
+                    { colIndex: 4, valueKey: 'total_gross' },
+                    { colIndex: 5, valueKey: 'total_net' },
+                    { colIndex: 6, valueKey: 'total_gst' }
                 ],
                 renderRow: function(bill, index, cfg) {
                     var pdfUrl = bill.pdf_url || bill.attachment_url || '';
@@ -1089,9 +1093,11 @@ Tabs:
                         .attr('data-bill-pk', bill.bill_pk)
                         .attr('data-pdf-url', pdfUrl)
                         .attr('data-total-net', netVal)
-                        .attr('data-total-gst', gstVal);
+                        .attr('data-total-gst', gstVal)
+                        .attr('data-xero-instance-pk', bill.xero_instance_pk || '');
                     
                     row.append($('<td>').text(bill.supplier_name || 'Unknown'));
+                    row.append($('<td>').text(bill.xero_instance_name || ''));
                     row.append($('<td>').text(bill.supplier_bill_number || ''));
                     
                     var grossVal = netVal + gstVal;
@@ -1117,6 +1123,17 @@ Tabs:
                     }
                     row.append(actionTd);
                     
+                    // Return to Inbox button
+                    var returnTd = $('<td>').addClass('col-action');
+                    var returnBtn = $('<button>')
+                        .addClass('btn btn-sm btn-warning stocktake-return-to-inbox-btn')
+                        .html('<i class="fas fa-undo"></i>')
+                        .attr('data-bill-pk', bill.bill_pk)
+                        .attr('title', 'Return to Inbox')
+                        .css('font-size', '10px');
+                    returnTd.append(returnBtn);
+                    row.append(returnTd);
+                    
                     return row;
                 },
                 onRowSelect: function(row, pk, cfg) {
@@ -1125,7 +1142,8 @@ Tabs:
                     window.currentSelectedBill = {
                         bill_pk: pk,
                         total_net: Utils.parseFloatSafe(row.attr('data-total-net')),
-                        total_gst: Utils.parseFloatSafe(row.attr('data-total-gst'))
+                        total_gst: Utils.parseFloatSafe(row.attr('data-total-gst')),
+                        xero_instance_pk: row.attr('data-xero-instance-pk') ? parseInt(row.attr('data-xero-instance-pk')) : null
                     };
                     cfg.data.currentItem = window.currentSelectedBill;
                     AllocationsManager.setEditMode('stocktakeAlloc', true);
@@ -1213,14 +1231,61 @@ Tabs:
         }
         
         // Editable mode: inputs and dropdowns
-        // 1. Project Type dropdown
+        // 1. Project Type dropdown - grouped by Xero Instance, bill's instance first, non-matching disabled
         var projectTypeSelect = $('<select>').addClass('form-control form-control-sm ' + cls + '-project-type-select');
         projectTypeSelect.append($('<option>').val('').text('Select Type...'));
-        getIncludedProjectTypes().forEach(function(pt) {
-            var option = $('<option>').val(pt.project_type).text(pt.project_type);
-            if (allocation.project_type === pt.project_type) option.prop('selected', true);
-            projectTypeSelect.append(option);
+        
+        var billXeroPk = window.currentSelectedBill ? window.currentSelectedBill.xero_instance_pk : null;
+        var includedTypes = getIncludedProjectTypes();
+        
+        // Group project types by xero instance
+        var groups = {};  // xero_instance_pk -> { name, types[] }
+        var noInstanceTypes = [];
+        includedTypes.forEach(function(pt) {
+            if (pt.xero_instance_pk) {
+                if (!groups[pt.xero_instance_pk]) {
+                    groups[pt.xero_instance_pk] = { name: pt.xero_instance_name || 'Unknown', types: [] };
+                }
+                groups[pt.xero_instance_pk].types.push(pt);
+            } else {
+                noInstanceTypes.push(pt);
+            }
         });
+        
+        // Build optgroups: bill's xero instance first, then others
+        var groupKeys = Object.keys(groups);
+        // Sort so bill's instance comes first
+        groupKeys.sort(function(a, b) {
+            if (parseInt(a) === billXeroPk) return -1;
+            if (parseInt(b) === billXeroPk) return 1;
+            return groups[a].name.localeCompare(groups[b].name);
+        });
+        
+        groupKeys.forEach(function(key) {
+            var grp = groups[key];
+            var isMatchingInstance = parseInt(key) === billXeroPk;
+            var optgroup = $('<optgroup>').attr('label', grp.name);
+            grp.types.forEach(function(pt) {
+                var option = $('<option>').val(pt.project_type).text(pt.project_type);
+                if (allocation.project_type === pt.project_type) option.prop('selected', true);
+                if (!isMatchingInstance) option.prop('disabled', true).css('color', '#aaa');
+                optgroup.append(option);
+            });
+            projectTypeSelect.append(optgroup);
+        });
+        
+        // Add ungrouped types (no xero instance) as disabled
+        if (noInstanceTypes.length > 0) {
+            var otherGroup = $('<optgroup>').attr('label', 'No Xero Instance');
+            noInstanceTypes.forEach(function(pt) {
+                var option = $('<option>').val(pt.project_type).text(pt.project_type);
+                if (allocation.project_type === pt.project_type) option.prop('selected', true);
+                option.prop('disabled', true).css('color', '#aaa');
+                otherGroup.append(option);
+            });
+            projectTypeSelect.append(otherGroup);
+        }
+        
         projectTypeSelect.on('change', function() {
             var selectedType = $(this).val();
             var itemSelect = row.find('.' + cls + '-item-select');
@@ -1503,6 +1568,50 @@ Tabs:
         });
     });
     
+    // Return to Inbox button handler
+    $(document).on('click', '.stocktake-return-to-inbox-btn', function(e) {
+        e.stopPropagation();
+        var btn = $(this);
+        var billPk = btn.attr('data-bill-pk');
+        var row = btn.closest('tr');
+        
+        if (!confirm('Return this bill to the inbox?')) return;
+        
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        
+        $.ajax({
+            url: '/core/return_to_inbox/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({ bill_pk: billPk }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    row.fadeOut(300, function() {
+                        $(this).remove();
+                        // Clear selection if this was the selected row
+                        if (window.currentSelectedBillPk == billPk) {
+                            window.currentSelectedBillPk = null;
+                            window.currentSelectedBill = null;
+                            $('#stocktakeAllocAllocationsTableBody').empty();
+                        }
+                        // Check if table is now empty
+                        if ($('#stocktakeAllocMainTableBody tr').length === 0) {
+                            $('#stocktakeAllocMainTableBody').html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No bills found.</td></tr>');
+                        }
+                    });
+                } else {
+                    alert('Error: ' + (response.message || 'Unknown error'));
+                    btn.prop('disabled', false).html('<i class="fas fa-undo"></i>');
+                }
+            },
+            error: function(xhr) {
+                alert('Failed to return bill to inbox: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                btn.prop('disabled', false).html('<i class="fas fa-undo"></i>');
+            }
+        });
+    });
+    
     // Add Row button handler
     $(document).on('click', '#stocktakeAllocAddAllocationBtn, #stocktakeAllocAddRowBtn, .stocktakeAlloc-add-btn', function() {
         addNewStocktakeAllocationRow();
@@ -1531,10 +1640,22 @@ Tabs:
                 });
             }
             
+            // Build xero instance lookup for enriching bill data
+            var xeroInstanceLookup = {};
+            if (response.xero_instances) {
+                response.xero_instances.forEach(function(xi) {
+                    xeroInstanceLookup[xi.xero_instance_pk] = xi.xero_name;
+                });
+            }
+            
             stocktakeBills.forEach(function(bill) {
                 if (bill.contact_pk && response.suppliers) {
                     var supplier = response.suppliers.find(function(s) { return s.contact_pk === bill.contact_pk; });
                     if (supplier) bill.supplier_name = supplier.name;
+                }
+                // Enrich with xero instance name
+                if (bill.xero_instance_pk && xeroInstanceLookup[bill.xero_instance_pk]) {
+                    bill.xero_instance_name = xeroInstanceLookup[bill.xero_instance_pk];
                 }
             });
             
@@ -1599,11 +1720,15 @@ Tabs:
     
     // Update table header for pending/approved mode
     function updateStocktakeTableHeader(mode) {
-        var lastTh = $('#stocktakeAllocMainTable thead th').last();
+        var ths = $('#stocktakeAllocMainTable thead th');
+        var approveTh = ths.eq(ths.length - 2); // Approve column (second-to-last)
+        var returnTh = ths.eq(ths.length - 1);  // Return column (last)
         if (mode === 'approved') {
-            lastTh.text('Approved').removeClass('col-action');
+            approveTh.text('Approved').removeClass('col-action');
+            returnTh.hide();
         } else {
-            lastTh.text('').addClass('col-action');
+            approveTh.text('Approve').addClass('col-action');
+            returnTh.show();
         }
     }
     
@@ -1699,7 +1824,7 @@ Tabs:
             }
         }, function(xhr, status, error) {
             console.error('[Stocktake Setup] Failed to load Xero instances:', error);
-            $('#stocktakeXeroInstancesBody').html('<tr><td colspan="3" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
+            $('#stocktakeXeroInstancesBody').html('<tr><td colspan="4" class="text-danger text-center py-2" style="font-size: 12px;">Failed to load</td></tr>');
         });
     }
     
@@ -1709,7 +1834,7 @@ Tabs:
         tbody.empty();
         
         if (setupData.xeroInstances.length === 0) {
-            tbody.html('<tr><td colspan="3" class="text-muted text-center py-2" style="font-size: 12px;">No Xero instances found</td></tr>');
+            tbody.html('<tr><td colspan="4" class="text-muted text-center py-2" style="font-size: 12px;">No Xero instances found</td></tr>');
             return;
         }
         
@@ -1755,6 +1880,28 @@ Tabs:
             });
             row.append($('<td>').append(select));
             
+            // Write Offs Account dropdown
+            var writeoffsSelect = $('<select class="form-control-sm xero-stocktake-writeoffs-account-select" style="font-size: 11px; width: 100%; padding: 1px 3px; height: 22px;">')
+                .attr('data-xero-instance-pk', xi.xero_instance_pk);
+            writeoffsSelect.append($('<option>').val('').text('— None —'));
+            if (xi.xero_accounts && xi.xero_accounts.length > 0) {
+                xi.xero_accounts.forEach(function(acct) {
+                    var opt = $('<option>').val(acct.xero_account_pk).text(acct.account_name);
+                    if (xi.xero_stocktake_writeoffs_account_pk === acct.xero_account_pk) {
+                        opt.prop('selected', true);
+                    }
+                    writeoffsSelect.append(opt);
+                });
+            }
+            writeoffsSelect.on('change', function(e) {
+                e.stopPropagation();
+                var selectedPk = $(this).val() || null;
+                updateXeroStocktakeWriteoffsAccount(xi.xero_instance_pk, selectedPk, $(this));
+                // Update local data
+                xi.xero_stocktake_writeoffs_account_pk = selectedPk ? parseInt(selectedPk) : null;
+            });
+            row.append($('<td>').append(writeoffsSelect));
+            
             tbody.append(row);
         });
     }
@@ -1774,6 +1921,25 @@ Tabs:
             }
         }, function(xhr, status, error) {
             console.error('[Stocktake] Update stocktake account error:', error);
+            selectEl.css('border-color', '#dc3545');
+        });
+    }
+    
+    // Update Xero stocktake writeoffs account for an instance
+    function updateXeroStocktakeWriteoffsAccount(xeroInstancePk, xeroAccountPk, selectEl) {
+        stocktakeAjax('/core/update_xero_stocktake_writeoffs_account/', 'POST', {
+            xero_instance_pk: xeroInstancePk,
+            xero_account_pk: xeroAccountPk
+        }, function(response) {
+            if (response.status === 'success') {
+                selectEl.css('border-color', '#28a745');
+                setTimeout(function() { selectEl.css('border-color', ''); }, 1500);
+            } else {
+                console.error('[Stocktake] Update stocktake writeoffs account failed:', response.message);
+                selectEl.css('border-color', '#dc3545');
+            }
+        }, function(xhr, status, error) {
+            console.error('[Stocktake] Update stocktake writeoffs account error:', error);
             selectEl.css('border-color', '#dc3545');
         });
     }
@@ -2559,12 +2725,31 @@ Tabs:
         var validProjects = item.valid_projects || [];
         validProjects.forEach(function(p) {
             var opt = $('<option>').val(p.project_pk).text(p.project_name);
-            if (parseInt(p.project_pk) === parseInt(alloc.project_pk)) opt.prop('selected', true);
+            if (!alloc.is_writeoff && parseInt(p.project_pk) === parseInt(alloc.project_pk)) opt.prop('selected', true);
             projectSelect.append(opt);
         });
+        // Add Write Off options from snap's writeoff_options
+        var writeoffOptions = (snapData.currentSnap && snapData.currentSnap.writeoff_options) || [];
+        if (writeoffOptions.length > 0) {
+            var optgroup = $('<optgroup label="Write Offs">');
+            writeoffOptions.forEach(function(wo) {
+                var opt = $('<option>').val('writeoff_' + wo.xero_instance_pk).text(wo.xero_name + ' - Write Off');
+                if (alloc.is_writeoff && parseInt(alloc.writeoff_xero_instance_pk) === parseInt(wo.xero_instance_pk)) {
+                    opt.prop('selected', true);
+                }
+                optgroup.append(opt);
+            });
+            projectSelect.append(optgroup);
+        }
         projectSelect.prop('disabled', !isEditable);
         projectSelect.on('change', function() {
-            updateAllocation(alloc.allocation_pk, { project_pk: $(this).val() });
+            var selectedVal = $(this).val();
+            if (selectedVal && selectedVal.toString().indexOf('writeoff_') === 0) {
+                var xiPk = parseInt(selectedVal.replace('writeoff_', ''));
+                updateAllocation(alloc.allocation_pk, { is_writeoff: true, writeoff_xero_instance_pk: xiPk });
+            } else {
+                updateAllocation(alloc.allocation_pk, { project_pk: selectedVal });
+            }
         });
         row.append(projectSelect);
         
@@ -2618,16 +2803,26 @@ Tabs:
     // Auto-create first allocation when variance becomes non-zero
     function autoCreateFirstAllocation(item) {
         var validProjects = item.valid_projects || [];
-        if (validProjects.length === 0) {
+        var writeoffOptions = (snapData.currentSnap && snapData.currentSnap.writeoff_options) || [];
+        
+        if (validProjects.length === 0 && writeoffOptions.length === 0) {
             loadSnap(snapData.currentSnap.snap_pk);
             return;
         }
         
-        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', {
+        var postData = {
             snap_item_pk: item.snap_item_pk,
-            project_pk: validProjects[0].project_pk,
             qty: 1
-        }, function(response) {
+        };
+        
+        if (validProjects.length > 0) {
+            postData.project_pk = validProjects[0].project_pk;
+        } else {
+            postData.is_writeoff = true;
+            postData.writeoff_xero_instance_pk = writeoffOptions[0].xero_instance_pk;
+        }
+        
+        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', postData, function(response) {
             loadSnap(snapData.currentSnap.snap_pk);
         }, function(xhr, status, error) {
             console.error('[Snap] Failed to auto-create allocation:', error);
@@ -2638,16 +2833,27 @@ Tabs:
     // Create new allocation
     function createNewAllocation(item, container) {
         var validProjects = item.valid_projects || [];
-        if (validProjects.length === 0) {
-            alert('No projects have this item');
+        var writeoffOptions = (snapData.currentSnap && snapData.currentSnap.writeoff_options) || [];
+        
+        if (validProjects.length === 0 && writeoffOptions.length === 0) {
+            alert('No projects have this item and no write-off accounts are configured');
             return;
         }
         
-        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', {
+        var postData = {
             snap_item_pk: item.snap_item_pk,
-            project_pk: validProjects[0].project_pk,
             qty: 1
-        }, function(response) {
+        };
+        
+        if (validProjects.length > 0) {
+            postData.project_pk = validProjects[0].project_pk;
+        } else {
+            // No valid projects - default to first writeoff option
+            postData.is_writeoff = true;
+            postData.writeoff_xero_instance_pk = writeoffOptions[0].xero_instance_pk;
+        }
+        
+        stocktakeAjax('/core/stocktake/snap-allocations/create/', 'POST', postData, function(response) {
             if (response.status === 'success') {
                 // Reload snap to show new allocation
                 loadSnap(snapData.currentSnap.snap_pk);
@@ -2778,6 +2984,78 @@ Tabs:
         }, function(xhr, status, error) {
             console.error('[Snap] Failed to create snap:', error);
             alert('Failed to create snap: ' + error);
+        });
+    });
+    
+    // Check Xero Instance Matching button
+    $('#checkXeroMatchBtn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
+        
+        stocktakeAjax('/core/stocktake/check-xero-matching/', 'GET', null, function(response) {
+            btn.prop('disabled', false).html('<i class="fas fa-search"></i> Check Xero Matching');
+            
+            if (response.status !== 'success') {
+                alert('Error: ' + (response.message || 'Unknown error'));
+                return;
+            }
+            
+            var rows = response.rows || [];
+            var mismatches = response.mismatches || 0;
+            
+            // Build modal HTML
+            var html = '<div id="xeroMatchModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">';
+            html += '<div style="background: white; border-radius: 8px; max-width: 900px; width: 95%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">';
+            html += '<div style="padding: 16px 20px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">';
+            html += '<div><strong>Xero Instance Matching Check</strong>';
+            html += '<span style="margin-left: 12px; font-size: 12px; color: #6c757d;">' + rows.length + ' allocations, ';
+            html += mismatches > 0 ? '<span style="color: #dc3545; font-weight: 600;">' + mismatches + ' mismatches</span>' : '<span style="color: #28a745;">0 mismatches</span>';
+            html += '</span></div>';
+            html += '<button id="closeXeroMatchModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #6c757d;">&times;</button>';
+            html += '</div>';
+            html += '<div style="overflow-y: auto; flex: 1; padding: 0;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead style="position: sticky; top: 0; background: #f8f9fa;"><tr>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Bill PK</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Bill Xero Instance</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Project Type</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">PT Xero Instance</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: left;">Item</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: right;">Amount</th>';
+            html += '<th style="padding: 8px 10px; border-bottom: 2px solid #dee2e6; text-align: center;">Match</th>';
+            html += '</tr></thead><tbody>';
+            
+            if (rows.length === 0) {
+                html += '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #6c757d;">No stocktake allocations found.</td></tr>';
+            } else {
+                rows.forEach(function(r) {
+                    var bgColor = r.is_match ? '' : 'background: #fff3cd;';
+                    html += '<tr style="' + bgColor + '">';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.bill_pk + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.bill_xero_instance_name + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.project_type + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.pt_xero_instance_name + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee;">' + r.item_name + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right;">' + Utils.formatCurrency(r.amount) + '</td>';
+                    html += '<td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: center;">';
+                    html += r.is_match ? '<i class="fas fa-check-circle" style="color: #28a745;"></i>' : '<i class="fas fa-times-circle" style="color: #dc3545;"></i>';
+                    html += '</td></tr>';
+                });
+            }
+            
+            html += '</tbody></table></div></div></div>';
+            
+            $('body').append(html);
+            
+            // Close modal handlers
+            $('#closeXeroMatchModal, #xeroMatchModal').on('click', function(e) {
+                if (e.target === this || this.id === 'closeXeroMatchModal') {
+                    $('#xeroMatchModal').remove();
+                }
+            });
+        }, function(xhr, status, error) {
+            btn.prop('disabled', false).html('<i class="fas fa-search"></i> Check Xero Matching');
+            alert('Failed to check matching: ' + error);
         });
     });
     

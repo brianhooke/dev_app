@@ -44,7 +44,7 @@ from .views.api_diagnostics import api_diagnostics
 from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, get_xero_dropdown_data, get_xero_sales_accounts
 from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
 from .views.stocktake import (
-    toggle_stocktake_inclusion, toggle_xero_instance_stocktake, update_xero_stocktake_account, get_stocktake_allocations,
+    toggle_stocktake_inclusion, toggle_xero_instance_stocktake, update_xero_stocktake_account, update_xero_stocktake_writeoffs_account, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
     delete_stocktake_allocation, approve_stocktake_bill,
     # Snap APIs
@@ -55,7 +55,9 @@ from .views.stocktake import (
     # Opening Balance APIs
     get_opening_balances, save_opening_balance, update_opening_balance, delete_opening_balance,
     # Item History API
-    get_item_history
+    get_item_history,
+    # Xero Instance Matching Check
+    check_xero_instance_matching
 )
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
@@ -287,6 +289,7 @@ urlpatterns = [
     path('toggle_stocktake_inclusion/', toggle_stocktake_inclusion, name='toggle_stocktake_inclusion'),
     path('toggle_xero_instance_stocktake/', toggle_xero_instance_stocktake, name='toggle_xero_instance_stocktake'),
     path('update_xero_stocktake_account/', update_xero_stocktake_account, name='update_xero_stocktake_account'),
+    path('update_xero_stocktake_writeoffs_account/', update_xero_stocktake_writeoffs_account, name='update_xero_stocktake_writeoffs_account'),
     path('get_stocktake_allocations/<int:bill_pk>/', get_stocktake_allocations, name='get_stocktake_allocations'),
     path('create_stocktake_allocation/', create_stocktake_allocation, name='create_stocktake_allocation'),
     path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),
@@ -313,6 +316,7 @@ urlpatterns = [
     path('stocktake/opening-balances/<int:balance_pk>/update/', update_opening_balance, name='update_opening_balance'),
     path('stocktake/opening-balances/<int:balance_pk>/delete/', delete_opening_balance, name='delete_opening_balance'),
     path('stocktake/item/<int:item_pk>/history/', get_item_history, name='get_item_history'),
+    path('stocktake/check-xero-matching/', check_xero_instance_matching, name='check_xero_instance_matching'),
     path('dashboard_create_category/<int:project_pk>/', dashboard_create_category, name='dashboard_create_category'),
     path('dashboard_create_item/<int:project_pk>/', dashboard_create_item, name='dashboard_create_item'),
     path('reorder_category/<int:project_pk>/<int:category_pk>/', reorder_category, name='reorder_category'),

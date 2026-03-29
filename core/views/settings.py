@@ -68,7 +68,7 @@ def get_xero_instances_list(request):
     try:
         from core.models import XeroAccounts
         
-        instances = XeroInstances.objects.select_related('xero_stocktake_account').all()
+        instances = XeroInstances.objects.select_related('xero_stocktake_account', 'xero_stocktake_writeoffs_account').all()
         
         instances_data = []
         for inst in instances:
@@ -83,6 +83,8 @@ def get_xero_instances_list(request):
                 'stocktake': inst.stocktake,
                 'xero_stocktake_account_pk': inst.xero_stocktake_account.xero_account_pk if inst.xero_stocktake_account else None,
                 'xero_stocktake_account_name': inst.xero_stocktake_account.account_name if inst.xero_stocktake_account else None,
+                'xero_stocktake_writeoffs_account_pk': inst.xero_stocktake_writeoffs_account.xero_account_pk if inst.xero_stocktake_writeoffs_account else None,
+                'xero_stocktake_writeoffs_account_name': inst.xero_stocktake_writeoffs_account.account_name if inst.xero_stocktake_writeoffs_account else None,
                 'xero_accounts': accounts,
             })
         

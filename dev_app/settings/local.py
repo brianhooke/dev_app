@@ -9,6 +9,9 @@ if os.path.exists(env_file):
 
 DEBUG = True
 
+# Trust localhost on any port (for Windsurf browser preview proxy)
+CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:*', 'http://localhost:*']
+
 # Database - PostgreSQL if RDS credentials are set, otherwise SQLite
 if os.environ.get('RDS_HOSTNAME'):
     # Use PostgreSQL (AWS RDS)

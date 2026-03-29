@@ -203,6 +203,69 @@ def update_xero_stocktake_account(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_xero_stocktake_writeoffs_account(request):
+    """
+    Update the xero_stocktake_writeoffs_account for a Xero instance.
+    
+    Expected POST data:
+    - xero_instance_pk: int
+    - xero_account_pk: int or null (to clear)
+    """
+    try:
+        from core.models import XeroInstances, XeroAccounts
+        
+        data = json.loads(request.body)
+        xero_instance_pk = data.get('xero_instance_pk')
+        xero_account_pk = data.get('xero_account_pk')
+        
+        if not xero_instance_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'xero_instance_pk is required'
+            }, status=400)
+        
+        try:
+            xero_instance = XeroInstances.objects.get(xero_instance_pk=xero_instance_pk)
+        except XeroInstances.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'XeroInstance with pk {xero_instance_pk} not found'
+            }, status=404)
+        
+        if xero_account_pk:
+            try:
+                xero_account = XeroAccounts.objects.get(xero_account_pk=xero_account_pk, xero_instance=xero_instance)
+                xero_instance.xero_stocktake_writeoffs_account = xero_account
+            except XeroAccounts.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'XeroAccount with pk {xero_account_pk} not found for this instance'
+                }, status=404)
+        else:
+            xero_instance.xero_stocktake_writeoffs_account = None
+        
+        xero_instance.save(update_fields=['xero_stocktake_writeoffs_account', 'updated_at'])
+        logger.info(f"Updated XeroInstance {xero_instance_pk} xero_stocktake_writeoffs_account to {xero_account_pk}")
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Xero stocktake writeoffs account updated'
+        })
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error updating Xero stocktake writeoffs account: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def get_stocktake_allocations(request, bill_pk):
     """
@@ -916,11 +979,14 @@ def get_snap(request, snap_pk):
         items = []
         for snap_item in snap.snap_items.select_related('item', 'item__unit').all():
             allocations = []
-            for alloc in snap_item.allocations.select_related('project').all():
+            for alloc in snap_item.allocations.select_related('project', 'writeoff_xero_instance').all():
                 allocations.append({
                     'allocation_pk': alloc.snap_allocation_pk,
                     'project_pk': alloc.project_id,
                     'project_name': alloc.project.project if alloc.project else '',
+                    'is_writeoff': alloc.is_writeoff,
+                    'writeoff_xero_instance_pk': alloc.writeoff_xero_instance_id,
+                    'writeoff_xero_instance_name': alloc.writeoff_xero_instance.xero_name if alloc.writeoff_xero_instance else '',
                     'qty': float(alloc.qty),
                     'rate': float(alloc.rate),
                     'amount': float(alloc.amount)
@@ -966,6 +1032,18 @@ def get_snap(request, snap_pk):
         most_recent_snap = StocktakeSnap.objects.order_by('-date', '-snap_pk').first()
         is_most_recent = most_recent_snap and most_recent_snap.snap_pk == snap.snap_pk
         
+        # Get Xero instances with writeoffs account set (for Write Off dropdown options)
+        writeoff_instances = XeroInstances.objects.filter(
+            stocktake=1,
+            xero_stocktake_writeoffs_account__isnull=False
+        ).select_related('xero_stocktake_writeoffs_account')
+        writeoff_options = [{
+            'xero_instance_pk': xi.xero_instance_pk,
+            'xero_name': xi.xero_name,
+            'writeoffs_account_pk': xi.xero_stocktake_writeoffs_account.xero_account_pk,
+            'writeoffs_account_name': xi.xero_stocktake_writeoffs_account.account_name,
+        } for xi in writeoff_instances]
+        
         return JsonResponse({
             'status': 'success',
             'snap': {
@@ -976,7 +1054,8 @@ def get_snap(request, snap_pk):
                 'status_display': snap.get_status_display(),
                 'notes': snap.notes or '',
                 'items': items,
-                'is_most_recent': is_most_recent
+                'is_most_recent': is_most_recent,
+                'writeoff_options': writeoff_options
             }
         })
         
@@ -1146,17 +1225,31 @@ def create_snap_allocation(request):
     Create a project allocation for a snap item's variance.
     """
     try:
-        from core.models import StocktakeSnapItem, StocktakeSnapAllocation, StocktakeSnap, Projects
+        from core.models import StocktakeSnapItem, StocktakeSnapAllocation, StocktakeSnap, Projects, XeroInstances
         
         data = json.loads(request.body)
         snap_item_pk = data.get('snap_item_pk')
         project_pk = data.get('project_pk')
+        is_writeoff = data.get('is_writeoff', False)
+        writeoff_xero_instance_pk = data.get('writeoff_xero_instance_pk')
         qty = data.get('qty', 0)
         
-        if not snap_item_pk or not project_pk:
+        if not snap_item_pk:
             return JsonResponse({
                 'status': 'error',
-                'message': 'snap_item_pk and project_pk are required'
+                'message': 'snap_item_pk is required'
+            }, status=400)
+        
+        if not is_writeoff and not project_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'project_pk is required for non-writeoff allocations'
+            }, status=400)
+        
+        if is_writeoff and not writeoff_xero_instance_pk:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'writeoff_xero_instance_pk is required for writeoff allocations'
             }, status=400)
         
         try:
@@ -1173,13 +1266,25 @@ def create_snap_allocation(request):
                 'message': 'Cannot add allocations to a finalised snap'
             }, status=400)
         
-        try:
-            project = Projects.objects.get(projects_pk=project_pk)
-        except Projects.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Project {project_pk} not found'
-            }, status=404)
+        project = None
+        writeoff_instance = None
+        
+        if is_writeoff:
+            try:
+                writeoff_instance = XeroInstances.objects.get(xero_instance_pk=writeoff_xero_instance_pk)
+            except XeroInstances.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'XeroInstance {writeoff_xero_instance_pk} not found'
+                }, status=404)
+        else:
+            try:
+                project = Projects.objects.get(projects_pk=project_pk)
+            except Projects.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Project {project_pk} not found'
+                }, status=404)
         
         # Calculate rate using AVG (average) costing method
         rate_info = calculate_rate_for_qty(
@@ -1193,6 +1298,8 @@ def create_snap_allocation(request):
         allocation = StocktakeSnapAllocation.objects.create(
             snap_item=snap_item,
             project=project,
+            is_writeoff=is_writeoff,
+            writeoff_xero_instance=writeoff_instance,
             qty=Decimal(str(qty)),
             rate=Decimal(str(rate_info['rate'])),
             amount=Decimal(str(rate_info['total_amount']))
@@ -1225,7 +1332,7 @@ def update_snap_allocation(request, allocation_pk):
     Update a snap allocation (qty or project).
     """
     try:
-        from core.models import StocktakeSnapAllocation, StocktakeSnap, Projects
+        from core.models import StocktakeSnapAllocation, StocktakeSnap, Projects, XeroInstances
         
         data = json.loads(request.body)
         
@@ -1245,9 +1352,29 @@ def update_snap_allocation(request, allocation_pk):
                 'message': 'Cannot update allocations in a finalised snap'
             }, status=400)
         
-        if 'project_pk' in data:
+        # Handle writeoff vs project assignment
+        if 'is_writeoff' in data and data['is_writeoff']:
+            writeoff_xero_instance_pk = data.get('writeoff_xero_instance_pk')
+            if not writeoff_xero_instance_pk:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'writeoff_xero_instance_pk is required for writeoff allocations'
+                }, status=400)
+            try:
+                writeoff_instance = XeroInstances.objects.get(xero_instance_pk=writeoff_xero_instance_pk)
+            except XeroInstances.DoesNotExist:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'XeroInstance {writeoff_xero_instance_pk} not found'
+                }, status=404)
+            allocation.is_writeoff = True
+            allocation.writeoff_xero_instance = writeoff_instance
+            allocation.project = None
+        elif 'project_pk' in data:
             try:
                 allocation.project = Projects.objects.get(projects_pk=data['project_pk'])
+                allocation.is_writeoff = False
+                allocation.writeoff_xero_instance = None
             except Projects.DoesNotExist:
                 return JsonResponse({
                     'status': 'error',
@@ -1503,30 +1630,47 @@ def send_snap_to_xero(request, snap_pk):
         total_amount = Decimal('0')
         
         # Get all allocations with project expense accounts
-        for snap_item in snap.snap_items.select_related('item').prefetch_related('allocations__project'):
+        for snap_item in snap.snap_items.select_related('item').prefetch_related(
+            'allocations__project', 'allocations__writeoff_xero_instance',
+            'allocations__writeoff_xero_instance__xero_stocktake_writeoffs_account'
+        ):
             for alloc in snap_item.allocations.all():
-                # Get the expense account for this project (from project's xero tracking or default)
-                # For now, we'll need the expense account code from the item or a default
-                expense_account_code = None
-                
-                # Try to get account from the item's xero_account
-                if snap_item.item and hasattr(snap_item.item, 'xero_account_code') and snap_item.item.xero_account_code:
-                    expense_account_code = snap_item.item.xero_account_code
-                
-                if not expense_account_code:
-                    # Use a default expense account - this should be configured
-                    expense_account_code = '300'  # Default cost of goods sold account
-                
                 amount = float(alloc.amount)
                 total_amount += Decimal(str(amount))
                 
-                # DEBIT line (positive) - expense to project
-                journal_lines.append({
-                    "AccountCode": expense_account_code,
-                    "Description": f"Stocktake: {snap_item.item.item if snap_item.item else 'Unknown'} - {alloc.project.project if alloc.project else 'Unknown project'}",
-                    "LineAmount": amount,
-                    "TaxType": "NONE"
-                })
+                if alloc.is_writeoff and alloc.writeoff_xero_instance:
+                    # Write-off allocation: use the instance's writeoffs account
+                    writeoffs_acct = alloc.writeoff_xero_instance.xero_stocktake_writeoffs_account
+                    if writeoffs_acct:
+                        writeoff_account_code = writeoffs_acct.account_code
+                    else:
+                        writeoff_account_code = '300'  # Fallback
+                    
+                    journal_lines.append({
+                        "AccountCode": writeoff_account_code,
+                        "Description": f"Stocktake Write Off: {snap_item.item.item if snap_item.item else 'Unknown'} - {alloc.writeoff_xero_instance.xero_name}",
+                        "LineAmount": amount,
+                        "TaxType": "NONE"
+                    })
+                else:
+                    # Regular project allocation
+                    expense_account_code = None
+                    
+                    # Try to get account from the item's xero_account
+                    if snap_item.item and hasattr(snap_item.item, 'xero_account_code') and snap_item.item.xero_account_code:
+                        expense_account_code = snap_item.item.xero_account_code
+                    
+                    if not expense_account_code:
+                        # Use a default expense account - this should be configured
+                        expense_account_code = '300'  # Default cost of goods sold account
+                    
+                    # DEBIT line (positive) - expense to project
+                    journal_lines.append({
+                        "AccountCode": expense_account_code,
+                        "Description": f"Stocktake: {snap_item.item.item if snap_item.item else 'Unknown'} - {alloc.project.project if alloc.project else 'Unknown project'}",
+                        "LineAmount": amount,
+                        "TaxType": "NONE"
+                    })
         
         if not journal_lines:
             return JsonResponse({
@@ -1994,6 +2138,66 @@ def get_item_history(request, item_pk):
         
     except Exception as e:
         logger.error(f"Error getting item history: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def check_xero_instance_matching(request):
+    """
+    Returns all StocktakeAllocations with their project_type's xero instance
+    vs the bill's xero instance, for visual mismatch checking.
+    """
+    try:
+        from core.models import StocktakeAllocations, ProjectTypes, XeroInstances
+        
+        allocations = StocktakeAllocations.objects.select_related(
+            'bill', 'bill__xero_instance', 'item'
+        ).all().order_by('bill__bill_pk', 'allocation_pk')
+        
+        # Build project_type -> xero_instance lookup
+        pt_xero_lookup = {}
+        for pt in ProjectTypes.objects.select_related('xero_instance').all():
+            pt_xero_lookup[pt.project_type] = {
+                'xero_instance_pk': pt.xero_instance.xero_instance_pk if pt.xero_instance else None,
+                'xero_instance_name': pt.xero_instance.xero_name if pt.xero_instance else None,
+            }
+        
+        rows = []
+        for alloc in allocations:
+            bill_xi_pk = alloc.bill.xero_instance_id if alloc.bill.xero_instance_id else None
+            bill_xi_name = alloc.bill.xero_instance.xero_name if alloc.bill.xero_instance else None
+            
+            pt_info = pt_xero_lookup.get(alloc.project_type, {})
+            pt_xi_pk = pt_info.get('xero_instance_pk')
+            pt_xi_name = pt_info.get('xero_instance_name')
+            
+            is_match = bill_xi_pk == pt_xi_pk if (bill_xi_pk and pt_xi_pk) else False
+            
+            rows.append({
+                'allocation_pk': alloc.allocation_pk,
+                'bill_pk': alloc.bill.bill_pk,
+                'bill_xero_instance_pk': bill_xi_pk,
+                'bill_xero_instance_name': bill_xi_name or '—',
+                'project_type': alloc.project_type or '—',
+                'pt_xero_instance_pk': pt_xi_pk,
+                'pt_xero_instance_name': pt_xi_name or '—',
+                'item_name': alloc.item.item if alloc.item else '—',
+                'amount': float(alloc.amount) if alloc.amount else 0,
+                'is_match': is_match,
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'rows': rows,
+            'total': len(rows),
+            'mismatches': sum(1 for r in rows if not r['is_match']),
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking xero instance matching: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': f'Error: {str(e)}'

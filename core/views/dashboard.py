@@ -113,12 +113,14 @@ def dashboard_view(request):
     
     # Stocktake table columns
     stocktake_main_columns = [
-        {'header': 'Supplier', 'width': '20%', 'sortable': True},
-        {'header': 'Bill #', 'width': '15%', 'sortable': True},
-        {'header': '$ Gross', 'width': '15%', 'sortable': True},
-        {'header': '$ Net', 'width': '15%', 'sortable': True},
-        {'header': '$ GST', 'width': '15%', 'sortable': True},
-        {'header': '', 'width': '10%', 'class': 'col-action', 'sortable': True},
+        {'header': 'Supplier', 'width': '18%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '12%', 'sortable': True},
+        {'header': 'Bill #', 'width': '12%', 'sortable': True},
+        {'header': '$ Gross', 'width': '13%', 'sortable': True},
+        {'header': '$ Net', 'width': '13%', 'sortable': True},
+        {'header': '$ GST', 'width': '13%', 'sortable': True},
+        {'header': 'Approve', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Return', 'width': '5%', 'class': 'col-action'},
     ]
     stocktake_alloc_columns = [
         {'header': 'Project Type', 'width': '15%'},

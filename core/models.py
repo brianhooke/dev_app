@@ -33,6 +33,7 @@ class XeroInstances(models.Model):
     staff_hours_tracking = models.IntegerField(default=0)  # 0=no, 1=yes
     stocktake = models.IntegerField(default=0)  # 0=not included, 1=included in stocktake
     xero_stocktake_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='stocktake_xero_instances')
+    xero_stocktake_writeoffs_account = models.ForeignKey('XeroAccounts', on_delete=models.SET_NULL, null=True, blank=True, related_name='stocktake_writeoffs_xero_instances')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -992,7 +993,9 @@ class StocktakeSnapAllocation(models.Model):
     """
     snap_allocation_pk = models.AutoField(primary_key=True)
     snap_item = models.ForeignKey(StocktakeSnapItem, on_delete=models.CASCADE, related_name='allocations')
-    project = models.ForeignKey('Projects', on_delete=models.CASCADE, related_name='stocktake_snap_allocations')
+    project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True, related_name='stocktake_snap_allocations')
+    is_writeoff = models.BooleanField(default=False)
+    writeoff_xero_instance = models.ForeignKey('XeroInstances', on_delete=models.SET_NULL, null=True, blank=True, related_name='stocktake_writeoff_allocations')
     qty = models.DecimalField(max_digits=15, decimal_places=5)
     rate = models.DecimalField(max_digits=15, decimal_places=5)  # Calculated by FIFO/LIFO/AVG
     amount = models.DecimalField(max_digits=10, decimal_places=2)  # qty * rate
