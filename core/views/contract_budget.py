@@ -25,6 +25,61 @@ from .staff_hours import get_employee_super_rate
 logger = logging.getLogger(__name__)
 
 
+def _contract_budget_main_table_columns(is_tender, is_construction):
+    """Column definitions for contract budget main table (matches allocations_layout thead)."""
+    if is_tender:
+        if is_construction:
+            return [
+                {'header': 'Category / Item', 'width': '22%', 'field': 'item'},
+                {'header': 'Unit', 'width': '5%', 'field': 'unit'},
+                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
+                {'header': 'Qty', 'width': '7%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
+                {'header': 'Rate', 'width': '7%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
+                {'header': 'Amount', 'width': '9%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
+                {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
+                {'header': 'Qty', 'width': '7%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
+                {'header': 'Rate', 'width': '7%', 'field': 'committed_rate', 'parent_header': 'Committed'},
+                {'header': 'Amount', 'width': '9%', 'field': 'committed_amount', 'parent_header': 'Committed'},
+            ]
+        return [
+            {'header': 'Category / Item', 'width': '30%', 'field': 'item'},
+            {'header': 'Unit', 'width': '8%', 'field': 'unit'},
+            {'header': 'Working Budget', 'width': '16%', 'field': 'working_budget'},
+            {'header': 'Uncommitted', 'width': '16%', 'field': 'uncommitted_amount', 'input': True},
+            {'header': 'Notes', 'width': '6%', 'field': 'uncommitted_notes', 'icon': True},
+            {'header': 'Committed', 'width': '16%', 'field': 'committed'},
+        ]
+    if is_construction:
+        return [
+            {'header': 'Category / Item', 'width': '10%', 'field': 'item'},
+            {'header': 'Unit', 'width': '4%', 'field': 'unit'},
+            {'header': 'Contract Budget', 'width': '8%', 'field': 'contract_budget'},
+            {'header': 'Working Budget', 'width': '8%', 'field': 'working_budget'},
+            {'header': 'Qty', 'width': '6%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
+            {'header': 'Rate', 'width': '6%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
+            {'header': 'Amount', 'width': '7%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
+            {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
+            {'header': 'Qty', 'width': '6%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
+            {'header': 'Rate', 'width': '6%', 'field': 'committed_rate', 'parent_header': 'Committed'},
+            {'header': 'Amount', 'width': '8%', 'field': 'committed_amount', 'parent_header': 'Committed'},
+            {'header': 'C2C', 'width': '7%', 'field': 'cost_to_complete'},
+            {'header': 'Billed', 'width': '7%', 'field': 'billed'},
+            {'header': 'Fixed on Site', 'width': '7%', 'field': 'fixed_on_site'},
+        ]
+    return [
+        {'header': 'Category / Item', 'width': '12%', 'field': 'item'},
+        {'header': 'Unit', 'width': '5%', 'field': 'unit'},
+        {'header': 'Contract Budget', 'width': '10%', 'field': 'contract_budget'},
+        {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
+        {'header': 'Uncommitted', 'width': '10%', 'field': 'uncommitted_amount', 'input': True},
+        {'header': 'Notes', 'width': '5%', 'field': 'uncommitted_notes', 'icon': True},
+        {'header': 'Committed', 'width': '15%', 'field': 'committed'},
+        {'header': 'C2C', 'width': '10%', 'field': 'cost_to_complete'},
+        {'header': 'Billed', 'width': '10%', 'field': 'billed'},
+        {'header': 'Fixed on Site', 'width': '10%', 'field': 'fixed_on_site'},
+    ]
+
+
 def contract_budget_view(request):
     """Render the Contract Budget section template with column configuration.
     
@@ -54,64 +109,9 @@ def contract_budget_view(request):
     
     has_subheadings = is_construction  # Only construction has subheadings
     
-    if is_tender:
-        if is_construction:
-            # Tender + Construction: 10 columns with Uncommitted and Committed subheadings
-            main_table_columns = [
-                {'header': 'Category / Item', 'width': '22%', 'field': 'item'},
-                {'header': 'Unit', 'width': '5%', 'field': 'unit'},
-                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
-                {'header': 'Qty', 'width': '7%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
-                {'header': 'Rate', 'width': '7%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
-                {'header': 'Amount', 'width': '9%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
-                {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
-                {'header': 'Qty', 'width': '7%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
-                {'header': 'Rate', 'width': '7%', 'field': 'committed_rate', 'parent_header': 'Committed'},
-                {'header': 'Amount', 'width': '9%', 'field': 'committed_amount', 'parent_header': 'Committed'},
-            ]
-        else:
-            # Tender + Non-construction: 6 columns (added Notes)
-            main_table_columns = [
-                {'header': 'Category / Item', 'width': '30%', 'field': 'item'},
-                {'header': 'Unit', 'width': '8%', 'field': 'unit'},
-                {'header': 'Working Budget', 'width': '16%', 'field': 'working_budget'},
-                {'header': 'Uncommitted', 'width': '16%', 'field': 'uncommitted_amount', 'input': True},
-                {'header': 'Notes', 'width': '6%', 'field': 'uncommitted_notes', 'icon': True},
-                {'header': 'Committed', 'width': '16%', 'field': 'committed'},
-            ]
-    else:
-        if is_construction:
-            # Execution + Construction: 14 columns with Uncommitted and Committed subheadings
-            main_table_columns = [
-                {'header': 'Category / Item', 'width': '10%', 'field': 'item'},
-                {'header': 'Unit', 'width': '4%', 'field': 'unit'},
-                {'header': 'Contract Budget', 'width': '8%', 'field': 'contract_budget'},
-                {'header': 'Working Budget', 'width': '8%', 'field': 'working_budget'},
-                {'header': 'Qty', 'width': '6%', 'field': 'uncommitted_qty', 'parent_header': 'Uncommitted', 'is_first_child': True, 'parent_colspan': 4, 'input': True},
-                {'header': 'Rate', 'width': '6%', 'field': 'uncommitted_rate', 'parent_header': 'Uncommitted', 'input': True},
-                {'header': 'Amount', 'width': '7%', 'field': 'uncommitted_amount', 'parent_header': 'Uncommitted', 'calculated': True},
-                {'header': 'Notes', 'width': '4%', 'field': 'uncommitted_notes', 'parent_header': 'Uncommitted', 'icon': True},
-                {'header': 'Qty', 'width': '6%', 'field': 'committed_qty', 'parent_header': 'Committed', 'is_first_child': True, 'parent_colspan': 3},
-                {'header': 'Rate', 'width': '6%', 'field': 'committed_rate', 'parent_header': 'Committed'},
-                {'header': 'Amount', 'width': '8%', 'field': 'committed_amount', 'parent_header': 'Committed'},
-                {'header': 'C2C', 'width': '7%', 'field': 'cost_to_complete'},
-                {'header': 'Billed', 'width': '7%', 'field': 'billed'},
-                {'header': 'Fixed on Site', 'width': '7%', 'field': 'fixed_on_site'},
-            ]
-        else:
-            # Execution + Non-construction: 10 columns (added Notes)
-            main_table_columns = [
-                {'header': 'Category / Item', 'width': '12%', 'field': 'item'},
-                {'header': 'Unit', 'width': '5%', 'field': 'unit'},
-                {'header': 'Contract Budget', 'width': '10%', 'field': 'contract_budget'},
-                {'header': 'Working Budget', 'width': '10%', 'field': 'working_budget'},
-                {'header': 'Uncommitted', 'width': '10%', 'field': 'uncommitted_amount', 'input': True},
-                {'header': 'Notes', 'width': '5%', 'field': 'uncommitted_notes', 'icon': True},
-                {'header': 'Committed', 'width': '15%', 'field': 'committed'},
-                {'header': 'C2C', 'width': '10%', 'field': 'cost_to_complete'},
-                {'header': 'Billed', 'width': '10%', 'field': 'billed'},
-                {'header': 'Fixed on Site', 'width': '10%', 'field': 'fixed_on_site'},
-            ]
+    main_table_columns = _contract_budget_main_table_columns(is_tender, is_construction)
+    columns_tender = _contract_budget_main_table_columns(True, is_construction)
+    columns_execution = _contract_budget_main_table_columns(False, is_construction)
     
     context = {
         'project_pk': project_pk,
@@ -123,6 +123,8 @@ def contract_budget_view(request):
         'main_table_columns': main_table_columns,
         'hide_viewer': True,
         'hide_allocations': True,
+        'contract_budget_columns_tender_json': json.dumps(columns_tender),
+        'contract_budget_columns_execution_json': json.dumps(columns_execution),
     }
     return render(request, 'core/contract_budget.html', context)
 

@@ -27,6 +27,8 @@ Column Behaviors:
     window.contractBudgetProjectPk = '{{ project_pk }}' !== 'None' ? '{{ project_pk }}' : null;
     window.contractBudgetIsConstruction = {{ is_construction|yesno:"true,false" }};
     window.contractBudgetIsTender = {{ is_tender|yesno:"true,false" }};
+    window.contractBudgetColumnsTender = {{ contract_budget_columns_tender_json|safe }};
+    window.contractBudgetColumnsExecution = {{ contract_budget_columns_execution_json|safe }};
 </script>
 
 <style>
@@ -315,6 +317,20 @@ Column Behaviors:
         text-align: left;
         color: var(--color-text);
     }
+    
+    #contractBudgetReviewTenderBar {
+        margin-top: 8px;
+        padding: 0 4px;
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .contract-budget-tender-readonly-banner {
+        font-size: 12px;
+        color: #6c757d;
+    }
 </style>
 
 <!-- Include the reusable allocations layout -->
@@ -331,6 +347,69 @@ Column Behaviors:
     var projectPk = window.contractBudgetProjectPk;
     var isConstruction = window.contractBudgetIsConstruction || false;
     var isTender = window.contractBudgetIsTender || false;
+    /** True while viewing frozen tender snapshot (execution projects only). */
+    var reviewTenderBudgetMode = false;
+    
+    function effectiveIsTender() {
+        return isTender || reviewTenderBudgetMode;
+    }
+    function contractBudgetReadOnly() {
+        return reviewTenderBudgetMode;
+    }
+    
+    function buildContractBudgetTheadFromColumns(cols, hasSubheadings) {
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+        if (!hasSubheadings) {
+            var tr = '<tr>' + cols.map(function(c) {
+                return '<th style="width:' + esc(c.width) + '">' + esc(c.header) + '</th>';
+            }).join('') + '</tr>';
+            return '<thead>' + tr + '</thead>';
+        }
+        var row1 = '<tr>';
+        cols.forEach(function(col) {
+            if (col.parent_header) {
+                if (col.is_first_child) {
+                    row1 += '<th colspan="' + col.parent_colspan + '" style="text-align:center;vertical-align:middle">' + esc(col.parent_header) + '</th>';
+                }
+            } else {
+                row1 += '<th rowspan="2" style="width:' + esc(col.width) + ';vertical-align:middle">' + esc(col.header) + '</th>';
+            }
+        });
+        row1 += '</tr><tr>';
+        cols.forEach(function(col) {
+            if (col.parent_header) {
+                row1 += '<th style="width:' + esc(col.width) + '">' + esc(col.header) + '</th>';
+            }
+        });
+        row1 += '</tr>';
+        return '<thead>' + row1 + '</thead>';
+    }
+    
+    function rebuildContractBudgetTableChrome() {
+        var cols = effectiveIsTender() ? window.contractBudgetColumnsTender : window.contractBudgetColumnsExecution;
+        if (!cols || !cols.length) return;
+        var $table = $('#contractBudgetMainTable');
+        if (!$table.length) return;
+        var colgroupHtml = '<colgroup>';
+        cols.forEach(function(c) {
+            colgroupHtml += '<col style="width: ' + c.width + ';">';
+        });
+        colgroupHtml += '</colgroup>';
+        $table.find('colgroup').replaceWith(colgroupHtml);
+        var theadHtml = buildContractBudgetTheadFromColumns(cols, isConstruction);
+        $table.find('thead').replaceWith(theadHtml);
+        $('#contractBudgetFixedFooter').remove();
+        createFixedFooter();
+        if (isConstruction) {
+            applyColumnGroupBorders();
+        }
+    }
     
     
     // Initialize when DOM is ready
@@ -386,7 +465,7 @@ Column Behaviors:
     // Get column count based on mode
     // Construction has Committed Qty|Rate|Amount (3 cols), non-construction has single Committed col
     function getColCount() {
-        if (isTender) {
+        if (effectiveIsTender()) {
             return isConstruction ? 10 : 6;  // Construction: +2 for committed qty/rate
         } else {
             return isConstruction ? 14 : 10;  // Construction: +2 for committed qty/rate
@@ -403,7 +482,7 @@ Column Behaviors:
         tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; padding: 20px;">Loading...</td></tr>');
         
         // Determine tender_or_execution value (1=tender, 2=execution)
-        var tenderOrExecution = isTender ? 1 : 2;
+        var tenderOrExecution = effectiveIsTender() ? 1 : 2;
         
         // Load categories, items, and committed amounts in parallel
         Promise.all([
@@ -419,7 +498,7 @@ Column Behaviors:
             console.log('Contract Budget - Committed Amounts from backend:', committedAmounts);
             console.log('Contract Budget - Billed Amounts from backend:', billedAmounts);
             
-            renderTable(categories, items, committedAmounts, billedAmounts);
+            renderTable(categories, items, committedAmounts, billedAmounts, contractBudgetReadOnly());
         }).catch(function(error) {
             console.error('Error loading contract budget:', error);
             tbody.html('<tr><td colspan="' + colCount + '" style="text-align: center; color: #dc3545; padding: 20px;">Error loading data</td></tr>');
@@ -427,7 +506,8 @@ Column Behaviors:
     }
     
     // Render the table
-    function renderTable(categories, items, committedAmounts, billedAmounts) {
+    function renderTable(categories, items, committedAmounts, billedAmounts, readOnly) {
+        readOnly = !!readOnly;
         var tbody = $('#contractBudgetMainTableBody');
         var tfoot = $('#contractBudgetMainTableFooter');
         var colCount = getColCount();
@@ -478,7 +558,7 @@ Column Behaviors:
                 var committedAmount = isConstruction ? 
                     (committedData ? committedData.amount : 0) : 
                     (committedData || 0);
-                var row = renderItemRow(item, committedData, billedAmount, isInternal, isLabour, category.category);
+                var row = renderItemRow(item, committedData, billedAmount, isInternal, isLabour, category.category, readOnly);
                 tbody.append(row);
                 
                 // Update totals (include all items including internal category)
@@ -493,7 +573,7 @@ Column Behaviors:
                 }
                 totals.working_budget += uncommittedAmount + committedAmount;
                 
-                if (!isTender) {
+                if (!effectiveIsTender()) {
                     totals.contract_budget += parseFloat(item.contract_budget) || 0;
                     // C2C = Working Budget - Billed
                     var workingBudgetForItem = uncommittedAmount + committedAmount;
@@ -527,7 +607,7 @@ Column Behaviors:
         // Unit column (empty)
         row.append('<td class="subtotal-cell"></td>');
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             // Contract Budget subtotal
             row.append('<td class="subtotal-cell" data-subtotal="contract_budget"></td>');
         }
@@ -551,7 +631,7 @@ Column Behaviors:
             row.append('<td class="subtotal-cell" data-subtotal="committed"></td>');
         }
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             row.append('<td class="subtotal-cell" data-subtotal="cost_to_complete"></td>');
             row.append('<td class="subtotal-cell" data-subtotal="billed"></td>');
             row.append('<td class="subtotal-cell" data-subtotal="fixed_on_site"></td>');
@@ -568,7 +648,8 @@ Column Behaviors:
     }
     
     // Render an item row
-    function renderItemRow(item, committedData, billedAmount, isInternal, isLabour, categoryName) {
+    function renderItemRow(item, committedData, billedAmount, isInternal, isLabour, categoryName, readOnly) {
+        readOnly = !!readOnly;
         // For construction types, committedData is {qty, rate, amount, has_multiple_rates}; for others, it's a number
         var committedAmount = isConstruction ? 
             (committedData ? committedData.amount : 0) : 
@@ -594,7 +675,7 @@ Column Behaviors:
         // Unit column
         row.append('<td>' + Utils.escapeHtml(item.unit || '-') + '</td>');
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             // Contract Budget column (execution mode only)
             // Make clickable if item has HC variation allocations
             var hasHcVariations = (item.hc_variation_amount || 0) > 0;
@@ -614,7 +695,7 @@ Column Behaviors:
         row.append('<td class="working-budget-cell" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(workingBudget) + '</td>');
         
         // Internal category items in execution mode: show blank/non-editable uncommitted fields
-        var internalInExecution = isInternal && !isTender;
+        var internalInExecution = isInternal && !effectiveIsTender();
         
         if (isConstruction) {
             // Uncommitted: Qty | Rate | Amount | Notes (construction mode)
@@ -739,7 +820,7 @@ Column Behaviors:
             row.append(amountTd);
         }
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             // Execution mode extra columns
             // C2C = Working Budget - Billed
             var c2cValue = workingBudget - billedAmount;
@@ -765,11 +846,19 @@ Column Behaviors:
             row.append(fixedOnSiteTd);
         }
         
+        if (readOnly) {
+            row.find('a.click-to-edit').each(function() {
+                var $a = $(this);
+                $a.replaceWith($('<span>').text($a.text()));
+            });
+        }
+        
         return row;
     }
     
     // Convert click-to-edit link to input field
     function convertToInput(itemPk, field) {
+        if (contractBudgetReadOnly()) return;
         var displaySelector = '.' + field + '-display[data-item-pk="' + itemPk + '"]';
         var display = $(displaySelector);
         if (!display.length) return;
@@ -816,6 +905,7 @@ Column Behaviors:
     
     // Convert click-to-edit link to input field (non-construction mode)
     function convertToInputNonConstruction(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var displaySelector = '.amount-display[data-item-pk="' + itemPk + '"]';
         var display = $(displaySelector);
         if (!display.length) return;
@@ -864,6 +954,7 @@ Column Behaviors:
     
     // Save uncommitted amount for non-construction mode
     function saveUncommittedNonConstruction(itemPk, amount) {
+        if (contractBudgetReadOnly()) return;
         var data = {
             costing_pk: itemPk,
             uncommitted: amount
@@ -885,6 +976,7 @@ Column Behaviors:
     
     // Convert Fixed on Site cell to input field
     function convertFixedOnSiteToInput(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var displaySelector = '.fixed-on-site-display[data-item-pk="' + itemPk + '"]';
         var display = $(displaySelector);
         if (!display.length) return;
@@ -928,6 +1020,7 @@ Column Behaviors:
     
     // Save Fixed on Site amount
     function saveFixedOnSite(itemPk, amount) {
+        if (contractBudgetReadOnly()) return;
         var data = {
             costing_pk: itemPk,
             fixed_on_site: amount
@@ -985,8 +1078,7 @@ Column Behaviors:
             var itemPk = textarea.attr('data-item-pk');
             var notes = textarea.val();
             
-            // Save before closing
-            if (itemPk) {
+            if (itemPk && !contractBudgetReadOnly()) {
                 saveNotes(itemPk, notes);
             }
             
@@ -1064,7 +1156,7 @@ Column Behaviors:
         });
         
         // For non-tender mode, also get contract_budget, cost_to_complete, billed, fixed_on_site from the row text
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             $('tr.item-row[data-category="' + categoryName + '"]').each(function() {
                 var cells = $(this).find('td');
                 // Contract budget is the 3rd cell (index 2) in execution mode
@@ -1112,7 +1204,7 @@ Column Behaviors:
         
         // Calculate column spans based on mode
         // Columns before Uncommitted: Category/Item, Unit, [Contract Budget if execution], Working Budget
-        var colsBeforeUncommitted = isTender ? 3 : 4;
+        var colsBeforeUncommitted = effectiveIsTender() ? 3 : 4;
         // Uncommitted columns: (Qty, Rate, Amount, Notes) for construction, (Amount, Notes) for non-construction
         var uncommittedCols = isConstruction ? 4 : 2;
         // Remaining columns after Uncommitted
@@ -1127,6 +1219,10 @@ Column Behaviors:
         var td = $('<td colspan="' + uncommittedCols + '"></td>');
         var textarea = $('<textarea class="notes-textarea" data-item-pk="' + itemPk + '" placeholder="Enter notes..." maxlength="1000"></textarea>');
         textarea.val(currentNotes);
+        if (contractBudgetReadOnly()) {
+            textarea.prop('readonly', true);
+            textarea.attr('placeholder', '');
+        }
         td.append(textarea);
         notesRow.append(td);
         
@@ -1136,7 +1232,9 @@ Column Behaviors:
         }
         
         itemRow.after(notesRow);
-        textarea.focus();
+        if (!contractBudgetReadOnly()) {
+            textarea.focus();
+        }
         
         icon.addClass('active');
     }
@@ -1187,12 +1285,12 @@ Column Behaviors:
         // Green box starts at UncommRate, spans: Rate+Amt+Notes+CommQty+CommRate+CommAmt = 6 cols
         
         // Columns before Uncommitted Rate: Cat/Item, Unit, Working, UncommQty = 4 cols in tender
-        var colsBeforeBox = isTender ? 4 : 5;
+        var colsBeforeBox = effectiveIsTender() ? 4 : 5;
         // Box spans from UncommRate to end of Committed section
         // Execution + Construction: extend to include C2C (7 cols)
         // Tender + Construction: 6 cols
         // Non-construction: 4 cols
-        var boxCols = isConstruction ? (isTender ? 6 : 7) : 4;
+        var boxCols = isConstruction ? (effectiveIsTender() ? 6 : 7) : 4;
         
         var detailsRow = $('<tr id="committed-details-row-' + itemPk + '" class="committed-details-row" data-item-pk="' + itemPk + '"></tr>');
         
@@ -1243,6 +1341,7 @@ Column Behaviors:
     
     // Toggle billed details row - shows bill allocations for this item
     function toggleBilledDetailsRow(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var existingRow = $('#billed-details-row-' + itemPk);
         
         // If clicking the same row, just close it
@@ -1327,6 +1426,7 @@ Column Behaviors:
     
     // Toggle contract budget details row - shows base budget and HC variation allocations
     function toggleContractBudgetDetailsRow(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var existingRow = $('#contract-budget-details-row-' + itemPk);
         
         // If clicking the same row, just close it
@@ -1460,6 +1560,7 @@ Column Behaviors:
     
     // Save notes to server
     function saveNotes(itemPk, notes) {
+        if (contractBudgetReadOnly()) return;
         var data = {
             costing_pk: itemPk,
             notes: notes
@@ -1494,6 +1595,7 @@ Column Behaviors:
     
     // Update uncommitted amount (Qty × Rate) for construction mode
     function updateUncommittedAmount(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var qty = getQtyValue(itemPk);
         var rate = getRateValue(itemPk);
         var amount = qty * rate;
@@ -1525,7 +1627,7 @@ Column Behaviors:
         $('.working-budget-cell[data-item-pk="' + itemPk + '"]').text(Utils.formatCurrency(workingBudget));
         
         // Update C2C = Working Budget - Billed (execution mode only)
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
             var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
             var c2c = workingBudget - billed;
@@ -1561,7 +1663,7 @@ Column Behaviors:
             totals.working_budget += workingBudget;
             
             // C2C and Billed (execution mode only)
-            if (!isTender) {
+            if (!effectiveIsTender()) {
                 var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
                 var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
                 var c2c = workingBudget - billed;
@@ -1574,7 +1676,7 @@ Column Behaviors:
         $('#totalCommitted').text(Utils.formatCurrency(totals.committed));
         $('#totalWorkingBudget').text(Utils.formatCurrency(totals.working_budget));
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             $('#totalCostToComplete').text(Utils.formatCurrency(totals.cost_to_complete));
             $('#totalBilled').text(Utils.formatCurrency(totals.billed));
         }
@@ -1596,7 +1698,7 @@ Column Behaviors:
         row.append('<td><strong>TOTALS</strong></td>');
         row.append('<td></td>');  // Unit
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             row.append('<td id="totalContractBudget">' + Utils.formatCurrency(totals.contract_budget) + '</td>');
         }
         
@@ -1617,7 +1719,7 @@ Column Behaviors:
             row.append('<td id="totalCommitted">' + Utils.formatCurrency(totals.committed) + '</td>');
         }
         
-        if (!isTender) {
+        if (!effectiveIsTender()) {
             row.append('<td id="totalCostToComplete">' + Utils.formatCurrency(totals.cost_to_complete) + '</td>');
             row.append('<td id="totalBilled">' + Utils.formatCurrency(totals.billed) + '</td>');
             row.append('<td id="totalFixedOnSite">' + Utils.formatCurrency(totals.fixed_on_site) + '</td>');
@@ -1634,6 +1736,7 @@ Column Behaviors:
     
     // Save uncommitted data to server
     function saveUncommitted(itemPk) {
+        if (contractBudgetReadOnly()) return;
         var data = { costing_pk: itemPk };
         
         if (isConstruction) {
@@ -1738,6 +1841,41 @@ Column Behaviors:
         // Insert after the table container inside the left panel
         $('.contractBudget-table-container').first().after(fixBudgetHtml);
     }
+    
+    // Execution mode: review frozen tender snapshot (read-only)
+    if (!isTender && projectPk) {
+        var reviewBarHtml = `
+            <div id="contractBudgetReviewTenderBar">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="contractBudgetReviewTenderBtn">Review Tender Budget</button>
+                <span id="contractBudgetReadonlyHint" class="contract-budget-tender-readonly-banner" style="display:none;">Viewing tender budget snapshot (read-only).</span>
+            </div>
+        `;
+        $('.contractBudget-table-container').first().after(reviewBarHtml);
+    }
+    
+    $(document).off('click', '#contractBudgetReviewTenderBtn').on('click', '#contractBudgetReviewTenderBtn', function() {
+        var btn = $(this);
+        if (!projectPk) return;
+        if (reviewTenderBudgetMode) {
+            reviewTenderBudgetMode = false;
+            btn.text('Review Tender Budget');
+            $('#contractBudgetReadonlyHint').hide();
+            closeOpenNotesRow();
+            $('.committed-details-row, .billed-details-row, .contract-budget-details-row, .notes-row').remove();
+            $('.committed-clickable, .billed-clickable, .contract-budget-clickable').removeClass('active');
+            rebuildContractBudgetTableChrome();
+            loadContractBudget(projectPk);
+        } else {
+            reviewTenderBudgetMode = true;
+            btn.text('Back to Contract Budget');
+            $('#contractBudgetReadonlyHint').show();
+            closeOpenNotesRow();
+            $('.committed-details-row, .billed-details-row, .contract-budget-details-row, .notes-row').remove();
+            $('.committed-clickable, .billed-clickable, .contract-budget-clickable').removeClass('active');
+            rebuildContractBudgetTableChrome();
+            loadContractBudget(projectPk);
+        }
+    });
     
     // Fix Contract Budget button click handler (use .off first to prevent duplicate handlers)
     $(document).off('click', '#fixContractBudgetBtn').on('click', '#fixContractBudgetBtn', function() {
