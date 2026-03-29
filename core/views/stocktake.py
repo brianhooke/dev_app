@@ -1568,12 +1568,34 @@ def unfinalise_snap(request, snap_pk):
         }, status=500)
 
 
-def _project_types_by_project_type_string():
+def _resolve_project_type_for_allocation(alloc, item):
+    """
+    Prefer Projects.project_type (FK to ProjectTypes) when the allocation has a project.
+    Otherwise match Costing.project_type to ProjectTypes.project_type case-insensitively.
+    """
     from core.models import ProjectTypes
-    return {
-        pt.project_type: pt
-        for pt in ProjectTypes.objects.select_related('xero_instance').all()
-    }
+
+    if alloc.project_id and alloc.project:
+        pt = alloc.project.project_type
+        if pt is not None:
+            return pt, None
+    if not item:
+        return None, 'Snap line has no costing item; cannot resolve Xero instance.'
+    raw = (item.project_type or '').strip()
+    if not raw:
+        return None, (
+            f'Costing item "{item.item}" has no project_type and the allocation has no project '
+            'with a project type; cannot determine which Xero organisation to use.'
+        )
+    pt = ProjectTypes.objects.filter(
+        project_type__iexact=raw
+    ).select_related('xero_instance').first()
+    if not pt:
+        return None, (
+            f'No project type row matching "{raw}" (item "{item.item}"). '
+            'Add it under settings.'
+        )
+    return pt, None
 
 
 def _expense_account_code_for_item_on_instance(costing_item, xero_instance):
@@ -1609,7 +1631,8 @@ def send_snap_to_xero(request, snap_pk):
     """
     Send a finalised snap to Xero as one manual journal per XeroInstance.
 
-    Regular allocations: XeroInstance comes from Costing.project_type → ProjectTypes.xero_instance;
+    Regular allocations: XeroInstance comes from allocation.project.project_type (FK) when set,
+    else Costing.project_type matched to ProjectTypes case-insensitively.
     expense AccountCode must exist in XeroAccounts for that instance.
 
     Write-offs: XeroInstance is writeoff_xero_instance; debit uses that instance's
@@ -1644,8 +1667,6 @@ def send_snap_to_xero(request, snap_pk):
                 'message': 'Snap has already been sent to Xero'
             }, status=400)
 
-        pt_map = _project_types_by_project_type_string()
-
         # xero_instance_pk -> {'instance': XeroInstances, 'debits': [...], 'subtotal': Decimal}
         groups = {}
 
@@ -1661,6 +1682,7 @@ def send_snap_to_xero(request, snap_pk):
 
         for snap_item in snap.snap_items.select_related('item').prefetch_related(
             'allocations__project',
+            'allocations__project__project_type',
             'allocations__writeoff_xero_instance',
             'allocations__writeoff_xero_instance__xero_stocktake_writeoffs_account',
         ):
@@ -1698,27 +1720,11 @@ def send_snap_to_xero(request, snap_pk):
                     })
                     grp['subtotal'] += Decimal(str(amount))
                 else:
-                    if not item:
+                    pt, pt_err = _resolve_project_type_for_allocation(alloc, item)
+                    if pt_err:
                         return JsonResponse({
                             'status': 'error',
-                            'message': 'Snap line has no costing item; cannot resolve Xero instance.',
-                        }, status=400)
-                    if not item.project_type:
-                        return JsonResponse({
-                            'status': 'error',
-                            'message': (
-                                f'Costing item "{item.item}" has no project_type; '
-                                'cannot determine which Xero organisation to use.'
-                            ),
-                        }, status=400)
-                    pt = pt_map.get(item.project_type)
-                    if not pt:
-                        return JsonResponse({
-                            'status': 'error',
-                            'message': (
-                                f'No project type row for "{item.project_type}" '
-                                f'(item "{item.item}"). Add it under settings.'
-                            ),
+                            'message': pt_err,
                         }, status=400)
                     if not pt.xero_instance_id:
                         return JsonResponse({
