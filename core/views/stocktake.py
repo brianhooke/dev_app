@@ -1598,6 +1598,36 @@ def _resolve_project_type_for_allocation(alloc, item):
     return pt, None
 
 
+def _parse_xero_api_error_body(error_text):
+    """Return dict if body is JSON (Xero API errors), else None."""
+    if not error_text or not str(error_text).strip():
+        return None
+    try:
+        return json.loads(error_text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _human_summary_from_xero_error(parsed, raw_text):
+    """Short string for user-facing message from Xero error JSON."""
+    if not parsed:
+        return (raw_text or '')[:2000]
+    msg = parsed.get('Message') or parsed.get('message') or parsed.get('Title')
+    if msg:
+        return msg
+    # Validation-style payloads
+    elems = parsed.get('Elements')
+    if isinstance(elems, list) and elems:
+        first = elems[0]
+        if isinstance(first, dict):
+            vs = first.get('ValidationErrors')
+            if isinstance(vs, list) and vs:
+                v0 = vs[0]
+                if isinstance(v0, dict) and v0.get('Message'):
+                    return v0['Message']
+    return (raw_text or '')[:2000]
+
+
 def _expense_account_code_for_item_on_instance(costing_item, xero_instance):
     """
     Resolve expense account code from Costing.xero_account_code, verified against
@@ -1810,22 +1840,36 @@ def send_snap_to_xero(request, snap_pk):
             )
 
             if response.status_code != 200:
-                error_text = response.text
+                error_text = response.text or ''
+                parsed = _parse_xero_api_error_body(error_text)
+                summary = _human_summary_from_xero_error(parsed, error_text)
                 logger.error(
-                    f'Xero API error for instance {pk} ({xi.xero_name}): '
-                    f'{response.status_code} - {error_text}'
+                    'Xero ManualJournals API error instance_pk=%s xero_name=%s status=%s '
+                    'summary=%s raw_body=%s parsed=%s',
+                    pk,
+                    xi.xero_name,
+                    response.status_code,
+                    summary,
+                    error_text[:8000] if error_text else '',
+                    json.dumps(parsed, indent=2) if parsed else None,
+                )
+                user_msg = (
+                    f'Xero API error for "{xi.xero_name}" ({response.status_code}): {summary}'
                 )
                 payload = {
                     'status': 'error',
-                    'message': (
-                        f'Xero API error for "{xi.xero_name}": {response.status_code}'
-                    ),
+                    'message': user_msg,
                     'details': error_text,
+                    'xero_instance_pk': pk,
+                    'xero_instance_name': xi.xero_name,
+                    'http_status': response.status_code,
                 }
+                if parsed is not None:
+                    payload['xero_error'] = parsed
                 if created_journals:
                     payload['partial_journals'] = created_journals
                     payload['message'] += (
-                        '. Earlier journal(s) may already exist in Xero; check partial_journals.'
+                        ' Earlier journal(s) may already exist in Xero; see partial_journals.'
                     )
                 return JsonResponse(payload, status=response.status_code)
 

@@ -1027,6 +1027,30 @@ Tabs:
         return defaultMsg || 'An error occurred';
     }
     
+    /** Log full server/Xero error payload for debugging (browser console). */
+    function logStocktakeXhrError(context, xhr) {
+        var j = xhr.responseJSON;
+        var payload = {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            url: xhr.responseURL || '(see Network tab request URL)',
+            message: j && j.message,
+            details: j && j.details,
+            xero_error: j && j.xero_error,
+            http_status: j && j.http_status,
+            xero_instance_pk: j && j.xero_instance_pk,
+            xero_instance_name: j && j.xero_instance_name,
+            partial_journals: j && j.partial_journals
+        };
+        console.error(context, payload);
+        if (j && j.details && typeof j.details === 'string' && j.details.length) {
+            console.error(context + ' (raw details body)', j.details);
+        }
+        if (xhr.responseText && (!j || !j.message)) {
+            console.error(context + ' (raw responseText)', xhr.responseText);
+        }
+    }
+    
     var stocktakeInitialized = false;
     
     // Load allocations for selected bill
@@ -3099,7 +3123,7 @@ Tabs:
                 alert(msg);
             }
         }, function(xhr, status, error) {
-            console.error('[Snap] Failed to send to Xero:', error);
+            logStocktakeXhrError('[Snap] send-to-xero failed', xhr);
             alert(getErrorMessage(xhr, 'Failed to send to Xero'));
         });
     });
