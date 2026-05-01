@@ -14,6 +14,11 @@ import requests
 from datetime import datetime
 import base64
 
+from xero_attachment_types import (
+    is_allowed_xero_email_attachment_content_type,
+    resolve_attachment_content_type,
+)
+
 s3 = boto3.client('s3')
 
 # Django API endpoint (will be configured via Lambda environment variables)
@@ -113,8 +118,9 @@ def extract_email_data(msg, bucket, s3_key):
 
 def process_attachments(msg, bucket, email_key):
     """
-    Extract and upload attachments to S3
-    Filters out embedded images (signatures, logos) and keeps only real attachments
+    Extract and upload attachments to S3.
+    MIME allowlist matches Xero Accounting / Files attachment expectations (see xero_attachment_types).
+    Skips typical embedded HTML resources (Content-ID parts) unless they are real attachments.
     """
     attachments = []
     
@@ -123,43 +129,41 @@ def process_attachments(msg, bucket, email_key):
     
     attachment_counter = 0
     
-    # Valid attachment types for invoices/bills
-    VALID_ATTACHMENT_TYPES = {
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/plain',
-        'text/csv'
-    }
-    
     for part in msg.walk():
         # Skip non-attachment parts
         if part.get_content_maintype() == 'multipart':
             continue
-        
-        # CRITICAL: Only process real attachments, not inline images
-        content_disposition = part.get('Content-Disposition', '')
-        if 'attachment' not in content_disposition:
+
+        content_disposition = part.get('Content-Disposition', '') or ''
+        cd_lower = content_disposition.lower()
+
+        # Skip CID-embedded images used in HTML bodies (unless also a real attachment)
+        if part.get('Content-ID') and 'attachment' not in cd_lower:
             continue
-        
-        # Filter by content type (skip images, signatures, etc.)
-        content_type = part.get_content_type()
-        if content_type not in VALID_ATTACHMENT_TYPES:
-            print(f"Skipping attachment {content_type} - not a valid invoice type")
+
+        if 'filename' not in cd_lower:
             continue
-        
+        if 'attachment' not in cd_lower and 'inline' not in cd_lower:
+            continue
+
         filename = part.get_filename()
         if not filename:
             # Generate filename if none provided
             ext = part.get_content_subtype()
             filename = f"attachment_{attachment_counter}.{ext}"
             attachment_counter += 1
-        
+
+        declared_type = part.get_content_type()
+        if not is_allowed_xero_email_attachment_content_type(declared_type, filename):
+            print(
+                f"Skipping attachment {declared_type!r} file={filename!r} "
+                f"- not an allowed Xero-style bill attachment type"
+            )
+            continue
+
         # Get attachment content
         content = part.get_payload(decode=True)
-        content_type = part.get_content_type()
+        content_type = resolve_attachment_content_type(declared_type, filename)
         
         # Upload to S3 in attachments folder
         attachment_key = f"attachments/{email_key.replace('inbox/', '')}/{filename}"

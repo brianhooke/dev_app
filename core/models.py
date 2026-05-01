@@ -1320,9 +1320,13 @@ class EmailAttachment(models.Model):
             # Set Content-Disposition to inline for viewing in browser (not downloading)
             if inline:
                 params['ResponseContentDisposition'] = 'inline'
-                # Also set content type for PDFs to help browser display correctly
-                if self.filename and self.filename.lower().endswith('.pdf'):
-                    params['ResponseContentType'] = 'application/pdf'
+                from xero_attachment_types import presigned_get_response_content_type
+
+                inline_ct = presigned_get_response_content_type(
+                    self.filename, self.content_type
+                )
+                if inline_ct:
+                    params['ResponseContentType'] = inline_ct
             
             url = s3_client.generate_presigned_url(
                 'get_object',

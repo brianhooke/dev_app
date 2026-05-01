@@ -980,7 +980,8 @@ def create_supplier(request):
             'supplier': {
                 'contact_pk': new_contact.contact_pk,
                 'name': new_contact.name,
-                'xero_instance_id': xero_instance_id
+                'xero_instance_id': xero_instance.xero_instance_pk,
+                'xero_contact_id': new_contact.xero_contact_id,
             }
         })
     

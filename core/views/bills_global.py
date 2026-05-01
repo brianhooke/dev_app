@@ -1849,6 +1849,28 @@ def delete_bill_allocation(request):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def get_inbox_supplier(request, contact_pk):
+    """
+    Return supplier fields for Bills Inbox client cache (includes xero_contact_id from DB).
+    Used after creating a supplier or when the cache is missing Xero IDs before send_bill.
+    """
+    try:
+        c = Contacts.objects.get(contact_pk=contact_pk)
+    except Contacts.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Supplier not found'}, status=404)
+    return JsonResponse({
+        'status': 'success',
+        'supplier': {
+            'contact_pk': c.contact_pk,
+            'name': c.name,
+            'xero_instance_id': c.xero_instance_id,
+            'xero_contact_id': c.xero_contact_id or '',
+        }
+    })
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def send_bill_to_stocktake(request):
     """

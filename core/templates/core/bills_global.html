@@ -427,6 +427,25 @@ $(document).ready(function() {
         return;
     }
     
+    function findInboxSupplierInCache(contactPk) {
+        if (!window.billsInboxData || !window.billsInboxData.suppliers || contactPk == null || contactPk === '') {
+            return null;
+        }
+        return window.billsInboxData.suppliers.find(function(s) {
+            return String(s.contact_pk) === String(contactPk);
+        }) || null;
+    }
+    
+    function mergeInboxSupplierIntoCache(supplierRow) {
+        if (!window.billsInboxData || !window.billsInboxData.suppliers || !supplierRow) return;
+        var list = window.billsInboxData.suppliers;
+        var idx = list.findIndex(function(x) { return String(x.contact_pk) === String(supplierRow.contact_pk); });
+        if (idx >= 0) {
+            $.extend(list[idx], supplierRow);
+        } else {
+            list.unshift(supplierRow);
+        }
+    }
     
     // Initialize AllocationsManager for Bills Inbox
     AllocationsManager.init({
@@ -1126,66 +1145,107 @@ $(document).ready(function() {
         console.log('[SendBill] bill_due_date:', billDueDate);
         console.log('[SendBill] currency:', currency);
         
-        // Log supplier details from cached data if available
-        var supplierData = null;
-        if (window.billsInboxData && window.billsInboxData.suppliers) {
-            supplierData = window.billsInboxData.suppliers.find(function(s) { 
-                return s.contact_pk == supplierPk; 
+        var supplierData = findInboxSupplierInCache(supplierPk);
+        if (supplierData) {
+            console.log('[SendBill] Supplier from cache:', {
+                contact_pk: supplierData.contact_pk,
+                name: supplierData.name,
+                xero_contact_id: supplierData.xero_contact_id,
+                xero_instance_id: supplierData.xero_instance_id
             });
-            if (supplierData) {
-                console.log('[SendBill] Supplier from cache:', {
-                    contact_pk: supplierData.contact_pk,
-                    name: supplierData.name,
-                    xero_contact_id: supplierData.xero_contact_id,
-                    xero_instance_id: supplierData.xero_instance_id
-                });
-            } else {
-                console.log('[SendBill] WARNING: Supplier not found in cached billsInboxData.suppliers for pk:', supplierPk);
-            }
+        } else {
+            console.log('[SendBill] WARNING: Supplier not found in cached billsInboxData.suppliers for pk:', supplierPk);
         }
         
-        // Log the selected Xero instance for stocktake
         if (isStocktake) {
             var selectedXeroRadio = row.find('.stocktake-xero-radio:checked');
             console.log('[SendBill] Stocktake selected Xero instance radio value:', selectedXeroRadio.val());
         }
-        // === END DEBUG LOGGING ===
         
-        // Validate supplier has xero_contact_id before sending
-        if (supplierData && !supplierData.xero_contact_id) {
-            alert('Error: Supplier "' + supplierData.name + '" does not have a Xero Contact ID. Please sync contacts from Xero first.');
-            console.error('[SendBill] Supplier missing xero_contact_id:', supplierData);
+        function postSendBillSuccess(response) {
+            console.log('[SendBill] Success response:', response);
+            if (response.status === 'success') {
+                var nextRow = row.next('tr');
+                if (!nextRow.length) {
+                    nextRow = row.prev('tr');
+                }
+                AllocationsManager.showSuccessAndFadeRow(button, row, function() {
+                    if (window.currentSelectedBillPk === billPk) {
+                        $('#billsInboxPdfViewer').hide();
+                        $('#billsInboxViewerPlaceholder').show();
+                        window.currentSelectedBillPk = null;
+                        window.currentBillData = null;
+                    }
+                    if (nextRow.length) {
+                        nextRow.click();
+                    }
+                });
+            } else {
+                console.error('[SendBill] Error in response:', response.message);
+                alert('Error: ' + response.message);
+                button.prop('disabled', false).text('Send');
+            }
+        }
+        
+        function postSendBillError(xhr, status, error) {
+            console.error('[SendBill] AJAX Error:', {
+                status: status,
+                error: error,
+                responseStatus: xhr.status,
+                responseText: xhr.responseText
+            });
+            if (xhr.responseJSON) {
+                console.error('[SendBill] Error response JSON:', xhr.responseJSON);
+            }
+            var errorMsg = 'Failed to send bill. Please try again.';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                errorMsg = xhr.responseJSON.message;
+            }
+            alert('Error: ' + errorMsg);
+            button.prop('disabled', false).text('Send');
+        }
+        
+        if (isStocktake) {
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            var xeroInstancePk = row.find('.stocktake-xero-radio:checked').val();
+            var stocktakePayload = {
+                bill_pk: parseInt(billPk, 10),
+                xero_instance_pk: parseInt(xeroInstancePk, 10),
+                supplier_pk: parseInt(supplierPk, 10),
+                bill_number: billNumber,
+                total_net: totalNet,
+                total_gst: totalGst,
+                bill_date: billDate,
+                bill_due_date: billDueDate,
+                currency: currency
+            };
+            console.log('[SendBill] Using stocktake endpoint:', '/core/send_bill_to_stocktake/');
+            console.log('[SendBill] Payload being sent:', JSON.stringify(stocktakePayload, null, 2));
+            $.ajax({
+                url: '/core/send_bill_to_stocktake/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify(stocktakePayload),
+                success: postSendBillSuccess,
+                error: postSendBillError
+            });
             return;
         }
         
-        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-        
-        // Determine endpoint and payload based on bill type
-        var endpoint, payload;
-        
-        if (isStocktake) {
-            // Stocktake bills use dedicated endpoint - just updates DB, no Xero API call
-            var xeroInstancePk = row.find('.stocktake-xero-radio:checked').val();
-            endpoint = '/core/send_bill_to_stocktake/';
-            payload = {
-                bill_pk: parseInt(billPk),
-                xero_instance_pk: parseInt(xeroInstancePk),
-                supplier_pk: parseInt(supplierPk),
-                bill_number: billNumber,
-                total_net: totalNet,
-                total_gst: totalGst,
-                bill_date: billDate,
-                bill_due_date: billDueDate,
-                currency: currency
-            };
-            console.log('[SendBill] Using stocktake endpoint:', endpoint);
-        } else {
-            // Regular bills use existing send_bill endpoint
-            endpoint = '/core/send_bill/';
-            payload = {
-                bill_pk: parseInt(billPk),
+        function submitInboxSendToXero() {
+            var sd = findInboxSupplierInCache(supplierPk);
+            if (!sd || !sd.xero_contact_id) {
+                var label = (sd && sd.name) ? sd.name : 'Unknown supplier';
+                alert('Error: Supplier "' + label + '" does not have a Xero Contact ID. Please sync contacts from Xero first.');
+                console.error('[SendBill] Supplier missing xero_contact_id:', sd);
+                return;
+            }
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            var xeroPayload = {
+                bill_pk: parseInt(billPk, 10),
                 xero_instance_or_project: xeroInstanceOrProject,
-                supplier_pk: parseInt(supplierPk),
+                supplier_pk: parseInt(supplierPk, 10),
                 bill_number: billNumber,
                 total_net: totalNet,
                 total_gst: totalGst,
@@ -1193,59 +1253,40 @@ $(document).ready(function() {
                 bill_due_date: billDueDate,
                 currency: currency
             };
+            console.log('[SendBill] Payload being sent:', JSON.stringify(xeroPayload, null, 2));
+            $.ajax({
+                url: '/core/send_bill/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+                contentType: 'application/json',
+                data: JSON.stringify(xeroPayload),
+                success: postSendBillSuccess,
+                error: postSendBillError
+            });
         }
-        console.log('[SendBill] Payload being sent:', JSON.stringify(payload, null, 2));
         
+        var cachedForXero = findInboxSupplierInCache(supplierPk);
+        if (cachedForXero && cachedForXero.xero_contact_id) {
+            submitInboxSendToXero();
+            return;
+        }
         $.ajax({
-            url: endpoint,
-            type: 'POST',
-            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
-            contentType: 'application/json',
-            data: JSON.stringify(payload),
+            url: '/core/get_inbox_supplier/' + parseInt(supplierPk, 10) + '/',
+            type: 'GET',
             success: function(response) {
-                console.log('[SendBill] Success response:', response);
-                if (response.status === 'success') {
-                    // Get next row (or previous if no next) before fade
-                    var nextRow = row.next('tr');
-                    if (!nextRow.length) {
-                        nextRow = row.prev('tr');
-                    }
-                    
-                    AllocationsManager.showSuccessAndFadeRow(button, row, function() {
-                        if (window.currentSelectedBillPk === billPk) {
-                            $('#billsInboxPdfViewer').hide();
-                            $('#billsInboxViewerPlaceholder').show();
-                            window.currentSelectedBillPk = null;
-                            window.currentBillData = null;
-                        }
-                        
-                        // Auto-select next row after fade completes
-                        if (nextRow.length) {
-                            nextRow.click();
-                        }
-                    });
+                if (response.status === 'success' && response.supplier) {
+                    mergeInboxSupplierIntoCache(response.supplier);
+                    submitInboxSendToXero();
                 } else {
-                    console.error('[SendBill] Error in response:', response.message);
-                    alert('Error: ' + response.message);
-                    button.prop('disabled', false).text('Send');
+                    alert('Could not load supplier details. Try again or refresh the page.');
                 }
             },
-            error: function(xhr, status, error) {
-                console.error('[SendBill] AJAX Error:', {
-                    status: status,
-                    error: error,
-                    responseStatus: xhr.status,
-                    responseText: xhr.responseText
-                });
-                if (xhr.responseJSON) {
-                    console.error('[SendBill] Error response JSON:', xhr.responseJSON);
-                }
-                var errorMsg = 'Failed to send bill. Please try again.';
+            error: function(xhr) {
+                var msg = 'Failed to refresh supplier from server.';
                 if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
+                    msg = xhr.responseJSON.message;
                 }
-                alert('Error: ' + errorMsg);
-                button.prop('disabled', false).text('Send');
+                alert(msg);
             }
         });
     });

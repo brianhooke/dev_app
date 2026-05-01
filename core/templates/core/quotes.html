@@ -213,6 +213,13 @@ $(document).ready(function() {
                 return payload;
             },
             onSave: function(itemPk, allocations, cfg) {
+                if (window.editingQuotePk) {
+                    var supVal = $('#quoteMainTableBody tr[data-pk="' + window.editingQuotePk + '"] .quote-supplier-select').val();
+                    if (!supVal || supVal === '__new__') {
+                        alert('Please select a supplier or finish creating a new one.');
+                        return false;
+                    }
+                }
                 // Validate allocations before saving
                 var result = AllocationsManager.updateStillToAllocate('quote');
                 if (!result) {
@@ -257,6 +264,122 @@ $(document).ready(function() {
                 // Reload the quotes list using custom function
                 loadQuotesData();
             }
+        }
+    });
+    
+    function mergeQuoteProjectContacts(supplierRow) {
+        if (!supplierRow || supplierRow.contact_pk == null) return;
+        var row = {
+            contact_pk: supplierRow.contact_pk,
+            name: supplierRow.name,
+            xero_contact_id: supplierRow.xero_contact_id,
+            xero_instance_id: supplierRow.xero_instance_id
+        };
+        if (window.currentQuotesProject && window.currentQuotesProject.contacts) {
+            var qc = window.currentQuotesProject.contacts;
+            if (!qc.some(function(c) { return String(c.contact_pk) === String(row.contact_pk); })) {
+                qc.unshift(row);
+            }
+        }
+        if (window.projectContacts) {
+            if (!window.projectContacts.some(function(c) { return String(c.contact_pk) === String(row.contact_pk); })) {
+                window.projectContacts.unshift(row);
+            }
+        }
+        if (window.constructionProjectContacts) {
+            if (!window.constructionProjectContacts.some(function(c) { return String(c.contact_pk) === String(row.contact_pk); })) {
+                window.constructionProjectContacts.unshift(row);
+            }
+        }
+    }
+    
+    $(document).on('change.quoteSupplier', '.quote-supplier-select', function() {
+        if ($(this).val() !== '__new__') return;
+        var cell = $(this).closest('td');
+        var wrap = cell.find('.searchable-dropdown-wrapper');
+        if (wrap.length) {
+            wrap.hide();
+        } else {
+            $(this).hide();
+        }
+        cell.find('.quote-new-supplier-form').show();
+        cell.find('.quote-new-supplier-name').val('').focus();
+    });
+    
+    $(document).on('click.quoteSupplier', '.quote-cancel-new-supplier-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var cell = $(this).closest('td');
+        cell.find('.quote-new-supplier-form').hide();
+        var $sel = cell.find('.quote-supplier-select');
+        var wrap = cell.find('.searchable-dropdown-wrapper');
+        $sel.val('');
+        if (wrap.length) {
+            wrap.show();
+            var c = $sel.data('searchable-dropdown');
+            if (c && typeof c.refresh === 'function') c.refresh();
+        } else {
+            $sel.show();
+        }
+    });
+    
+    $(document).on('click.quoteSupplier', '.quote-create-supplier-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var cell = $(this).closest('td');
+        var name = cell.find('.quote-new-supplier-name').val().trim();
+        var sel = cell.find('.quote-supplier-select');
+        var btn = $(this);
+        if (!name) {
+            cell.find('.quote-new-supplier-name').focus();
+            return;
+        }
+        var xeroPk = window.quoteContactsXeroInstancePk;
+        if (!xeroPk) {
+            alert('This project has no Xero instance. Assign one before adding suppliers.');
+            return;
+        }
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+        $.ajax({
+            url: '/core/create_supplier/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify({ name: name, xero_instance_id: parseInt(xeroPk, 10) }),
+            success: function(response) {
+                if (response.status === 'success' && response.supplier) {
+                    var ns = response.supplier;
+                    sel.find('option[value="__new__"]').after($('<option>').val(ns.contact_pk).text(ns.name));
+                    sel.val(ns.contact_pk);
+                    var wrap = cell.find('.searchable-dropdown-wrapper');
+                    var c = sel.data('searchable-dropdown');
+                    if (wrap.length && c) {
+                        c.refresh();
+                        wrap.show();
+                    } else {
+                        sel.show();
+                    }
+                    cell.find('.quote-new-supplier-form').hide();
+                    mergeQuoteProjectContacts(ns);
+                    btn.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                } else {
+                    alert(response.message || 'Error creating supplier');
+                    btn.prop('disabled', false).html('<i class="fas fa-check"></i>');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Failed to create supplier.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                alert(msg);
+                btn.prop('disabled', false).html('<i class="fas fa-check"></i>');
+            }
+        });
+    });
+    
+    $(document).on('keypress.quoteSupplier', '.quote-new-supplier-name', function(ev) {
+        if (ev.which === 13) {
+            ev.preventDefault();
+            $(this).closest('.quote-new-supplier-form').find('.quote-create-supplier-btn').click();
         }
     });
     
@@ -386,7 +509,7 @@ $(document).ready(function() {
         var supplierCell = $(cells[0]);
         var currentSupplierName = quote.supplier_name || supplierCell.text();
         var currentSupplierPk = quote.supplier_pk || '';
-        var supplierSelect = $('<select>').addClass('form-control form-control-sm quote-edit-supplier');
+        var supplierSelect = $('<select>').addClass('form-control form-control-sm quote-edit-supplier quote-supplier-select');
         supplierSelect.append($('<option>').val('').text('Select Supplier...'));
         // Load suppliers for this project
         var pk = projectPk || (window.currentQuotesProject && window.currentQuotesProject.pk);
@@ -396,8 +519,12 @@ $(document).ready(function() {
                 type: 'GET',
                 async: false,  // Need synchronous to populate before continuing
                 success: function(response) {
-                    if (response.status === 'success' && response.contacts) {
-                        response.contacts.forEach(function(contact) {
+                    if (response.status === 'success') {
+                        window.quoteContactsXeroInstancePk = response.xero_instance_pk || null;
+                        if (response.xero_instance_pk) {
+                            supplierSelect.append($('<option>').val('__new__').text('+ New Supplier'));
+                        }
+                        (response.contacts || []).forEach(function(contact) {
                             var opt = $('<option>').val(contact.contact_pk).text(contact.name);
                             if (contact.contact_pk == currentSupplierPk) {
                                 opt.prop('selected', true);
@@ -408,7 +535,15 @@ $(document).ready(function() {
                 }
             });
         }
-        supplierCell.empty().append(supplierSelect);
+        var newSupplierForm = $('<div>').addClass('quote-new-supplier-form').hide();
+        newSupplierForm.html(
+            '<div style="display: flex; gap: 4px; margin-top: 4px; align-items: center;">' +
+            '<input type="text" class="form-control form-control-sm quote-new-supplier-name" placeholder="Supplier name" style="flex: 1; min-width: 100px;">' +
+            '<button type="button" class="btn btn-sm btn-success quote-create-supplier-btn" title="Create"><i class="fas fa-check"></i></button>' +
+            '<button type="button" class="btn btn-sm btn-secondary quote-cancel-new-supplier-btn" title="Cancel"><i class="fas fa-times"></i></button>' +
+            '</div>'
+        );
+        supplierCell.empty().append(supplierSelect).append(newSupplierForm);
         
         // Cell 1: $ Net - convert to input
         var netCell = $(cells[1]);

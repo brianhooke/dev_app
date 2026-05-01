@@ -575,7 +575,8 @@ Column Behaviors:
                 
                 if (!effectiveIsTender()) {
                     totals.contract_budget += parseFloat(item.contract_budget) || 0;
-                    // C2C = Working Budget - Billed
+                            // C2C = Working Budget − Billed (not Contract Budget − Billed).
+                    // Working Budget = Uncommitted (Costing fields) + Committed (quotes, snaps, bills types 0/1 — not PP / bill_type 2).
                     var workingBudgetForItem = uncommittedAmount + committedAmount;
                     totals.cost_to_complete += workingBudgetForItem - billedAmount;
                     totals.billed += billedAmount;
@@ -822,7 +823,7 @@ Column Behaviors:
         
         if (!effectiveIsTender()) {
             // Execution mode extra columns
-            // C2C = Working Budget - Billed
+            // C2C = Working Budget − Billed (Working Budget is Uncommitted + Committed roll-up above)
             var c2cValue = workingBudget - billedAmount;
             row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '">' + Utils.formatCurrency(c2cValue) + '</td>');
             // Billed - clickable if has value (green like committed)

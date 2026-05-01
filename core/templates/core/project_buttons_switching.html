@@ -631,11 +631,20 @@ $(document).ready(function() {
         
         // Supplier dropdown (will be populated from contacts)
         var supplierCell = $('<td>');
-        var supplierSelect = $('<select id="newQuoteSupplier" class="form-control form-control-sm" style="width: 100%;">')
+        var supplierSelect = $('<select id="newQuoteSupplier" class="form-control form-control-sm quote-supplier-select" style="width: 100%;">')
             .append('<option value="">Select Supplier...</option>')
             .on('change', function() {
                 window.validateNewQuote();
             });
+        
+        var newSupplierForm = $('<div>').addClass('quote-new-supplier-form').hide();
+        newSupplierForm.html(
+            '<div style="display: flex; gap: 4px; margin-top: 4px; align-items: center;">' +
+            '<input type="text" class="form-control form-control-sm quote-new-supplier-name" placeholder="Supplier name" style="flex: 1; min-width: 100px;">' +
+            '<button type="button" class="btn btn-sm btn-success quote-create-supplier-btn" title="Create"><i class="fas fa-check"></i></button>' +
+            '<button type="button" class="btn btn-sm btn-secondary quote-cancel-new-supplier-btn" title="Cancel"><i class="fas fa-times"></i></button>' +
+            '</div>'
+        );
         
         // Try to populate suppliers from contacts
         var projectPk = window.projectPk || 
@@ -647,15 +656,25 @@ $(document).ready(function() {
                 url: '/core/get_project_contacts/' + projectPk + '/',
                 type: 'GET',
                 success: function(response) {
-                    if (response.status === 'success' && response.contacts) {
-                        response.contacts.forEach(function(contact, index) {
+                    if (response.status === 'success') {
+                        window.quoteContactsXeroInstancePk = response.xero_instance_pk || null;
+                        if (response.xero_instance_pk) {
+                            supplierSelect.append($('<option>').val('__new__').text('+ New Supplier'));
+                        }
+                        (response.contacts || []).forEach(function(contact) {
                             supplierSelect.append($('<option>').val(contact.contact_pk).text(contact.name));
                         });
-                        // Initialize searchable dropdown after options are populated
                         if (typeof Utils !== 'undefined' && Utils.createSearchableDropdown) {
                             Utils.createSearchableDropdown(supplierSelect, {
                                 placeholder: 'Search suppliers...',
+                                pinnedValues: response.xero_instance_pk ? ['__new__'] : [],
                                 onChange: function(value, text, $sel) {
+                                    if (value === '__new__') {
+                                        var cell = $sel.closest('td');
+                                        cell.find('.searchable-dropdown-wrapper').hide();
+                                        cell.find('.quote-new-supplier-form').show();
+                                        cell.find('.quote-new-supplier-name').val('').focus();
+                                    }
                                     window.validateNewQuote();
                                 }
                             });
@@ -667,7 +686,7 @@ $(document).ready(function() {
                 }
             });
         }
-        supplierCell.append(supplierSelect);
+        supplierCell.append(supplierSelect).append(newSupplierForm);
         newRow.append(supplierCell);
         
         // $ Net input - must have class 'new-quote-net' for updateStillToAllocate
@@ -746,7 +765,7 @@ $(document).ready(function() {
         
         // 1. Supplier must be selected
         var supplierPk = $('#newQuoteSupplier').val();
-        if (!supplierPk) {
+        if (!supplierPk || supplierPk === '__new__') {
             isValid = false;
             errors.push('Select supplier');
         }
@@ -800,8 +819,8 @@ $(document).ready(function() {
         var netAmount = parseFloat($('#newQuoteNet').val()) || 0;
         var quoteNumber = $('#newQuoteNumber').val();
         
-        if (!supplierPk) {
-            alert('Please select a supplier.');
+        if (!supplierPk || supplierPk === '__new__') {
+            alert('Please select a supplier or finish creating a new one.');
             return;
         }
         if (netAmount <= 0) {

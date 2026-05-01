@@ -51,7 +51,7 @@ Note: Uses helper functions from xero.py:
 import csv
 from decimal import Decimal, InvalidOperation
 from django.http import HttpResponse, JsonResponse
-from ..models import Contacts, Costing, Bills, Bill_allocations, Projects, XeroAccounts
+from ..models import Contacts, Costing, Bills, Bill_allocations, Projects, XeroAccounts, Quotes
 import json
 from django.shortcuts import render
 from django.db.models import Sum, Case, When, IntegerField, Q, F, Prefetch, Max
@@ -764,8 +764,9 @@ def bills_view(request):
         # Updated 2026-02-14: Added Currency column for FX support
         if is_allocated:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '13%', 'sortable': True},
-                {'header': 'Bill #', 'width': '9%', 'sortable': True},
+                {'header': 'Supplier', 'width': '12%', 'sortable': True},
+                {'header': 'Bill #', 'width': '8%', 'sortable': True},
+                {'header': 'Type', 'width': '4%', 'sortable': False},
                 {'header': 'Curr', 'width': '5%', 'sortable': True},  # FX: Currency display
                 {'header': '$ Gross', 'width': '8%', 'sortable': True},
                 {'header': '$ Net', 'width': '8%', 'sortable': True},
@@ -777,8 +778,9 @@ def bills_view(request):
             ]
         else:
             main_table_columns = [
-                {'header': 'Supplier', 'width': '20%', 'sortable': True},
-                {'header': 'Bill #', 'width': '13%', 'sortable': True},
+                {'header': 'Supplier', 'width': '18%', 'sortable': True},
+                {'header': 'Bill #', 'width': '11%', 'sortable': True},
+                {'header': 'Type', 'width': '4%', 'sortable': False},
                 {'header': 'Curr', 'width': '6%', 'sortable': True},  # FX: Currency display
                 {'header': '$ Gross', 'width': '12%', 'sortable': True},
                 {'header': '$ Net', 'width': '12%', 'sortable': True},
@@ -924,13 +926,18 @@ def get_project_bills(request, project_pk):
             
             logger.info(f'Invoice {inv.bill_pk}: pdf_url={pdf_url}, attachment_url={attachment_url}')
             
+            _tn = float(inv.total_net) if inv.total_net else 0.0
+            _tg = float(inv.total_gst) if inv.total_gst else 0.0
+            
             invoices_data.append({
                 'bill_pk': inv.bill_pk,
                 'supplier_pk': inv.contact_pk.contact_pk if inv.contact_pk else None,
                 'supplier_name': inv.contact_pk.name if inv.contact_pk else None,
                 'bill_number': inv.supplier_bill_number or '',
+                'bill_type': int(inv.bill_type) if getattr(inv, 'bill_type', None) is not None else 0,
                 'total_net': float(inv.total_net) if inv.total_net else None,
                 'total_gst': float(inv.total_gst) if inv.total_gst else None,
+                'total_gross': _tn + _tg,
                 'pdf_url': pdf_url,
                 'attachment_url': attachment_url,
                 'bill_status': inv.bill_status,
@@ -952,12 +959,22 @@ def get_project_bills(request, project_pk):
             costing_filter = costing_filter.filter(tender_or_execution=int(tender_or_execution))
         costing_items = list(costing_filter.select_related('unit').values('costing_pk', 'item', 'unit__unit_name'))
         
+        quotes_qs = Quotes.objects.filter(project_id=project_pk).exclude(contact_pk__isnull=True)
+        if tender_or_execution and tender_or_execution != 'null':
+            try:
+                te = int(tender_or_execution)
+                quotes_qs = quotes_qs.filter(tender_or_execution=te)
+            except ValueError:
+                pass
+        quote_supplier_pks = list(quotes_qs.values_list('contact_pk_id', flat=True).distinct())
+        
         return JsonResponse({
             'status': 'success',
             'bills': invoices_data,
             'suppliers': suppliers,
             'costing_items': costing_items,
             'project_pk': project_pk,
+            'quote_supplier_pks': quote_supplier_pks,
         })
         
     except Projects.DoesNotExist:
@@ -1287,12 +1304,25 @@ def unallocate_bill(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
+def _supplier_has_quote_for_bill(contact_pk_id, project_id, tender_execution_mode):
+    """True if contact has any Quote on project for the tender/execution variant."""
+    if not contact_pk_id or not project_id:
+        return False
+    qs = Quotes.objects.filter(
+        project_id=project_id,
+        contact_pk_id=contact_pk_id,
+        tender_or_execution=int(tender_execution_mode),
+    )
+    return qs.exists()
+
+
 @csrf_exempt
 def approve_bill(request, bill_pk):
     """
     Mark an invoice as approved.
     - PO claim invoices (status 102) -> status 103
     - Other invoices -> status 2
+    JSON body optional: bill_type (1 Direct Cost, 2 Progress Claim) for non-PO bills.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
@@ -1300,11 +1330,14 @@ def approve_bill(request, bill_pk):
     try:
         # Get current status from request body if provided
         current_status = None
+        desired_bill_type = None
         if request.body:
             data = json.loads(request.body)
             current_status = data.get('current_status')
+            if 'bill_type' in data and data['bill_type'] is not None:
+                desired_bill_type = int(data['bill_type'])
         
-        invoice = Bills.objects.get(bill_pk=bill_pk)
+        invoice = Bills.objects.select_related('project').get(bill_pk=bill_pk)
         
         # Use current_status from request or fall back to invoice's actual status
         status_to_check = current_status if current_status is not None else invoice.bill_status
@@ -1312,8 +1345,48 @@ def approve_bill(request, bill_pk):
         # PO claim invoices (102) go to 103, others go to 2
         if status_to_check == 102:
             invoice.bill_status = 103
+            invoice.bill_type = 2  # Progress claim
         else:
             invoice.bill_status = 2
+            project = invoice.project
+            tender_execution_mode = (
+                int(project.project_status == 2) + 1
+                if project
+                else 2
+            )  # 1=tender, 2=execution when project exists
+            if desired_bill_type is None:
+                if invoice.bill_type in (1, 2):
+                    pass  # keep existing
+                else:
+                    invoice.bill_type = 1
+            else:
+                if desired_bill_type not in (1, 2):
+                    return JsonResponse(
+                        {'status': 'error', 'message': 'bill_type must be 1 or 2'},
+                        status=400,
+                    )
+                supplier_id = invoice.contact_pk_id if invoice.contact_pk_id else None
+                if desired_bill_type == 2:
+                    pid = invoice.project_id
+                    if not supplier_id or not pid:
+                        return JsonResponse(
+                            {
+                                'status': 'error',
+                                'message': 'Progress Claim requires supplier and project with a quote',
+                            },
+                            status=400,
+                        )
+                    if not _supplier_has_quote_for_bill(supplier_id, pid, tender_execution_mode):
+                        return JsonResponse(
+                            {
+                                'status': 'error',
+                                'message': 'Progress Claim is only available for suppliers with quotes on this project',
+                            },
+                            status=400,
+                        )
+                    invoice.bill_type = 2
+                else:
+                    invoice.bill_type = 1
         invoice.save()
         
         return JsonResponse({'status': 'success', 'new_status': invoice.bill_status})

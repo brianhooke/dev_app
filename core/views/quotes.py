@@ -476,21 +476,23 @@ def get_project_contacts(request, project_pk):
             return JsonResponse({
                 'status': 'success',
                 'contacts': [],
-                'message': 'Project has no Xero instance assigned'
+                'message': 'Project has no Xero instance assigned',
+                'xero_instance_pk': None,
             })
         
         # Get active contacts for this Xero instance from database
         contacts = Contacts.objects.filter(
             xero_instance=project.xero_instance,
             status='ACTIVE'  # Only active suppliers
-        ).values('contact_pk', 'name').order_by('name')
+        ).values('contact_pk', 'name', 'xero_contact_id', 'xero_instance_id').order_by('name')
         
         contacts_list = list(contacts)
         
         return JsonResponse({
             'status': 'success',
             'contacts': contacts_list,
-            'xero_instance_name': project.xero_instance.xero_name
+            'xero_instance_name': project.xero_instance.xero_name,
+            'xero_instance_pk': project.xero_instance_id,
         })
         
     except Exception as e:

@@ -182,13 +182,18 @@ def get_project_committed_amounts(request, project_pk):
     """
     Get committed amounts (sum of quote allocations) per item for a project.
     For Internal category items, use contract_budget as committed amount.
-    
+
+    Bill lines: only bills with bill_type in (0, 1) add to committed/working-budget
+    roll-up. Progress claims (bill_type=2) are excluded from that roll-up (they are
+    still included in billed_amounts for C2C). The Uncommitted column in the UI is
+    always Costing.uncommitted_* fields, not derived from bills.
+
     For construction/precast/pods projects, returns detailed data:
     {costing_pk: {qty: X, rate: Y, amount: Z}}
-    
+
     For other project types, returns simple amounts:
     {costing_pk: amount}
-    
+
     Query params:
     - tender_or_execution: '1' for tender, '2' for execution (default: '1')
     """
@@ -394,11 +399,12 @@ def get_project_committed_amounts(request, project_pk):
                 else:
                     committed_dict[costing_pk] = alloc_amount
         
-        # Add Bill_allocations where bill_type=1 (Direct Cost) to committed amounts
-        # These are direct costs that should be included in committed totals
+        # Add Bill_allocations for direct-cost bills (types 0 and 1) to committed totals.
+        # Progress claims (bill_type=2) are excluded so working budget stays quote/snap-grounded:
+        # they still count toward billed/C2C-only via billed_dict below.
         direct_cost_bills = Bills.objects.filter(
             project=project,
-            bill_type=1  # Direct Cost
+            bill_type__in=[0, 1],
         )
         
         bill_allocations_direct = Bill_allocations.objects.filter(
@@ -443,7 +449,8 @@ def get_project_committed_amounts(request, project_pk):
                 else:
                     committed_dict[costing_pk] = total_amount
         
-        # Calculate Billed amounts (ALL bill_types) per item
+        # Calculate Billed amounts — all Bill_allocations tied to bills on this project
+        # (bill_type 0, 1, 2 all included).
         # This is the sum of all Bill_allocations.amount for this project
         all_project_bills = Bills.objects.filter(project=project)
         
@@ -538,12 +545,12 @@ def get_item_quote_allocations(request, item_pk):
                     'type': 'snap',
                 })
         
-        # Get direct cost bill allocations (bill_type=1) for this item
+        # Get direct / unset bill allocations (bill_type 0 or 1) alongside quotes panel
         if project:
             direct_cost_bill_allocations = Bill_allocations.objects.filter(
                 item=costing,
                 bill__project=project,
-                bill__bill_type=1  # Direct Cost
+                bill__bill_type__in=[0, 1],
             ).select_related('bill', 'bill__contact_pk')
             
             for bill_alloc in direct_cost_bill_allocations:

@@ -6,12 +6,12 @@ def Committed():
     # Sum of all quote allocations
     quote_sum = Quote_allocations.objects.aggregate(total=Sum('amount'))['total'] or 0
     # Sum of invoice allocations that meet:
-    # bill_type=1 OR (bill_type=2 AND allocation_type=1)
+    # bill_type in (0,1) OR (bill_type=2 AND allocation_type=1)
     invoice_sum = (
         Bill_allocations.objects
         .filter(
-            models.Q(bill_pk__bill_type=1) |
-            (models.Q(bill_pk__bill_type=2) & models.Q(allocation_type=1))
+            models.Q(bill__bill_type__in=[0, 1]) |
+            (models.Q(bill__bill_type=2) & models.Q(allocation_type=1))
         )
         .aggregate(total=Sum('amount'))['total']
         or 0
@@ -21,8 +21,8 @@ def Committed():
     invoice_by_costing = (
         Bill_allocations.objects
         .filter(
-            models.Q(bill_pk__bill_type=1) |
-            (models.Q(bill_pk__bill_type=2) & models.Q(allocation_type=1))
+            models.Q(bill__bill_type__in=[0, 1]) |
+            (models.Q(bill__bill_type=2) & models.Q(allocation_type=1))
         )
         .values('item__costing_pk')
         .annotate(amount=Sum('amount'))
