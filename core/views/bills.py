@@ -1304,15 +1304,20 @@ def unallocate_bill(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-def _supplier_has_quote_for_bill(contact_pk_id, project_id, tender_execution_mode):
-    """True if contact has any Quote on project for the tender/execution variant."""
+def _supplier_has_quote_for_bill(contact_pk_id, project_id, tender_execution_mode=None):
+    """
+    True if contact has a Quote on project.
+    tender_execution_mode: if 1 or 2, only match quotes in that TE band; if None, any TE
+    (mirrors get_project_bills quote_supplier_pks when tender_or_execution is not applied).
+    """
     if not contact_pk_id or not project_id:
         return False
     qs = Quotes.objects.filter(
         project_id=project_id,
         contact_pk_id=contact_pk_id,
-        tender_or_execution=int(tender_execution_mode),
     )
+    if tender_execution_mode is not None:
+        qs = qs.filter(tender_or_execution=int(tender_execution_mode))
     return qs.exists()
 
 
@@ -1331,11 +1336,22 @@ def approve_bill(request, bill_pk):
         # Get current status from request body if provided
         current_status = None
         desired_bill_type = None
+        quote_te_for_validation = '__legacy__'
         if request.body:
             data = json.loads(request.body)
             current_status = data.get('current_status')
             if 'bill_type' in data and data['bill_type'] is not None:
                 desired_bill_type = int(data['bill_type'])
+            if 'tender_or_execution' in data:
+                raw_te = data['tender_or_execution']
+                if raw_te is None or raw_te == '':
+                    quote_te_for_validation = None
+                else:
+                    try:
+                        te_int = int(raw_te)
+                        quote_te_for_validation = te_int if te_int in (1, 2) else None
+                    except (TypeError, ValueError):
+                        quote_te_for_validation = None
         
         invoice = Bills.objects.select_related('project').get(bill_pk=bill_pk)
         
@@ -1349,11 +1365,6 @@ def approve_bill(request, bill_pk):
         else:
             invoice.bill_status = 2
             project = invoice.project
-            tender_execution_mode = (
-                int(project.project_status == 2) + 1
-                if project
-                else 2
-            )  # 1=tender, 2=execution when project exists
             if desired_bill_type is None:
                 if invoice.bill_type in (1, 2):
                     pass  # keep existing
@@ -1376,7 +1387,14 @@ def approve_bill(request, bill_pk):
                             },
                             status=400,
                         )
-                    if not _supplier_has_quote_for_bill(supplier_id, pid, tender_execution_mode):
+                    te_mode = quote_te_for_validation
+                    if quote_te_for_validation == '__legacy__':
+                        te_mode = (
+                            int(project.project_status == 2) + 1
+                            if project
+                            else 2
+                        )
+                    if not _supplier_has_quote_for_bill(supplier_id, pid, te_mode):
                         return JsonResponse(
                             {
                                 'status': 'error',

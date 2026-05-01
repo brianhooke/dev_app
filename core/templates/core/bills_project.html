@@ -116,6 +116,8 @@ $(document).ready(function() {
                 };
             });
 
+            console.log('[bills_project supplier debug][' + contextLabel + '] tender_or_execution (UI global):',
+                typeof window.billTenderOrExecution === 'undefined' ? '(undefined)' : window.billTenderOrExecution);
             console.log('[bills_project supplier debug][' + contextLabel + '] quote supplier IDs:', quotePkList);
             console.log('[bills_project supplier debug][' + contextLabel + '] quote suppliers:', quoteSuppliers);
             console.log('[bills_project supplier debug][' + contextLabel + '] bill suppliers:', billSuppliers);
@@ -498,7 +500,11 @@ $(document).ready(function() {
                 $.ajax({
                     url: '/core/approve_bill/' + billPk + '/',
                     type: 'POST',
-                    data: JSON.stringify({ current_status: 0, bill_type: readBillTypeFromRow(row) }),
+                    data: JSON.stringify({
+                        current_status: 0,
+                        bill_type: readBillTypeFromRow(row),
+                        tender_or_execution: typeof window.billTenderOrExecution === 'undefined' ? null : window.billTenderOrExecution
+                    }),
                     contentType: 'application/json',
                     success: function(response) {
                         if (response.status === 'success') {
@@ -917,7 +923,11 @@ $(document).ready(function() {
         $.ajax({
             url: '/core/approve_bill/' + billPk + '/',
             type: 'POST',
-            data: JSON.stringify({ current_status: currentStatus, bill_type: readBillTypeFromRow(row) }),
+            data: JSON.stringify({
+                current_status: currentStatus,
+                bill_type: readBillTypeFromRow(row),
+                tender_or_execution: typeof window.billTenderOrExecution === 'undefined' ? null : window.billTenderOrExecution
+            }),
             contentType: 'application/json',
             success: function(response) {
                 if (response.status === 'success') {
