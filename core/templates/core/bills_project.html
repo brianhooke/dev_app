@@ -88,6 +88,41 @@ $(document).ready(function() {
         }
         row.append(typeTd);
     }
+
+    function logBillQuoteSupplierMatching(response, contextLabel) {
+        try {
+            var quotePkList = response && response.quote_supplier_pks ? response.quote_supplier_pks : [];
+            var supplierList = response && response.suppliers ? response.suppliers : [];
+            var bills = response && response.bills ? response.bills : [];
+            var quotePkSet = {};
+            quotePkList.forEach(function(pk) { quotePkSet[String(pk)] = true; });
+
+            var quoteSuppliers = supplierList
+                .filter(function(s) { return quotePkSet[String(s.contact_pk)] === true; })
+                .map(function(s) {
+                    return {
+                        supplier_id: s.contact_pk,
+                        supplier_name: s.name
+                    };
+                });
+
+            var billSuppliers = bills.map(function(b) {
+                var sid = b.supplier_pk;
+                return {
+                    bill_pk: b.bill_pk,
+                    supplier_id: sid,
+                    supplier_name: b.supplier_name || null,
+                    has_matching_quote_supplier: !!quotePkSet[String(sid)]
+                };
+            });
+
+            console.log('[bills_project supplier debug][' + contextLabel + '] quote supplier IDs:', quotePkList);
+            console.log('[bills_project supplier debug][' + contextLabel + '] quote suppliers:', quoteSuppliers);
+            console.log('[bills_project supplier debug][' + contextLabel + '] bill suppliers:', billSuppliers);
+        } catch (e) {
+            console.error('[bills_project supplier debug] failed to build logs:', e);
+        }
+    }
     
     // Get project_pk from view context, or fall back to global construction project
     var projectPk = window.billProjectPk || 
@@ -173,7 +208,6 @@ $(document).ready(function() {
                 // Add fx-unfixed class and inline style for orange highlighting
                 if (typeof isUnfixedFxBill === 'function' && isUnfixedFxBill(bill)) {
                     row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
-                    console.log('[FX] bills_project row', bill.bill_pk, 'is unfixed FX - adding orange styling');
                 }
                 
                 // 4. $ Gross (calculated: Net + GST)
@@ -218,12 +252,6 @@ $(document).ready(function() {
                 var netVal = parseFloat(netText) || 0;
                 var gstVal = parseFloat(gstText) || 0;
                 
-                // DEBUG: Log the values for diagnosis
-                console.log('[bills_project] onRowSelect - bill_pk:', pk);
-                console.log('[bills_project] onRowSelect - grossText:', grossText, '-> grossVal:', grossVal);
-                console.log('[bills_project] onRowSelect - netText:', netText, '-> netVal:', netVal);
-                console.log('[bills_project] onRowSelect - gstText:', gstText, '-> gstVal:', gstVal);
-                
                 // Set currentSelectedBill for bill-specific logic
                 // Use NET for total_net (still to allocate calculation uses net, not gross)
                 currentSelectedBill = {
@@ -231,9 +259,6 @@ $(document).ready(function() {
                     total_net: netVal,
                     total_gst: gstVal
                 };
-                
-                console.log('[bills_project] currentSelectedBill set:', JSON.stringify(currentSelectedBill));
-                
                 // Set currentItem for shared updateStillToAllocate
                 cfg.data.currentItem = currentSelectedBill;
                 // Enable edit mode so footer shows "still to allocate"
@@ -291,6 +316,7 @@ $(document).ready(function() {
             billCostingItems = response.costing_items || [];
             billSectionSuppliers = response.suppliers || [];
             window.billQuoteSupplierPks = response.quote_supplier_pks || [];
+            logBillQuoteSupplierMatching(response, 'unallocated-load');
             // Initialize sortable table after data loads
             Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });
         });
@@ -340,12 +366,9 @@ $(document).ready(function() {
     // which enables auto-save on change. Quotes uses the shared function which adds UI-only
     // rows that may be batch-saved later.
     function addNewAllocationRow() {
-        console.log('=== addNewAllocationRow called ===');
         if (!currentSelectedBill) {
-            console.log('ABORTED: No currentSelectedBill');
             return;
         }
-        console.log('currentSelectedBill.bill_pk:', currentSelectedBill.bill_pk);
         
         var createData = {
             bill_pk: currentSelectedBill.bill_pk,
@@ -355,7 +378,6 @@ $(document).ready(function() {
             unit: '',
             rate: null
         };
-        console.log('Creating allocation with data:', createData);
         
         $.ajax({
             url: '/core/create_unallocated_invoice_allocation/',
@@ -364,9 +386,7 @@ $(document).ready(function() {
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             data: JSON.stringify(createData),
             success: function(response) {
-                console.log('CREATE response:', response);
                 if (response.status === 'success') {
-                    console.log('SUCCESS - new allocation_pk:', response.allocation_pk);
                     var row = AllocationsManager.createEditableAllocationRow({
                         sectionId: 'bill',
                         allocation: {
@@ -387,7 +407,6 @@ $(document).ready(function() {
                             delete: '/core/delete_unallocated_invoice_allocation/{pk}/'
                         }
                     });
-                    console.log('Row created, data-allocation-pk:', row.attr('data-allocation-pk'));
                     $('#billAllocationsTableBody').append(row);
                     AllocationsManager.updateStillToAllocate('bill');
                 } else {
@@ -402,34 +421,18 @@ $(document).ready(function() {
     
     // Force save all allocation rows immediately (bypass debounce)
     function forceSaveAllAllocations() {
-        console.log('=== forceSaveAllAllocations START ===');
         var isConstruction = Utils.isConstructionProject('bill');
-        console.log('isConstruction:', isConstruction);
         var cls = 'bill-allocation';
         var promises = [];
         var rowCount = $('#billAllocationsTableBody tr').length;
-        console.log('Total allocation rows found:', rowCount);
         
         $('#billAllocationsTableBody tr').each(function(index) {
             var rowEl = $(this);
             var pk = rowEl.attr('data-allocation-pk');
-            console.log('--- Row', index, '---');
-            console.log('  allocation_pk:', pk);
             
             if (!pk) {
-                console.log('  SKIPPED: No pk');
                 return;
             }
-            
-            // Log what elements we find
-            console.log('  item-select found:', rowEl.find('.' + cls + '-item-select').length);
-            console.log('  item-select val:', rowEl.find('.' + cls + '-item-select').val());
-            console.log('  net-input found:', rowEl.find('.' + cls + '-net-input').length);
-            console.log('  net-input val:', rowEl.find('.' + cls + '-net-input').val());
-            console.log('  gst-input found:', rowEl.find('.' + cls + '-gst-input').length);
-            console.log('  gst-input val:', rowEl.find('.' + cls + '-gst-input').val());
-            console.log('  notes-input found:', rowEl.find('.' + cls + '-notes-input').length);
-            console.log('  notes-input val:', rowEl.find('.' + cls + '-notes-input').val());
             
             var data;
             if (isConstruction) {
@@ -452,11 +455,7 @@ $(document).ready(function() {
                     notes: rowEl.find('.' + cls + '-notes-input').val() || ''
                 };
             }
-            
-            console.log('  DATA TO SAVE:', JSON.stringify(data));
-            
             var url = '/core/update_unallocated_invoice_allocation/' + pk + '/';
-            console.log('  URL:', url);
             
             promises.push($.ajax({
                 url: url,
@@ -465,14 +464,10 @@ $(document).ready(function() {
                 headers: { 'X-CSRFToken': Utils.getCSRFToken() },
                 data: JSON.stringify(data)
             }).done(function(response) {
-                console.log('  SAVE SUCCESS for pk', pk, ':', response);
             }).fail(function(xhr, status, error) {
                 console.error('  SAVE FAILED for pk', pk, ':', error, xhr.responseText);
             }));
         });
-        
-        console.log('Total save promises:', promises.length);
-        console.log('=== forceSaveAllAllocations END ===');
         return $.when.apply($, promises);
     }
     
@@ -560,6 +555,7 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.status === 'success') {
                     window.billQuoteSupplierPks = response.quote_supplier_pks || [];
+                    logBillQuoteSupplierMatching(response, 'allocated-load');
                     populateAllocatedBillsTable(response.bills, response.suppliers);
                     // Initialize sortable table after data loads
                     Utils.initSortableTable('billMainTable', { tbodyId: 'billMainTableBody' });
@@ -618,7 +614,6 @@ $(document).ready(function() {
             // Add fx-unfixed class and inline style for orange highlighting
             if (typeof isUnfixedFxBill === 'function' && isUnfixedFxBill(bill)) {
                 row.addClass('fx-unfixed').css('background-color', 'rgba(255, 140, 0, 0.5)');
-                console.log('[FX] allocated bills_project row', bill.bill_pk, 'is unfixed FX - adding orange styling');
             }
             
             // 4. $ Gross (calculated: Net + GST)
