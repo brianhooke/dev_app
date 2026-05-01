@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django import forms
+from django.core.exceptions import ValidationError
 from .models import (
     Categories, Projects, ProjectTypes, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
     PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
@@ -70,9 +71,57 @@ class BillAllocationsForm(forms.ModelForm):
     class Meta:
         model = Bill_allocations
         fields = '__all__'
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         set_nullable_fields_not_required(self, ['notes'])
+
+        bill = None
+        if self.instance.pk and getattr(self.instance, 'bill_id', None):
+            try:
+                bill = Bills.objects.select_related('project').get(pk=self.instance.bill_id)
+            except Bills.DoesNotExist:
+                bill = None
+
+        if not bill and self.data:
+            raw_bill = self.data.get('bill')
+            if raw_bill:
+                try:
+                    bill = Bills.objects.select_related('project').get(pk=raw_bill)
+                except (Bills.DoesNotExist, ValueError, TypeError):
+                    bill = None
+
+        if not bill and getattr(self, 'initial', None):
+            ib = self.initial.get('bill')
+            if ib:
+                try:
+                    bill = Bills.objects.select_related('project').get(pk=ib)
+                except (Bills.DoesNotExist, ValueError, TypeError):
+                    bill = None
+
+        qs = Costing.objects.none()
+        if bill and bill.project_id:
+            qs = Costing.objects.filter(project_id=bill.project_id).select_related('category').order_by(
+                'category__order_in_list', 'category__category', 'order_in_list', 'item'
+            )
+        self.fields['item'].queryset = qs
+        if bill and bill.project_id:
+            self.fields['item'].help_text = ''
+        else:
+            self.fields['item'].help_text = (
+                'Choose and save the Bill first; items are limited to that bill\'s project.'
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        bill = cleaned_data.get('bill')
+        item = cleaned_data.get('item')
+        if bill and item and bill.project_id and item.project_id:
+            if bill.project_id != item.project_id:
+                raise ValidationError(
+                    {'item': 'Item must belong to the same project as the bill.'}
+                )
+        return cleaned_data
 
 class HcVariationForm(forms.ModelForm):
     class Meta:

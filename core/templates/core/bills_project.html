@@ -8,7 +8,7 @@
 <!-- FX: Orange row styling for unfixed FX bills - Added 2026-02-14 -->
 <style>
     .bill-type-select-narrow {
-        max-width: 3.35rem;
+        max-width: 5rem;
         padding: 2px 4px;
         font-size: 10px;
         line-height: 1.2;
@@ -28,6 +28,15 @@
     #billMainTableBody tr.fx-unfixed.selected-row,
     #billMainTableBody tr.fx-unfixed.selected-row td {
         background-color: rgba(255, 140, 0, 0.7) !important;
+    }
+    /* Bill allocation Item dropdown: grey category labels (disabled options), indented line items */
+    select.bill-allocation-grouped-by-category option.bill-alloc-cat-header {
+        color: #6c757d !important;
+        font-weight: 600;
+        background-color: #f1f3f5;
+    }
+    select.bill-allocation-grouped-by-category option:not(.bill-alloc-cat-header) {
+        color: #212529;
     }
 </style>
 

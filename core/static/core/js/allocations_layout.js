@@ -1565,44 +1565,80 @@ var AllocationsManager = (function() {
         
         // 1. Item dropdown (populated with costing items)
         var itemSelect = $('<select>').addClass('form-control form-control-sm ' + cls + '-item-select');
+        if (sectionId === 'bill') {
+            itemSelect.addClass('bill-allocation-grouped-by-category');
+        }
         itemSelect.append($('<option>').val('').text('Select Item...'));
-        
-        // Populate with costing items, grouped by category
-        var currentCategory = null;
-        // Get the item pk from allocation - could be item_pk or costing_pk
-        // Convert to string for consistent comparison with option values
+
         var allocItemPk = alloc.item_pk || alloc.costing_pk || null;
         if (allocItemPk) allocItemPk = String(allocItemPk);
-        
-        console.log('[createEditableAllocationRow] sectionId:', sectionId);
-        console.log('[createEditableAllocationRow] alloc:', JSON.stringify(alloc));
-        console.log('[createEditableAllocationRow] allocItemPk:', allocItemPk);
-        console.log('[createEditableAllocationRow] costingItems:', costingItems);
-        console.log('[createEditableAllocationRow] costingItems.length:', costingItems ? costingItems.length : 'undefined');
-        
-        if (!costingItems || costingItems.length === 0) {
-            console.error('[createEditableAllocationRow] WARNING: costingItems is empty or undefined!');
+
+        function parseOrderVal(v) {
+            var n = parseFloat(v);
+            return isNaN(n) ? 0 : n;
         }
-        
-        costingItems.forEach(function(item) {
-            // Add category optgroup if category changed
-            if (item.category__category !== currentCategory) {
-                currentCategory = item.category__category;
-                itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
+
+        function appendBillCategoryGroupedItems(items) {
+            var sorted = items.slice().sort(function(a, b) {
+                var oa = parseOrderVal(a.category__order_in_list);
+                var ob = parseOrderVal(b.category__order_in_list);
+                if (oa !== ob) return oa - ob;
+                var ca = (a.category__category || '').toLowerCase();
+                var cb = (b.category__category || '').toLowerCase();
+                if (ca !== cb) return ca.localeCompare(cb);
+                var oia = parseOrderVal(a.order_in_list);
+                var oib = parseOrderVal(b.order_in_list);
+                if (oia !== oib) return oia - oib;
+                return (a.item || '').localeCompare(b.item || '');
+            });
+            var currentCategory = null;
+            sorted.forEach(function(item) {
+                var cat = item.category__category || 'Uncategorized';
+                if (cat !== currentCategory) {
+                    currentCategory = cat;
+                    itemSelect.append(
+                        $('<option>')
+                            .addClass('bill-alloc-cat-header')
+                            .attr('disabled', true)
+                            .attr('value', '')
+                            .text(cat)
+                    );
+                }
+                var itemPkStr = String(item.costing_pk);
+                var option = $('<option>').val(itemPkStr).text('\u2003\u2003' + (item.item || ''));
+                option.attr('data-unit', item.unit__unit_name || item.unit || '');
+                if (allocItemPk && itemPkStr === allocItemPk) {
+                    option.prop('selected', true);
+                }
+                itemSelect.append(option);
+            });
+        }
+
+        function appendOptgroupItems(items) {
+            var currentCategory = null;
+            items.forEach(function(item) {
+                if (item.category__category !== currentCategory) {
+                    currentCategory = item.category__category;
+                    itemSelect.append($('<optgroup>').attr('label', currentCategory || 'Uncategorized'));
+                }
+                var itemPkStr = String(item.costing_pk);
+                var option = $('<option>').val(itemPkStr).text(item.item);
+                option.attr('data-unit', item.unit__unit_name || item.unit || '');
+                if (allocItemPk && itemPkStr === allocItemPk) {
+                    option.prop('selected', true);
+                }
+                itemSelect.find('optgroup').last().append(option);
+            });
+        }
+
+        if (costingItems && costingItems.length) {
+            if (sectionId === 'bill') {
+                appendBillCategoryGroupedItems(costingItems);
+            } else {
+                appendOptgroupItems(costingItems);
             }
-            // Use string for option value for consistent matching
-            var itemPkStr = String(item.costing_pk);
-            var option = $('<option>').val(itemPkStr).text(item.item);
-            // Store unit as data attribute for construction mode
-            option.attr('data-unit', item.unit__unit_name || item.unit || '');
-            // Set selected if this is the allocation's item
-            if (allocItemPk && itemPkStr === allocItemPk) {
-                option.prop('selected', true);
-            }
-            itemSelect.find('optgroup').last().append(option);
-        });
-        
-        // After populating, force set the value if we have an allocItemPk
+        }
+
         if (allocItemPk) {
             itemSelect.val(allocItemPk);
         }

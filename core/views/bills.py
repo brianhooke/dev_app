@@ -766,11 +766,11 @@ def bills_view(request):
             main_table_columns = [
                 {'header': 'Supplier', 'width': '12%', 'sortable': True},
                 {'header': 'Bill #', 'width': '8%', 'sortable': True},
-                {'header': 'Type', 'width': '4%', 'sortable': False},
+                {'header': 'Type', 'width': '6%', 'sortable': False},
                 {'header': 'Curr', 'width': '5%', 'sortable': True},  # FX: Currency display
                 {'header': '$ Gross', 'width': '8%', 'sortable': True},
-                {'header': '$ Net', 'width': '8%', 'sortable': True},
-                {'header': '$ GST', 'width': '8%', 'sortable': True},
+                {'header': '$ Net', 'width': '7%', 'sortable': True},
+                {'header': '$ GST', 'width': '7%', 'sortable': True},
                 {'header': 'Progress Claim', 'width': '10%', 'class': 'col-action-first'},
                 {'header': 'Unallocate', 'width': '11%', 'class': 'col-action'},
                 {'header': 'Approve', 'width': '11%', 'class': 'col-action'},
@@ -780,11 +780,11 @@ def bills_view(request):
             main_table_columns = [
                 {'header': 'Supplier', 'width': '18%', 'sortable': True},
                 {'header': 'Bill #', 'width': '11%', 'sortable': True},
-                {'header': 'Type', 'width': '4%', 'sortable': False},
+                {'header': 'Type', 'width': '6%', 'sortable': False},
                 {'header': 'Curr', 'width': '6%', 'sortable': True},  # FX: Currency display
                 {'header': '$ Gross', 'width': '12%', 'sortable': True},
-                {'header': '$ Net', 'width': '12%', 'sortable': True},
-                {'header': '$ GST', 'width': '12%', 'sortable': True},
+                {'header': '$ Net', 'width': '11%', 'sortable': True},
+                {'header': '$ GST', 'width': '11%', 'sortable': True},
                 {'header': 'Approve', 'width': '12%', 'class': 'col-action-first'},
                 {'header': 'Return', 'width': '7%', 'class': 'col-action'},
             ]
@@ -957,7 +957,18 @@ def get_project_bills(request, project_pk):
         costing_filter = Costing.objects.filter(project_id=project_pk).exclude(category__category='Internal')
         if tender_or_execution and tender_or_execution != 'null':
             costing_filter = costing_filter.filter(tender_or_execution=int(tender_or_execution))
-        costing_items = list(costing_filter.select_related('unit').values('costing_pk', 'item', 'unit__unit_name'))
+        costing_items = list(
+            costing_filter.select_related('unit', 'category')
+            .order_by('category__order_in_list', 'category__category', 'order_in_list', 'item')
+            .values(
+                'costing_pk',
+                'item',
+                'unit__unit_name',
+                'category__category',
+                'category__order_in_list',
+                'order_in_list',
+            )
+        )
         
         quotes_qs = Quotes.objects.filter(project_id=project_pk).exclude(contact_pk__isnull=True)
         if tender_or_execution and tender_or_execution != 'null':
