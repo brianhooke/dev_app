@@ -177,6 +177,54 @@ def update_fixed_on_site(request):
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
 
+def _compute_staff_hours_allocation_amount(alloc):
+    """
+    Compute the realised wages cost (incl. superannuation) for one
+    StaffHoursAllocation row.
+
+    Mirrors the per-allocation maths used by the Labour-committed branch in
+    ``get_project_committed_amounts`` so that StaffHours can be rolled up
+    consistently into both Committed (Labour items only) and Billed
+    (every item with project allocations) totals without drifting.
+
+    Returns 0.0 when hours are non-positive, no applicable EmployeePayRate
+    exists, or no derivable hourly rate can be obtained.
+    """
+    hours = alloc.hours or Decimal('0')
+    if hours <= 0:
+        return 0.0
+
+    employee = alloc.staff_hours.employee
+    target_date = alloc.staff_hours.date
+
+    pay_rate = EmployeePayRate.objects.filter(
+        employee=employee,
+        effective_date__lte=target_date,
+        is_ordinary_rate=True
+    ).order_by('-effective_date').first()
+    if not pay_rate:
+        return 0.0
+
+    hourly_rate = None
+    if pay_rate.rate_per_unit:
+        hourly_rate = float(pay_rate.rate_per_unit)
+    elif pay_rate.annual_salary and pay_rate.units_per_week:
+        weekly_hours = float(pay_rate.units_per_week)
+        if weekly_hours > 0:
+            hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
+    if not hourly_rate:
+        return 0.0
+
+    wages_cost = float(hours) * hourly_rate
+    super_rate = get_employee_super_rate(
+        employee.xero_instance_id,
+        employee.xero_employee_id
+    )
+    if super_rate:
+        wages_cost += wages_cost * (super_rate / 100)
+    return wages_cost
+
+
 @require_http_methods(["GET"])
 def get_project_committed_amounts(request, project_pk):
     """
@@ -466,7 +514,45 @@ def get_project_committed_amounts(request, project_pk):
             for item in all_bill_allocations
             if item['item__costing_pk']
         }
-        
+
+        # Additionally fold StocktakeSnapAllocation amounts into Billed.
+        # Snap allocations represent stock physically consumed against the
+        # project, i.e. a realised cost — so they are already in Working
+        # Budget (via committed_dict above) AND should now contribute to
+        # Billed. Net effect on C2C (= WB − Billed) is zero, which is the
+        # desired behaviour: consumed stock should not still be expected
+        # cost-to-complete.
+        # Reuses the same item_name_to_costing map built earlier so we
+        # respect the active tender_or_execution view.
+        for snap_alloc in snap_allocations:
+            snap_item_obj = snap_alloc.snap_item.item
+            if not snap_item_obj:
+                continue
+            costing_pk = item_name_to_costing.get(snap_item_obj.item)
+            if not costing_pk:
+                continue
+            billed_dict[costing_pk] = (
+                billed_dict.get(costing_pk, 0.0) + float(snap_alloc.amount or 0)
+            )
+
+        # Additionally fold StaffHoursAllocations into Billed for every
+        # costing in the current view (not just Labour). Wages paid are a
+        # realised cost regardless of which costing item the hours were
+        # booked against.
+        staff_allocations_billed = StaffHoursAllocations.objects.filter(
+            project=project,
+            allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+            costing__isnull=False,
+            costing__project=project,
+            costing__tender_or_execution=tender_or_execution,
+        ).select_related('staff_hours__employee', 'costing')
+
+        for alloc in staff_allocations_billed:
+            wages_amount = _compute_staff_hours_allocation_amount(alloc)
+            if wages_amount > 0:
+                cpk = alloc.costing.costing_pk
+                billed_dict[cpk] = billed_dict.get(cpk, 0.0) + wages_amount
+
         return JsonResponse({
             'status': 'success',
             'committed_amounts': committed_dict,
@@ -589,29 +675,40 @@ def get_item_quote_allocations(request, item_pk):
 @require_http_methods(["GET"])
 def get_item_bill_allocations(request, item_pk):
     """
-    Get all bill allocations for a specific item (all bill_types).
-    Returns list of allocations with associated bill/contact information.
-    Used for the Billed cells dropdown.
+    Get the entries that make up the Billed total for a single costing item.
+
+    The list contains three kinds of entries, all using the same shape
+    expected by ``renderBilledDetailsRow`` in contract_budget.html:
+    1. ``type='bill'`` — one row per Bill_allocations record (all bill_types)
+    2. ``type='snap'`` — one row per StocktakeSnapAllocation (finalised snaps,
+        same matching rule used by the Committed dropdown)
+    3. ``type='wages'`` — at most one aggregated row summing every
+        StaffHoursAllocations.amount (incl. super) booked against this
+        costing for this project, displayed as "Staff Wages"
     """
     try:
         costing = get_object_or_404(Costing, pk=item_pk)
         project = costing.project
-        
+
         allocations_list = []
-        
+
         if project:
-            # Get all bill allocations for this item (all bill_types)
+            # ---------- Bill_allocations (existing behaviour) ----------
             bill_allocations = Bill_allocations.objects.filter(
                 item=costing,
                 bill__project=project
             ).select_related('bill', 'bill__contact_pk')
-            
+
             for bill_alloc in bill_allocations:
                 bill = bill_alloc.bill
                 contact = bill.contact_pk if bill else None
                 bill_date = bill.bill_date.strftime('%d-%b-%y') if bill and bill.bill_date else 'No Date'
-                bill_type_display = 'Direct Cost' if bill.bill_type == 1 else 'Progress Claim' if bill.bill_type == 2 else 'Other'
-                
+                bill_type_display = (
+                    'Direct Cost' if bill and bill.bill_type == 1
+                    else 'Progress Claim' if bill and bill.bill_type == 2
+                    else 'Other'
+                )
+
                 allocations_list.append({
                     'allocation_pk': bill_alloc.bill_allocation_pk,
                     'qty': float(bill_alloc.qty) if bill_alloc.qty else 0,
@@ -626,8 +723,69 @@ def get_item_bill_allocations(request, item_pk):
                     'bill_date': bill_date,
                     'bill_type': bill.bill_type if bill else 0,
                     'bill_type_display': bill_type_display,
+                    'type': 'bill',
                 })
-        
+
+            # ---------- StocktakeSnapAllocation rows ----------
+            # Match by item name (snap items reference global costings, so
+            # the Committed dropdown does the same: see get_item_quote_allocations).
+            item_name = costing.item
+            if item_name:
+                snap_allocations = StocktakeSnapAllocation.objects.filter(
+                    project=project,
+                    snap_item__item__item=item_name,
+                    snap_item__snap__status__gte=1
+                ).select_related('snap_item__snap')
+
+                for snap_alloc in snap_allocations:
+                    snap = snap_alloc.snap_item.snap
+                    snap_date = snap.date.strftime('%d-%b-%y') if snap.date else 'Unknown Date'
+
+                    allocations_list.append({
+                        'allocation_pk': snap_alloc.snap_allocation_pk,
+                        'qty': float(snap_alloc.qty) if snap_alloc.qty else 0,
+                        'rate': float(snap_alloc.rate) if snap_alloc.rate else 0,
+                        'amount': float(snap_alloc.amount) if snap_alloc.amount else 0,
+                        'unit': '',
+                        'notes': '',
+                        'snap_pk': snap.snap_pk,
+                        'snap_date': snap_date,
+                        'contact_name': f'Stocktake {snap_date}',
+                        'bill_number': f'Snap {snap.snap_pk}',
+                        'bill_type': None,
+                        'bill_type_display': 'Stocktake',
+                        'type': 'snap',
+                    })
+
+            # ---------- Aggregated Staff Wages row ----------
+            staff_allocations = StaffHoursAllocations.objects.filter(
+                project=project,
+                costing=costing,
+                allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+            ).select_related('staff_hours__employee')
+
+            staff_total = 0.0
+            for alloc in staff_allocations:
+                staff_total += _compute_staff_hours_allocation_amount(alloc)
+
+            if staff_total > 0:
+                allocations_list.append({
+                    'allocation_pk': None,
+                    'qty': 0,
+                    'rate': 0,
+                    'amount': float(staff_total),
+                    'unit': '',
+                    'notes': '',
+                    'bill_pk': None,
+                    'bill_number': '-',
+                    'contact_name': 'Staff Wages',
+                    'contact_pk': None,
+                    'bill_date': '',
+                    'bill_type': None,
+                    'bill_type_display': 'Wages',
+                    'type': 'wages',
+                })
+
         return JsonResponse({
             'status': 'success',
             'allocations': allocations_list

@@ -601,9 +601,16 @@
     
     <!-- Projects Footer with buttons -->
     <div id="projectsHeader" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-shrink: 0; padding-top: 15px; border-top: 1px solid #e9ecef;">
-        <button id="toggleArchiveBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
-            <i class="fas fa-archive"></i> Show Archived
-        </button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button id="toggleArchiveBtn" class="btn btn-outline-secondary btn-sm" data-showing-archived="0">
+                <i class="fas fa-archive"></i> Show Archived
+            </button>
+            <select id="projectStatusFilter" class="form-control form-control-sm" style="width: auto; min-width: 130px; height: 31px;" title="Filter projects by status">
+                <option value="1">Tender</option>
+                <option value="2" selected>Execution</option>
+                <option value="all">All</option>
+            </select>
+        </div>
         <button id="addProjectBtn" class="btn btn-primary btn-sm">
             <i class="fas fa-plus"></i> Add Project
         </button>
@@ -780,7 +787,7 @@ $(document).ready(function() {
             const typeClass = project.project_type || 'general';
             
             const card = $(`
-                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}">
+                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}" data-project-status="${project.project_status}">
                     <div class="card-header card-toggle">
                         <h5 class="card-title">${project.project}</h5>
                         <i class="fas fa-chevron-down card-chevron"></i>
@@ -864,8 +871,74 @@ $(document).ready(function() {
             
             grid.append(card);
         });
+
+        // Re-apply the active status filter so newly rendered cards respect it
+        applyProjectStatusFilter();
     }
-    
+
+    // Filter cards in #projectsGrid based on #projectStatusFilter value.
+    // Default on page load is 'execution' (status=2). Cards are matched via
+    // the data-project-status attribute on each .project-card element.
+    function applyProjectStatusFilter() {
+        const grid = $('#projectsGrid');
+        if (!grid.length) return;
+
+        const filter = String($('#projectStatusFilter').val() || 'all');
+        const allCards = grid.find('.project-card');
+
+        if (filter === 'all') {
+            allCards.show();
+        } else {
+            allCards.hide();
+            grid.find('.project-card[data-project-status="' + filter + '"]').show();
+        }
+
+        // Manage a filter-specific empty state without disturbing the
+        // existing "no projects loaded" empty state from populateProjectsTable
+        grid.find('.projects-empty.filter-empty').remove();
+        if (allCards.length > 0 && allCards.filter(':visible').length === 0) {
+            grid.append(
+                '<div class="projects-empty filter-empty">' +
+                    '<i class="fas fa-filter"></i>' +
+                    '<p>No projects match the selected status filter.</p>' +
+                '</div>'
+            );
+        }
+    }
+
+    // Expose for other modules that may want to force a re-filter after
+    // mutating a card's status (e.g. contract budget approval flow)
+    window.applyProjectStatusFilter = applyProjectStatusFilter;
+
+    // Re-apply filter when the user changes the dropdown
+    $(document).on('change', '#projectStatusFilter', applyProjectStatusFilter);
+
+    // Watch the grid for any card whose data-project-status (or archived)
+    // attribute changes during normal use, and re-apply the filter so the
+    // visible set stays consistent with the selected status.
+    (function setupProjectStatusObserver() {
+        const gridEl = document.getElementById('projectsGrid');
+        if (!gridEl || typeof MutationObserver === 'undefined') return;
+
+        const observer = new MutationObserver(function(mutations) {
+            for (let i = 0; i < mutations.length; i++) {
+                const m = mutations[i];
+                if (m.type === 'attributes' &&
+                    (m.attributeName === 'data-project-status' ||
+                     m.attributeName === 'data-project-archived')) {
+                    applyProjectStatusFilter();
+                    return;
+                }
+            }
+        });
+
+        observer.observe(gridEl, {
+            attributes: true,
+            attributeFilter: ['data-project-status', 'data-project-archived'],
+            subtree: true
+        });
+    })();
+
     // Toggle Archive button handler
     $('#toggleArchiveBtn').click(function() {
         const currentlyShowingArchived = $(this).data('showing-archived') === 1;
