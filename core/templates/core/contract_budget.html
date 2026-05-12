@@ -776,8 +776,11 @@ Column Behaviors:
         }
         
         // Committed column(s) (display only - calculated from quote allocations)
-        // Make cells green and clickable if they have values
-        var hasCommittedValue = committedAmount > 0;
+        // Make cells clickable if they have a non-zero value.
+        // abs() so credit-note allocations (negative committed) are still
+        // expandable into the details dropdown — otherwise users can't see
+        // the credit lines that produced the negative total.
+        var hasCommittedValue = Math.abs(committedAmount) >= 0.01;
         var clickableClass = hasCommittedValue ? ' committed-clickable' : '';
         
         if (isConstruction) {
@@ -826,8 +829,10 @@ Column Behaviors:
             // C2C = Working Budget − Billed (Working Budget is Uncommitted + Committed roll-up above)
             var c2cValue = workingBudget - billedAmount;
             row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '">' + Utils.formatCurrency(c2cValue) + '</td>');
-            // Billed - clickable if has value (green like committed)
-            var hasBilledValue = billedAmount > 0;
+            // Billed - clickable if has a non-zero value.
+            // abs() so credit-note billings (negative billed) are still
+            // expandable into the breakdown dropdown.
+            var hasBilledValue = Math.abs(billedAmount) >= 0.01;
             var billedClickableClass = hasBilledValue ? ' billed-clickable' : '';
             var billedTd = $('<td class="billed-cell' + billedClickableClass + '" data-item-pk="' + item.costing_pk + '">' + Utils.formatCurrency(billedAmount) + '</td>');
             if (hasBilledValue) {

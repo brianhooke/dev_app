@@ -327,8 +327,31 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
             'message': f'This bill was already sent to Xero (Xero ID: {invoice.bill_xero_id}). Cannot send again.'
         }, status=400)
     
-    # Pre-check: Search Xero for existing invoice with same InvoiceNumber AND same Contact (unless force_update)
-    # Note: Different suppliers can have the same invoice number, so we must filter by Contact
+    # ----------------------------------------------------------------------
+    # Credit-note detection.
+    # A bill with a negative net total maps to an Accounts-Payable Credit
+    # Note in Xero (Type=ACCPAYCREDIT), which lives on a different endpoint
+    # (/CreditNotes vs /Invoices) and stores line amounts as positive values.
+    # We branch the duplicate pre-check, payload Type, endpoint URL, response
+    # parsing and attachment URL on this flag, and flip line-item signs to
+    # positive when posting to the CreditNotes endpoint.
+    # ----------------------------------------------------------------------
+    bill_total_net_signed = float(invoice.total_net or 0)
+    is_credit_note = bill_total_net_signed < 0
+    xero_doc_type = 'ACCPAYCREDIT' if is_credit_note else 'ACCPAY'
+    xero_endpoint_path = 'CreditNotes' if is_credit_note else 'Invoices'
+    xero_response_key = 'CreditNotes' if is_credit_note else 'Invoices'
+    xero_id_key = 'CreditNoteID' if is_credit_note else 'InvoiceID'
+    xero_number_field = 'CreditNoteNumber' if is_credit_note else 'InvoiceNumber'
+    logger.info(f"=== CREDIT NOTE DETECTION ===")
+    logger.info(f"  total_net: {bill_total_net_signed}")
+    logger.info(f"  is_credit_note: {is_credit_note}")
+    logger.info(f"  xero_doc_type: {xero_doc_type}")
+    logger.info(f"  xero_endpoint_path: {xero_endpoint_path}")
+    
+    # Pre-check: Search Xero for existing document with same number AND same Contact (unless force_update).
+    # Different suppliers can share an invoice number, so we filter by Contact.
+    # For credit notes we hit /CreditNotes (CreditNoteNumber field), otherwise /Invoices (InvoiceNumber).
     if invoice.supplier_bill_number and not force_update:
         xero_instance = invoice.xero_instance
         supplier_contact_id = invoice.contact_pk.xero_contact_id if invoice.contact_pk else None
@@ -337,12 +360,11 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 access_token = xero_instance.get_valid_access_token()
                 tenant_id = xero_instance.xero_tenant_id
                 
-                # Search for existing ACCPAY invoice with this number FROM THE SAME SUPPLIER
                 # Note: quote is imported at module level (line 30)
                 inv_num = invoice.supplier_bill_number.strip()
-                where_clause = f'Type=="ACCPAY" AND InvoiceNumber=="{inv_num}" AND Contact.ContactID==Guid("{supplier_contact_id}")'
+                where_clause = f'Type=="{xero_doc_type}" AND {xero_number_field}=="{inv_num}" AND Contact.ContactID==Guid("{supplier_contact_id}")'
                 encoded_where = quote(where_clause)
-                search_url = f'https://api.xero.com/api.xro/2.0/Invoices?where={encoded_where}'
+                search_url = f'https://api.xero.com/api.xro/2.0/{xero_endpoint_path}?where={encoded_where}'
                 
                 logger.info(f"=== PRE-CHECK: Searching Xero for existing invoice ===")
                 logger.info(f"  supplier_bill_number: '{inv_num}'")
@@ -365,26 +387,31 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 
                 if search_response.status_code == 200:
                     search_data = search_response.json()
-                    existing_invoices = search_data.get('Invoices', [])
-                    logger.info(f"  Found {len(existing_invoices)} existing invoices")
-                    if existing_invoices:
-                        existing = existing_invoices[0]
-                        existing_id = existing.get('InvoiceID')
+                    # Response key matches the endpoint we hit (Invoices or CreditNotes).
+                    existing_docs = search_data.get(xero_response_key, [])
+                    logger.info(f"  Found {len(existing_docs)} existing {xero_response_key.lower()}")
+                    if existing_docs:
+                        existing = existing_docs[0]
+                        existing_id = existing.get(xero_id_key)
                         existing_status = existing.get('Status')
                         existing_date = existing.get('DateString', existing.get('Date', 'Unknown'))
                         existing_total = existing.get('Total', 'Unknown')
-                        logger.warning(f"Found existing Xero invoice: {existing_id} with status {existing_status}")
+                        doc_kind = 'credit note' if is_credit_note else 'invoice'
+                        logger.warning(f"Found existing Xero {doc_kind}: {existing_id} with status {existing_status}")
                         
-                        # Return duplicate_found status - let frontend ask user for confirmation
+                        # Return duplicate_found status - let frontend ask user for confirmation.
+                        # Frontend keys kept as 'invoice_id' / 'invoice_number' for backwards
+                        # compatibility (the value is whichever Xero document type matched).
                         return JsonResponse({
                             'status': 'duplicate_found',
-                            'message': f'Invoice #{inv_num} already exists in Xero',
+                            'message': f'{doc_kind.title()} #{inv_num} already exists in Xero',
                             'existing_invoice': {
                                 'invoice_id': existing_id,
                                 'invoice_number': inv_num,
                                 'status': existing_status,
                                 'date': existing_date,
                                 'total': existing_total,
+                                'doc_type': xero_doc_type,
                             }
                         })
             except Exception as e:
@@ -522,12 +549,20 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"")
     logger.info(f"[_send_bill_to_xero_core] Sending bill {bill_pk} to Xero ({workflow}) for instance: {xero_instance.xero_name}")
     
-    # Build line items from allocations
+    # Build line items from allocations.
+    # Xero credit notes (ACCPAYCREDIT) require POSITIVE line amounts — the
+    # credit-vs-invoice distinction is carried by the document Type, not the
+    # sign of the figures. So when sending a credit note we feed Xero the
+    # absolute values of Quantity / UnitAmount / TaxAmount. Negative bills
+    # in our system flip cleanly to positive credit-note lines on Xero.
+    # GST flag uses abs() so a negative GST component (credit) still posts
+    # against the INPUT tax code rather than silently NONE.
     line_items = []
     if is_stocktake:
         for alloc in allocations:
             qty = float(alloc.qty) if alloc.qty else 1
             unit_amount = float(alloc.amount) / qty if alloc.amount else 0
+            tax_amount = float(alloc.gst_amount) if alloc.gst_amount else 0
             
             # Build description as "Item | Qty | Rate | Notes"
             item_name = alloc.item.item if alloc.item else ''
@@ -536,13 +571,18 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
             desc_parts = [item_name, str(qty), rate_str, notes_str]
             description = ' | '.join(p for p in desc_parts if p)
             
+            if is_credit_note:
+                qty = abs(qty)
+                unit_amount = abs(unit_amount)
+                tax_amount = abs(tax_amount)
+            
             line_item = {
                 "Description": description or "No description",
                 "Quantity": qty,
                 "UnitAmount": unit_amount,
                 "AccountCode": stocktake_account_code,
-                "TaxType": "INPUT" if alloc.gst_amount and alloc.gst_amount > 0 else "NONE",
-                "TaxAmount": float(alloc.gst_amount) if alloc.gst_amount else 0
+                "TaxType": "INPUT" if alloc.gst_amount and abs(float(alloc.gst_amount)) > 0 else "NONE",
+                "TaxAmount": tax_amount
             }
             
             line_items.append(line_item)
@@ -551,14 +591,20 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
             # Use qty if available (approvals workflow), otherwise default to 1
             qty = float(allocation.qty) if allocation.qty else 1
             unit_amount = float(allocation.amount) / qty if allocation.amount else 0
+            tax_amount = float(allocation.gst_amount) if allocation.gst_amount else 0
+            
+            if is_credit_note:
+                qty = abs(qty)
+                unit_amount = abs(unit_amount)
+                tax_amount = abs(tax_amount)
             
             line_item = {
                 "Description": allocation.notes or (allocation.item.item if allocation.item else "No description"),
                 "Quantity": qty,
                 "UnitAmount": unit_amount,
                 "AccountCode": allocation.xero_account.account_code,
-                "TaxType": "INPUT" if allocation.gst_amount and allocation.gst_amount > 0 else "NONE",
-                "TaxAmount": float(allocation.gst_amount) if allocation.gst_amount else 0
+                "TaxType": "INPUT" if allocation.gst_amount and abs(float(allocation.gst_amount)) > 0 else "NONE",
+                "TaxAmount": tax_amount
             }
             
             line_items.append(line_item)
@@ -583,17 +629,24 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"  bill_currency resolved: '{bill_currency}'")
     logger.info(f"  is foreign currency: {bill_currency != 'AUD'}")
     
+    # Build the document payload. For credit notes Xero uses
+    # CreditNoteNumber (not InvoiceNumber) and ignores DueDate, so we set the
+    # right key based on the doc type. Wrapper key on the request body and
+    # endpoint URL also branch on the doc type.
     invoice_payload = {
-        "Type": "ACCPAY",
+        "Type": xero_doc_type,
         "Contact": {
             "ContactID": supplier.xero_contact_id
         },
         "Date": formatted_date,
-        "DueDate": formatted_due_date,
-        "InvoiceNumber": invoice.supplier_bill_number or '',
         "LineItems": line_items,
         "Status": "DRAFT"
     }
+    if is_credit_note:
+        invoice_payload["CreditNoteNumber"] = invoice.supplier_bill_number or ''
+    else:
+        invoice_payload["DueDate"] = formatted_due_date
+        invoice_payload["InvoiceNumber"] = invoice.supplier_bill_number or ''
     
     # FX: Add CurrencyCode if not AUD - critical for foreign currency bills
     if bill_currency and bill_currency != 'AUD':
@@ -602,18 +655,19 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     else:
         logger.info(f"  Using default AUD currency (not adding CurrencyCode field)")
     
-    # Send to Xero API
-    logger.info(f"Sending invoice to Xero: {json.dumps(invoice_payload, indent=2)}")
+    # Send to Xero API on the matching endpoint (Invoices vs CreditNotes).
+    xero_post_url = f'https://api.xero.com/api.xro/2.0/{xero_endpoint_path}'
+    logger.info(f"Sending {xero_doc_type} to {xero_post_url}: {json.dumps(invoice_payload, indent=2)}")
     
     response = requests.post(
-        'https://api.xero.com/api.xro/2.0/Invoices',
+        xero_post_url,
         headers={
             'Authorization': f'Bearer {access_token}',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Xero-tenant-id': tenant_id
         },
-        json={"Invoices": [invoice_payload]},
+        json={xero_response_key: [invoice_payload]},
         timeout=30
     )
     
@@ -646,10 +700,12 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     xero_response = response.json()
     logger.info(f"Xero response: {json.dumps(xero_response, indent=2)}")
     
-    # Extract Xero Invoice ID
+    # Extract the Xero document ID (InvoiceID for ACCPAY, CreditNoteID for
+    # ACCPAYCREDIT). We persist whichever value Xero returns into
+    # invoice.bill_xero_id — the field is just a UUID-shaped reference.
     xero_invoice_id = None
-    if 'Invoices' in xero_response and len(xero_response['Invoices']) > 0:
-        xero_invoice_id = xero_response['Invoices'][0].get('InvoiceID')
+    if xero_response_key in xero_response and len(xero_response[xero_response_key]) > 0:
+        xero_invoice_id = xero_response[xero_response_key][0].get(xero_id_key)
     
     # Attach PDF to the Xero invoice if available
     attachment_status = None
@@ -783,10 +839,11 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
                 attachment_debug['is_valid_pdf'] = is_pdf
                 logger.info(f"File is_pdf: {is_pdf}, size: {len(file_data)} bytes")
                 
-                # Upload attachment to Xero
+                # Upload attachment to Xero. Endpoint matches the document
+                # type we just created (Invoices or CreditNotes).
                 encoded_filename = quote(file_name, safe='')
                 attachment_debug['encoded_filename'] = encoded_filename
-                xero_attach_url = f'https://api.xero.com/api.xro/2.0/Invoices/{xero_invoice_id}/Attachments/{encoded_filename}'
+                xero_attach_url = f'https://api.xero.com/api.xro/2.0/{xero_endpoint_path}/{xero_invoice_id}/Attachments/{encoded_filename}'
                 attachment_debug['xero_attach_url'] = xero_attach_url
                 logger.info(f"=== XERO ATTACHMENT UPLOAD === URL: {xero_attach_url}")
                 
@@ -869,13 +926,21 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     invoice.bill_xero_id = xero_invoice_id
     invoice.save()
     
-    logger.info(f"Successfully sent bill {bill_pk} to Xero (InvoiceID: {xero_invoice_id}, attachment: {attachment_status})")
+    logger.info(
+        f"Successfully sent bill {bill_pk} to Xero as {xero_doc_type} "
+        f"({xero_id_key}: {xero_invoice_id}, attachment: {attachment_status})"
+    )
     
     return JsonResponse({
         'status': 'success',
-        'message': 'Bill sent to Xero successfully' + ('' if attachment_status == 'success' else ' (PDF attachment may have failed)'),
+        'message': (
+            ('Credit note' if is_credit_note else 'Bill')
+            + ' sent to Xero successfully'
+            + ('' if attachment_status == 'success' else ' (PDF attachment may have failed)')
+        ),
         'bill_pk': invoice.bill_pk,
         'xero_invoice_id': xero_invoice_id,
+        'xero_doc_type': xero_doc_type,
         'attachment_status': attachment_status,
         'attachment_debug': attachment_debug
     })

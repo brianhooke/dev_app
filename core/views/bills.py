@@ -1264,17 +1264,22 @@ def allocate_bill(request, bill_pk):
                 'message': f'Net amount not fully allocated. Bill: ${bill_total_net:.2f}, Allocated: ${float(total_allocated_net):.2f}'
             }, status=400)
         
-        # Validation 3: GST amounts must be fully allocated (within tolerance)
-        # Only check if bill has GST
-        if bill_total_gst > 0 and abs(float(total_allocated_gst) - bill_total_gst) >= 0.01:
+        # Validation 3: GST amounts must be fully allocated (within tolerance).
+        # Use abs() so credit-note bills with a negative GST total are validated
+        # the same way as positive bills; the previous `> 0` short-circuit let
+        # negative GST bypass this balance check entirely.
+        if abs(bill_total_gst) >= 0.01 and abs(float(total_allocated_gst) - bill_total_gst) >= 0.01:
             return JsonResponse({
                 'status': 'error',
                 'message': f'GST amount not fully allocated. Bill: ${bill_total_gst:.2f}, Allocated: ${float(total_allocated_gst):.2f}'
             }, status=400)
         
-        # Validation 4: All allocations with amounts must have an item selected
+        # Validation 4: All allocations with non-zero amounts must have an item.
+        # abs() so credit-note (negative) allocations are held to the same rule
+        # as positive ones — only zero-amount rows are skipped (those get
+        # pruned client-side before approve).
         for alloc in allocations:
-            if (alloc.amount or 0) > 0 and not alloc.item:
+            if abs(float(alloc.amount or 0)) >= 0.01 and not alloc.item:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'All allocations with amounts must have a costing item selected'

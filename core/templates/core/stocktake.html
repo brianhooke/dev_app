@@ -1528,13 +1528,15 @@ Tabs:
         var approveBtn = selectedRow.find('.approve-stocktake-btn');
         var isFullyAllocated = Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
         
-        // Check all rows with amounts have an item selected
+        // Check all rows with amounts have an item selected.
+        // Use abs() so credit-note rows (negative qty * rate → negative amount)
+        // are also required to nominate an item, just like positive rows.
         var allItemsSelected = true;
         var cls = 'stocktake-alloc';
         $('#stocktakeAllocAllocationsTableBody tr').each(function() {
             var itemVal = $(this).find('.' + cls + '-item-select').val();
             var amountVal = Utils.parseFloatSafe($(this).find('.' + cls + '-amount-input').val());
-            if (amountVal > 0 && !itemVal) { allItemsSelected = false; return false; }
+            if (Math.abs(amountVal) >= 0.01 && !itemVal) { allItemsSelected = false; return false; }
         });
         
         var canApprove = isFullyAllocated && allItemsSelected;

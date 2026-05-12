@@ -592,19 +592,19 @@ $(document).ready(function() {
                 row.append(grossCell);
                 
                 // 6. $ Net input
+                // Negative totals are valid (supplier credit notes).
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
-                    .attr('min', '0')
                     .addClass('form-control form-control-sm net-input')
                     .val(bill.total_net !== null ? bill.total_net : '');
                 row.append($('<td>').append(netInput));
                 
                 // 7. $ GST input
+                // Negative totals are valid (mirrors net for credit notes).
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
-                    .attr('min', '0')
                     .addClass('form-control form-control-sm gst-input')
                     .val(bill.total_gst !== null ? bill.total_gst : '');
                 row.append($('<td>').append(gstInput));
@@ -1458,19 +1458,19 @@ $(document).ready(function() {
                 row.append(grossCell);
                 
                 // 4. $ Net input
+                // Negatives allowed for credit-note allocation rows.
                 var netInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
-                    .attr('min', '0')
                     .addClass('form-control form-control-sm allocation-net-input')
                     .val(alloc.amount || '');
                 row.append($('<td>').append(netInput));
                 
                 // 5. $ GST input
+                // Negatives allowed for credit-note allocation rows.
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
-                    .attr('min', '0')
                     .addClass('form-control form-control-sm allocation-gst-input')
                     .val(alloc.gst_amount || '');
                 row.append($('<td>').append(gstInput));

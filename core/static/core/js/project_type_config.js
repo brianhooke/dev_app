@@ -387,19 +387,15 @@
                     });
                     row.append($('<td>').append(itemSelect));
                     
-                    // $ Net input with auto-GST calculation
+                    // $ Net input with auto-GST calculation.
+                    // Negatives allowed for credit-note allocation rows.
                     var netInput = $('<input>')
                         .attr('type', 'number')
                         .attr('step', '0.01')
-                        .attr('min', '0')
                         .addClass('form-control form-control-sm allocation-net-input')
                         .val(alloc.amount || '')
                         .on('input', function() {
                             var value = $(this).val();
-                            if (parseFloat(value) < 0) {
-                                $(this).val(0);
-                                return;
-                            }
                             // Auto-calculate GST as 10%
                             var gstInputEl = row.find('.allocation-gst-input');
                             if (!gstInputEl.data('manually-edited')) {
@@ -412,11 +408,10 @@
                         });
                     row.append($('<td>').append(netInput));
                     
-                    // $ GST input
+                    // $ GST input — negatives allowed (mirrors net for credit notes).
                     var gstInput = $('<input>')
                         .attr('type', 'number')
                         .attr('step', '0.01')
-                        .attr('min', '0')
                         .addClass('form-control form-control-sm allocation-gst-input')
                         .val(alloc.gst_amount || '')
                         .on('focus', function() {

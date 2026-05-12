@@ -1740,18 +1740,15 @@ var AllocationsManager = (function() {
             }
             
             // 3. $ Net input
+            // Negative values are allowed (supplier credit notes flow through
+            // bills + project/stocktake allocations as negative amounts).
             var netInput = $('<input>')
                 .attr('type', 'number')
                 .attr('step', '0.01')
-                .attr('min', '0')
                 .addClass('form-control form-control-sm ' + cls + '-net-input')
                 .val(alloc.amount || '')
                 .on('input', function() {
                     var value = $(this).val();
-                    if (parseFloat(value) < 0) {
-                        $(this).val(0);
-                        return;
-                    }
                     if (value.includes('.')) {
                         var parts = value.split('.');
                         if (parts[1] && parts[1].length > 2) {
@@ -1779,11 +1776,12 @@ var AllocationsManager = (function() {
             row.append($('<td>').append(netInput));
             
             // 3. GST input only for bills with GST enabled
+            // Negative values are allowed (mirrors net input — credit notes can
+            // carry a negative GST component).
             if (sectionId !== 'quote' && showGst) {
                 var gstInput = $('<input>')
                     .attr('type', 'number')
                     .attr('step', '0.01')
-                    .attr('min', '0')
                     .addClass('form-control form-control-sm ' + cls + '-gst-input')
                     .val(alloc.gst_amount || '')
                     .on('focus', function() {
@@ -1791,10 +1789,6 @@ var AllocationsManager = (function() {
                     })
                     .on('input', function() {
                         var value = $(this).val();
-                        if (parseFloat(value) < 0) {
-                            $(this).val(0);
-                            return;
-                        }
                         if (value.includes('.')) {
                             var parts = value.split('.');
                             if (parts[1] && parts[1].length > 2) {

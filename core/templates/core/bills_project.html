@@ -355,12 +355,15 @@ $(document).ready(function() {
             ? Math.abs(totals.remainingNet) < 0.01 
             : Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
         
-        // Check all items with amounts have an item selected
+        // Check all items with amounts have an item selected.
+        // Use abs() so negative allocation rows (credit notes) are also held to
+        // the same "must have an item" rule as positive ones; only true zero
+        // rows are skipped (they get pruned at approve time).
         var allItemsSelected = true;
         $('#billAllocationsTableBody tr').each(function() {
             var itemVal = $(this).find('.bill-allocation-item-select').val();
             var netVal = parseFloat($(this).find('.bill-allocation-net-input').val()) || 0;
-            if (netVal > 0 && !itemVal) { allItemsSelected = false; return false; }
+            if (Math.abs(netVal) >= 0.01 && !itemVal) { allItemsSelected = false; return false; }
         });
         
         var canApprove = isFullyAllocated && allItemsSelected;
@@ -647,7 +650,7 @@ $(document).ready(function() {
                 if (hasBillNumber) {
                     gstCell.addClass('allocated-gst-cell allocated-money-gst').text('$' + Utils.formatMoney(bill.total_gst)).attr('data-value', gstRawValue);
                 } else {
-                    var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').attr('min', '0')
+                    var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01')
                         .addClass('form-control form-control-sm allocated-gst-input').css({'width': '70px'})
                         .val(gstRawValue).attr('data-original-value', gstRawValue)
                         .on('click', function(e) { e.stopPropagation(); });
@@ -759,7 +762,7 @@ $(document).ready(function() {
             .on('click', function(e) { e.stopPropagation(); });
         billNumCell.removeClass('allocated-bill-number-cell').empty().append(billNumInput);
         
-        var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').attr('min', '0').addClass('form-control form-control-sm allocated-gst-input').css({'width': '70px'}).val(currentGst).attr('data-original-value', currentGst)
+        var gstInput = $('<input>').attr('type', 'number').attr('step', '0.01').addClass('form-control form-control-sm allocated-gst-input').css({'width': '70px'}).val(currentGst).attr('data-original-value', currentGst)
             .on('click', function(e) { e.stopPropagation(); });
         gstCell.removeClass('allocated-gst-cell').empty().append(gstInput);
         
