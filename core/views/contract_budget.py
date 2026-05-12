@@ -10,10 +10,12 @@ Data Updates:
 4. get_item_quote_allocations - Get individual quote allocations for an item with quote/contact details
 """
 
+import csv
+import io
 import json
 import logging
 from decimal import Decimal
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -225,6 +227,325 @@ def _compute_staff_hours_allocation_amount(alloc):
     return wages_cost
 
 
+def _compute_project_committed_billed(project, tender_or_execution):
+    """
+    Pure-Python core of ``get_project_committed_amounts`` — produces the same
+    ``committed_dict`` and ``billed_dict`` numbers the UI consumes, but without
+    the JsonResponse wrapper, so other server-side callers (e.g. the
+    Export C2C report) can reuse it.
+
+    Returns:
+        (committed_dict, billed_dict, is_construction)
+
+        For construction projects ``committed_dict`` values are dicts with
+        qty / rate / amount keys; for non-construction projects values are
+        simple float amounts. ``billed_dict`` values are always floats.
+    """
+    is_construction = (project.project_type and project.project_type.rates_based == 1)
+    
+    # Get all quotes for this project filtered by tender_or_execution
+    project_quotes = Quotes.objects.filter(project=project, tender_or_execution=tender_or_execution)
+    
+    if is_construction:
+        # For construction types, return qty, rate, amount per item
+        # Check for multiple unique rates per costing item
+        allocations = Quote_allocations.objects.filter(
+            quotes_pk__in=project_quotes
+        ).values('item__costing_pk', 'qty', 'rate', 'amount')
+        
+        # Group allocations by costing_pk
+        from collections import defaultdict
+        allocations_by_item = defaultdict(list)
+        for alloc in allocations:
+            allocations_by_item[alloc['item__costing_pk']].append(alloc)
+        
+        # Convert to dictionary with qty, rate, amount
+        # If multiple unique rates exist for an item, mark has_multiple_rates
+        committed_dict = {}
+        for costing_pk, allocs in allocations_by_item.items():
+            total_qty = sum(float(a['qty'] or 0) for a in allocs)
+            total_amount = sum(float(a['amount'] or 0) for a in allocs)
+            
+            # Get unique non-null rates
+            unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
+            
+            if len(unique_rates) > 1:
+                # Multiple different rates - show "multiple" for qty and rate
+                committed_dict[costing_pk] = {
+                    'qty': total_qty,
+                    'rate': None,
+                    'amount': total_amount,
+                    'has_multiple_rates': True
+                }
+            else:
+                # Single rate (or no rates) - show actual values
+                rate = list(unique_rates)[0] if unique_rates else 0
+                committed_dict[costing_pk] = {
+                    'qty': total_qty,
+                    'rate': round(rate, 2),
+                    'amount': total_amount,
+                    'has_multiple_rates': False
+                }
+    else:
+        # For non-construction, return simple amounts
+        committed_amounts = Quote_allocations.objects.filter(
+            quotes_pk__in=project_quotes
+        ).values('item__costing_pk').annotate(
+            total_committed=Sum('amount')
+        )
+        
+        committed_dict = {
+            item['item__costing_pk']: float(item['total_committed'])
+            for item in committed_amounts
+        }
+    
+    # For Internal category items, use contract_budget as committed amount
+    # (since they don't use uncommitted or quote allocations)
+    internal_items = Costing.objects.filter(
+        project=project,
+        category__category='Internal',
+        tender_or_execution=tender_or_execution
+    )
+    
+    for item in internal_items:
+        if is_construction:
+            committed_dict[item.costing_pk] = {
+                'qty': 0,
+                'rate': 0,
+                'amount': float(item.contract_budget or 0)
+            }
+        else:
+            committed_dict[item.costing_pk] = float(item.contract_budget or 0)
+    
+    # For Labour category items (division=-5), calculate committed from StaffHoursAllocations
+    # Sum of (hours * applicable pay rate) for each costing item
+    labour_items = Costing.objects.filter(
+        project=project,
+        category__division=-5,  # Labour category
+        tender_or_execution=tender_or_execution
+    )
+    
+    for item in labour_items:
+        # Get all staff hour allocations for this costing item
+        allocations = StaffHoursAllocations.objects.filter(
+            project=project,
+            costing=item
+        ).select_related('staff_hours__employee')
+        
+        total_amount = Decimal('0')
+        for alloc in allocations:
+            hours = alloc.hours or Decimal('0')
+            if hours > 0:
+                # Get the pay rate for this employee as of the allocation date
+                employee = alloc.staff_hours.employee
+                target_date = alloc.staff_hours.date
+                
+                # Get applicable pay rate (most recent before or on target_date)
+                pay_rate = EmployeePayRate.objects.filter(
+                    employee=employee,
+                    effective_date__lte=target_date,
+                    is_ordinary_rate=True
+                ).order_by('-effective_date').first()
+                
+                if pay_rate:
+                    # Calculate hourly rate
+                    hourly_rate = None
+                    if pay_rate.rate_per_unit:
+                        hourly_rate = float(pay_rate.rate_per_unit)
+                    elif pay_rate.annual_salary and pay_rate.units_per_week:
+                        weekly_hours = float(pay_rate.units_per_week)
+                        if weekly_hours > 0:
+                            hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
+                    
+                    if hourly_rate:
+                        wages_cost = float(hours) * hourly_rate
+                        
+                        # Add superannuation to get total daily cost
+                        super_rate = get_employee_super_rate(
+                            employee.xero_instance_id,
+                            employee.xero_employee_id
+                        )
+                        if super_rate:
+                            super_amount = wages_cost * (super_rate / 100)
+                            total_cost = wages_cost + super_amount
+                        else:
+                            total_cost = wages_cost
+                        
+                        total_amount += Decimal(str(total_cost))
+        
+        # Set committed amount for Labour items (no qty/rate, just amount)
+        if is_construction:
+            committed_dict[item.costing_pk] = {
+                'qty': None,
+                'rate': None,
+                'amount': float(total_amount),
+                'is_labour': True
+            }
+        else:
+            committed_dict[item.costing_pk] = float(total_amount)
+    
+    # Add stocktake snap allocations to committed amounts
+    # Only include finalised snaps (status >= 1) allocated to this project
+    snap_allocations = StocktakeSnapAllocation.objects.filter(
+        project=project,
+        snap_item__snap__status__gte=1  # Finalised or sent to Xero
+    ).select_related('snap_item__snap', 'snap_item__item')
+    
+    # Build a map of item names to project costing_pk for matching
+    # (snap items link to global items, need to find project-specific costing)
+    project_costings = Costing.objects.filter(
+        project=project,
+        tender_or_execution=tender_or_execution
+    )
+    item_name_to_costing = {c.item: c.costing_pk for c in project_costings}
+    
+    for snap_alloc in snap_allocations:
+        snap_item = snap_alloc.snap_item.item
+        if not snap_item:
+            continue
+        
+        # Match by item name to find the project's costing_pk
+        costing_pk = item_name_to_costing.get(snap_item.item)
+        if not costing_pk:
+            continue
+        
+        alloc_qty = float(snap_alloc.qty or 0)
+        alloc_rate = float(snap_alloc.rate or 0)
+        alloc_amount = float(snap_alloc.amount or 0)
+        
+        if is_construction:
+            if costing_pk in committed_dict:
+                # Add to existing committed data
+                existing = committed_dict[costing_pk]
+                existing['qty'] = (existing.get('qty') or 0) + alloc_qty
+                existing['amount'] = (existing.get('amount') or 0) + alloc_amount
+                # Check if rates differ
+                if existing.get('rate') and existing['rate'] != alloc_rate:
+                    existing['has_multiple_rates'] = True
+                elif not existing.get('has_multiple_rates'):
+                    existing['rate'] = alloc_rate
+            else:
+                committed_dict[costing_pk] = {
+                    'qty': alloc_qty,
+                    'rate': alloc_rate,
+                    'amount': alloc_amount,
+                    'has_multiple_rates': False
+                }
+        else:
+            if costing_pk in committed_dict:
+                committed_dict[costing_pk] += alloc_amount
+            else:
+                committed_dict[costing_pk] = alloc_amount
+    
+    # Add Bill_allocations for direct-cost bills (types 0 and 1) to committed totals.
+    # Progress claims (bill_type=2) are excluded so working budget stays quote/snap-grounded:
+    # they still count toward billed/C2C-only via billed_dict below.
+    direct_cost_bills = Bills.objects.filter(
+        project=project,
+        bill_type__in=[0, 1],
+    )
+    
+    bill_allocations_direct = Bill_allocations.objects.filter(
+        bill__in=direct_cost_bills,
+        item__isnull=False
+    ).values('item__costing_pk', 'qty', 'rate', 'amount')
+    
+    # Group by costing_pk
+    from collections import defaultdict
+    bill_allocs_by_item = defaultdict(list)
+    for alloc in bill_allocations_direct:
+        if alloc['item__costing_pk']:
+            bill_allocs_by_item[alloc['item__costing_pk']].append(alloc)
+    
+    for costing_pk, allocs in bill_allocs_by_item.items():
+        total_qty = sum(float(a['qty'] or 0) for a in allocs)
+        total_amount = sum(float(a['amount'] or 0) for a in allocs)
+        unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
+        
+        if is_construction:
+            if costing_pk in committed_dict:
+                existing = committed_dict[costing_pk]
+                existing['qty'] = (existing.get('qty') or 0) + total_qty
+                existing['amount'] = (existing.get('amount') or 0) + total_amount
+                # Check if rates differ
+                if unique_rates:
+                    if existing.get('rate') and existing['rate'] not in unique_rates:
+                        existing['has_multiple_rates'] = True
+                    elif len(unique_rates) > 1:
+                        existing['has_multiple_rates'] = True
+            else:
+                rate = list(unique_rates)[0] if len(unique_rates) == 1 else None
+                committed_dict[costing_pk] = {
+                    'qty': total_qty,
+                    'rate': rate,
+                    'amount': total_amount,
+                    'has_multiple_rates': len(unique_rates) > 1
+                }
+        else:
+            if costing_pk in committed_dict:
+                committed_dict[costing_pk] += total_amount
+            else:
+                committed_dict[costing_pk] = total_amount
+    
+    # Calculate Billed amounts — all Bill_allocations tied to bills on this project
+    # (bill_type 0, 1, 2 all included).
+    # This is the sum of all Bill_allocations.amount for this project
+    all_project_bills = Bills.objects.filter(project=project)
+    
+    all_bill_allocations = Bill_allocations.objects.filter(
+        bill__in=all_project_bills,
+        item__isnull=False
+    ).values('item__costing_pk').annotate(
+        total_billed=Sum('amount')
+    )
+    
+    billed_dict = {
+        item['item__costing_pk']: float(item['total_billed'])
+        for item in all_bill_allocations
+        if item['item__costing_pk']
+    }
+
+    # Additionally fold StocktakeSnapAllocation amounts into Billed.
+    # Snap allocations represent stock physically consumed against the
+    # project, i.e. a realised cost — so they are already in Working
+    # Budget (via committed_dict above) AND should now contribute to
+    # Billed. Net effect on C2C (= WB − Billed) is zero, which is the
+    # desired behaviour: consumed stock should not still be expected
+    # cost-to-complete.
+    # Reuses the same item_name_to_costing map built earlier so we
+    # respect the active tender_or_execution view.
+    for snap_alloc in snap_allocations:
+        snap_item_obj = snap_alloc.snap_item.item
+        if not snap_item_obj:
+            continue
+        costing_pk = item_name_to_costing.get(snap_item_obj.item)
+        if not costing_pk:
+            continue
+        billed_dict[costing_pk] = (
+            billed_dict.get(costing_pk, 0.0) + float(snap_alloc.amount or 0)
+        )
+
+    # Additionally fold StaffHoursAllocations into Billed for every
+    # costing in the current view (not just Labour). Wages paid are a
+    # realised cost regardless of which costing item the hours were
+    # booked against.
+    staff_allocations_billed = StaffHoursAllocations.objects.filter(
+        project=project,
+        allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+        costing__isnull=False,
+        costing__project=project,
+        costing__tender_or_execution=tender_or_execution,
+    ).select_related('staff_hours__employee', 'costing')
+
+    for alloc in staff_allocations_billed:
+        wages_amount = _compute_staff_hours_allocation_amount(alloc)
+        if wages_amount > 0:
+            cpk = alloc.costing.costing_pk
+            billed_dict[cpk] = billed_dict.get(cpk, 0.0) + wages_amount
+    
+    return committed_dict, billed_dict, is_construction
+
+
 @require_http_methods(["GET"])
 def get_project_committed_amounts(request, project_pk):
     """
@@ -247,325 +568,144 @@ def get_project_committed_amounts(request, project_pk):
     """
     try:
         project = get_object_or_404(Projects, pk=project_pk)
-        # Use rates_based flag from ProjectTypes instead of hardcoded project type names
-        is_construction = (project.project_type and project.project_type.rates_based == 1)
-        
-        # Get tender_or_execution filter (default to tender)
         tender_or_execution = int(request.GET.get('tender_or_execution', '1'))
-        
-        # Get all quotes for this project filtered by tender_or_execution
-        project_quotes = Quotes.objects.filter(project=project, tender_or_execution=tender_or_execution)
-        
-        if is_construction:
-            # For construction types, return qty, rate, amount per item
-            # Check for multiple unique rates per costing item
-            allocations = Quote_allocations.objects.filter(
-                quotes_pk__in=project_quotes
-            ).values('item__costing_pk', 'qty', 'rate', 'amount')
-            
-            # Group allocations by costing_pk
-            from collections import defaultdict
-            allocations_by_item = defaultdict(list)
-            for alloc in allocations:
-                allocations_by_item[alloc['item__costing_pk']].append(alloc)
-            
-            # Convert to dictionary with qty, rate, amount
-            # If multiple unique rates exist for an item, mark has_multiple_rates
-            committed_dict = {}
-            for costing_pk, allocs in allocations_by_item.items():
-                total_qty = sum(float(a['qty'] or 0) for a in allocs)
-                total_amount = sum(float(a['amount'] or 0) for a in allocs)
-                
-                # Get unique non-null rates
-                unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
-                
-                if len(unique_rates) > 1:
-                    # Multiple different rates - show "multiple" for qty and rate
-                    committed_dict[costing_pk] = {
-                        'qty': total_qty,
-                        'rate': None,
-                        'amount': total_amount,
-                        'has_multiple_rates': True
-                    }
-                else:
-                    # Single rate (or no rates) - show actual values
-                    rate = list(unique_rates)[0] if unique_rates else 0
-                    committed_dict[costing_pk] = {
-                        'qty': total_qty,
-                        'rate': round(rate, 2),
-                        'amount': total_amount,
-                        'has_multiple_rates': False
-                    }
-        else:
-            # For non-construction, return simple amounts
-            committed_amounts = Quote_allocations.objects.filter(
-                quotes_pk__in=project_quotes
-            ).values('item__costing_pk').annotate(
-                total_committed=Sum('amount')
-            )
-            
-            committed_dict = {
-                item['item__costing_pk']: float(item['total_committed'])
-                for item in committed_amounts
-            }
-        
-        # For Internal category items, use contract_budget as committed amount
-        # (since they don't use uncommitted or quote allocations)
-        internal_items = Costing.objects.filter(
-            project=project,
-            category__category='Internal',
-            tender_or_execution=tender_or_execution
+        committed_dict, billed_dict, is_construction = _compute_project_committed_billed(
+            project, tender_or_execution
         )
-        
-        for item in internal_items:
-            if is_construction:
-                committed_dict[item.costing_pk] = {
-                    'qty': 0,
-                    'rate': 0,
-                    'amount': float(item.contract_budget or 0)
-                }
-            else:
-                committed_dict[item.costing_pk] = float(item.contract_budget or 0)
-        
-        # For Labour category items (division=-5), calculate committed from StaffHoursAllocations
-        # Sum of (hours * applicable pay rate) for each costing item
-        labour_items = Costing.objects.filter(
-            project=project,
-            category__division=-5,  # Labour category
-            tender_or_execution=tender_or_execution
-        )
-        
-        for item in labour_items:
-            # Get all staff hour allocations for this costing item
-            allocations = StaffHoursAllocations.objects.filter(
-                project=project,
-                costing=item
-            ).select_related('staff_hours__employee')
-            
-            total_amount = Decimal('0')
-            for alloc in allocations:
-                hours = alloc.hours or Decimal('0')
-                if hours > 0:
-                    # Get the pay rate for this employee as of the allocation date
-                    employee = alloc.staff_hours.employee
-                    target_date = alloc.staff_hours.date
-                    
-                    # Get applicable pay rate (most recent before or on target_date)
-                    pay_rate = EmployeePayRate.objects.filter(
-                        employee=employee,
-                        effective_date__lte=target_date,
-                        is_ordinary_rate=True
-                    ).order_by('-effective_date').first()
-                    
-                    if pay_rate:
-                        # Calculate hourly rate
-                        hourly_rate = None
-                        if pay_rate.rate_per_unit:
-                            hourly_rate = float(pay_rate.rate_per_unit)
-                        elif pay_rate.annual_salary and pay_rate.units_per_week:
-                            weekly_hours = float(pay_rate.units_per_week)
-                            if weekly_hours > 0:
-                                hourly_rate = float(pay_rate.annual_salary) / (weekly_hours * 52)
-                        
-                        if hourly_rate:
-                            wages_cost = float(hours) * hourly_rate
-                            
-                            # Add superannuation to get total daily cost
-                            super_rate = get_employee_super_rate(
-                                employee.xero_instance_id,
-                                employee.xero_employee_id
-                            )
-                            if super_rate:
-                                super_amount = wages_cost * (super_rate / 100)
-                                total_cost = wages_cost + super_amount
-                            else:
-                                total_cost = wages_cost
-                            
-                            total_amount += Decimal(str(total_cost))
-            
-            # Set committed amount for Labour items (no qty/rate, just amount)
-            if is_construction:
-                committed_dict[item.costing_pk] = {
-                    'qty': None,
-                    'rate': None,
-                    'amount': float(total_amount),
-                    'is_labour': True
-                }
-            else:
-                committed_dict[item.costing_pk] = float(total_amount)
-        
-        # Add stocktake snap allocations to committed amounts
-        # Only include finalised snaps (status >= 1) allocated to this project
-        snap_allocations = StocktakeSnapAllocation.objects.filter(
-            project=project,
-            snap_item__snap__status__gte=1  # Finalised or sent to Xero
-        ).select_related('snap_item__snap', 'snap_item__item')
-        
-        # Build a map of item names to project costing_pk for matching
-        # (snap items link to global items, need to find project-specific costing)
-        project_costings = Costing.objects.filter(
-            project=project,
-            tender_or_execution=tender_or_execution
-        )
-        item_name_to_costing = {c.item: c.costing_pk for c in project_costings}
-        
-        for snap_alloc in snap_allocations:
-            snap_item = snap_alloc.snap_item.item
-            if not snap_item:
-                continue
-            
-            # Match by item name to find the project's costing_pk
-            costing_pk = item_name_to_costing.get(snap_item.item)
-            if not costing_pk:
-                continue
-            
-            alloc_qty = float(snap_alloc.qty or 0)
-            alloc_rate = float(snap_alloc.rate or 0)
-            alloc_amount = float(snap_alloc.amount or 0)
-            
-            if is_construction:
-                if costing_pk in committed_dict:
-                    # Add to existing committed data
-                    existing = committed_dict[costing_pk]
-                    existing['qty'] = (existing.get('qty') or 0) + alloc_qty
-                    existing['amount'] = (existing.get('amount') or 0) + alloc_amount
-                    # Check if rates differ
-                    if existing.get('rate') and existing['rate'] != alloc_rate:
-                        existing['has_multiple_rates'] = True
-                    elif not existing.get('has_multiple_rates'):
-                        existing['rate'] = alloc_rate
-                else:
-                    committed_dict[costing_pk] = {
-                        'qty': alloc_qty,
-                        'rate': alloc_rate,
-                        'amount': alloc_amount,
-                        'has_multiple_rates': False
-                    }
-            else:
-                if costing_pk in committed_dict:
-                    committed_dict[costing_pk] += alloc_amount
-                else:
-                    committed_dict[costing_pk] = alloc_amount
-        
-        # Add Bill_allocations for direct-cost bills (types 0 and 1) to committed totals.
-        # Progress claims (bill_type=2) are excluded so working budget stays quote/snap-grounded:
-        # they still count toward billed/C2C-only via billed_dict below.
-        direct_cost_bills = Bills.objects.filter(
-            project=project,
-            bill_type__in=[0, 1],
-        )
-        
-        bill_allocations_direct = Bill_allocations.objects.filter(
-            bill__in=direct_cost_bills,
-            item__isnull=False
-        ).values('item__costing_pk', 'qty', 'rate', 'amount')
-        
-        # Group by costing_pk
-        from collections import defaultdict
-        bill_allocs_by_item = defaultdict(list)
-        for alloc in bill_allocations_direct:
-            if alloc['item__costing_pk']:
-                bill_allocs_by_item[alloc['item__costing_pk']].append(alloc)
-        
-        for costing_pk, allocs in bill_allocs_by_item.items():
-            total_qty = sum(float(a['qty'] or 0) for a in allocs)
-            total_amount = sum(float(a['amount'] or 0) for a in allocs)
-            unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
-            
-            if is_construction:
-                if costing_pk in committed_dict:
-                    existing = committed_dict[costing_pk]
-                    existing['qty'] = (existing.get('qty') or 0) + total_qty
-                    existing['amount'] = (existing.get('amount') or 0) + total_amount
-                    # Check if rates differ
-                    if unique_rates:
-                        if existing.get('rate') and existing['rate'] not in unique_rates:
-                            existing['has_multiple_rates'] = True
-                        elif len(unique_rates) > 1:
-                            existing['has_multiple_rates'] = True
-                else:
-                    rate = list(unique_rates)[0] if len(unique_rates) == 1 else None
-                    committed_dict[costing_pk] = {
-                        'qty': total_qty,
-                        'rate': rate,
-                        'amount': total_amount,
-                        'has_multiple_rates': len(unique_rates) > 1
-                    }
-            else:
-                if costing_pk in committed_dict:
-                    committed_dict[costing_pk] += total_amount
-                else:
-                    committed_dict[costing_pk] = total_amount
-        
-        # Calculate Billed amounts — all Bill_allocations tied to bills on this project
-        # (bill_type 0, 1, 2 all included).
-        # This is the sum of all Bill_allocations.amount for this project
-        all_project_bills = Bills.objects.filter(project=project)
-        
-        all_bill_allocations = Bill_allocations.objects.filter(
-            bill__in=all_project_bills,
-            item__isnull=False
-        ).values('item__costing_pk').annotate(
-            total_billed=Sum('amount')
-        )
-        
-        billed_dict = {
-            item['item__costing_pk']: float(item['total_billed'])
-            for item in all_bill_allocations
-            if item['item__costing_pk']
-        }
-
-        # Additionally fold StocktakeSnapAllocation amounts into Billed.
-        # Snap allocations represent stock physically consumed against the
-        # project, i.e. a realised cost — so they are already in Working
-        # Budget (via committed_dict above) AND should now contribute to
-        # Billed. Net effect on C2C (= WB − Billed) is zero, which is the
-        # desired behaviour: consumed stock should not still be expected
-        # cost-to-complete.
-        # Reuses the same item_name_to_costing map built earlier so we
-        # respect the active tender_or_execution view.
-        for snap_alloc in snap_allocations:
-            snap_item_obj = snap_alloc.snap_item.item
-            if not snap_item_obj:
-                continue
-            costing_pk = item_name_to_costing.get(snap_item_obj.item)
-            if not costing_pk:
-                continue
-            billed_dict[costing_pk] = (
-                billed_dict.get(costing_pk, 0.0) + float(snap_alloc.amount or 0)
-            )
-
-        # Additionally fold StaffHoursAllocations into Billed for every
-        # costing in the current view (not just Labour). Wages paid are a
-        # realised cost regardless of which costing item the hours were
-        # booked against.
-        staff_allocations_billed = StaffHoursAllocations.objects.filter(
-            project=project,
-            allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
-            costing__isnull=False,
-            costing__project=project,
-            costing__tender_or_execution=tender_or_execution,
-        ).select_related('staff_hours__employee', 'costing')
-
-        for alloc in staff_allocations_billed:
-            wages_amount = _compute_staff_hours_allocation_amount(alloc)
-            if wages_amount > 0:
-                cpk = alloc.costing.costing_pk
-                billed_dict[cpk] = billed_dict.get(cpk, 0.0) + wages_amount
-
         return JsonResponse({
             'status': 'success',
             'committed_amounts': committed_dict,
             'billed_amounts': billed_dict,
             'is_construction': is_construction
         })
-        
     except Exception as e:
         logger.error(f"Error getting committed amounts: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': f'Error getting committed amounts: {str(e)}'
         }, status=500)
+
+
+def _compute_project_working_budget_and_c2c(project):
+    """
+    Total Working Budget and C2C for a single project, using the same
+    tender_or_execution scope the project is currently in (mirrors what the
+    user sees when they open Contract Budget for that project).
+
+    Working Budget = Σ(uncommitted) + Σ(committed)
+    C2C            = Working Budget − Σ(billed)
+    
+    Sums are restricted to the costings in the project's current scope so a
+    bill or quote allocated to an item in the *other* scope (tender vs
+    execution) does not leak into this project's totals.
+    
+    Returns (working_budget: float, c2c: float).
+    """
+    # The project_status field on Projects mirrors Costing.tender_or_execution:
+    # 1 = tender, 2 = execution. Default to 1 for backwards-compatibility.
+    tender_or_execution = int(getattr(project, 'project_status', 1) or 1)
+    
+    is_construction = (project.project_type and project.project_type.rates_based == 1)
+    
+    # Costings in scope — used to (a) compute uncommitted total directly and
+    # (b) restrict the committed/billed sums to the relevant costing_pks.
+    project_costings = Costing.objects.filter(
+        project=project,
+        tender_or_execution=tender_or_execution,
+    )
+    in_scope_pks = {c.costing_pk for c in project_costings}
+    
+    uncommitted_total = 0.0
+    for c in project_costings:
+        if is_construction:
+            qty = float(c.uncommitted_qty or 0)
+            rate = float(c.uncommitted_rate or 0)
+            uncommitted_total += qty * rate
+        else:
+            uncommitted_total += float(c.uncommitted_amount or 0)
+    
+    committed_dict, billed_dict, _ = _compute_project_committed_billed(
+        project, tender_or_execution
+    )
+    
+    def _amount_of(value):
+        # committed_dict values are dicts (construction) or floats (others).
+        if isinstance(value, dict):
+            return float(value.get('amount') or 0)
+        return float(value or 0)
+    
+    committed_total = sum(
+        _amount_of(committed_dict[pk])
+        for pk in committed_dict
+        if pk in in_scope_pks
+    )
+    billed_total = sum(
+        float(billed_dict[pk] or 0)
+        for pk in billed_dict
+        if pk in in_scope_pks
+    )
+    
+    working_budget = uncommitted_total + committed_total
+    c2c = working_budget - billed_total
+    return working_budget, c2c
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def export_projects_c2c(request):
+    """
+    CSV export of Working Budget and C2C for a list of projects.
+    
+    Body (JSON):
+        {"project_pks": [1, 5, 7, ...]}
+    
+    Each project's totals are computed at its current tender_or_execution
+    scope (Projects.project_status), matching what the Contract Budget UI
+    would show for that project.
+    
+    Response: text/csv attachment with one row per project in the same
+    order the caller provided. Columns: project_name, working_budget, C2C.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    
+    project_pks = data.get('project_pks') or []
+    if not isinstance(project_pks, list):
+        return JsonResponse({'status': 'error', 'message': 'project_pks must be a list'}, status=400)
+    
+    # Map pks -> Projects, preserving the caller's order. Silently drop pks
+    # that don't resolve (the row would be misleading without a name).
+    projects_by_pk = {p.pk: p for p in Projects.objects.filter(pk__in=project_pks).select_related('project_type')}
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['project_name', 'working_budget', 'C2C'])
+    for pk in project_pks:
+        project = projects_by_pk.get(pk)
+        if project is None:
+            continue
+        try:
+            working_budget, c2c = _compute_project_working_budget_and_c2c(project)
+        except Exception as e:
+            logger.error(
+                "Error computing C2C export totals for project %s: %s",
+                pk, e, exc_info=True,
+            )
+            # Emit a row with blanks for the totals so the user can see which
+            # project failed rather than silently dropping it.
+            writer.writerow([project.project, '', ''])
+            continue
+        writer.writerow([
+            project.project,
+            f'{working_budget:.2f}',
+            f'{c2c:.2f}',
+        ])
+    
+    response = HttpResponse(buf.getvalue(), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="projects_c2c_export.csv"'
+    return response
 
 
 @require_http_methods(["GET"])

@@ -610,6 +610,9 @@
                 <option value="2" selected>Execution</option>
                 <option value="all">All</option>
             </select>
+            <button id="exportC2CBtn" class="btn btn-outline-primary btn-sm" title="Export Working Budget &amp; C2C for the projects currently visible">
+                <i class="fas fa-file-csv"></i> Export C2C
+            </button>
         </div>
         <button id="addProjectBtn" class="btn btn-primary btn-sm">
             <i class="fas fa-plus"></i> Add Project
@@ -967,6 +970,64 @@ $(document).ready(function() {
     // Add Project button - open modal in create mode
     $(document).on('click', '#addProjectBtn', function() {
         openProjectModal(null, true);
+    });
+
+    // Export C2C button - download a CSV of {project_name, working_budget, C2C}
+    // for whichever project cards are currently visible (i.e. respecting both
+    // the status filter and the "Show Archived" toggle). Server computes the
+    // totals at each project's own tender_or_execution scope, matching what
+    // Contract Budget would show for that project.
+    $(document).on('click', '#exportC2CBtn', function() {
+        var $btn = $(this);
+        if ($btn.prop('disabled')) return;
+
+        var projectPks = [];
+        $('#projectsGrid .project-card').each(function() {
+            var $card = $(this);
+            if ($card.is(':visible')) {
+                var pk = parseInt($card.attr('data-project-pk'), 10);
+                if (!isNaN(pk)) projectPks.push(pk);
+            }
+        });
+
+        if (projectPks.length === 0) {
+            alert('No projects are currently visible to export.');
+            return;
+        }
+
+        var originalHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exporting...');
+
+        $.ajax({
+            url: '/core/export_projects_c2c/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ project_pks: projectPks }),
+            headers: { 'X-CSRFToken': (typeof Utils !== 'undefined' && Utils.getCSRFToken) ? Utils.getCSRFToken() : '' },
+            xhrFields: { responseType: 'blob' },
+            success: function(blob) {
+                try {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'projects_c2c_export.csv';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(function() { window.URL.revokeObjectURL(url); }, 0);
+                } catch (err) {
+                    console.error('Failed to trigger CSV download:', err);
+                    alert('Export succeeded but the download failed to start. See console for details.');
+                }
+            },
+            error: function(xhr) {
+                console.error('Export C2C failed:', xhr.status, xhr.responseText);
+                alert('Failed to export C2C. See console for details.');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(originalHtml);
+            }
+        });
     });
     
     // Click anywhere on card (except buttons/links/dropdown) to toggle dropdown

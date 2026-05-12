@@ -16,7 +16,7 @@ from .views.bills_global import (
 from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
-from .views.contract_budget import contract_budget_view, update_uncommitted, update_fixed_on_site, get_project_committed_amounts, get_item_quote_allocations, get_item_bill_allocations, get_item_hc_variation_allocations, validate_fix_contract_budget, fix_contract_budget
+from .views.contract_budget import contract_budget_view, update_uncommitted, update_fixed_on_site, get_project_committed_amounts, get_item_quote_allocations, get_item_bill_allocations, get_item_hc_variation_allocations, validate_fix_contract_budget, fix_contract_budget, export_projects_c2c
 from .views.hc_variations import (
     hc_variations_view, get_hc_variations, get_hc_variation_allocations,
     save_hc_variation, delete_hc_variation, update_hc_variation_allocation,
@@ -128,6 +128,7 @@ urlpatterns = [
     path('save_project_quote/', save_project_quote, name='save_project_quote'),
     path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
     path('get_project_committed_amounts/<int:project_pk>/', get_project_committed_amounts, name='get_project_committed_amounts'),
+    path('export_projects_c2c/', export_projects_c2c, name='export_projects_c2c'),
     path('get_item_quote_allocations/<int:item_pk>/', get_item_quote_allocations, name='get_item_quote_allocations'),
     path('get_item_bill_allocations/<int:item_pk>/', get_item_bill_allocations, name='get_item_bill_allocations'),
     path('get_item_hc_variation_allocations/<int:costing_pk>/', get_item_hc_variation_allocations, name='get_item_hc_variation_allocations'),
