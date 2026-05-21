@@ -578,7 +578,13 @@ Column Behaviors:
                             // C2C = Working Budget − Billed (not Contract Budget − Billed).
                     // Working Budget = Uncommitted (Costing fields) + Committed (quotes, snaps, bills types 0/1 — not PP / bill_type 2).
                     var workingBudgetForItem = uncommittedAmount + committedAmount;
-                    totals.cost_to_complete += workingBudgetForItem - billedAmount;
+                    // Internal-category items (e.g. Margin) are part of the
+                    // contract value but represent revenue receivable to the
+                    // company, not cost we still need to incur, so they are
+                    // excluded from the C2C tally.
+                    if (!isInternal) {
+                        totals.cost_to_complete += workingBudgetForItem - billedAmount;
+                    }
                     totals.billed += billedAmount;
                     totals.fixed_on_site += parseFloat(item.fixed_on_site || 0);
                 }
@@ -827,8 +833,15 @@ Column Behaviors:
         if (!effectiveIsTender()) {
             // Execution mode extra columns
             // C2C = Working Budget − Billed (Working Budget is Uncommitted + Committed roll-up above)
-            var c2cValue = workingBudget - billedAmount;
-            row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '">' + Utils.formatCurrency(c2cValue) + '</td>');
+            // Internal-category items (e.g. Margin) are revenue receivable,
+            // not cost-to-incur, so their C2C cell is rendered blank and
+            // tagged with data-internal so totals/subtotals can skip them.
+            if (isInternal) {
+                row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '" data-internal="1"></td>');
+            } else {
+                var c2cValue = workingBudget - billedAmount;
+                row.append('<td class="c2c-cell" data-item-pk="' + item.costing_pk + '" data-billed="' + billedAmount + '">' + Utils.formatCurrency(c2cValue) + '</td>');
+            }
             // Billed - clickable if has a non-zero value.
             // abs() so credit-note billings (negative billed) are still
             // expandable into the breakdown dropdown.
@@ -1633,11 +1646,14 @@ Column Behaviors:
         $('.working-budget-cell[data-item-pk="' + itemPk + '"]').text(Utils.formatCurrency(workingBudget));
         
         // Update C2C = Working Budget - Billed (execution mode only)
+        // Internal items (Margin etc.) keep an empty C2C cell — see render.
         if (!effectiveIsTender()) {
             var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
-            var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
-            var c2c = workingBudget - billed;
-            $c2cCell.text(Utils.formatCurrency(c2c));
+            if ($c2cCell.attr('data-internal') !== '1') {
+                var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
+                var c2c = workingBudget - billed;
+                $c2cCell.text(Utils.formatCurrency(c2c));
+            }
         }
         
         // Update totals
@@ -1668,13 +1684,16 @@ Column Behaviors:
             totals.committed += committed;
             totals.working_budget += workingBudget;
             
-            // C2C and Billed (execution mode only)
+            // C2C and Billed (execution mode only). Internal-category items
+            // (e.g. Margin) are revenue, not cost — skip their C2C contribution.
             if (!effectiveIsTender()) {
                 var $c2cCell = $('.c2c-cell[data-item-pk="' + itemPk + '"]');
                 var billed = parseFloat($c2cCell.attr('data-billed')) || 0;
-                var c2c = workingBudget - billed;
                 totals.billed += billed;
-                totals.cost_to_complete += c2c;
+                if ($c2cCell.attr('data-internal') !== '1') {
+                    var c2c = workingBudget - billed;
+                    totals.cost_to_complete += c2c;
+                }
             }
         });
         

@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
-from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations, XeroInstances, Hc_variation_allocations
+from ..models import Costing, Projects, Quotes, Quote_allocations, Categories, StaffHoursAllocations, EmployeePayRate, StocktakeSnapAllocation, StocktakeSnapItem, Bills, Bill_allocations, XeroInstances, Hc_variation_allocations, HC_claim_allocations
 from .staff_hours import get_employee_super_rate
 
 logger = logging.getLogger(__name__)
@@ -586,108 +586,152 @@ def get_project_committed_amounts(request, project_pk):
         }, status=500)
 
 
-def _compute_project_working_budget_and_c2c(project):
+def _compute_project_export_totals(project):
     """
-    Total Working Budget and C2C for a single project, using the same
-    tender_or_execution scope the project is currently in (mirrors what the
-    user sees when they open Contract Budget for that project).
+    Project-level totals for the C2C CSV export, computed at the project's
+    current tender_or_execution scope (Projects.project_status). Mirrors what
+    the Contract Budget UI shows when that project is opened.
 
-    Working Budget = Σ(uncommitted) + Σ(committed)
-    C2C            = Working Budget − Σ(billed)
-    
-    Sums are restricted to the costings in the project's current scope so a
-    bill or quote allocated to an item in the *other* scope (tender vs
-    execution) does not leak into this project's totals.
-    
-    Returns (working_budget: float, c2c: float).
+    Working Budget    = Σ(uncommitted) + Σ(committed)              (all in-scope items)
+    Revenue Recvable  = Σ(contract_budget) − Σ(hc_claimed)         (all in-scope items;
+                                                                    only approved+ HC claims, mirroring
+                                                                    core/views/hc_claims.py:472)
+    C2C               = Σ(uncommitted) + Σ(committed) − Σ(billed)  (excluding Internal-category items
+                                                                    such as Margin — those are revenue
+                                                                    receivable, not cost-to-incur)
+
+    Sums are restricted to costings in the project's current scope so an
+    allocation against the *other* scope (tender vs execution) doesn't leak
+    into this project's totals.
+
+    Returns (working_budget: float, revenue_receivable: float, c2c: float).
     """
     # The project_status field on Projects mirrors Costing.tender_or_execution:
     # 1 = tender, 2 = execution. Default to 1 for backwards-compatibility.
     tender_or_execution = int(getattr(project, 'project_status', 1) or 1)
-    
+
     is_construction = (project.project_type and project.project_type.rates_based == 1)
-    
-    # Costings in scope — used to (a) compute uncommitted total directly and
-    # (b) restrict the committed/billed sums to the relevant costing_pks.
-    project_costings = Costing.objects.filter(
-        project=project,
-        tender_or_execution=tender_or_execution,
+
+    # Costings in scope — used to (a) compute uncommitted/contract_budget
+    # totals directly and (b) restrict the committed/billed sums to the
+    # relevant costing_pks.
+    project_costings = list(
+        Costing.objects.filter(
+            project=project,
+            tender_or_execution=tender_or_execution,
+        ).select_related('category')
     )
     in_scope_pks = {c.costing_pk for c in project_costings}
-    
-    uncommitted_total = 0.0
-    for c in project_costings:
+
+    # Internal-category items (Categories.division == -10, e.g. the auto-
+    # created "Margin" line) are part of the contract value but represent
+    # revenue receivable, not cost we still need to incur, so they are
+    # excluded from the C2C tally below. They ARE retained in working_budget
+    # and contract_budget totals (they're real contract line items).
+    internal_pks = {
+        c.costing_pk
+        for c in project_costings
+        if c.category and c.category.division == -10
+    }
+    costable_pks = in_scope_pks - internal_pks
+
+    def _uncommitted_for(c):
         if is_construction:
-            qty = float(c.uncommitted_qty or 0)
-            rate = float(c.uncommitted_rate or 0)
-            uncommitted_total += qty * rate
-        else:
-            uncommitted_total += float(c.uncommitted_amount or 0)
-    
+            return float(c.uncommitted_qty or 0) * float(c.uncommitted_rate or 0)
+        return float(c.uncommitted_amount or 0)
+
+    uncommitted_total = sum(_uncommitted_for(c) for c in project_costings)
+    uncommitted_costable = sum(
+        _uncommitted_for(c) for c in project_costings if c.costing_pk in costable_pks
+    )
+    contract_budget_total = sum(float(c.contract_budget or 0) for c in project_costings)
+
     committed_dict, billed_dict, _ = _compute_project_committed_billed(
         project, tender_or_execution
     )
-    
+
     def _amount_of(value):
         # committed_dict values are dicts (construction) or floats (others).
         if isinstance(value, dict):
             return float(value.get('amount') or 0)
         return float(value or 0)
-    
+
     committed_total = sum(
         _amount_of(committed_dict[pk])
         for pk in committed_dict
         if pk in in_scope_pks
     )
-    billed_total = sum(
+    committed_costable = sum(
+        _amount_of(committed_dict[pk])
+        for pk in committed_dict
+        if pk in costable_pks
+    )
+    billed_costable = sum(
         float(billed_dict[pk] or 0)
         for pk in billed_dict
-        if pk in in_scope_pks
+        if pk in costable_pks
     )
-    
+
+    # HC claims already raised against this project's in-scope costings.
+    # Match the precedent in core/views/hc_claims.py:460-472: only approved
+    # claims (status >= 1) count as "revenue claimed".
+    if in_scope_pks:
+        hc_claimed_total = float(
+            HC_claim_allocations.objects.filter(
+                item_id__in=in_scope_pks,
+                hc_claim_pk__status__gte=1,
+            ).aggregate(total=Sum('hc_claimed'))['total'] or 0
+        )
+    else:
+        hc_claimed_total = 0.0
+
     working_budget = uncommitted_total + committed_total
-    c2c = working_budget - billed_total
-    return working_budget, c2c
+    revenue_receivable = contract_budget_total - hc_claimed_total
+    c2c = (uncommitted_costable + committed_costable) - billed_costable
+    return working_budget, revenue_receivable, c2c
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def export_projects_c2c(request):
     """
-    CSV export of Working Budget and C2C for a list of projects.
-    
+    CSV export of project-level Working Budget, Revenue Receivable and C2C.
+
     Body (JSON):
         {"project_pks": [1, 5, 7, ...]}
-    
+
     Each project's totals are computed at its current tender_or_execution
     scope (Projects.project_status), matching what the Contract Budget UI
     would show for that project.
-    
+
     Response: text/csv attachment with one row per project in the same
-    order the caller provided. Columns: project_name, working_budget, C2C.
+    order the caller provided. Columns:
+        project_name, working_budget, revenue_receivable, C2C
+    where C2C excludes Internal-category items (Margin etc.) because those
+    are revenue receivable, not cost we still need to incur.
     """
     try:
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
-    
+
     project_pks = data.get('project_pks') or []
     if not isinstance(project_pks, list):
         return JsonResponse({'status': 'error', 'message': 'project_pks must be a list'}, status=400)
-    
+
     # Map pks -> Projects, preserving the caller's order. Silently drop pks
     # that don't resolve (the row would be misleading without a name).
     projects_by_pk = {p.pk: p for p in Projects.objects.filter(pk__in=project_pks).select_related('project_type')}
-    
+
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(['project_name', 'working_budget', 'C2C'])
+    writer.writerow(['project_name', 'working_budget', 'revenue_receivable', 'C2C'])
     for pk in project_pks:
         project = projects_by_pk.get(pk)
         if project is None:
             continue
         try:
-            working_budget, c2c = _compute_project_working_budget_and_c2c(project)
+            working_budget, revenue_receivable, c2c = _compute_project_export_totals(project)
         except Exception as e:
             logger.error(
                 "Error computing C2C export totals for project %s: %s",
@@ -695,14 +739,15 @@ def export_projects_c2c(request):
             )
             # Emit a row with blanks for the totals so the user can see which
             # project failed rather than silently dropping it.
-            writer.writerow([project.project, '', ''])
+            writer.writerow([project.project, '', '', ''])
             continue
         writer.writerow([
             project.project,
             f'{working_budget:.2f}',
+            f'{revenue_receivable:.2f}',
             f'{c2c:.2f}',
         ])
-    
+
     response = HttpResponse(buf.getvalue(), content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="projects_c2c_export.csv"'
     return response
