@@ -603,6 +603,13 @@ class Po_globals(models.Model):
 
 # SERVICE: costings
 class Categories(models.Model):
+    # Sentinel division values that other parts of the codebase rely on to
+    # identify special category types. Keep these as constants so the
+    # invariant in save() below stays in sync with consumers like
+    # core/views/contract_budget.py (Margin/Labour C2C slices) and the admin.
+    DIVISION_INTERNAL = -10  # "Internal" category — houses the Margin line
+    DIVISION_LABOUR = -5     # "Labour" category — staff-hours allocations
+
     categories_pk = models.AutoField(primary_key=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
     project_type = models.CharField(
@@ -617,6 +624,24 @@ class Categories(models.Model):
     order_in_list = models.DecimalField(max_digits=10, decimal_places=0)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+
+    def save(self, *args, **kwargs):
+        # Enforce the division sentinel for the two named categories the
+        # codebase reasons about, regardless of caller. Historically several
+        # creation paths (rates page, dashboard, hc_variations, csv upload,
+        # template-copy) hard-coded division=0 even when the name was
+        # 'Labour' / 'Internal', which made C2C slices and Margin handling
+        # silently miss those projects. This guard makes the invariant a
+        # model-level guarantee instead of a per-caller discipline. Any
+        # other category name is left untouched.
+        if self.category:
+            normalised = self.category.strip().lower()
+            if normalised == 'labour':
+                self.division = self.DIVISION_LABOUR
+            elif normalised == 'internal':
+                self.division = self.DIVISION_INTERNAL
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.category
 
