@@ -610,7 +610,7 @@
                 <option value="2" selected>Execution</option>
                 <option value="all">All</option>
             </select>
-            <button id="exportC2CBtn" class="btn btn-outline-primary btn-sm" title="Export Working Budget, Revenue Receivable &amp; C2C for the projects currently visible">
+            <button id="exportC2CBtn" class="btn btn-outline-primary btn-sm" title="Export Working Budget, Revenue Receivable and C2C breakdown (incl. margin / labour slices) for the projects currently visible">
                 <i class="fas fa-file-csv"></i> Export C2C
             </button>
         </div>
@@ -973,12 +973,14 @@ $(document).ready(function() {
     });
 
     // Export C2C button - download a CSV of
-    //   {project_name, working_budget, revenue_receivable, C2C}
+    //   project_name, working_budget, revenue_receivable,
+    //   c2c_incl_margin_and_labour, c2c_margin, c2c_labour
     // for whichever project cards are currently visible (i.e. respecting both
     // the status filter and the "Show Archived" toggle). Server computes the
     // totals at each project's own tender_or_execution scope, matching what
-    // Contract Budget would show for that project. C2C excludes Internal-
-    // category items (e.g. Margin) since those represent revenue receivable.
+    // Contract Budget would show for that project. The three C2C columns are
+    // additive — c2c_incl_margin_and_labour contains the margin and labour
+    // slices.
     $(document).on('click', '#exportC2CBtn', function() {
         var $btn = $(this);
         if ($btn.prop('disabled')) return;

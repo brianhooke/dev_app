@@ -592,19 +592,25 @@ def _compute_project_export_totals(project):
     current tender_or_execution scope (Projects.project_status). Mirrors what
     the Contract Budget UI shows when that project is opened.
 
-    Working Budget    = Σ(uncommitted) + Σ(committed)              (all in-scope items)
-    Revenue Recvable  = Σ(contract_budget) − Σ(hc_claimed)         (all in-scope items;
-                                                                    only approved+ HC claims, mirroring
-                                                                    core/views/hc_claims.py:472)
-    C2C               = Σ(uncommitted) + Σ(committed) − Σ(billed)  (excluding Internal-category items
-                                                                    such as Margin — those are revenue
-                                                                    receivable, not cost-to-incur)
+    Returns a dict with:
+        working_budget               — Σ(uncommitted) + Σ(committed)        (all in-scope items)
+        revenue_receivable           — Σ(contract_budget) − Σ(hc_claimed)   (all in-scope items;
+                                       only approved+ HC claims, mirroring
+                                       core/views/hc_claims.py:472)
+        c2c_incl_margin_and_labour   — Σ(uncommitted) + Σ(committed) − Σ(billed) over ALL in-scope items
+        c2c_margin                   — same formula but only over Internal-category items
+                                       (Categories.division == -10)
+        c2c_labour                   — same formula but only over Labour-category items
+                                       (Categories.division == -5)
+
+    The three C2C figures are additive: the all-inclusive C2C contains the
+    margin and labour slices; downstream consumers can derive a
+    margin-and-labour-excluded C2C as
+    `c2c_incl_margin_and_labour − c2c_margin − c2c_labour`.
 
     Sums are restricted to costings in the project's current scope so an
     allocation against the *other* scope (tender vs execution) doesn't leak
     into this project's totals.
-
-    Returns (working_budget: float, revenue_receivable: float, c2c: float).
     """
     # The project_status field on Projects mirrors Costing.tender_or_execution:
     # 1 = tender, 2 = execution. Default to 1 for backwards-compatibility.
@@ -623,27 +629,24 @@ def _compute_project_export_totals(project):
     )
     in_scope_pks = {c.costing_pk for c in project_costings}
 
-    # Internal-category items (Categories.division == -10, e.g. the auto-
-    # created "Margin" line) are part of the contract value but represent
-    # revenue receivable, not cost we still need to incur, so they are
-    # excluded from the C2C tally below. They ARE retained in working_budget
-    # and contract_budget totals (they're real contract line items).
-    internal_pks = {
-        c.costing_pk
-        for c in project_costings
+    # Category-division sentinels (see core/models.py:614):
+    #   -10 = Internal (Margin lives here)
+    #    -5 = Labour
+    margin_pks = {
+        c.costing_pk for c in project_costings
         if c.category and c.category.division == -10
     }
-    costable_pks = in_scope_pks - internal_pks
+    labour_pks = {
+        c.costing_pk for c in project_costings
+        if c.category and c.category.division == -5
+    }
 
     def _uncommitted_for(c):
         if is_construction:
             return float(c.uncommitted_qty or 0) * float(c.uncommitted_rate or 0)
         return float(c.uncommitted_amount or 0)
 
-    uncommitted_total = sum(_uncommitted_for(c) for c in project_costings)
-    uncommitted_costable = sum(
-        _uncommitted_for(c) for c in project_costings if c.costing_pk in costable_pks
-    )
+    uncommitted_by_pk = {c.costing_pk: _uncommitted_for(c) for c in project_costings}
     contract_budget_total = sum(float(c.contract_budget or 0) for c in project_costings)
 
     committed_dict, billed_dict, _ = _compute_project_committed_billed(
@@ -656,21 +659,22 @@ def _compute_project_export_totals(project):
             return float(value.get('amount') or 0)
         return float(value or 0)
 
+    def _slice_c2c(pks):
+        # C2C contribution of an arbitrary subset of costing_pks:
+        #   (Σ uncommitted + Σ committed − Σ billed) restricted to that subset.
+        if not pks:
+            return 0.0
+        unc = sum(uncommitted_by_pk.get(pk, 0.0) for pk in pks)
+        com = sum(_amount_of(committed_dict[pk]) for pk in committed_dict if pk in pks)
+        bil = sum(float(billed_dict[pk] or 0) for pk in billed_dict if pk in pks)
+        return (unc + com) - bil
+
     committed_total = sum(
         _amount_of(committed_dict[pk])
         for pk in committed_dict
         if pk in in_scope_pks
     )
-    committed_costable = sum(
-        _amount_of(committed_dict[pk])
-        for pk in committed_dict
-        if pk in costable_pks
-    )
-    billed_costable = sum(
-        float(billed_dict[pk] or 0)
-        for pk in billed_dict
-        if pk in costable_pks
-    )
+    uncommitted_total = sum(uncommitted_by_pk.values())
 
     # HC claims already raised against this project's in-scope costings.
     # Match the precedent in core/views/hc_claims.py:460-472: only approved
@@ -685,17 +689,21 @@ def _compute_project_export_totals(project):
     else:
         hc_claimed_total = 0.0
 
-    working_budget = uncommitted_total + committed_total
-    revenue_receivable = contract_budget_total - hc_claimed_total
-    c2c = (uncommitted_costable + committed_costable) - billed_costable
-    return working_budget, revenue_receivable, c2c
+    return {
+        'working_budget': uncommitted_total + committed_total,
+        'revenue_receivable': contract_budget_total - hc_claimed_total,
+        'c2c_incl_margin_and_labour': _slice_c2c(in_scope_pks),
+        'c2c_margin': _slice_c2c(margin_pks),
+        'c2c_labour': _slice_c2c(labour_pks),
+    }
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def export_projects_c2c(request):
     """
-    CSV export of project-level Working Budget, Revenue Receivable and C2C.
+    CSV export of project-level Working Budget, Revenue Receivable and the
+    three additive C2C slices.
 
     Body (JSON):
         {"project_pks": [1, 5, 7, ...]}
@@ -706,9 +714,15 @@ def export_projects_c2c(request):
 
     Response: text/csv attachment with one row per project in the same
     order the caller provided. Columns:
-        project_name, working_budget, revenue_receivable, C2C
-    where C2C excludes Internal-category items (Margin etc.) because those
-    are revenue receivable, not cost we still need to incur.
+        project_name,
+        working_budget,
+        revenue_receivable,
+        c2c_incl_margin_and_labour,   — full C2C across all in-scope items
+        c2c_margin,                   — C2C contribution from Internal-category items
+        c2c_labour                    — C2C contribution from Labour-category items
+    The three C2C columns are additive (the all-inclusive figure contains
+    the margin and labour slices), so a margin-and-labour-excluded C2C is
+    `c2c_incl_margin_and_labour − c2c_margin − c2c_labour`.
     """
     try:
         data = json.loads(request.body or '{}')
@@ -723,15 +737,24 @@ def export_projects_c2c(request):
     # that don't resolve (the row would be misleading without a name).
     projects_by_pk = {p.pk: p for p in Projects.objects.filter(pk__in=project_pks).select_related('project_type')}
 
+    header = [
+        'project_name',
+        'working_budget',
+        'revenue_receivable',
+        'c2c_incl_margin_and_labour',
+        'c2c_margin',
+        'c2c_labour',
+    ]
+    blank_totals = [''] * (len(header) - 1)
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(['project_name', 'working_budget', 'revenue_receivable', 'C2C'])
+    writer.writerow(header)
     for pk in project_pks:
         project = projects_by_pk.get(pk)
         if project is None:
             continue
         try:
-            working_budget, revenue_receivable, c2c = _compute_project_export_totals(project)
+            totals = _compute_project_export_totals(project)
         except Exception as e:
             logger.error(
                 "Error computing C2C export totals for project %s: %s",
@@ -739,13 +762,15 @@ def export_projects_c2c(request):
             )
             # Emit a row with blanks for the totals so the user can see which
             # project failed rather than silently dropping it.
-            writer.writerow([project.project, '', '', ''])
+            writer.writerow([project.project, *blank_totals])
             continue
         writer.writerow([
             project.project,
-            f'{working_budget:.2f}',
-            f'{revenue_receivable:.2f}',
-            f'{c2c:.2f}',
+            f"{totals['working_budget']:.2f}",
+            f"{totals['revenue_receivable']:.2f}",
+            f"{totals['c2c_incl_margin_and_labour']:.2f}",
+            f"{totals['c2c_margin']:.2f}",
+            f"{totals['c2c_labour']:.2f}",
         ])
 
     response = HttpResponse(buf.getvalue(), content_type='text/csv')
