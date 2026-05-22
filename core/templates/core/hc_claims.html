@@ -1551,9 +1551,18 @@
             var $catRow = renderCategoryRow(catName, catItems, colCount);
             $tableBody.append($catRow);
             
-            // Check if this is a special category (Internal or Labour)
-            var isInternal = catName === 'Internal';
-            var isLabour = catName === 'Labour';
+            // Identify Internal (-10) and Labour (-5) categories via the
+            // Categories.division sentinel rather than a string match on
+            // the category name. The sentinel is the canonical
+            // identifier (see core/models.py::Categories) and is now
+            // enforced model-side. Every item under a given category
+            // shares the same division, so reading it off the first
+            // item is sufficient.
+            var firstItem = catItems[0] || {};
+            var catDivision = parseInt(firstItem.division, 10);
+            if (isNaN(catDivision)) catDivision = 0;
+            var isInternal = catDivision === -10;
+            var isLabour = catDivision === -5;
             var isSpecialCategory = isInternal || isLabour;
             
             // Item rows
@@ -1749,20 +1758,32 @@
         item.uncommitted = uncommitted;
         item.fixed_on_site = fixedOnSite;
         item.working_budget = uncommitted + (parseFloat(item.committed) || 0);
-        
-        // Recalculate QS Claim
+
+        // Pull every input the formulas need from the item dict and
+        // default any missing field to 0. The backend surfaces these
+        // explicitly: invoiced (total bill-allocations sum, used by the
+        // QS formula); paid_invoices and invoices_in_claim (used by the
+        // HC formula); prev_hc_claimed and prev_qs_claimed (approved
+        // prior claims). Pre-fix the JS read item.invoiced which was
+        // never sent (B5), giving NaN for non-construction projects.
+        var contractBudget = parseFloat(item.contract_budget) || 0;
+        var invoicedTotal = parseFloat(item.invoiced) || 0;
+        var paidInvoices = parseFloat(item.paid_invoices) || 0;
+        var invoicesInClaim = parseFloat(item.invoices_in_claim) || 0;
+        var prevHc = parseFloat(item.prev_hc_claimed) || 0;
+        var prevQs = parseFloat(item.prev_qs_claimed) || 0;
+
         // QS Claim = Max(0, Min(Contract Budget - C2C, Fixed on Site) - Previous QS Claims)
-        // C2C = Working Budget - Invoiced
-        var c2c_qs = item.working_budget - item.invoiced;
-        var qs_claim = Math.max(0, Math.min(item.contract_budget - c2c_qs, fixedOnSite) - item.prev_qs_claimed);
-        
-        // Recalculate HC Claim
+        // C2C_qs = Working Budget - Invoiced (total)
+        var c2c_qs = item.working_budget - invoicedTotal;
+        var qs_claim = Math.max(0, Math.min(contractBudget - c2c_qs, fixedOnSite) - prevQs);
+
         // HC Claim = Min(Remaining Claimable, Max(0, Contract Budget - C2C - Previous HC Claims))
         // Remaining Claimable = Contract Budget - Previous HC Claims
-        // C2C = Working Budget - (Paid Invoices + Invoices in This Claim)
-        var remaining_claimable = item.contract_budget - item.prev_hc_claimed;
-        var c2c_hc = item.working_budget - item.paid_invoices - item.invoices_in_claim;
-        var hc_claim = Math.min(remaining_claimable, Math.max(0, item.contract_budget - c2c_hc - item.prev_hc_claimed));
+        // C2C_hc = Working Budget - (Paid Invoices + Invoices in This Claim)
+        var remaining_claimable = contractBudget - prevHc;
+        var c2c_hc = item.working_budget - paidInvoices - invoicesInClaim;
+        var hc_claim = Math.min(remaining_claimable, Math.max(0, contractBudget - c2c_hc - prevHc));
         
         // Update display
         item.this_hc_claim = Math.round(hc_claim * 100) / 100;
@@ -1944,9 +1965,15 @@
         currentClaimPk = null;
         currentClaimData = null;
         budgetData = [];
-        
-        $tableBody.html('<tr><td colspan="11" style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>Select a claim or create a new one to view budget data.</td></tr>');
-        $tableFooter.hide();
+
+        var colCount = getColCount();
+        $tableBody.html('<tr><td colspan="' + colCount + '" style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>Select a claim or create a new one to view budget data.</td></tr>');
+        // The fixed footer lives outside the scrollable table area; the
+        // pre-fix code referenced an undeclared $tableFooter, which threw
+        // a ReferenceError every time we cleared the table (B4 in the
+        // review).
+        $fixedFooter.hide();
+        $('#finalizedReportContainer').hide();
         $actionsRow.hide();
         $deleteBtn.hide();
         $claimStatus.hide();

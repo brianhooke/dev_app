@@ -1055,6 +1055,18 @@ class StocktakeSnapAllocation(models.Model):
 # SERVICE: invoices (claims)
 class HC_claims(models.Model):
     hc_claim_pk = models.AutoField(primary_key=True)
+    # Direct link to the project this claim belongs to. Historically a claim
+    # was linked to a project only indirectly (via HC_claim_allocations.item
+    # -> Costing.project, or via Bills.associated_hc_claim and that bill's
+    # project). That made it impossible to keep a draft claim project-scoped
+    # before any allocations or bills were attached, so two projects could
+    # never have a draft claim simultaneously. Migration 0074 backfills this
+    # FK from the indirect relations for every existing claim; nullable for
+    # the rare orphan claim with no allocations and no bills.
+    project = models.ForeignKey(
+        'Projects', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='hc_claims',
+    )
     date = models.DateField()
     status = models.IntegerField(default=0) #0 for unapproved, 1 for approved, 2 for sent to Xero, 3 for payment received
     display_id = models.IntegerField(blank=True, null=True)

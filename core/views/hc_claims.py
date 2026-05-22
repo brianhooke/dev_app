@@ -67,46 +67,59 @@ def hc_claims_view(request):
 
 @csrf_exempt
 def get_hc_claims(request, project_pk):
-    """Get all HC claims related to this project.
-    
-    Returns claims that have:
-    - Allocations for items in this project, OR
-    - Associated bills that belong to this project
+    """Get all HC claims for this project.
+
+    Uses the direct HC_claims.project FK (added in migration 0074). The
+    legacy "discover claims via allocations or bills" logic is preserved
+    only as a safety net for any orphan claim that the backfill could
+    not link — those are surfaced too if they happen to share an
+    allocation/bill with this project.
     """
     if not project_pk:
         return JsonResponse({'error': 'project_pk required'}, status=400)
-    
+
     try:
-        # Get all costing items for this project
-        costing_items = Costing.objects.filter(project_id=project_pk)
-        costing_pks = list(costing_items.values_list('costing_pk', flat=True))
-        
-        # Get claims that have allocations for these items
-        claims_with_allocations = HC_claim_allocations.objects.filter(
-            item__in=costing_pks
-        ).values_list('hc_claim_pk_id', flat=True).distinct()
-        
-        # Get claims that have associated bills for this project
-        claims_with_bills = Bills.objects.filter(
-            project_id=project_pk,
-            associated_hc_claim__isnull=False
-        ).values_list('associated_hc_claim_id', flat=True).distinct()
-        
-        # Combine both sets
-        all_claim_pks = set(claims_with_allocations) | set(claims_with_bills)
-        
+        # Primary path: claim.project FK
+        primary = set(
+            HC_claims.objects
+            .filter(project_id=project_pk)
+            .values_list('hc_claim_pk', flat=True)
+        )
+
+        # Safety net for orphan claims (project IS NULL on the claim row
+        # but the claim still relates to this project via allocations or
+        # attached bills). Should be empty in practice once 0074 has run.
+        costing_pks = list(
+            Costing.objects.filter(project_id=project_pk)
+            .values_list('costing_pk', flat=True)
+        )
+        orphan_via_alloc = set()
+        if costing_pks:
+            orphan_via_alloc = set(
+                HC_claim_allocations.objects
+                .filter(item__in=costing_pks, hc_claim_pk__project__isnull=True)
+                .values_list('hc_claim_pk_id', flat=True)
+            )
+        orphan_via_bill = set(
+            Bills.objects
+            .filter(project_id=project_pk,
+                    associated_hc_claim__isnull=False,
+                    associated_hc_claim__project__isnull=True)
+            .values_list('associated_hc_claim_id', flat=True)
+        )
+
+        all_claim_pks = primary | orphan_via_alloc | orphan_via_bill
         claims = HC_claims.objects.filter(hc_claim_pk__in=all_claim_pks).order_by('-date')
-        
+
         claims_list = []
         for claim in claims:
-            # Calculate total claimed amounts
             allocations = HC_claim_allocations.objects.filter(
                 hc_claim_pk=claim,
-                item__in=costing_pks
+                item__in=costing_pks,
             )
             total_hc_claimed = sum(float(a.hc_claimed or 0) for a in allocations)
             total_qs_claimed = sum(float(a.qs_claimed or 0) for a in allocations)
-            
+
             claims_list.append({
                 'hc_claim_pk': claim.hc_claim_pk,
                 'display_id': claim.display_id,
@@ -117,9 +130,9 @@ def get_hc_claims(request, project_pk):
                 'total_hc_claimed': total_hc_claimed,
                 'total_qs_claimed': total_qs_claimed,
             })
-        
+
         return JsonResponse({'status': 'success', 'claims': claims_list})
-    
+
     except Exception as e:
         logger.error(f"Error getting HC claims: {e}")
         return JsonResponse({'error': str(e)}, status=500)
@@ -138,39 +151,50 @@ def get_status_display(status):
 
 @csrf_exempt
 def get_available_bills(request, project_pk):
-    """Get bills available for inclusion in an HC claim.
-    
-    Returns bills that are:
-    - Associated with this project (via bill allocations to project items)
-    - Not already associated with an approved HC claim
+    """Get bills available for inclusion in an HC claim for THIS project.
+
+    A bill is available if:
+      - it belongs to this project (Bills.project_id matches), AND
+      - it is either unattached to any claim, OR attached only to a
+        draft (status=0) claim of this same project.
+
+    Bills attached to *another* project's draft claim are deliberately
+    excluded — picking them in the new claim's checkbox list would
+    silently re-assign them away from that draft (B2 in the review).
     """
     if not project_pk:
         return JsonResponse({'error': 'project_pk required'}, status=400)
-    
+
     try:
-        # Get costing items for this project
-        costing_pks = Costing.objects.filter(project_id=project_pk).values_list('costing_pk', flat=True)
-        
-        # Get bills that have allocations to these items
+        costing_pks = list(
+            Costing.objects.filter(project_id=project_pk)
+            .values_list('costing_pk', flat=True)
+        )
+
+        # Bills with at least one allocation against a costing line in
+        # this project. Restricting Bills.project to this project too
+        # belt-and-braces against the (rare) bill that has cross-project
+        # allocations.
         bill_pks = Bill_allocations.objects.filter(
-            item__in=costing_pks
+            item__in=costing_pks,
         ).values_list('bill_id', flat=True).distinct()
-        
-        # Filter to bills not already in an approved claim
+
         available_bills = Bills.objects.filter(
-            bill_pk__in=bill_pks
+            bill_pk__in=bill_pks,
+            project_id=project_pk,
         ).filter(
-            Q(associated_hc_claim__isnull=True) | Q(associated_hc_claim__status=0)
-        ).order_by('-bill_date')
-        
+            Q(associated_hc_claim__isnull=True) |
+            Q(associated_hc_claim__status=0,
+              associated_hc_claim__project_id=project_pk)
+        ).select_related('contact_pk', 'associated_hc_claim').order_by('-bill_date')
+
         bills_list = []
         for bill in available_bills:
-            # Get total amount from allocations
             total_amount = Bill_allocations.objects.filter(
                 bill=bill,
-                item__in=costing_pks
+                item__in=costing_pks,
             ).aggregate(total=Sum('amount'))['total'] or 0
-            
+
             bills_list.append({
                 'bill_pk': bill.bill_pk,
                 'supplier': bill.contact_pk.name if bill.contact_pk else 'Unknown',
@@ -179,9 +203,9 @@ def get_available_bills(request, project_pk):
                 'bill_status': bill.bill_status,
                 'already_in_claim': bill.associated_hc_claim_id is not None,
             })
-        
+
         return JsonResponse({'status': 'success', 'bills': bills_list})
-    
+
     except Exception as e:
         logger.error(f"Error getting available bills: {e}")
         return JsonResponse({'error': str(e)}, status=500)
@@ -232,7 +256,16 @@ def get_available_stocktake_snaps(request, project_pk):
 
 @csrf_exempt
 def create_hc_claim(request):
-    """Create a new HC claim with date and optionally associate bills."""
+    """Create a new HC claim with date and optionally associate bills.
+
+    The draft check is project-scoped (via HC_claims.project, populated
+    by migration 0074): only one open draft per project, but multiple
+    projects can each have their own in-flight draft simultaneously.
+
+    Bills are scoped to the project by enforcing that every supplied
+    bill_pk belongs to this project. Anything that doesn't is dropped
+    rather than silently re-attached from another project's draft.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     
@@ -241,33 +274,58 @@ def create_hc_claim(request):
         project_pk = data.get('project_pk')
         claim_date = data.get('date')
         selected_bill_pks = data.get('bill_pks', [])
-        selected_snap_pks = data.get('snap_pks', [])
-        
+        # snap_pks is accepted by the API for forward compatibility but
+        # the data model has no FK on StocktakeSnap to lock it to a
+        # claim, so it's currently a no-op (see B7 in the review).
+        selected_snap_pks = data.get('snap_pks', [])  # noqa: F841
+
         if not project_pk or not claim_date:
             return JsonResponse({'error': 'project_pk and date required'}, status=400)
-        
-        # Check for existing draft claim
-        if HC_claims.objects.filter(status=0).exists():
+
+        try:
+            project = Projects.objects.get(pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({'error': 'Project not found'}, status=404)
+
+        # Project-scoped draft guard. A draft for *this* project blocks a
+        # new one; drafts for other projects are unaffected.
+        if HC_claims.objects.filter(status=0, project=project).exists():
             return JsonResponse({
-                'error': 'There is already a draft HC claim in progress. Complete or delete it first.'
+                'error': (
+                    'There is already a draft HC claim in progress for '
+                    'this project. Complete or delete it first.'
+                ),
             }, status=400)
-        
-        # Create the claim
+
         claim_date_obj = datetime.strptime(claim_date, '%Y-%m-%d').date()
-        claim = HC_claims.objects.create(date=claim_date_obj, status=0)
-        
-        # Associate selected bills
-        if selected_bill_pks:
-            Bills.objects.filter(bill_pk__in=selected_bill_pks).update(associated_hc_claim=claim)
-        
-        logger.info(f"Created HC claim {claim.hc_claim_pk} with {len(selected_bill_pks)} bills")
-        
+        claim = HC_claims.objects.create(
+            date=claim_date_obj, status=0, project=project,
+        )
+
+        # Associate selected bills — but only those that actually belong
+        # to this project. Anything else is ignored to prevent the
+        # cross-project bill leak (B2 in the review).
+        valid_bill_pks = list(
+            Bills.objects
+            .filter(bill_pk__in=selected_bill_pks, project=project)
+            .values_list('bill_pk', flat=True)
+        )
+        if valid_bill_pks:
+            Bills.objects.filter(bill_pk__in=valid_bill_pks).update(associated_hc_claim=claim)
+
+        logger.info(
+            "Created HC claim %s for project %s with %s bills (%s requested)",
+            claim.hc_claim_pk, project.pk, len(valid_bill_pks), len(selected_bill_pks),
+        )
+
         return JsonResponse({
             'status': 'success',
             'hc_claim_pk': claim.hc_claim_pk,
-            'display_id': claim.display_id
+            'display_id': claim.display_id,
+            'bills_attached': len(valid_bill_pks),
+            'bills_requested': len(selected_bill_pks),
         })
-    
+
     except Exception as e:
         logger.error(f"Error creating HC claim: {e}")
         return JsonResponse({'error': str(e)}, status=500)
@@ -306,7 +364,12 @@ def get_hc_claim_data(request, claim_pk):
         
         # Get all categories and items for this project (execution mode only, tender_or_execution=2)
         categories = Categories.objects.filter(project_id=project_pk).order_by('order_in_list')
-        items = Costing.objects.filter(project_id=project_pk, tender_or_execution=2).order_by('category__order_in_list', 'order_in_list')
+        items = (
+            Costing.objects
+            .filter(project_id=project_pk, tender_or_execution=2)
+            .select_related('category', 'unit')
+            .order_by('category__order_in_list', 'order_in_list')
+        )
         
         # Get existing allocations for this claim
         existing_allocations = {
@@ -402,6 +465,10 @@ def get_hc_claim_data(request, claim_pk):
                 'costing_pk': item_pk,
                 'category': item.category.category if item.category else '',
                 'category_pk': item.category_id,
+                # Sentinel exposed so the JS can branch on Internal (-10)
+                # / Labour (-5) categories without string-matching the
+                # category name (B6 in the review).
+                'division': int(item.category.division) if item.category and item.category.division is not None else 0,
                 'item': item.item,
                 'unit': item.unit.unit_name if item.unit else '',
                 'contract_budget': contract_budget,
@@ -414,6 +481,14 @@ def get_hc_claim_data(request, claim_pk):
                 'committed_qty': committed_qty,
                 'committed_rate': committed_rate,
                 'fixed_on_site': fixed_on_site,
+                # invoiced is the TOTAL invoiced for this item across all
+                # bills (regardless of which claim they're attached to)
+                # — it is what the QS-claim formula uses. The split
+                # invoiced_prev/invoiced_this fields are for the table
+                # display and are computed differently. Surfacing
+                # invoiced explicitly so the frontend recalculation
+                # matches the backend (B5 in the review).
+                'invoiced': float(invoiced),
                 'invoiced_prev': float(invoiced_prev),
                 'invoiced_this': float(invoiced_this),
                 'paid_invoices': paid_invoices,
@@ -780,17 +855,38 @@ def finalize_hc_claim(request):
         # Can only finalize draft claims
         if claim.status != 0:
             return JsonResponse({'error': 'Can only finalize draft claims'}, status=400)
-        
-        # Create/update allocations for all items
+
+        # Helper — interpret an allocation row as "no real activity" so we
+        # skip persisting it. The frontend posts every visible row,
+        # which previously bloated the allocations table with hundreds
+        # of all-zero rows per claim and made the per-project claim
+        # listing match unrelated claims (B3 in the review).
+        def _is_zero_activity(d):
+            keys = ('hc_claimed', 'qs_claimed', 'sc_invoiced')
+            for k in keys:
+                try:
+                    if abs(float(d.get(k, 0) or 0)) > 1e-6:
+                        return False
+                except (TypeError, ValueError):
+                    return False
+            return True
+
+        # Create/update allocations only for items with real activity
+        kept = 0
+        skipped = 0
         for alloc_data in allocations_data:
             item_pk = alloc_data.get('costing_pk')
             category_pk = alloc_data.get('category_pk')
             if not item_pk:
                 continue
-            
+
+            if _is_zero_activity(alloc_data):
+                skipped += 1
+                continue
+
             item = Costing.objects.get(costing_pk=item_pk)
             category = Categories.objects.get(pk=category_pk) if category_pk else item.category
-            
+
             HC_claim_allocations.objects.update_or_create(
                 hc_claim_pk=claim,
                 item=item,
@@ -812,12 +908,16 @@ def finalize_hc_claim(request):
                     'qs_claimed': alloc_data.get('qs_claimed', 0),
                 }
             )
-        
+            kept += 1
+
         # Set claim status to approved (1)
         claim.status = 1
         claim.save()
-        
-        logger.info(f"Finalized HC claim {claim_pk} with {len(allocations_data)} allocations")
+
+        logger.info(
+            "Finalized HC claim %s for project %s: persisted %s allocations (skipped %s zero-activity rows of %s posted)",
+            claim_pk, claim.project_id, kept, skipped, len(allocations_data),
+        )
         
         return JsonResponse({
             'status': 'success',
