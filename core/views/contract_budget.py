@@ -689,9 +689,19 @@ def _compute_project_export_totals(project):
     else:
         hc_claimed_total = 0.0
 
+    # Non-revenue projects (Projects.is_revenue_project=False) are internal /
+    # expense-only — they never bill the client, so revenue receivable is
+    # always zero for them regardless of contract budget. The C2C slices
+    # remain meaningful (these projects still incur cost), so they are not
+    # zeroed.
+    if getattr(project, 'is_revenue_project', True):
+        revenue_receivable = contract_budget_total - hc_claimed_total
+    else:
+        revenue_receivable = 0.0
+
     return {
         'working_budget': uncommitted_total + committed_total,
-        'revenue_receivable': contract_budget_total - hc_claimed_total,
+        'revenue_receivable': revenue_receivable,
         'c2c_incl_margin_and_labour': _slice_c2c(in_scope_pks),
         'c2c_margin': _slice_c2c(margin_pks),
         'c2c_labour': _slice_c2c(labour_pks),
