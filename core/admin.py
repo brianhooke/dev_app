@@ -138,11 +138,23 @@ class HcVariationAllocationsForm(forms.ModelForm):
 
 # Custom admin classes
 class CategoriesAdmin(admin.ModelAdmin):
-    list_display = ("categories_pk", "project", "project_type", "category", "invoice_category", "order_in_list")
-    list_filter = ('project', 'project_type')
+    # Categories.division uses sentinel ints (-10=Internal, -5=Labour) so
+    # exposing it on the changelist is essential for spotting Margin/Labour
+    # at a glance; surfacing it in list_filter and list_editable also lets
+    # you bulk-correct misclassified rows.
+    list_display = (
+        "categories_pk", "project", "project_type",
+        "category", "invoice_category", "division", "order_in_list",
+        "created_at", "updated_at",
+    )
+    list_filter = ('project', 'project_type', 'division')
+    list_editable = ('division',)
 
 class UnitsAdmin(admin.ModelAdmin):
-    list_display = ("unit_pk", "project", "project_type", "unit_name", "unit_qty", "order_in_list")
+    list_display = (
+        "unit_pk", "project", "project_type", "unit_name",
+        "unit_qty", "order_in_list", "created_at", "updated_at",
+    )
     list_filter = ('project', 'project_type')
 
 class ProjectTypesAdmin(admin.ModelAdmin):
@@ -151,55 +163,103 @@ class ProjectTypesAdmin(admin.ModelAdmin):
     search_fields = ('project_type',)
 
 class XeroInstancesAdmin(admin.ModelAdmin):
-    list_display = ("xero_instance_pk", "xero_name", "xero_client_id", "staff_hours_tracking", "stocktake", "created_at", "updated_at")
+    # Encrypted BinaryField columns (xero_client_secret_encrypted,
+    # oauth_access_token_encrypted, oauth_refresh_token_encrypted) are
+    # deliberately omitted from list_display — they'd render as unreadable
+    # binary blobs. Use the SSM-backed accessors on the detail page instead.
+    list_display = (
+        "xero_instance_pk", "xero_name", "xero_client_id",
+        "oauth_tenant_id", "oauth_token_expires_at",
+        "staff_hours_tracking", "stocktake",
+        "xero_stocktake_account", "xero_stocktake_writeoffs_account",
+        "created_at", "updated_at",
+    )
     list_filter = ('staff_hours_tracking', 'stocktake')
 
 class XeroAccountsAdmin(admin.ModelAdmin):
-    list_display = ("xero_account_pk", "xero_instance", "account_code", "account_name", "account_type", "account_status")
+    list_display = (
+        "xero_account_pk", "xero_instance", "account_code", "account_name",
+        "account_id", "account_status", "account_type",
+        "created_at", "updated_at",
+    )
     list_filter = ('xero_instance', 'account_type', 'account_status')
     search_fields = ('account_code', 'account_name', 'account_id')
 
 class ProjectsAdmin(admin.ModelAdmin):
     form = ProjectsForm
-    list_display = ("projects_pk", "project", "project_type", "xero_instance", "xero_sales_account", "background", "archived", "project_status")
+    list_display = (
+        "projects_pk", "project", "project_type", "xero_instance",
+        "xero_sales_account", "background", "archived", "project_status",
+        "manager", "manager_email", "contracts_admin_emails",
+        "created_at", "updated_at",
+    )
     list_filter = ('project_type', 'archived', 'project_status')
 
 class ContactsAdmin(admin.ModelAdmin):
-    list_display = ("contact_pk", "xero_instance", "xero_contact_id", "name", "first_name", "last_name", "email", "status", "bank_bsb", "bank_account_number", "bank_details_verified", "checked", "created_at")
+    list_display = (
+        "contact_pk", "xero_instance", "xero_contact_id",
+        "name", "first_name", "last_name", "email", "status",
+        "contact_person", "bank_details", "bank_bsb", "bank_account_number",
+        "bank_details_verified", "tax_number", "division", "checked",
+        "verified_name", "verified_email", "verified_bank_bsb",
+        "verified_bank_account_number", "verified_tax_number", "verified_notes",
+        "verified_status",
+        "created_at", "updated_at",
+    )
     list_filter = ('xero_instance', 'status', 'bank_details_verified', 'checked')
     search_fields = ('name', 'email', 'xero_contact_id')
 
 class QuotesAdmin(admin.ModelAdmin):
     form = QuotesForm
-    list_display = ("quotes_pk", "supplier_quote_number", "total_cost", "contact_pk", "pdf", "tender_or_execution")
+    list_display = (
+        "quotes_pk", "supplier_quote_number", "total_cost", "pdf",
+        "contact_pk", "project", "tender_or_execution",
+        "created_at", "updated_at",
+    )
     list_filter = ('project', 'tender_or_execution')
 
 class CostingAdmin(admin.ModelAdmin):
     form = CostingForm
-    list_display = ("costing_pk", "project", "project_type", "category", "item", "order_in_list", "xero_account_code", "contract_budget", "unit", "rate", "operator", "operator_value", "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes", "fixed_on_site", "sc_invoiced", "sc_paid", "tender_or_execution", "stocktake")
+    list_display = (
+        "costing_pk", "project", "project_type", "category", "item",
+        "order_in_list", "xero_account_code", "contract_budget",
+        "unit", "rate", "operator", "operator_value",
+        "uncommitted_amount", "uncommitted_qty", "uncommitted_rate", "uncommitted_notes",
+        "fixed_on_site", "sc_invoiced", "sc_paid",
+        "tender_or_execution", "stocktake",
+        "created_at", "updated_at",
+    )
     list_filter = ('project', 'project_type', 'category', 'tender_or_execution', 'stocktake')
 
 class QuoteAllocationsAdmin(admin.ModelAdmin):
     form = QuoteAllocationsForm
-    list_display = ("quote_allocations_pk", "quotes_pk", "item", "amount", "qty", "unit", "rate", "notes")
+    list_display = (
+        "quote_allocations_pk", "quotes_pk", "item",
+        "amount", "qty", "unit", "rate", "notes",
+        "created_at", "updated_at",
+    )
 
 class DesignCategoriesAdmin(admin.ModelAdmin):
-    list_display = ("design_category_pk", "design_category")
+    list_display = ("design_category_pk", "design_category", "created_at", "updated_at")
 
 class PlanPdfsAdmin(admin.ModelAdmin):
-    list_display = ("design_category", "file", "plan_number", "rev_number")
+    list_display = ("id", "design_category", "file", "plan_number", "rev_number", "created_at", "updated_at")
 
 class ReportCategoriesAdmin(admin.ModelAdmin):
-    list_display = ("report_category_pk", "report_category")
+    list_display = ("report_category_pk", "report_category", "created_at", "updated_at")
 
 class ReportPdfsAdmin(admin.ModelAdmin):
-    list_display = ("report_category", "file", "report_reference")
+    list_display = ("id", "report_category", "file", "report_reference", "created_at", "updated_at")
 
 class Models_3dAdmin(admin.ModelAdmin):
-    list_display = ("file", "filename")
+    list_display = ("id", "file", "filename", "created_at", "updated_at")
 
 class Po_globalsAdmin(admin.ModelAdmin):
-    list_display = ("reference", "invoicee", "address", "project_address", "ABN", "email", "note1", "note2", "note3")
+    list_display = (
+        "id", "reference", "invoicee", "address", "project_address",
+        "ABN", "email", "note1", "note2", "note3",
+        "created_at", "updated_at",
+    )
 
 class Po_ordersForm(forms.ModelForm):
     class Meta:
@@ -212,47 +272,80 @@ class Po_ordersForm(forms.ModelForm):
 
 class Po_ordersAdmin(admin.ModelAdmin):
     form = Po_ordersForm
-    list_display = ("po_order_pk", "po_supplier", "project", "unique_id", "pdf", "po_sent", "created_at")
+    list_display = (
+        "po_order_pk", "po_supplier", "project", "unique_id",
+        "pdf", "po_sent", "created_at", "updated_at",
+    )
     readonly_fields = ("unique_id", "created_at")  # Removed pdf from readonly to allow re-uploading
 
 class PoOrderDetailAdmin(admin.ModelAdmin):
     form = PoOrderDetailForm
-    list_display = ("po_order_detail_pk", "po_order_pk", "date", "costing", "quote", "amount", "variation_note")
+    list_display = (
+        "po_order_detail_pk", "po_order_pk", "date", "costing", "quote",
+        "amount", "qty", "unit", "rate", "variation_note",
+        "created_at", "updated_at",
+    )
 
 class SPVDataAdmin(admin.ModelAdmin):
-    list_display = ("address", "lot_size", "legal_owner", "folio_identifier", "bill_to", "email", "owner_address", "director_1", "director_2", "abn", "acn")
+    list_display = (
+        "id", "address", "lot_size", "legal_owner", "folio_identifier",
+        "bill_to", "email", "owner_address", "director_1", "director_2",
+        "abn", "acn", "created_at", "updated_at",
+    )
 
 class LetterheadAdmin(admin.ModelAdmin):
-    list_display = ("letterhead_path",)
+    list_display = ("id", "letterhead_path", "created_at", "updated_at")
 
 class BillsAdmin(admin.ModelAdmin):
     form = BillsForm
     list_display = (
-        "bill_pk", "contact_pk", "project", "is_stocktake", "xero_instance", "bill_status", "bill_xero_id", "supplier_bill_number", 
-        "bill_date", "bill_due_date", "total_net", "total_gst", "pdf", "associated_hc_claim", 
-        "bill_type", "auto_created", "received_email", "email_attachment", "created_at", "updated_at"
+        "bill_pk", "contact_pk", "project", "is_stocktake", "xero_instance",
+        "bill_status", "bill_xero_id", "supplier_bill_number",
+        "bill_date", "bill_due_date", "total_net", "total_gst", "pdf",
+        "associated_hc_claim", "bill_type", "auto_created",
+        "received_email", "email_attachment",
+        "currency", "foreign_amount", "foreign_gst", "exchange_rate",
+        "is_fx_fixed", "fx_fixed_at", "xero_paid_aud",
+        "created_at", "updated_at",
     )
-    list_filter = ('bill_status', 'is_stocktake', 'auto_created', 'bill_type', 'project', 'xero_instance')
+    list_filter = ('bill_status', 'is_stocktake', 'auto_created', 'bill_type', 'project', 'xero_instance', 'currency', 'is_fx_fixed')
     search_fields = ('supplier_bill_number', 'contact_pk__name', 'bill_xero_id')
 class BillAllocationsAdmin(admin.ModelAdmin):
     form = BillAllocationsForm
-    list_display = ("bill_allocation_pk", "bill", "item", "xero_account", "amount", "gst_amount", "notes", "allocation_type")
+    list_display = (
+        "bill_allocation_pk", "bill", "item", "xero_account",
+        "amount", "qty", "unit", "rate", "gst_amount",
+        "notes", "allocation_type",
+        "created_at", "updated_at",
+    )
     list_filter = ('bill__bill_status', 'allocation_type', 'xero_account')
     search_fields = ('bill__supplier_bill_number', 'notes')
 
 class HC_claimsAdmin(admin.ModelAdmin):
-    list_display = ("hc_claim_pk", "date", "status", "display_id")
+    list_display = ("hc_claim_pk", "date", "status", "display_id", "invoicee", "created_at", "updated_at")
 
 class HC_claim_allocationsAdmin(admin.ModelAdmin):
-    list_display = ('hc_claim_pk', 'item', 'contract_budget', 'working_budget', 'committed', 'uncommitted', 'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this', 'sc_invoiced', 'sc_invoiced_previous', 'adjustment', 'hc_claimed', 'hc_claimed_previous', 'qs_claimed', 'qs_claimed_previous')
+    list_display = (
+        'hc_claim_allocations_pk', 'hc_claim_pk', 'category', 'item',
+        'contract_budget', 'working_budget', 'committed', 'uncommitted',
+        'fixed_on_site', 'fixed_on_site_previous', 'fixed_on_site_this',
+        'sc_invoiced_previous', 'sc_invoiced', 'adjustment',
+        'hc_claimed_previous', 'hc_claimed',
+        'qs_claimed_previous', 'qs_claimed',
+        'created_at', 'updated_at',
+    )
 
 class HcVariationAdmin(admin.ModelAdmin):
     form = HcVariationForm
-    list_display = ('hc_variation_pk', 'date')
-    
+    list_display = ('hc_variation_pk', 'date', 'amount', 'created_at', 'updated_at')
+
 class HcVariationAllocationsAdmin(admin.ModelAdmin):
     form = HcVariationAllocationsForm
-    list_display = ('hc_variation_allocation_pk', 'hc_variation', 'costing', 'amount', 'notes')
+    list_display = (
+        'hc_variation_allocation_pk', 'hc_variation', 'costing',
+        'amount', 'qty', 'unit', 'rate', 'notes',
+        'created_at', 'updated_at',
+    )
 
 # Register models with custom admin classes
 admin.site.register(Categories, CategoriesAdmin)
@@ -284,12 +377,18 @@ admin.site.register(Hc_variation_allocations, HcVariationAllocationsAdmin)
 
 # Document management models
 class DocumentFoldersAdmin(admin.ModelAdmin):
-    list_display = ("folder_pk", "project", "folder_name", "parent_folder", "order_index", "created_at")
+    list_display = (
+        "folder_pk", "project", "folder_name", "parent_folder",
+        "order_index", "created_at", "updated_at",
+    )
     list_filter = ('project',)
     search_fields = ('folder_name',)
 
 class DocumentFilesAdmin(admin.ModelAdmin):
-    list_display = ("file_pk", "folder", "file_name", "file_type", "file_size", "uploaded_by", "uploaded_at")
+    list_display = (
+        "file_pk", "folder", "file_name", "file", "file_type",
+        "file_size", "uploaded_by", "uploaded_at", "description",
+    )
     list_filter = ('file_type', 'folder__project')
     search_fields = ('file_name', 'description')
 
@@ -304,7 +403,15 @@ class EmailAttachmentInline(admin.TabularInline):
     can_delete = False
 
 class ReceivedEmailAdmin(admin.ModelAdmin):
-    list_display = ('id', 'from_address', 'to_address', 'subject', 'body_preview', 'received_at', 'attachment_count', 'is_processed', 'email_type')
+    # body_text and body_html are TextField bodies that can be megabytes long;
+    # they're surfaced via the body_preview helper (first 100 chars) instead
+    # of being dumped raw into a column.
+    list_display = (
+        'id', 'from_address', 'to_address', 'cc_address', 'subject', 'message_id',
+        'body_preview', 'received_at', 'processed_at', 'updated_at',
+        's3_bucket', 's3_key', 'attachment_count',
+        'is_processed', 'processing_notes', 'email_type',
+    )
     list_filter = ('is_processed', 'email_type', 'to_address', 'received_at')
     search_fields = ('from_address', 'to_address', 'subject', 'body_text', 'message_id')
     
@@ -336,7 +443,10 @@ class ReceivedEmailAdmin(admin.ModelAdmin):
     date_hierarchy = 'received_at'
 
 class EmailAttachmentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'email', 'filename', 'content_type', 'size_bytes', 'uploaded_at')
+    list_display = (
+        'id', 'email', 'filename', 'content_type', 'size_bytes',
+        's3_bucket', 's3_key', 'uploaded_at', 'updated_at',
+    )
     list_filter = ('content_type', 'uploaded_at')
     search_fields = ('filename', 'email__subject', 'email__from_address')
     readonly_fields = ('email', 'filename', 'content_type', 'size_bytes', 's3_bucket', 's3_key', 'uploaded_at')
@@ -351,7 +461,7 @@ class PublicHolidayCalendarAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 class PublicHolidayAdmin(admin.ModelAdmin):
-    list_display = ('holiday_pk', 'calendar', 'name', 'date', 'created_at')
+    list_display = ('holiday_pk', 'calendar', 'name', 'date', 'created_at', 'updated_at')
     list_filter = ('calendar', 'date')
     search_fields = ('name',)
     date_hierarchy = 'date'
@@ -361,26 +471,41 @@ admin.site.register(PublicHoliday, PublicHolidayAdmin)
 
 # Staff Hours models
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ('employee_pk', 'xero_instance', 'xero_employee_id', 'name', 'status', 'start_date', 'created_at')
+    list_display = (
+        'employee_pk', 'xero_instance', 'xero_employee_id',
+        'name', 'status', 'start_date', 'created_at', 'updated_at',
+    )
     list_filter = ('xero_instance', 'status')
     search_fields = ('name', 'xero_employee_id')
 
 class EmployeePayRateAdmin(admin.ModelAdmin):
-    list_display = ('payrate_pk', 'employee', 'effective_date', 'earnings_rate_name', 'rate_per_unit', 'annual_salary', 'units_per_week', 'pay_basis', 'is_ordinary_rate', 'created_at')
+    list_display = (
+        'payrate_pk', 'employee', 'effective_date',
+        'earnings_rate_id', 'earnings_rate_name',
+        'rate_per_unit', 'units_per_week', 'annual_salary',
+        'pay_basis', 'is_ordinary_rate', 'rate_hash', 'created_at',
+    )
     list_filter = ('employee__xero_instance', 'pay_basis', 'is_ordinary_rate', 'effective_date')
     search_fields = ('employee__name', 'earnings_rate_name')
     date_hierarchy = 'effective_date'
 
 class StaffHoursAdmin(admin.ModelAdmin):
-    list_display = ('staff_hours_pk', 'employee', 'date', 'hours', 'payrate', 'created_at')
+    list_display = (
+        'staff_hours_pk', 'employee', 'date', 'hours', 'payrate',
+        'created_at', 'updated_at',
+    )
     list_filter = ('employee__xero_instance', 'date')
     search_fields = ('employee__name',)
     date_hierarchy = 'date'
 
 class StaffHoursAllocationsAdmin(admin.ModelAdmin):
-    list_display = ('allocation_pk', 'staff_hours', 'project', 'costing', 'hours', 'created_at')
-    list_filter = ('project', 'staff_hours__employee__xero_instance')
-    search_fields = ('staff_hours__employee__name', 'project__project', 'costing__item')
+    list_display = (
+        'allocation_pk', 'staff_hours', 'allocation_type',
+        'project', 'costing', 'hours', 'note',
+        'created_at', 'updated_at',
+    )
+    list_filter = ('allocation_type', 'project', 'staff_hours__employee__xero_instance')
+    search_fields = ('staff_hours__employee__name', 'project__project', 'costing__item', 'note')
 
 admin.site.register(Employee, EmployeeAdmin)
 admin.site.register(EmployeePayRate, EmployeePayRateAdmin)
@@ -389,12 +514,19 @@ admin.site.register(StaffHoursAllocations, StaffHoursAllocationsAdmin)
 
 # Stocktake models
 class StocktakeAllocationsAdmin(admin.ModelAdmin):
-    list_display = ('allocation_pk', 'bill', 'project_type', 'item', 'unit', 'qty', 'rate', 'amount', 'gst_amount', 'notes', 'created_at')
+    list_display = (
+        'allocation_pk', 'bill', 'project_type', 'item', 'unit',
+        'qty', 'rate', 'amount', 'gst_amount', 'notes',
+        'created_at', 'updated_at',
+    )
     list_filter = ('project_type', 'bill__bill_status')
     search_fields = ('item__item', 'notes', 'bill__supplier_bill_number')
 
 class StocktakeOpeningBalanceAdmin(admin.ModelAdmin):
-    list_display = ('opening_balance_pk', 'item', 'date', 'qty', 'rate', 'notes', 'created_at')
+    list_display = (
+        'opening_balance_pk', 'item', 'date', 'qty', 'rate', 'notes',
+        'created_at', 'updated_at',
+    )
     list_filter = ('date', 'item__project_type')
     search_fields = ('item__item', 'notes')
     date_hierarchy = 'date'
@@ -405,9 +537,13 @@ class StocktakeSnapItemInline(admin.TabularInline):
     readonly_fields = ('item', 'book_qty', 'counted_qty', 'variance_qty')
 
 class StocktakeSnapAdmin(admin.ModelAdmin):
+    # The xero_journals JSONField is summarised by xero_journal_summary
+    # (already defined below) so a multi-org snap stays scannable rather
+    # than dumping raw JSON into the column.
     list_display = (
         'snap_pk', 'date', 'costing_method', 'status',
-        'xero_journal_summary', 'notes', 'created_at',
+        'xero_journal_id', 'xero_journal_summary', 'notes',
+        'created_at', 'updated_at',
     )
     list_filter = ('status', 'costing_method', 'date')
     search_fields = ('notes', 'xero_journal_id')
@@ -422,13 +558,20 @@ class StocktakeSnapAdmin(admin.ModelAdmin):
         return obj.xero_journal_id or '—'
 
 class StocktakeSnapItemAdmin(admin.ModelAdmin):
-    list_display = ('snap_item_pk', 'snap', 'item', 'book_qty', 'counted_qty', 'variance_qty', 'created_at')
+    list_display = (
+        'snap_item_pk', 'snap', 'item', 'book_qty', 'counted_qty',
+        'variance_qty', 'created_at', 'updated_at',
+    )
     list_filter = ('snap__date', 'snap__status', 'item__project_type')
     search_fields = ('item__item',)
 
 class StocktakeSnapAllocationAdmin(admin.ModelAdmin):
-    list_display = ('snap_allocation_pk', 'snap_item', 'project', 'qty', 'rate', 'amount', 'created_at')
-    list_filter = ('project', 'snap_item__snap__date')
+    list_display = (
+        'snap_allocation_pk', 'snap_item', 'project',
+        'is_writeoff', 'writeoff_xero_instance',
+        'qty', 'rate', 'amount', 'created_at', 'updated_at',
+    )
+    list_filter = ('project', 'is_writeoff', 'writeoff_xero_instance', 'snap_item__snap__date')
     search_fields = ('project__project', 'snap_item__item__item')
 
 admin.site.register(StocktakeAllocations, StocktakeAllocationsAdmin)
