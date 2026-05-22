@@ -789,8 +789,9 @@ $(document).ready(function() {
             
             const typeClass = project.project_type || 'general';
             
+            const isRevenue = (project.is_revenue_project !== false);  // default true if missing
             const card = $(`
-                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}" data-project-status="${project.project_status}">
+                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}" data-project-status="${project.project_status}" data-is-revenue-project="${isRevenue ? 1 : 0}">
                     <div class="card-header card-toggle">
                         <h5 class="card-title">${project.project}</h5>
                         <i class="fas fa-chevron-down card-chevron"></i>
@@ -837,6 +838,13 @@ $(document).ready(function() {
                                     <option value="">Loading...</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label title="Set to 'No' for internal/expense-only projects (e.g. R&D). HC Claims are disabled and HC Variations are relabelled 'Scope Variations'.">Revenue Project</label>
+                                <select class="form-control form-control-sm dropdown-is-revenue-project" disabled>
+                                    <option value="1"${isRevenue ? ' selected' : ''}>Yes</option>
+                                    <option value="0"${!isRevenue ? ' selected' : ''}>No</option>
+                                </select>
+                            </div>
                             <div class="dropdown-actions">
                                 <button class="btn btn-warning btn-sm dropdown-update-btn">Update</button>
                                 <button class="btn btn-success btn-sm dropdown-save-btn" style="display: none;">Save</button>
@@ -867,6 +875,8 @@ $(document).ready(function() {
             card.data('original-manager', project.manager || '');
             card.data('original-manager-email', project.manager_email || '');
             card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
+            card.data('original-is-revenue-project', isRevenue ? 1 : 0);
+            card.data('is-revenue-project', isRevenue ? 1 : 0);
             card.data('xero-instance-pk', project.xero_instance_pk);
             card.data('project-type', project.project_type);
             card.data('rates-based', project.rates_based || 0);  // 0=not rates-based, 1=rates-based
@@ -1109,6 +1119,7 @@ $(document).ready(function() {
         dropdown.find('.dropdown-manager-email').val(card.data('original-manager-email') || '');
         dropdown.find('.dropdown-contracts-admin').val(card.data('original-contracts-admin-emails') || '');
         dropdown.find('.dropdown-sales-account').val(card.data('original-sales-account') || '');
+        dropdown.find('.dropdown-is-revenue-project').val(String(card.data('original-is-revenue-project')));
         
         // Disable inputs
         dropdown.find('input, select').prop('disabled', true);
@@ -1134,6 +1145,7 @@ $(document).ready(function() {
         formData.append('manager_email', dropdown.find('.dropdown-manager-email').val());
         formData.append('contracts_admin_emails', dropdown.find('.dropdown-contracts-admin').val());
         formData.append('xero_sales_account', dropdown.find('.dropdown-sales-account').val());
+        formData.append('is_revenue_project', dropdown.find('.dropdown-is-revenue-project').val());
         
         $.ajax({
             url: '/core/update_project/' + projectPk + '/',
@@ -1144,12 +1156,23 @@ $(document).ready(function() {
             headers: { 'X-CSRFToken': Utils.getCSRFToken() },
             success: function(response) {
                 if (response.status === 'success') {
+                    // Authoritative value comes back from the server (the
+                    // server may have rejected the True->False flip if HC
+                    // claims exist; this guards us from drifting out of
+                    // sync if someone bypasses the front-end check).
+                    const serverIsRevenue = response.project && response.project.is_revenue_project !== false;
+                    const serverIsRevenueInt = serverIsRevenue ? 1 : 0;
+
                     // Update card data
                     card.data('original-project', dropdown.find('.dropdown-project-name').val());
                     card.data('original-manager', dropdown.find('.dropdown-manager').val());
                     card.data('original-manager-email', dropdown.find('.dropdown-manager-email').val());
                     card.data('original-contracts-admin-emails', dropdown.find('.dropdown-contracts-admin').val());
                     card.data('original-sales-account', dropdown.find('.dropdown-sales-account').val());
+                    card.data('original-is-revenue-project', serverIsRevenueInt);
+                    card.data('is-revenue-project', serverIsRevenueInt);
+                    card.attr('data-is-revenue-project', serverIsRevenueInt);
+                    dropdown.find('.dropdown-is-revenue-project').val(String(serverIsRevenueInt));
                     
                     // Update card display
                     card.find('.card-title').text(dropdown.find('.dropdown-project-name').val());
@@ -1163,11 +1186,25 @@ $(document).ready(function() {
                     dropdown.find('.dropdown-update-btn').show();
                 } else {
                     alert(response.message || 'Error updating project');
+                    // Roll the toggle back to the last-known-good value so
+                    // the form reflects the rejected state.
+                    const orig = card.data('original-is-revenue-project');
+                    dropdown.find('.dropdown-is-revenue-project').val(String(orig));
                 }
                 btn.prop('disabled', false).text('Save');
             },
-            error: function() {
-                alert('Error updating project');
+            error: function(xhr) {
+                // Server-side guard rejection (e.g. HC claims exist when
+                // trying to flip Revenue Project Yes -> No) returns 400 with
+                // a JSON body containing a 'message' explaining why.
+                let msg = 'Error updating project';
+                try {
+                    const parsed = xhr && xhr.responseJSON;
+                    if (parsed && parsed.message) msg = parsed.message;
+                } catch (_) { /* ignore */ }
+                alert(msg);
+                const orig = card.data('original-is-revenue-project');
+                dropdown.find('.dropdown-is-revenue-project').val(String(orig));
                 btn.prop('disabled', false).text('Save');
             }
         });

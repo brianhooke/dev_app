@@ -21,8 +21,13 @@
         </div>
         
         <button class="btn btn-primary construction-nav-btn" data-section="contract-budget">Contract Budget</button>
-        <button class="btn btn-primary construction-nav-btn" data-section="hc-variations">HC Variations</button>
-        <button class="btn btn-primary construction-nav-btn" data-section="hc-claims">HC Claims</button>
+        <!-- Variations button: label flips between "HC Variations" and
+             "Scope Variations" depending on whether the active project is a
+             revenue project. The downstream click handler is the same in
+             both cases. -->
+        <button class="btn btn-primary construction-nav-btn" data-section="hc-variations" id="constructionVariationsBtn">HC Variations</button>
+        <!-- HC Claims button is hidden entirely for non-revenue projects. -->
+        <button class="btn btn-primary construction-nav-btn" data-section="hc-claims" id="constructionHcClaimsBtn">HC Claims</button>
         <button class="btn btn-primary construction-nav-btn" data-section="documents">Documents</button>
         
         <!-- Dynamic action buttons (shown based on selected section) -->
@@ -146,6 +151,23 @@ $(document).ready(function() {
         $('#tenderProjectName').text(projectName);
     });
     
+    // Apply revenue-project-aware label/visibility swap on the
+    // construction nav bar. Called every time we enter the construction
+    // view so the toolbar reflects the freshly-clicked project's state.
+    //   isRevenue === true  : "HC Variations" + "HC Claims" both visible
+    //   isRevenue === false : "Scope Variations" only; HC Claims hidden
+    window.applyRevenueProjectButtonState = function(isRevenue) {
+        var $variationsBtn = $('#constructionVariationsBtn');
+        var $hcClaimsBtn = $('#constructionHcClaimsBtn');
+        if (isRevenue) {
+            $variationsBtn.text('HC Variations');
+            $hcClaimsBtn.show();
+        } else {
+            $variationsBtn.text('Scope Variations');
+            $hcClaimsBtn.hide();
+        }
+    };
+
     // Handle Construction link click from project card - show construction view (Execution mode)
     $(document).on('click', '.construction-link', function(e) {
         e.preventDefault();
@@ -155,6 +177,8 @@ $(document).ready(function() {
         const projectName = card.find('.card-title').text();
         const xeroInstancePk = card.data('xero-instance-pk');
         const projectType = card.data('project-type');
+        // The card stores 1/0 ints; treat anything other than 0 as "revenue".
+        const isRevenueProject = (Number(card.data('is-revenue-project')) !== 0);
         
         
         // Store current project info globally
@@ -162,7 +186,8 @@ $(document).ready(function() {
             pk: projectPk,
             name: projectName,
             xero_instance_pk: xeroInstancePk,
-            project_type: projectType
+            project_type: projectType,
+            is_revenue_project: isRevenueProject
         };
         
         // Hide projects header and grid
@@ -172,6 +197,10 @@ $(document).ready(function() {
         // Reset all construction nav buttons to outline state (none selected initially)
         $('.construction-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
         $('#billsButtonGroup').removeClass('active');
+
+        // Apply revenue-project-aware button state (label swap + hide HC
+        // Claims for internal/expense-only projects).
+        window.applyRevenueProjectButtonState(isRevenueProject);
         
         // Clear content area with placeholder
         $('#constructionContentArea').html('<p style="text-align: center; color: #6c757d; padding: 40px;">Select a section above to view content.</p>');

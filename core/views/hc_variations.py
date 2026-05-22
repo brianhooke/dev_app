@@ -29,6 +29,7 @@ def hc_variations_view(request):
     project_pk = request.GET.get('project_pk')
     is_construction = False
     project_status = 1  # Default to tender
+    is_revenue_project = True  # Default; only flips False for non-revenue projects
     
     if project_pk:
         try:
@@ -36,8 +37,14 @@ def hc_variations_view(request):
             # Use rates_based flag from ProjectTypes instead of hardcoded project type names
             is_construction = (project.project_type and project.project_type.rates_based == 1)
             project_status = project.project_status if project.project_status in [1, 2] else 1
+            is_revenue_project = bool(project.is_revenue_project)
         except Projects.DoesNotExist:
             pass
+
+    # Variation noun used throughout the section UI. Revenue projects keep
+    # the original "HC Variation" label; non-revenue projects render the
+    # exact same UI but call the concept "Scope Variation".
+    variation_noun = 'HC Variation' if is_revenue_project else 'Scope Variation'
     
     # Main table columns - HC Variations list
     main_table_columns = [
@@ -70,6 +77,8 @@ def hc_variations_view(request):
         'project_pk': project_pk,
         'is_construction': is_construction,
         'project_status': project_status,
+        'is_revenue_project': is_revenue_project,
+        'variation_noun': variation_noun,  # "HC Variation" or "Scope Variation"
         'main_table_columns': main_table_columns,
         'allocations_columns': allocations_columns,
     }

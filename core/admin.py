@@ -190,10 +190,12 @@ class ProjectsAdmin(admin.ModelAdmin):
     list_display = (
         "projects_pk", "project", "project_type", "xero_instance",
         "xero_sales_account", "background", "archived", "project_status",
+        "is_revenue_project",
         "manager", "manager_email", "contracts_admin_emails",
         "created_at", "updated_at",
     )
-    list_filter = ('project_type', 'archived', 'project_status')
+    list_filter = ('project_type', 'archived', 'project_status', 'is_revenue_project')
+    list_editable = ('is_revenue_project',)
 
 class ContactsAdmin(admin.ModelAdmin):
     list_display = (

@@ -6,7 +6,10 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from core.models import Projects, ProjectTypes, XeroInstances, XeroAccounts, Categories, Costing, Units
+from core.models import (
+    Projects, ProjectTypes, XeroInstances, XeroAccounts, Categories,
+    Costing, Units, HC_claim_allocations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +258,8 @@ def get_projects(request):
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
-                'project_status': project.project_status
+                'project_status': project.project_status,
+                'is_revenue_project': bool(project.is_revenue_project),
             })
         
         return JsonResponse({
@@ -334,7 +338,35 @@ def update_project(request, project_pk):
             project.contracts_admin_emails = contracts_admin_emails
         elif 'contracts_admin_emails' in request.POST:
             project.contracts_admin_emails = None
-        
+
+        # Revenue Project flag — guard the True->False transition.
+        # Allowed transitions:
+        #   True  -> True   no-op
+        #   True  -> False  ONLY if no HC_claim_allocations point at any
+        #                   Costing belonging to this project. Existing
+        #                   Hc_variation rows are *not* a blocker — they
+        #                   simply get relabelled "Scope Variation" in the UI.
+        #   False -> True   always allowed
+        #   False -> False  no-op
+        if 'is_revenue_project' in request.POST:
+            raw = request.POST.get('is_revenue_project', '').strip().lower()
+            new_value = raw in ('1', 'true', 'yes', 'on')
+            if project.is_revenue_project and not new_value:
+                has_claims = HC_claim_allocations.objects.filter(
+                    item__project=project
+                ).exists()
+                if has_claims:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': (
+                            "Cannot set this project to non-revenue: at least "
+                            "one HC claim has already been raised against it. "
+                            "Delete the HC claim(s) first if you really need "
+                            "to flip this flag."
+                        ),
+                    }, status=400)
+            project.is_revenue_project = new_value
+
         project.save()
         
         logger.info(f"Updated project: {project.project} (pk={project.projects_pk})")
@@ -368,7 +400,8 @@ def update_project(request, project_pk):
                 'manager': project.manager or '',
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
-                'project_status': project.project_status
+                'project_status': project.project_status,
+                'is_revenue_project': bool(project.is_revenue_project),
             }
         })
         

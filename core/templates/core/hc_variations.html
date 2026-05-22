@@ -20,6 +20,10 @@
     }
     window.hcVariationIsConstruction = {{ is_construction|yesno:"true,false" }};
     window.hcVariationProjectStatus = {{ project_status|default:1 }};
+    // Noun used in user-facing strings throughout this section.
+    // "HC Variation" for revenue projects, "Scope Variation" otherwise.
+    window.hcVariationNoun = "{{ variation_noun|default:'HC Variation'|escapejs }}";
+    window.hcVariationNounLower = window.hcVariationNoun.toLowerCase();
 </script>
 
 <!-- Self-Contained HC Variations Section JS -->
@@ -66,7 +70,11 @@
             pkField: 'hc_variation_pk'
         },
         mainTable: {
-            emptyMessage: 'No HC variations found. Click "+ New Variation" to create one.',
+            emptyMessage: (function() {
+                var noun = window.hcVariationNounLower;
+                var btnNoun = (window.hcVariationNoun === 'Scope Variation') ? 'Scope Variation' : 'Variation';
+                return 'No ' + noun + 's found. Click "+ New ' + btnNoun + '" to create one.';
+            })(),
             showFooter: true,
             alwaysShowFooter: true,
             footerTotals: [{ colIndex: 2, valueKey: 'total_amount' }],
@@ -857,8 +865,13 @@
         });
     }
     
-    // Initialize - Add New Variation button using shared AllocationsManager function
-    AllocationsManager.addNewItemButton('hcVariation', 'New Variation', createNewVariationRow);
+    // Initialize - Add New Variation button using shared AllocationsManager
+    // function. Label tracks the noun: "New Variation" for revenue projects,
+    // "New Scope Variation" for non-revenue projects.
+    var _newVariationBtnLabel = (window.hcVariationNoun === 'Scope Variation')
+        ? 'New Scope Variation'
+        : 'New Variation';
+    AllocationsManager.addNewItemButton('hcVariation', _newVariationBtnLabel, createNewVariationRow);
     setupMainTableHeight();
     
     // Make functions globally available
@@ -869,7 +882,7 @@
     if (projectPk) {
         loadVariationsData();
     } else {
-        $('#hcVariationMainTableBody').html('<tr><td colspan="4" class="text-center text-muted">Select a project to view HC variations</td></tr>');
+        $('#hcVariationMainTableBody').html('<tr><td colspan="4" class="text-center text-muted">Select a project to view ' + window.hcVariationNounLower + 's</td></tr>');
         // Adjust height for empty state
         if (window.adjustMainTableHeight && window.adjustMainTableHeight['hcVariation']) {
             window.adjustMainTableHeight['hcVariation']();

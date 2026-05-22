@@ -508,6 +508,11 @@ class Projects(models.Model):
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
     project_status = models.IntegerField(default=1)  # 1=tender, 2=execution
+    # True = client-billed revenue project (HC claims + HC variations).
+    # False = internal/expense-only project (no HC claims; HC variations are
+    # surfaced in the UI as "Scope Variations" but use the same model). Can
+    # only be flipped True->False if no HC claims exist for the project.
+    is_revenue_project = models.BooleanField(default=True)
     manager = models.CharField(max_length=255, null=True, blank=True)
     manager_email = models.CharField(max_length=255, null=True, blank=True)
     contracts_admin_emails = models.CharField(max_length=500, null=True, blank=True)
