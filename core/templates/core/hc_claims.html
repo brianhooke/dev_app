@@ -265,37 +265,62 @@
         border-collapse: collapse;
         font-size: 12px;
     }
-    
+
     .finalized-report .report-table th,
     .finalized-report .report-table td {
-        padding: 8px 12px;
-        text-align: left;
+        padding: 8px 10px;
+        text-align: right;
         border: 1px solid #dee2e6;
+        font-variant-numeric: tabular-nums;
     }
-    
+
+    .finalized-report .report-table th.left,
+    .finalized-report .report-table td.left {
+        text-align: left;
+    }
+
     .finalized-report .report-table th {
         background: #e9ecef;
         font-weight: 600;
         color: #212529;
         border-bottom: 2px solid #dee2e6;
     }
-    
-    .finalized-report .report-table th.this-claim-col {
-        color: #28a745;
-        font-weight: 600;
+
+    .finalized-report .report-table th.group-this {
+        background: #d4edda;
+        color: #155724;
     }
-    
-    .finalized-report .report-table td.this-claim-col {
-        color: #28a745;
+
+    .finalized-report .report-table th.group-prev {
+        background: #e2e3e5;
+        color: #383d41;
+    }
+
+    .finalized-report .report-table th.group-still {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .finalized-report .report-table td.group-this {
+        background: #f4faf5;
+    }
+
+    .finalized-report .report-table td.group-prev {
+        background: #fafafa;
+    }
+
+    .finalized-report .report-table td.group-still {
+        background: #fffbe6;
         font-weight: 500;
     }
-    
+
     .finalized-report .report-table .totals-row {
         background: #f8f9fa;
     }
-    
+
     .finalized-report .report-table .totals-row td {
         border-top: 2px solid #212529;
+        font-weight: 600;
     }
     
     @media print {
@@ -371,24 +396,63 @@
     }
     
     .bills-selection-list {
-        max-height: 120px;
+        max-height: 200px;
         overflow-y: auto;
         border: 1px solid var(--color-border);
         border-radius: 4px;
-        padding: 6px;
         background: var(--color-bg-surface);
     }
-    
-    .bills-selection-list .bill-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 0;
+
+    .bills-selection-list table.bills-selection-table {
+        width: 100%;
+        border-collapse: collapse;
         font-size: 11px;
     }
-    
-    .bills-selection-list .bill-item:hover {
+
+    .bills-selection-list table.bills-selection-table th,
+    .bills-selection-list table.bills-selection-table td {
+        padding: 4px 6px;
+        text-align: left;
+        border-bottom: 1px solid var(--color-border);
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .bills-selection-list table.bills-selection-table thead th {
+        position: sticky;
+        top: 0;
         background: var(--color-bg-muted);
+        font-weight: 600;
+        z-index: 1;
+    }
+
+    .bills-selection-list table.bills-selection-table th.col-checkbox,
+    .bills-selection-list table.bills-selection-table td.col-checkbox {
+        width: 24px;
+        text-align: center;
+    }
+
+    .bills-selection-list table.bills-selection-table td.col-amount {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .bills-selection-list table.bills-selection-table td.col-multi {
+        white-space: normal;
+        max-width: 200px;
+    }
+
+    .bills-selection-list table.bills-selection-table tr.row-already-attached td {
+        background: rgba(16, 185, 129, 0.06);
+    }
+
+    .bills-selection-list table.bills-selection-table tbody tr:hover td {
+        background: var(--color-bg-muted);
+    }
+
+    .bills-selection-list .bills-empty-state {
+        padding: 8px;
+        margin: 0;
     }
     
     /* Editable cells - subtle yellow highlight */
@@ -554,11 +618,30 @@
     var $actionsRow = $('#claimActionsRow');
     var $deleteBtn = $('#deleteClaimBtn');
     
-    // Get column count based on construction mode
+    // Get column count based on construction mode. Must match the
+    // number of <th>s emitted by buildTableHeader and the number of
+    // <td>s emitted by both renderCategoryRow and the per-item
+    // rendering inside renderBudgetTable, otherwise category rows
+    // skew sideways and category subtotals end up under the wrong
+    // header (see audit notes for collapsed-totals bug).
+    //
+    // Construction (18 cols):
+    //   Cat/Item, Unit, Contract, Working,
+    //   Uncommit Qty/Rate/Amt/Notes,
+    //   Commit Qty/Rate/Amt,
+    //   Fixed on Site,
+    //   Invoiced Prev/This,
+    //   HC Prev/This,
+    //   QS Prev/This
+    //
+    // Non-construction (12 cols):
+    //   Cat/Item, Contract, Working, Uncommitted, Committed,
+    //   Fixed on Site,
+    //   Invoiced Prev/This,
+    //   HC Prev/This,
+    //   QS Prev/This
     function getColCount() {
-        // Construction: Cat/Item, Unit, ContractBudget, WorkingBudget, Uncommitted(Qty,Rate,Amt,Notes), Committed(Qty,Rate,Amt), FixedOnSite, Invoiced, HCPrev, HCThis, QSPrev, QSThis = 16 cols
-        // Non-construction: Cat/Item, ContractBudget, WorkingBudget, Uncommitted, Committed, FixedOnSite, Invoiced, HCPrev, HCThis, QSPrev, QSThis = 11 cols
-        return isConstruction ? 16 : 11;
+        return isConstruction ? 18 : 12;
     }
     
     // Build table header based on construction mode
@@ -1106,6 +1189,7 @@
         
         // New claim button
         $('#newClaimBtn').on('click', function() {
+            if ($(this).prop('disabled')) return;
             $newClaimForm.addClass('show');
             $(this).hide();
         });
@@ -1122,6 +1206,23 @@
         // Delete claim
         $deleteBtn.on('click', deleteClaim);
         
+        // Bills/snaps table interactions: select-all in header
+        // toggles every row; per-row changes update the header
+        // checkbox to checked / unchecked / indeterminate.
+        $(document).on('change', '#billsSelectionList .bills-select-all', function() {
+            var checked = $(this).prop('checked');
+            $('#billsSelectionList .bill-checkbox').prop('checked', checked);
+            syncBillsSelectAll();
+        });
+        $(document).on('change', '#billsSelectionList .bill-checkbox', syncBillsSelectAll);
+
+        $(document).on('change', '#snapsSelectionList .snaps-select-all', function() {
+            var checked = $(this).prop('checked');
+            $('#snapsSelectionList .snap-checkbox').prop('checked', checked);
+            syncSnapsSelectAll();
+        });
+        $(document).on('change', '#snapsSelectionList .snap-checkbox', syncSnapsSelectAll);
+
         // Finalize claim
         $('#finalizeClaimBtn').on('click', function() {
             if (confirm('Click OK to finalise the claim')) {
@@ -1138,12 +1239,35 @@
             success: function(response) {
                 if (response.status === 'success') {
                     populateClaimSelector(response.claims);
+                    // Reflect draft state in the New Claim button so the
+                    // user gets a visual + tooltip cue rather than a
+                    // surprise 400 from the server (B1/B7/B16 in the
+                    // review).
+                    updateNewClaimButtonState(response.claims);
                 }
             },
             error: function(xhr, status, error) {
                 console.error('Failed to load claims:', error);
             }
         });
+    }
+
+    // Disable the New Claim button (with tooltip) when there's already
+    // a draft for this project. Re-enable when there isn't.
+    function updateNewClaimButtonState(claims) {
+        var $btn = $('#newClaimBtn');
+        var hasDraft = (claims || []).some(function(c) { return c.status === 0; });
+        if (hasDraft) {
+            $btn.prop('disabled', true)
+                .addClass('disabled')
+                .css('cursor', 'not-allowed')
+                .attr('title', 'A draft HC claim is already in progress for this project. Complete or delete it before starting a new one.');
+        } else {
+            $btn.prop('disabled', false)
+                .removeClass('disabled')
+                .css('cursor', '')
+                .attr('title', '');
+        }
     }
     
     // Populate claim selector dropdown
@@ -1176,27 +1300,63 @@
         });
     }
     
-    // Render bills selection checkboxes
+    // Render bills selection table with a select-all checkbox in
+    // the header. One row per bill; category/costing show all
+    // values the bill touches on this project, joined with commas.
     function renderBillsSelection() {
         var $list = $('#billsSelectionList');
         $list.empty();
-        
+
         if (availableBills.length === 0) {
-            $list.html('<p class="text-muted" style="margin: 0;">No unassigned bills available</p>');
+            $list.html('<p class="text-muted bills-empty-state">No unassigned bills available</p>');
             return;
         }
-        
+
+        var $table = $('<table class="bills-selection-table">');
+        var $thead = $('<thead>');
+        var $headRow = $('<tr>');
+        $headRow.append(
+            $('<th class="col-checkbox">').append(
+                $('<input type="checkbox" class="bills-select-all" title="Select / deselect all">')
+            )
+        );
+        $headRow.append('<th>Supplier</th>');
+        $headRow.append('<th>Invoice date</th>');
+        $headRow.append('<th class="col-amount">$ (net)</th>');
+        $headRow.append('<th>Category</th>');
+        $headRow.append('<th>Costing</th>');
+        $thead.append($headRow);
+        $table.append($thead);
+
+        var $tbody = $('<tbody>');
         availableBills.forEach(function(bill) {
-            var dateStr = bill.bill_date ? formatDate(bill.bill_date) : 'No date';
-            var amount = formatMoney(bill.total_amount);
-            
-            var $item = $('<div class="bill-item">');
-            var $checkbox = $('<input type="checkbox" class="bill-checkbox">').val(bill.bill_pk);
-            var $label = $('<span>').text(bill.supplier + ' - ' + dateStr + ' ($' + amount + ')');
-            
-            $item.append($checkbox).append($label);
-            $list.append($item);
+            var dateStr = bill.bill_date ? formatDate(bill.bill_date) : '';
+            var net = bill.total_net != null ? bill.total_net : bill.total_amount;
+            var amount = formatMoney(net);
+            var categories = (bill.categories || []).join(', ');
+            var costings = (bill.costings || []).join(', ');
+
+            var $tr = $('<tr>');
+            if (bill.already_in_claim) {
+                $tr.addClass('row-already-attached');
+            }
+            $tr.append(
+                $('<td class="col-checkbox">').append(
+                    $('<input type="checkbox" class="bill-checkbox">')
+                        .val(bill.bill_pk)
+                        .prop('checked', !!bill.already_in_claim)
+                )
+            );
+            $tr.append($('<td>').text(bill.supplier || ''));
+            $tr.append($('<td>').text(dateStr));
+            $tr.append($('<td class="col-amount">').text(amount));
+            $tr.append($('<td class="col-multi">').text(categories));
+            $tr.append($('<td class="col-multi">').text(costings));
+            $tbody.append($tr);
         });
+        $table.append($tbody);
+        $list.append($table);
+        syncBillsSelectAll();
     }
     
     // Load available stocktake snaps for selection
@@ -1217,26 +1377,90 @@
         });
     }
     
-    // Render snaps selection checkboxes
+    // Render snaps selection table — same shape as bills, with
+    // "Stocktake" used as the supplier slot (snaps don't have an
+    // external supplier).
     function renderSnapsSelection() {
         var $list = $('#snapsSelectionList');
         $list.empty();
-        
+
         if (availableSnaps.length === 0) {
-            $list.html('<p class="text-muted" style="margin: 0;">No stocktake snaps available</p>');
+            $list.html('<p class="text-muted bills-empty-state">No stocktake snaps available</p>');
             return;
         }
-        
+
+        var $table = $('<table class="bills-selection-table">');
+        var $thead = $('<thead>');
+        var $headRow = $('<tr>');
+        $headRow.append(
+            $('<th class="col-checkbox">').append(
+                $('<input type="checkbox" class="snaps-select-all" title="Select / deselect all">')
+            )
+        );
+        $headRow.append('<th>Supplier</th>');
+        $headRow.append('<th>Date</th>');
+        $headRow.append('<th class="col-amount">$ (net)</th>');
+        $headRow.append('<th>Category</th>');
+        $headRow.append('<th>Costing</th>');
+        $thead.append($headRow);
+        $table.append($thead);
+
+        var $tbody = $('<tbody>');
         availableSnaps.forEach(function(snap) {
-            var dateStr = snap.snap_date ? formatDate(snap.snap_date) : 'No date';
+            var dateStr = snap.snap_date ? formatDate(snap.snap_date) : '';
             var amount = formatMoney(snap.total_allocated);
-            
-            var $item = $('<div class="bill-item">');
-            var $checkbox = $('<input type="checkbox" class="snap-checkbox">').val(snap.stocktake_snap_pk);
-            var $label = $('<span>').text('Stocktake - ' + dateStr + ' ($' + amount + ')');
-            
-            $item.append($checkbox).append($label);
-            $list.append($item);
+            var categories = (snap.categories || []).join(', ');
+            var costings = (snap.costings || []).join(', ');
+
+            var $tr = $('<tr>');
+            if (snap.already_in_claim) {
+                $tr.addClass('row-already-attached');
+            }
+            $tr.append(
+                $('<td class="col-checkbox">').append(
+                    $('<input type="checkbox" class="snap-checkbox">')
+                        .val(snap.stocktake_snap_pk)
+                        .prop('checked', !!snap.already_in_claim)
+                )
+            );
+            $tr.append($('<td>').text('Stocktake'));
+            $tr.append($('<td>').text(dateStr));
+            $tr.append($('<td class="col-amount">').text(amount));
+            $tr.append($('<td class="col-multi">').text(categories));
+            $tr.append($('<td class="col-multi">').text(costings));
+            $tbody.append($tr);
+        });
+        $table.append($tbody);
+        $list.append($table);
+        syncSnapsSelectAll();
+    }
+
+    // Keep the header select-all checkbox in sync with row state.
+    function syncBillsSelectAll() {
+        var $rows = $('#billsSelectionList .bill-checkbox');
+        var $all = $('#billsSelectionList .bills-select-all');
+        if (!$rows.length) {
+            $all.prop({checked: false, indeterminate: false});
+            return;
+        }
+        var checkedCount = $rows.filter(':checked').length;
+        $all.prop({
+            checked: checkedCount === $rows.length,
+            indeterminate: checkedCount > 0 && checkedCount < $rows.length
+        });
+    }
+
+    function syncSnapsSelectAll() {
+        var $rows = $('#snapsSelectionList .snap-checkbox');
+        var $all = $('#snapsSelectionList .snaps-select-all');
+        if (!$rows.length) {
+            $all.prop({checked: false, indeterminate: false});
+            return;
+        }
+        var checkedCount = $rows.filter(':checked').length;
+        $all.prop({
+            checked: checkedCount === $rows.length,
+            indeterminate: checkedCount > 0 && checkedCount < $rows.length
         });
     }
     
@@ -1328,154 +1552,258 @@
         });
     }
     
-    // Render finalized claim report (PDF-friendly)
+    // Render finalized claim report (PDF-friendly).
+    //
+    // Single table, multi-level header. Column groups, in order:
+    //   - Category               (rowspan=2)
+    //   - Contract Budget        (rowspan=2; base contract excluding variations)
+    //   - This Claim             (colspan=3): HC Variation | HC Claim | QS Claim
+    //   - Prev Claims            (colspan=3): HC Variation | HC Claim | QS Claim
+    //   - Total Claimed          (colspan=2): HC | QS
+    //   - Still to Claim         (colspan=2): HC | QS
+    //
+    // Notes on the figures:
+    //   - "Contract Budget" is the BASE contract (item.base_contract_budget),
+    //     not the variation-adjusted contract. Variations are surfaced
+    //     in their own columns so totals are additive: Contract Budget
+    //     + This HC Variation + Prev HC Variation = full claimable
+    //     contract value at this claim's date.
+    //   - "This HC Variation" and "Prev HC Variation" are split by the
+    //     date of the most recent prior approved claim
+    //     (variations on or before that date count as "prev",
+    //     variations after that date and on or before this claim's
+    //     date count as "this"). Computed server-side and surfaced
+    //     per-item as item.this_hc_variations / item.prev_hc_variations.
+    //   - "Total Claimed (HC)" = prev_hc_claimed + this_hc_claim
+    //   - "Total Claimed (QS)" = prev_qs_claimed + this_qs_claim
+    //   - "Still to Claim (HC)" = base + total variations - total HC
+    //     claimed. Same formula for QS but vs total QS claimed.
     function renderFinalizedReport() {
-        // Hide the main budget table and footer
         $('#hcClaimsTable').hide();
         $fixedFooter.hide();
-        
-        // Create or show report container
+
         var $reportContainer = $('#finalizedReportContainer');
         if (!$reportContainer.length) {
             $reportContainer = $('<div id="finalizedReportContainer" class="finalized-report"></div>');
             $('#hcClaimsTable').after($reportContainer);
         }
         $reportContainer.empty().show();
-        
-        // Aggregate data by category
+
         var categoryTotals = {};
-        var grandTotals = {
+        var grand = {
             contract_budget: 0,
-            hc_variations: 0,
-            this_hc_claim: 0,
-            total_hc_claimed: 0,
-            this_qs_claim: 0,
-            total_qs_claimed: 0
+            this_hc_var: 0, this_hc: 0, this_qs: 0,
+            prev_hc_var: 0, prev_hc: 0, prev_qs: 0,
+            total_hc: 0, total_qs: 0,
+            still_hc: 0, still_qs: 0
         };
-        
+
         budgetData.forEach(function(item) {
             var catName = item.category || 'Uncategorized';
             if (!categoryTotals[catName]) {
                 categoryTotals[catName] = {
                     contract_budget: 0,
-                    hc_variations: 0,
-                    this_hc_claim: 0,
-                    total_hc_claimed: 0,
-                    this_qs_claim: 0,
-                    total_qs_claimed: 0
+                    this_hc_var: 0, this_hc: 0, this_qs: 0,
+                    prev_hc_var: 0, prev_hc: 0, prev_qs: 0,
+                    total_hc: 0, total_qs: 0,
+                    still_hc: 0, still_qs: 0
                 };
             }
-            
-            var contractBudget = parseFloat(item.contract_budget) || 0;
-            var thisHcClaim = parseFloat(item.this_hc_claim) || 0;
-            var prevHcClaimed = parseFloat(item.prev_hc_claimed) || 0;
-            var thisQsClaim = parseFloat(item.this_qs_claim) || 0;
-            var prevQsClaimed = parseFloat(item.prev_qs_claimed) || 0;
-            
-            categoryTotals[catName].contract_budget += contractBudget;
-            categoryTotals[catName].this_hc_claim += thisHcClaim;
-            categoryTotals[catName].total_hc_claimed += prevHcClaimed + thisHcClaim;
-            categoryTotals[catName].this_qs_claim += thisQsClaim;
-            categoryTotals[catName].total_qs_claimed += prevQsClaimed + thisQsClaim;
-            
-            grandTotals.contract_budget += contractBudget;
-            grandTotals.this_hc_claim += thisHcClaim;
-            grandTotals.total_hc_claimed += prevHcClaimed + thisHcClaim;
-            grandTotals.this_qs_claim += thisQsClaim;
-            grandTotals.total_qs_claimed += prevQsClaimed + thisQsClaim;
+            var c = categoryTotals[catName];
+
+            // base_contract_budget is the pre-variation figure;
+            // contract_budget already has variations rolled in. We
+            // want them split here.
+            var base = parseFloat(item.base_contract_budget);
+            if (isNaN(base)) {
+                // Defensive fallback: treat base = contract - all
+                // variations if API didn't surface base for some
+                // reason. Keeps still_to_claim consistent.
+                base = (parseFloat(item.contract_budget) || 0)
+                     - (parseFloat(item.this_hc_variations) || 0)
+                     - (parseFloat(item.prev_hc_variations) || 0);
+            }
+            var thisVar = parseFloat(item.this_hc_variations) || 0;
+            var prevVar = parseFloat(item.prev_hc_variations) || 0;
+            var thisHc  = parseFloat(item.this_hc_claim) || 0;
+            var prevHc  = parseFloat(item.prev_hc_claimed) || 0;
+            var thisQs  = parseFloat(item.this_qs_claim) || 0;
+            var prevQs  = parseFloat(item.prev_qs_claimed) || 0;
+
+            var totalHc = prevHc + thisHc;
+            var totalQs = prevQs + thisQs;
+            var totalContract = base + thisVar + prevVar;
+            var stillHc = totalContract - totalHc;
+            var stillQs = totalContract - totalQs;
+
+            c.contract_budget += base;
+            c.this_hc_var += thisVar;
+            c.this_hc     += thisHc;
+            c.this_qs     += thisQs;
+            c.prev_hc_var += prevVar;
+            c.prev_hc     += prevHc;
+            c.prev_qs     += prevQs;
+            c.total_hc    += totalHc;
+            c.total_qs    += totalQs;
+            c.still_hc    += stillHc;
+            c.still_qs    += stillQs;
+
+            grand.contract_budget += base;
+            grand.this_hc_var += thisVar;
+            grand.this_hc     += thisHc;
+            grand.this_qs     += thisQs;
+            grand.prev_hc_var += prevVar;
+            grand.prev_hc     += prevHc;
+            grand.prev_qs     += prevQs;
+            grand.total_hc    += totalHc;
+            grand.total_qs    += totalQs;
+            grand.still_hc    += stillHc;
+            grand.still_qs    += stillQs;
         });
-        
-        // Build HC Claim Report
-        var hcReportHtml = '<div class="claim-report-section">';
-        hcReportHtml += '<h3 class="report-title">This Head Contract Claim</h3>';
-        hcReportHtml += '<table class="report-table">';
-        hcReportHtml += '<thead><tr><th>Category</th><th>Contract Budget</th><th>HC Variations</th><th class="this-claim-col">This Claim</th><th>Total Claimed</th></tr></thead>';
-        hcReportHtml += '<tbody>';
-        
+
+        var html = '';
+        html += '<div class="claim-report-section">';
+        html += '<h3 class="report-title">Head Contract Claim Report</h3>';
+        html += '<table class="report-table">';
+
+        // Two-row header. Cell counts:
+        //  row 1: Category, Contract Budget, This Claim, Prev Claims,
+        //         Total Claimed, Still to Claim = 6 logical columns
+        //         (some with colspan).
+        //  row 2: 3 + 3 + 2 + 2 = 10 sub-headers under the colspan'd
+        //         groups.
+        // Total leaf columns = 1 + 1 + 3 + 3 + 2 + 2 = 12.
+        html += '<thead>';
+        html += '<tr>';
+        html += '<th class="left" rowspan="2">Category</th>';
+        html += '<th rowspan="2">Contract Budget</th>';
+        html += '<th class="group-this" colspan="3">This Claim</th>';
+        html += '<th class="group-prev" colspan="3">Prev Claims</th>';
+        html += '<th colspan="2">Total Claimed</th>';
+        html += '<th class="group-still" colspan="2">Still to Claim</th>';
+        html += '</tr>';
+        html += '<tr>';
+        html += '<th class="group-this">HC Variation</th>';
+        html += '<th class="group-this">HC Claim</th>';
+        html += '<th class="group-this">QS Claim</th>';
+        html += '<th class="group-prev">HC Variation</th>';
+        html += '<th class="group-prev">HC Claim</th>';
+        html += '<th class="group-prev">QS Claim</th>';
+        html += '<th>HC</th>';
+        html += '<th>QS</th>';
+        html += '<th class="group-still">HC</th>';
+        html += '<th class="group-still">QS</th>';
+        html += '</tr>';
+        html += '</thead>';
+
+        html += '<tbody>';
         Object.keys(categoryTotals).forEach(function(catName) {
-            var cat = categoryTotals[catName];
-            hcReportHtml += '<tr>';
-            hcReportHtml += '<td>' + catName + '</td>';
-            hcReportHtml += '<td>' + formatMoney(cat.contract_budget) + '</td>';
-            hcReportHtml += '<td>' + formatMoney(cat.hc_variations) + '</td>';
-            hcReportHtml += '<td class="this-claim-col">' + formatMoney(cat.this_hc_claim) + '</td>';
-            hcReportHtml += '<td>' + formatMoney(cat.total_hc_claimed) + '</td>';
-            hcReportHtml += '</tr>';
+            var c = categoryTotals[catName];
+            html += '<tr>';
+            html += '<td class="left">' + catName + '</td>';
+            html += '<td>' + formatMoney(c.contract_budget) + '</td>';
+            html += '<td class="group-this">' + formatMoney(c.this_hc_var) + '</td>';
+            html += '<td class="group-this">' + formatMoney(c.this_hc) + '</td>';
+            html += '<td class="group-this">' + formatMoney(c.this_qs) + '</td>';
+            html += '<td class="group-prev">' + formatMoney(c.prev_hc_var) + '</td>';
+            html += '<td class="group-prev">' + formatMoney(c.prev_hc) + '</td>';
+            html += '<td class="group-prev">' + formatMoney(c.prev_qs) + '</td>';
+            html += '<td>' + formatMoney(c.total_hc) + '</td>';
+            html += '<td>' + formatMoney(c.total_qs) + '</td>';
+            html += '<td class="group-still">' + formatMoney(c.still_hc) + '</td>';
+            html += '<td class="group-still">' + formatMoney(c.still_qs) + '</td>';
+            html += '</tr>';
         });
-        
-        hcReportHtml += '</tbody>';
-        hcReportHtml += '<tfoot><tr class="totals-row">';
-        hcReportHtml += '<td><strong>Totals</strong></td>';
-        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.contract_budget) + '</strong></td>';
-        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.hc_variations) + '</strong></td>';
-        hcReportHtml += '<td class="this-claim-col"><strong>' + formatMoney(grandTotals.this_hc_claim) + '</strong></td>';
-        hcReportHtml += '<td><strong>' + formatMoney(grandTotals.total_hc_claimed) + '</strong></td>';
-        hcReportHtml += '</tr></tfoot>';
-        hcReportHtml += '</table></div>';
-        
-        // Build QS Claim Report
-        var qsReportHtml = '<div class="claim-report-section">';
-        qsReportHtml += '<h3 class="report-title">This QS Claim</h3>';
-        qsReportHtml += '<table class="report-table">';
-        qsReportHtml += '<thead><tr><th>Category</th><th>Contract Budget</th><th>HC Variations</th><th class="this-claim-col">This Claim</th><th>Total Claimed</th></tr></thead>';
-        qsReportHtml += '<tbody>';
-        
-        Object.keys(categoryTotals).forEach(function(catName) {
-            var cat = categoryTotals[catName];
-            qsReportHtml += '<tr>';
-            qsReportHtml += '<td>' + catName + '</td>';
-            qsReportHtml += '<td>' + formatMoney(cat.contract_budget) + '</td>';
-            qsReportHtml += '<td>' + formatMoney(cat.hc_variations) + '</td>';
-            qsReportHtml += '<td class="this-claim-col">' + formatMoney(cat.this_qs_claim) + '</td>';
-            qsReportHtml += '<td>' + formatMoney(cat.total_qs_claimed) + '</td>';
-            qsReportHtml += '</tr>';
-        });
-        
-        qsReportHtml += '</tbody>';
-        qsReportHtml += '<tfoot><tr class="totals-row">';
-        qsReportHtml += '<td><strong>Totals</strong></td>';
-        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.contract_budget) + '</strong></td>';
-        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.hc_variations) + '</strong></td>';
-        qsReportHtml += '<td class="this-claim-col"><strong>' + formatMoney(grandTotals.this_qs_claim) + '</strong></td>';
-        qsReportHtml += '<td><strong>' + formatMoney(grandTotals.total_qs_claimed) + '</strong></td>';
-        qsReportHtml += '</tr></tfoot>';
-        qsReportHtml += '</table></div>';
-        
-        $reportContainer.html(hcReportHtml + qsReportHtml);
+        html += '</tbody>';
+
+        html += '<tfoot><tr class="totals-row">';
+        html += '<td class="left">Totals</td>';
+        html += '<td>' + formatMoney(grand.contract_budget) + '</td>';
+        html += '<td class="group-this">' + formatMoney(grand.this_hc_var) + '</td>';
+        html += '<td class="group-this">' + formatMoney(grand.this_hc) + '</td>';
+        html += '<td class="group-this">' + formatMoney(grand.this_qs) + '</td>';
+        html += '<td class="group-prev">' + formatMoney(grand.prev_hc_var) + '</td>';
+        html += '<td class="group-prev">' + formatMoney(grand.prev_hc) + '</td>';
+        html += '<td class="group-prev">' + formatMoney(grand.prev_qs) + '</td>';
+        html += '<td>' + formatMoney(grand.total_hc) + '</td>';
+        html += '<td>' + formatMoney(grand.total_qs) + '</td>';
+        html += '<td class="group-still">' + formatMoney(grand.still_hc) + '</td>';
+        html += '<td class="group-still">' + formatMoney(grand.still_qs) + '</td>';
+        html += '</tr></tfoot>';
+
+        html += '</table></div>';
+
+        $reportContainer.html(html);
     }
     
-    // Render category row with collapse icon and subtotals
+    // Render category row with collapse icon and subtotals.
+    //
+    // Audit note: the previous version emitted only one Invoiced
+    // <td> (instead of Prev + This), used `item.invoiced` (the
+    // total invoiced across all bills) as the value, and left
+    // HC/QS Prev+This empty. That meant collapsed categories
+    // showed an "Invoiced - Prev" total that wasn't the sum of
+    // costing-level Invoiced - Prev cells, and pushed every cell
+    // after Invoiced one column to the left. This rewrite:
+    //   - emits exactly getColCount() cells in the same order as
+    //     the data rows
+    //   - sums Invoiced Prev and Invoiced This separately (matching
+    //     the per-item invoiced_prev / invoiced_this values surfaced
+    //     by the API)
+    //   - sums HC Prev/This and QS Prev/This so that, when
+    //     collapsed, the category row carries those totals through
+    //     to the user-visible columns (per the latest UX pass).
     function renderCategoryRow(catName, catItems, colCount) {
         var $catRow = $('<tr class="category-row" data-category="' + catName + '">');
-        
-        // First cell: collapse icon + category name
-        $catRow.append('<td><i class="fas fa-chevron-down collapse-icon"></i><strong>' + catName + '</strong></td>');
-        
-        // Calculate category subtotals
-        var catTotals = { contract_budget: 0, working_budget: 0, uncommitted: 0, committed: 0, fixed_on_site: 0, invoiced: 0 };
+
+        $catRow.append(
+            '<td><i class="fas fa-chevron-down collapse-icon"></i><strong>' +
+            catName + '</strong></td>'
+        );
+
+        var catTotals = {
+            contract_budget: 0,
+            working_budget: 0,
+            uncommitted: 0,
+            committed: 0,
+            fixed_on_site: 0,
+            invoiced_prev: 0,
+            invoiced_this: 0,
+            prev_hc_claimed: 0,
+            this_hc_claim: 0,
+            prev_qs_claimed: 0,
+            this_qs_claim: 0
+        };
+
         catItems.forEach(function(item) {
             catTotals.contract_budget += parseFloat(item.contract_budget) || 0;
             catTotals.working_budget += parseFloat(item.working_budget) || 0;
             if (isConstruction) {
-                catTotals.uncommitted += (parseFloat(item.uncommitted_qty) || 0) * (parseFloat(item.uncommitted_rate) || 0);
+                catTotals.uncommitted +=
+                    (parseFloat(item.uncommitted_qty) || 0) *
+                    (parseFloat(item.uncommitted_rate) || 0);
             } else {
                 catTotals.uncommitted += parseFloat(item.uncommitted) || 0;
             }
             catTotals.committed += parseFloat(item.committed) || 0;
             catTotals.fixed_on_site += parseFloat(item.fixed_on_site) || 0;
-            catTotals.invoiced += parseFloat(item.invoiced) || 0;
+            catTotals.invoiced_prev += parseFloat(item.invoiced_prev) || 0;
+            catTotals.invoiced_this += parseFloat(item.invoiced_this) || 0;
+            catTotals.prev_hc_claimed += parseFloat(item.prev_hc_claimed) || 0;
+            catTotals.this_hc_claim += parseFloat(item.this_hc_claim) || 0;
+            catTotals.prev_qs_claimed += parseFloat(item.prev_qs_claimed) || 0;
+            catTotals.this_qs_claim += parseFloat(item.this_qs_claim) || 0;
         });
-        
-        // Add subtotal cells (hidden unless collapsed)
+
         if (isConstruction) {
             $catRow.append('<td class="subtotal-cell"></td>'); // Unit
         }
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.contract_budget) + '</td>');
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.working_budget) + '</td>');
-        
+
         if (isConstruction) {
-            $catRow.append('<td class="subtotal-cell"></td>'); // Qty
-            $catRow.append('<td class="subtotal-cell"></td>'); // Rate
+            $catRow.append('<td class="subtotal-cell"></td>'); // Uncommit Qty
+            $catRow.append('<td class="subtotal-cell"></td>'); // Uncommit Rate
             $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.uncommitted) + '</td>');
             $catRow.append('<td class="subtotal-cell"></td>'); // Notes
             $catRow.append('<td class="subtotal-cell"></td>'); // Commit Qty
@@ -1485,19 +1813,19 @@
             $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.uncommitted) + '</td>');
             $catRow.append('<td class="subtotal-cell committed-value">' + formatMoney(catTotals.committed) + '</td>');
         }
-        
+
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.fixed_on_site) + '</td>');
-        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.invoiced) + '</td>');
-        $catRow.append('<td class="subtotal-cell"></td>'); // HC Prev
-        $catRow.append('<td class="subtotal-cell"></td>'); // HC This
-        $catRow.append('<td class="subtotal-cell"></td>'); // QS Prev
-        $catRow.append('<td class="subtotal-cell"></td>'); // QS This
-        
-        // Add click handler
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.invoiced_prev) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.invoiced_this) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.prev_hc_claimed) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.this_hc_claim) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.prev_qs_claimed) + '</td>');
+        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.this_qs_claim) + '</td>');
+
         $catRow.on('click', function() {
             toggleCategory(catName);
         });
-        
+
         return $catRow;
     }
     
@@ -1796,32 +2124,137 @@
         recalculateTotals();
     }
     
-    // Recalculate all totals
+    // Recalculate footer totals AND category subtotals from the
+    // current per-row data. Footer is the single source of truth
+    // for grand totals; category rows mirror their items so the
+    // collapsed view stays accurate after edits.
+    //
+    // No '$' prefix here — formatMoney already returns a plain
+    // number string and the initial render in renderBudgetTable
+    // doesn't prefix either, so prefixing only on recalc was
+    // visually inconsistent (numbers gained a "$" the first time
+    // they were edited).
     function recalculateTotals() {
         var totals = {
-            uncommitted: 0,
+            contract_budget: 0,
             working_budget: 0,
+            uncommitted: 0,
+            committed: 0,
             fixed_on_site: 0,
+            invoiced_prev: 0,
+            invoiced_this: 0,
+            prev_hc_claimed: 0,
             this_hc_claim: 0,
+            prev_qs_claimed: 0,
             this_qs_claim: 0
         };
-        
+
+        // Group running per-category subtotals at the same time so
+        // we can refresh the category rows in a single pass.
+        var byCategory = {};
+
         $('.item-row').each(function() {
             var item = $(this).data('item');
-            if (item) {
-                totals.uncommitted += item.uncommitted || 0;
-                totals.working_budget += item.working_budget || 0;
-                totals.fixed_on_site += item.fixed_on_site || 0;
-                totals.this_hc_claim += item.this_hc_claim || 0;
-                totals.this_qs_claim += item.this_qs_claim || 0;
+            if (!item) return;
+            var cat = $(this).attr('data-category') || 'Uncategorized';
+            if (!byCategory[cat]) {
+                byCategory[cat] = {
+                    contract_budget: 0, working_budget: 0,
+                    uncommitted: 0, committed: 0, fixed_on_site: 0,
+                    invoiced_prev: 0, invoiced_this: 0,
+                    prev_hc_claimed: 0, this_hc_claim: 0,
+                    prev_qs_claimed: 0, this_qs_claim: 0
+                };
+            }
+            var c = byCategory[cat];
+
+            var add = function(key, value) {
+                var v = parseFloat(value) || 0;
+                totals[key] += v;
+                c[key] += v;
+            };
+            add('contract_budget', item.contract_budget);
+            add('working_budget', item.working_budget);
+            // Uncommitted is qty*rate in construction, an
+            // explicit field otherwise.
+            if (isConstruction) {
+                var uc = (parseFloat(item.uncommitted_qty) || 0) *
+                         (parseFloat(item.uncommitted_rate) || 0);
+                totals.uncommitted += uc;
+                c.uncommitted += uc;
+            } else {
+                add('uncommitted', item.uncommitted);
+            }
+            add('committed', item.committed);
+            add('fixed_on_site', item.fixed_on_site);
+            add('invoiced_prev', item.invoiced_prev);
+            add('invoiced_this', item.invoiced_this);
+            add('prev_hc_claimed', item.prev_hc_claimed);
+            add('this_hc_claim', item.this_hc_claim);
+            add('prev_qs_claimed', item.prev_qs_claimed);
+            add('this_qs_claim', item.this_qs_claim);
+        });
+
+        $('#totalContractBudget').text(formatMoney(totals.contract_budget));
+        $('#totalWorkingBudget').text(formatMoney(totals.working_budget));
+        $('#totalUncommitted').text(formatMoney(totals.uncommitted));
+        $('#totalCommitted').text(formatMoney(totals.committed));
+        $('#totalFixedOnSite').text(formatMoney(totals.fixed_on_site));
+        $('#totalInvoicedPrev').text(formatMoney(totals.invoiced_prev));
+        $('#totalInvoicedThis').text(formatMoney(totals.invoiced_this));
+        $('#totalPrevHcClaimed').text(formatMoney(totals.prev_hc_claimed));
+        $('#totalThisHcClaim').text(formatMoney(totals.this_hc_claim));
+        $('#totalPrevQsClaimed').text(formatMoney(totals.prev_qs_claimed));
+        $('#totalThisQsClaim').text(formatMoney(totals.this_qs_claim));
+
+        // Refresh category-row subtotals so the collapsed view
+        // reflects the latest edits. We only need to update the
+        // value-bearing cells (those with text content) — empty
+        // placeholder cells (Unit, Qty, Rate, Notes) stay empty.
+        $('tr.category-row').each(function() {
+            var cat = $(this).attr('data-category');
+            var c = byCategory[cat];
+            if (!c) return;
+            // Preserve the category-name <td> at index 0 and
+            // refresh subtotal cells in the order they were
+            // appended in renderCategoryRow.
+            var $cells = $(this).children('td');
+            // Cell layout (construction):
+            //   0: name, 1: unit (empty), 2: contract, 3: working,
+            //   4: uc qty (empty), 5: uc rate (empty), 6: uc amt,
+            //   7: notes (empty), 8: cm qty (empty), 9: cm rate (empty),
+            //   10: cm amt, 11: fixed, 12: inv prev, 13: inv this,
+            //   14: hc prev, 15: hc this, 16: qs prev, 17: qs this
+            // Non-construction:
+            //   0: name, 1: contract, 2: working, 3: uncommitted,
+            //   4: committed, 5: fixed, 6: inv prev, 7: inv this,
+            //   8: hc prev, 9: hc this, 10: qs prev, 11: qs this
+            if (isConstruction) {
+                $cells.eq(2).text(formatMoney(c.contract_budget));
+                $cells.eq(3).text(formatMoney(c.working_budget));
+                $cells.eq(6).text(formatMoney(c.uncommitted));
+                $cells.eq(10).text(formatMoney(c.committed));
+                $cells.eq(11).text(formatMoney(c.fixed_on_site));
+                $cells.eq(12).text(formatMoney(c.invoiced_prev));
+                $cells.eq(13).text(formatMoney(c.invoiced_this));
+                $cells.eq(14).text(formatMoney(c.prev_hc_claimed));
+                $cells.eq(15).text(formatMoney(c.this_hc_claim));
+                $cells.eq(16).text(formatMoney(c.prev_qs_claimed));
+                $cells.eq(17).text(formatMoney(c.this_qs_claim));
+            } else {
+                $cells.eq(1).text(formatMoney(c.contract_budget));
+                $cells.eq(2).text(formatMoney(c.working_budget));
+                $cells.eq(3).text(formatMoney(c.uncommitted));
+                $cells.eq(4).text(formatMoney(c.committed));
+                $cells.eq(5).text(formatMoney(c.fixed_on_site));
+                $cells.eq(6).text(formatMoney(c.invoiced_prev));
+                $cells.eq(7).text(formatMoney(c.invoiced_this));
+                $cells.eq(8).text(formatMoney(c.prev_hc_claimed));
+                $cells.eq(9).text(formatMoney(c.this_hc_claim));
+                $cells.eq(10).text(formatMoney(c.prev_qs_claimed));
+                $cells.eq(11).text(formatMoney(c.this_qs_claim));
             }
         });
-        
-        $('#totalUncommitted').text('$' + formatMoney(totals.uncommitted));
-        $('#totalWorkingBudget').text('$' + formatMoney(totals.working_budget));
-        $('#totalFixedOnSite').text('$' + formatMoney(totals.fixed_on_site));
-        $('#totalThisHcClaim').text('$' + formatMoney(totals.this_hc_claim));
-        $('#totalThisQsClaim').text('$' + formatMoney(totals.this_qs_claim));
     }
     
     // Update claim status badge

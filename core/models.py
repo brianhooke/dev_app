@@ -786,6 +786,30 @@ class Document_files(models.Model):
 
 # SERVICE: bills
 class Bills(models.Model):
+    # Named bill_status values. Pre-fix the codebase scattered numeric
+    # literals like `if bill_status in [2, 3]:` with conflicting
+    # comments (B15 in the review). Use these constants instead.
+    STATUS_UNPROCESSED_EMAIL = -2
+    STATUS_ARCHIVED = -1
+    STATUS_CREATED = 0
+    STATUS_ALLOCATED = 1
+    STATUS_APPROVED = 2
+    STATUS_SENT_TO_XERO = 3
+    STATUS_PAID = 4
+    STATUS_PO_PROGRESS_REJECTED = 99
+    STATUS_PO_PROGRESS_SUBMITTED = 100
+    STATUS_PO_APPROVED_NO_BILL = 101
+    STATUS_PO_APPROVED_BILL_UPLOADED = 102
+    STATUS_PO_APPROVED_BILL_FOR_PAYMENT = 103
+    STATUS_PO_SENT_TO_XERO = 104
+    # Statuses that count as "settled" for the HC-claim formula —
+    # i.e. fully through the AP workflow. The historical code used
+    # the set {APPROVED, SENT_TO_XERO} as the proxy for "paid" (see
+    # core/views/hc_claims.py::get_invoiced_amounts) and we preserve
+    # that behaviour here. Adding STATUS_PAID would arguably be more
+    # correct, but is a behaviour change deliberately deferred.
+    STATUSES_SETTLED_FOR_HC_CLAIM = {STATUS_APPROVED, STATUS_SENT_TO_XERO}
+
     bill_pk = models.AutoField(primary_key=True)
     # Replaced invoice_division with FK to Projects. project=None with is_stocktake=True means Stocktake bill
     project = models.ForeignKey('Projects', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
@@ -964,6 +988,15 @@ class StocktakeSnap(models.Model):
     date = models.DateField()
     costing_method = models.CharField(max_length=10, choices=COSTING_METHOD_CHOICES, default='FIFO')
     status = models.IntegerField(choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    # Optional link to the HC claim the snap is consumed by — mirrors
+    # Bills.associated_hc_claim. Pre-fix the create_hc_claim view
+    # accepted snap_pks but had nowhere to store them (B7 in the
+    # review). Nullable because plenty of finalised snaps are not
+    # attached to any HC claim (writeoffs, future-claim staging).
+    associated_hc_claim = models.ForeignKey(
+        'HC_claims', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='associated_stocktake_snaps',
+    )
     xero_journal_id = models.CharField(max_length=255, null=True, blank=True)
     # One entry per Xero org when a snap spans multiple instances:
     # [{"xero_instance_pk": 1, "xero_name": "...", "journal_id": "uuid"}, ...]
@@ -1070,18 +1103,47 @@ class HC_claims(models.Model):
     date = models.DateField()
     status = models.IntegerField(default=0) #0 for unapproved, 1 for approved, 2 for sent to Xero, 3 for payment received
     display_id = models.IntegerField(blank=True, null=True)
+    # Reserved field carried over from an earlier iteration for the
+    # human-readable invoicee (e.g. the contract counterparty receiving
+    # the claim). Currently not populated by any flow — kept on the
+    # model to avoid a backwards-incompatible removal but treated as
+    # optional metadata everywhere it appears (B14 in the review).
     invoicee = models.CharField(blank = True, null = True, max_length=255)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+
     def save(self, *args, **kwargs):
+        # Allocate display_id atomically and scoped per-project.
+        #
+        # Pre-fix display_id was a *global* counter, so each project's
+        # claim list looked like {1, 2, 4} when claim #3 happened to be
+        # for a different project. Users perceive these as their
+        # project's claim sequence, not a global one — so claim #5 of
+        # Project A and claim #5 of Project B coexisting is the
+        # expected behaviour, and within a single project the sequence
+        # should never have gaps just because another project created
+        # claims in the middle.
+        #
+        # Concurrency: the SELECT FOR UPDATE on the project's latest
+        # claim row gives us per-project serialisation under PostgreSQL.
+        # SQLite ignores SELECT FOR UPDATE, but local dev is
+        # single-user so the race is academic.
         if not self.display_id:
-            # Get the highest display_id in the table
-            highest_display_id = HC_claims.objects.order_by('-display_id').values('display_id').first()
-            if highest_display_id:
-                self.display_id = highest_display_id['display_id'] + 1
-            else:
-                self.display_id = 1
+            from django.db import transaction
+            with transaction.atomic():
+                latest = (
+                    HC_claims.objects
+                    .filter(project_id=self.project_id)
+                    .select_for_update()
+                    .order_by('-display_id')
+                    .values('display_id')
+                    .first()
+                )
+                self.display_id = (latest['display_id'] + 1) if latest and latest.get('display_id') else 1
+                super().save(*args, **kwargs)
+            return
         super().save(*args, **kwargs)
+
     def __str__(self):
         return f"HC Claim - PK: {self.hc_claim_pk}, Date: {self.date}, Status: {self.status}, Display ID: {self.display_id}"
 

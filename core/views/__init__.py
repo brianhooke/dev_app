@@ -25,7 +25,7 @@ from .hc_variations import (
 # HC Claims views
 from .hc_claims import (
     hc_claims_view, get_hc_claims, get_available_bills, get_available_stocktake_snaps,
-    create_hc_claim, get_hc_claim_data, save_hc_claim, delete_hc_claim, update_claim_bills
+    create_hc_claim, get_hc_claim_data, delete_hc_claim, finalize_hc_claim,
 )
 
 # Bill/Invoice views
