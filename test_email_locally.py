@@ -16,8 +16,11 @@ from datetime import datetime
 # Local server URL
 LOCAL_API_URL = "http://localhost:8000/core/api/receive_email/"
 
-# API secret key (must match your local settings)
-API_SECRET_KEY = "change-me-in-production-use-strong-random-key"
+import os
+
+# API secret key — read from env so it stays in sync with the running server's
+# EMAIL_API_SECRET_KEY. Falls back to the dev default in base.py.
+API_SECRET_KEY = os.environ.get("EMAIL_API_SECRET_KEY", "dev-only-email-api-secret-key")
 
 # Sample email data
 email_data = {

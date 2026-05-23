@@ -401,7 +401,7 @@
                             if (!gstInputEl.data('manually-edited')) {
                                 var netVal = parseFloat(value);
                                 if (!isNaN(netVal)) {
-                                    gstInputEl.val((netVal * 0.1).toFixed(2));
+                                    gstInputEl.val(Money.gstFromNet(netVal).toFixed(2));
                                 }
                             }
                             if (callbacks.onAmountChange) callbacks.onAmountChange(row);

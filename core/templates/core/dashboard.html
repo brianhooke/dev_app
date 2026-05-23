@@ -15,30 +15,22 @@ Structure:
    - Navigation bar with dropdown menus
 
 2. Included Modal Templates
-   - Bills Section (using allocations_layout pattern):
-     * {% include 'core/bills_global_buttons.html' %} - Navigation buttons, content loaded via AJAX
-     * bills_global_inbox.html - Uses allocations_layout with hide_allocations=True
-     * bills_global_direct.html - Uses allocations_layout with all 3 sections
-     * bills_global_approvals.html - Uses allocations_layout with all 3 sections
+   - Bills Section: {% include 'core/bills_global_buttons.html' %} (navigation buttons)
+     and bills_global.html (consolidated Inbox/Direct/Approvals view, switched
+     client-side).
    - {% include 'core/contacts.html' %} - Extended contacts modal with verification
-   - {% include 'core/xero_modals.html' %} - Xero instance management
 
-Bills Functionality (status-based workflows):
-- Bills - Inbox (bill_status = -2):
-  * Unprocessed email bills
-  * LHS table: Xero Instance, Supplier, Bill #, Net, GST fields
-  * Send button → Updates bill, sets status to 0, moves to Bills - Direct
-  * Archive button → Sets status to 4
+Bills Functionality (status state machine, see Bills.STATUS_* in core/models.py):
+- Bills - Inbox (bill_status = STATUS_UNPROCESSED_EMAIL = -2):
+  * Unprocessed email bills.
+  * Send button -> sets status to STATUS_CREATED (0), moves to Bills - Direct.
+  * Archive button -> sets status to STATUS_ARCHIVED (-1).
 
-- Bills - Direct (bill_status = 0):
-  * Ready for allocation
-  * LHS table: Same fields as Inbox
-  * RHS table: Allocations with Xero Account selection, amounts, notes
-  * PDF viewer: Display bill attachment
-  * "Still to allocate" calculations (Net/GST must = $0.00)
-  * Send to Xero button → Validates allocations, posts to Xero API as DRAFT, sets status to 2
-  * Return to Inbox (mail icon) → Deletes allocations, clears fields, sets status to -2
-  * Archive button → Sets status to 4
+- Bills - Direct (bill_status = STATUS_CREATED = 0):
+  * Ready for allocation.
+  * Send to Xero -> creates Xero invoice and sets status to STATUS_SENT_TO_XERO (3).
+  * Return to Inbox -> deletes allocations and reverts to -2.
+  * Archive button -> sets status to STATUS_ARCHIVED (-1).
 
 Contacts Functionality:
 - Pull contacts from Xero API (insert/update)
@@ -544,6 +536,7 @@ Version: v249 (displayed in navbar bottom-left)
 {% include 'core/xero.html' %}
 {% include 'core/contacts.html' %} <!-- Keep for modals and JS handlers used by Settings -->
 
+<script src="{% static 'core/js/money.js' %}"></script>
 <script src="{% static 'core/js/utils.js' %}"></script>
 <script src="{% static 'core/js/allocations_layout.js' %}"></script>
 
@@ -1109,32 +1102,13 @@ Version: v249 (displayed in navbar bottom-left)
             
             // Show loading state
             $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-            
-            // Get CSRF token
-            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            // Send request to wipe database
-            fetch('/core/wipe_database/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('✓ Database wiped successfully!\n\n' + data.tables_wiped + ' tables were cleared.\n\nThe page will now reload.');
-                    // Reload the page
-                    window.location.reload();
-                } else {
-                    alert('✗ Error wiping database:\n\n' + data.message);
-                    $('#wipeDbBtn').prop('disabled', false).html('<i class="fas fa-trash-alt"></i>');
-                }
-            })
-            .catch(error => {
-                console.error('Error wiping database:', error);
-                alert('✗ Error wiping database:\n\n' + error);
+
+            Utils.apiPost('/core/wipe_database/').then(function(data) {
+                alert('✓ Database wiped successfully!\n\n' + data.tables_wiped + ' tables were cleared.\n\nThe page will now reload.');
+                window.location.reload();
+            }).catch(function(err) {
+                console.error('Error wiping database:', err);
+                alert('✗ Error wiping database:\n\n' + err.message);
                 $('#wipeDbBtn').prop('disabled', false).html('<i class="fas fa-trash-alt"></i>');
             });
         });
@@ -1147,31 +1121,13 @@ Version: v249 (displayed in navbar bottom-left)
             
             // Show loading state
             $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-            
-            // Get CSRF token
-            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            // Send request to migrate Xero credentials
-            fetch('/core/migrate_xero_to_ssm/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('✓ Xero credentials migrated to SSM!\n\n' + data.message);
-                    $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
-                } else {
-                    alert('✗ Error migrating Xero credentials:\n\n' + data.message);
-                    $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
-                }
-            })
-            .catch(error => {
-                console.error('Error migrating Xero credentials:', error);
-                alert('✗ Error migrating Xero credentials:\n\n' + error);
+
+            Utils.apiPost('/core/migrate_xero_to_ssm/').then(function(data) {
+                alert('✓ Xero credentials migrated to SSM!\n\n' + data.message);
+            }).catch(function(err) {
+                console.error('Error migrating Xero credentials:', err);
+                alert('✗ Error migrating Xero credentials:\n\n' + err.message);
+            }).finally(function() {
                 $('#migrateXeroBtn').prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i>');
             });
         });

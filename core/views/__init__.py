@@ -63,12 +63,11 @@ from .documents import (
 # Project type views
 from .project_type import (
     switch_project_type, switch_project, get_current_project_info,
-    project_selector_view
 )
 
 # Other utility views (still in main.py for now)
 from .main import (
-    create_contacts, send_test_email, send_test_email_view,
+    send_test_email, send_test_email_view,
     upload_categories, upload_costings, update_contract_budget_amounts,
     upload_letterhead, update_contacts, upload_margin_category_and_lines
 )

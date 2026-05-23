@@ -1,19 +1,18 @@
 from django.urls import path
 from django.views.generic import RedirectView
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
+from .views import commit_data, update_quote, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
 from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills, get_sent_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
-    bills_global_view, bills_global_inbox_view, bills_global_direct_view, bills_global_approvals_view, 
+    bills_global_view,
     send_bill_direct, send_bill_to_xero, get_bill_pdf_info, return_bill_to_project, approve_bill_direct, mark_bill_as_sent,
-    # Moved from bills.py:
-    get_bills_list, archive_bill, return_to_inbox, 
+    get_bills_list, archive_bill, return_to_inbox,
     pull_xero_accounts_and_divisions, pull_xero_accounts, get_xero_accounts_by_instance,
     create_bill_allocation, update_bill_allocation, delete_bill_allocation,
     send_bill_to_stocktake, get_inbox_supplier,
 )
-from .views.project_type import switch_project_type, switch_project, get_current_project_info, project_selector_view
+from .views.project_type import switch_project_type, switch_project, get_current_project_info
 from .views.projects import create_project, get_projects, update_project, toggle_project_archive, delete_category, delete_item, update_internal_committed
 from .views.quotes import quotes_view, get_project_contacts, save_project_quote, get_project_quotes, get_quote_allocations_for_quote, create_quote_allocation, update_quote_allocation, delete_quote_allocation, save_quote_allocations
 from .views.contract_budget import contract_budget_view, update_uncommitted, update_fixed_on_site, get_project_committed_amounts, get_item_quote_allocations, get_item_bill_allocations, get_item_hc_variation_allocations, validate_fix_contract_budget, fix_contract_budget, export_projects_c2c
@@ -88,7 +87,6 @@ urlpatterns = [
     path('update_fixedonsite/', update_fixed_on_site, name='update_fixedonsite'),
     # path('update_costing/', update_costing, name='update_costing'),
     path('update_quote/', update_quote, name='update_quote'),
-    path('create_contacts/', create_contacts, name='create_contacts'),
     path('delete_quote/', delete_quote, name='delete_quote'),
     path('delete_bill/', delete_bill, name='delete_bill'),
     path('upload_design_pdf/', upload_design_pdf, name='upload_design_pdf'),
@@ -139,7 +137,6 @@ urlpatterns = [
     path('switch_project_type/', switch_project_type, name='switch_project_type'),
     path('switch_project/', switch_project, name='switch_project'),
     path('get_current_project_info/', get_current_project_info, name='get_current_project_info'),
-    path('project_selector/', project_selector_view, name='project_selector'),
     
     # Projects management endpoints
     path('create_project/', create_project, name='create_project'),
@@ -162,11 +159,6 @@ urlpatterns = [
     # Xero OAuth2 endpoints
     path('xero_oauth_authorize/<int:instance_pk>/', xero_oauth_authorize, name='xero_oauth_authorize'),
     path('xero_oauth_callback/', xero_oauth_callback, name='xero_oauth_callback'),
-    path('xero_oauth_diagnostics/<int:instance_pk>/', xero_oauth_diagnostics, name='xero_oauth_diagnostics'),
-    
-    # Database diagnostics
-    path('database_diagnostics/', database_diagnostics, name='database_diagnostics'),
-    path('wipe_database/', wipe_database, name='wipe_database'),
     
     # Bills management
     path('get_bills_list/', get_bills_list, name='get_bills_list'),
@@ -189,14 +181,10 @@ urlpatterns = [
     # Email receiving API
     path('api/receive_email/', receive_email, name='receive_email'),
     path('api/emails/', email_list, name='email_list'),
-    path('api/diagnostics/', api_diagnostics, name='api_diagnostics'),
     
     # Bills section
     path('bills/', bills_view, name='bills'),
     path('bills/global/', bills_global_view, name='bills_global'),  # Consolidated view
-    path('bills/inbox/', bills_global_inbox_view, name='bills_global_inbox'),  # Deprecated
-    path('bills/direct/', bills_global_direct_view, name='bills_global_direct'),  # Deprecated
-    path('bills/approvals/', bills_global_approvals_view, name='bills_global_approvals'),  # Deprecated
     path('get_project_bills/<int:project_pk>/', get_project_bills, name='get_project_bills'),
     path('get_allocated_bills/<int:project_pk>/', get_allocated_bills, name='get_allocated_bills'),
     path('get_unallocated_bill_allocations/<int:bill_pk>/', get_unallocated_bill_allocations, name='get_unallocated_bill_allocations'),
@@ -391,6 +379,18 @@ urlpatterns = [
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),
 ]
+
+# Diagnostic endpoints dump env/DB/OAuth state and one of them can TRUNCATE
+# every business table. They are off by default and gated by an env var; the
+# views also require a staff session. To enable temporarily on EB:
+#   eb setenv ENABLE_DIAGNOSTICS=1     (then unset when done)
+if getattr(settings, 'ENABLE_DIAGNOSTICS', False):
+    urlpatterns += [
+        path('xero_oauth_diagnostics/<int:instance_pk>/', xero_oauth_diagnostics, name='xero_oauth_diagnostics'),
+        path('database_diagnostics/', database_diagnostics, name='database_diagnostics'),
+        path('wipe_database/', wipe_database, name='wipe_database'),
+        path('api/diagnostics/', api_diagnostics, name='api_diagnostics'),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

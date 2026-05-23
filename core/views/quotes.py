@@ -110,32 +110,47 @@ def quotes_view(request):
 
 @csrf_exempt
 def commit_data(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        total_cost = data['total_cost']
-        supplier_quote_number = data['supplier_quote_number']  
-        pdf_data = data['pdf']
-        contact_pk = data['contact_pk']
-        allocations = data.get('allocations')
-        format, imgstr = pdf_data.split(';base64,')
-        ext = format.split('/')[-1]
-        contact = get_object_or_404(Contacts, pk=contact_pk)
-        supplier = contact.contact_name
-        unique_filename = supplier + " " + str(uuid.uuid4()) + '.' + ext
-        data = ContentFile(base64.b64decode(imgstr), name=unique_filename)
-        quote = Quotes.objects.create(total_cost=total_cost, supplier_quote_number=supplier_quote_number, pdf=data, contact_pk=contact)
+    """Create a Quote with its Quote_allocations and update each item's
+    uncommitted_amount.
+
+    B.V-C-12: previously this wrote across three tables (Quotes,
+    Quote_allocations, Costing.uncommitted_amount) without a transaction,
+    so a failure mid-loop left an orphan quote with partial allocations
+    and Costing.uncommitted_amount drifted. Now wrapped atomically.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+    data = json.loads(request.body)
+    total_cost = data['total_cost']
+    supplier_quote_number = data['supplier_quote_number']
+    pdf_data = data['pdf']
+    contact_pk = data['contact_pk']
+    allocations = data.get('allocations')
+    format, imgstr = pdf_data.split(';base64,')
+    ext = format.split('/')[-1]
+    contact = get_object_or_404(Contacts, pk=contact_pk)
+    supplier = contact.name
+    unique_filename = supplier + " " + str(uuid.uuid4()) + '.' + ext
+    data = ContentFile(base64.b64decode(imgstr), name=unique_filename)
+    with transaction.atomic():
+        quote = Quotes.objects.create(
+            total_cost=total_cost,
+            supplier_quote_number=supplier_quote_number,
+            pdf=data,
+            contact_pk=contact,
+        )
         for allocation in allocations:
             amount = allocation['amount']
             item_pk = allocation['item']
             item = Costing.objects.get(pk=item_pk)
-            notes = allocation.get('notes', '')  
+            notes = allocation.get('notes', '')
             if amount == '':
                 amount = '0'
-            Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)  
+            Quote_allocations.objects.create(quotes_pk=quote, item=item, amount=amount, notes=notes)
             uncommitted = allocation['uncommitted']
             item.uncommitted_amount = uncommitted
             item.save()
-        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'success'})
 @csrf_exempt
 def update_quote(request):
     """
@@ -175,61 +190,65 @@ def update_quote(request):
                 except Contacts.DoesNotExist:
                     logger.warning(f"Contact {supplier_id} not found, keeping existing supplier")
             
-            quote.save()
-            logger.info(f"Updated quote {quote_id} - Total: {total_cost}, Number: {quote_number}")
-            
-            # Delete existing allocations and create new ones
-            Quote_allocations.objects.filter(quotes_pk=quote).delete()
-            
-            # Check if construction project - use rates_based flag
-            is_construction = (quote.project and quote.project.project_type and quote.project.project_type.rates_based == 1)
-            
-            for line_item in line_items:
-                item_pk = line_item.get('item')
-                notes = line_item.get('notes', '')
-                
-                if not item_pk:
-                    continue
-                
-                try:
-                    costing = Costing.objects.get(pk=item_pk)
-                    
-                    # Handle construction vs non-construction
-                    if is_construction:
-                        # Construction: save qty, unit, rate and calculate amount
-                        qty = Decimal(str(line_item.get('qty', 0)))
-                        unit = line_item.get('unit', '')
-                        rate = Decimal(str(line_item.get('rate', 0)))
-                        amount = qty * rate
-                        
-                        Quote_allocations.objects.create(
-                            quotes_pk=quote,
-                            item=costing,
-                            qty=qty,
-                            unit=unit,
-                            rate=rate,
-                            amount=amount,
-                            notes=notes
-                        )
-                        logger.info(f"Created construction allocation: Item {item_pk}, Qty {qty}, Rate {rate}, Amount {amount}")
-                    else:
-                        # Non-construction: use provided amount
-                        raw_amount = line_item.get('amount', 0)
-                        logger.info(f"DEBUG UPDATE_QUOTE: Raw amount data: {raw_amount}, type: {type(raw_amount)}")
-                        amount = Decimal(str(raw_amount))
-                        logger.info(f"DEBUG UPDATE_QUOTE: Converted amount: {amount}, type: {type(amount)}")
-                        
-                        Quote_allocations.objects.create(
-                            quotes_pk=quote,
-                            item=costing,
-                            amount=amount,
-                            notes=notes
-                        )
-                        logger.info(f"DEBUG UPDATE_QUOTE: Created allocation: Item {item_pk}, Amount {amount}")
-                        
-                except Costing.DoesNotExist:
-                    logger.error(f"Costing {item_pk} not found, skipping allocation")
-                    continue
+            # B.V-C-12: header save + allocation delete-and-recreate must
+            # land or fail together. Without the wrapper, a failed allocation
+            # rebuild left the quote header updated with the line items wiped.
+            with transaction.atomic():
+                quote.save()
+                logger.info(f"Updated quote {quote_id} - Total: {total_cost}, Number: {quote_number}")
+
+                # Delete existing allocations and create new ones
+                Quote_allocations.objects.filter(quotes_pk=quote).delete()
+
+                # Check if construction project - use rates_based flag
+                is_construction = (
+                    quote.project and quote.project.project_type
+                    and quote.project.project_type.rates_based == 1
+                )
+
+                for line_item in line_items:
+                    item_pk = line_item.get('item')
+                    notes = line_item.get('notes', '')
+
+                    if not item_pk:
+                        continue
+
+                    try:
+                        costing = Costing.objects.get(pk=item_pk)
+
+                        # Handle construction vs non-construction
+                        if is_construction:
+                            # Construction: save qty, unit, rate and calculate amount
+                            qty = Decimal(str(line_item.get('qty', 0)))
+                            unit = line_item.get('unit', '')
+                            rate = Decimal(str(line_item.get('rate', 0)))
+                            amount = qty * rate
+
+                            Quote_allocations.objects.create(
+                                quotes_pk=quote,
+                                item=costing,
+                                qty=qty,
+                                unit=unit,
+                                rate=rate,
+                                amount=amount,
+                                notes=notes,
+                            )
+                            logger.info(f"Created construction allocation: Item {item_pk}, Qty {qty}, Rate {rate}, Amount {amount}")
+                        else:
+                            # Non-construction: use provided amount
+                            raw_amount = line_item.get('amount', 0)
+                            amount = Decimal(str(raw_amount))
+
+                            Quote_allocations.objects.create(
+                                quotes_pk=quote,
+                                item=costing,
+                                amount=amount,
+                                notes=notes,
+                            )
+
+                    except Costing.DoesNotExist:
+                        logger.error(f"Costing {item_pk} not found, skipping allocation")
+                        continue
             
             return JsonResponse({
                 'status': 'success',
@@ -242,7 +261,7 @@ def update_quote(request):
             return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
         except Exception as e:
             logger.error(f"Error updating quote: {str(e)}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'Error updating quote: {str(e)}'}, status=500)
+            return JsonResponse({'status': 'error', 'message': 'Error updating quote'}, status=500)
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 @csrf_exempt
@@ -329,7 +348,7 @@ def get_quote_allocations_for_quote(request, quote_pk):
     except Quotes.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Quote not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -384,7 +403,7 @@ def create_quote_allocation(request):
     except Costing.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -438,7 +457,7 @@ def update_quote_allocation(request, allocation_pk):
     except Costing.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -452,7 +471,7 @@ def delete_quote_allocation(request, allocation_pk):
     except Quote_allocations.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 @require_http_methods(["GET"])
 def get_project_contacts(request, project_pk):
@@ -499,7 +518,7 @@ def get_project_contacts(request, project_pk):
         logger.error(f"Error getting project contacts: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting contacts: {str(e)}'
+            'message': 'Error getting contacts'
         }, status=500)
 
 
@@ -613,7 +632,7 @@ def save_project_quote(request):
                 logger.error(f"Error processing PDF: {str(e)}")
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Error processing PDF: {str(e)}'
+                    'message': 'Error processing PDF'
                 }, status=400)
         
         # Create or Update Quote using transaction
@@ -748,7 +767,7 @@ def save_project_quote(request):
         logger.error(f"Error saving quote: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error saving quote: {str(e)}'
+            'message': 'Error saving quote'
         }, status=500)
 
 
@@ -837,7 +856,7 @@ def get_project_quotes(request, project_pk):
         logger.error(f"Error getting project quotes: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting quotes: {str(e)}'
+            'message': 'Error getting quotes'
         }, status=500)
 
 
@@ -920,7 +939,7 @@ def get_quote_allocations_by_quotes(request):
         logger.error(f"Error getting quote allocations: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting allocations: {str(e)}'
+            'message': 'Error getting allocations'
         }, status=500)
 
 
@@ -1065,5 +1084,5 @@ def save_quote_allocations(request):
         logger.error(f"Error saving quote allocations: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error saving allocations: {str(e)}'
+            'message': 'Error saving allocations'
         }, status=500)

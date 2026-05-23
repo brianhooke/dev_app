@@ -109,70 +109,94 @@ def delete_bill(request):
         return JsonResponse({'status': 'fail', 'message': 'Invalid request method'}, status=405)
 @csrf_exempt
 def upload_bill(request):
-    if request.method == 'POST':
-        supplier_id = request.POST.get('supplier')
-        bill_number = request.POST.get('bill_number')
-        invoice_total = request.POST.get('invoice_total')
-        invoice_total_gst = request.POST.get('invoice_total_gst') 
-        bill_date = request.POST.get('bill_date')
-        bill_due_date = request.POST.get('bill_due_date')
-        invoice_division = request.POST.get('invoiceDivision') 
-        pdf_file = request.FILES.get('pdf')
-        try:
-            contact = Contacts.objects.get(pk=supplier_id)
-            invoice = Bills(
-                supplier_bill_number=bill_number,
-                total_net=invoice_total,
-                total_gst=invoice_total_gst, 
-                bill_status=0, 
-                bill_date=bill_date,
-                bill_due_date=bill_due_date,
-                invoice_division=invoice_division, 
-                pdf=pdf_file,
-                contact_pk=contact
-            )
-            invoice.save()
-            return JsonResponse({'success': True})
-        except Contacts.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Supplier not found'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    else:
-        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    """Create a Bill from a manual PDF upload.
+
+    NOTE: this endpoint is not currently invoked from any template/JS in the
+    repo; the live upload paths are `upload_bill_pdf` (PO public flow) and
+    the email-receiver. It's preserved here in case a UI is added back. The
+    legacy `invoiceDivision` POST field used to write into a removed
+    `invoice_division` int column; it is now interpreted as a `Projects` FK.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)
+
+    supplier_id = request.POST.get('supplier')
+    bill_number = request.POST.get('bill_number')
+    invoice_total = request.POST.get('invoice_total')
+    invoice_total_gst = request.POST.get('invoice_total_gst')
+    bill_date = request.POST.get('bill_date')
+    bill_due_date = request.POST.get('bill_due_date')
+    project_pk = request.POST.get('invoiceDivision') or request.POST.get('project_pk')
+    pdf_file = request.FILES.get('pdf')
+
+    try:
+        contact = Contacts.objects.get(pk=supplier_id)
+        project = Projects.objects.get(pk=project_pk) if project_pk else None
+        invoice = Bills(
+            supplier_bill_number=bill_number,
+            total_net=invoice_total,
+            total_gst=invoice_total_gst,
+            bill_status=Bills.STATUS_UNALLOCATED if hasattr(Bills, 'STATUS_UNALLOCATED') else 0,
+            bill_date=bill_date,
+            bill_due_date=bill_due_date,
+            project=project,
+            pdf=pdf_file,
+            contact_pk=contact,
+        )
+        invoice.save()
+        return JsonResponse({'success': True, 'bill_pk': invoice.bill_pk})
+    except Contacts.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Supplier not found'}, status=404)
+    except Projects.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Project not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': 'Internal server error'}, status=400)
 @csrf_exempt
 def upload_bill_allocations(request):
-    if request.method == 'POST':
+    """Create Bill_allocations rows for a bill and promote its status.
+
+    B.V-C-12: this used to write across three tables (Bill_allocations,
+    Costing.uncommitted_amount, Bills.bill_status) without a transaction,
+    so a failure mid-loop left the bill partially allocated and
+    Costing.uncommitted_amount drifted. The whole write now runs inside
+    `transaction.atomic` — either every allocation lands and the bill's
+    status moves, or nothing changes.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    try:
         bill_pk = request.POST.get('bill_pk')
         allocations = json.loads(request.POST.get('allocations'))
-        try:
-            invoice = Bills.objects.get(pk=bill_pk)
+        invoice = Bills.objects.get(pk=bill_pk)
+        with transaction.atomic():
             for allocation in allocations:
                 item_id = allocation.get('item')
-                if item_id:
-                    item = Costing.objects.get(pk=item_id)
-                    amount = Decimal(str(allocation.get('thisInvoice', 0)))  
-                    gst_amount = Decimal(str(allocation.get('gst_amount', 0)))  
-                    uncommitted = Decimal(str(allocation.get('uncommitted', 0)))  
-                    notes = allocation.get('notes', '')
-                    Bill_allocations.objects.create(
-                        bill_pk=invoice,
-                        item=item,
-                        amount=amount,
-                        gst_amount=gst_amount,  
-                        notes=notes
-                    )
-                    item.uncommitted_amount = uncommitted  
-                    item.save()
-            invoice.bill_status = 1
+                if not item_id:
+                    continue
+                item = Costing.objects.get(pk=item_id)
+                amount = Decimal(str(allocation.get('thisInvoice', 0)))
+                gst_amount = Decimal(str(allocation.get('gst_amount', 0)))
+                uncommitted = Decimal(str(allocation.get('uncommitted', 0)))
+                notes = allocation.get('notes', '')
+                Bill_allocations.objects.create(
+                    bill=invoice,
+                    item=item,
+                    amount=amount,
+                    gst_amount=gst_amount,
+                    notes=notes,
+                )
+                item.uncommitted_amount = uncommitted
+                item.save()
+            invoice.bill_status = Bills.STATUS_ALLOCATED
             invoice.save()
-            return JsonResponse({'success': True})
-        except Bills.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Invoice not found'})
-        except Costing.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Costing item not found'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+        return JsonResponse({'success': True})
+    except Bills.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Invoice not found'})
+    except Costing.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Costing item not found'})
+    except Exception:
+        logger.exception('upload_bill_allocations failed')
+        return JsonResponse({'success': False, 'error': 'Internal server error'})
 @csrf_exempt
 def post_bill(request):
     logger.info('Starting post_bill function')
@@ -229,7 +253,8 @@ def post_bill(request):
     if 'Status' in response_data and response_data['Status'] == 'OK':
         invoice_id = response_data['Invoices'][0]['InvoiceID']
         logger.info(f'Invoice created with ID: {invoice_id}')
-        invoice.bill_status = 2
+        # Legacy direct-to-Xero path; keep behaviour but use named constant.
+        invoice.bill_status = Bills.STATUS_APPROVED
         invoice.bill_xero_id = invoice_id
         invoice.save()
         file_url = invoice.pdf.url
@@ -336,7 +361,7 @@ def get_bills_by_supplier(request):
             "bill_due_date": invoice.bill_due_date.strftime("%Y-%m-%d"),  
             "bill_allocations": [
                 {
-                    "bill_allocations_pk": allocation.bill_allocations_pk,
+                    "bill_allocations_pk": allocation.bill_allocation_pk,
                     "item": allocation.item.item,  
                     "amount": str(allocation.amount),
                     "gst_amount": str(allocation.gst_amount),
@@ -367,13 +392,13 @@ def get_bill_allocations(request, invoice_id):
             logger.debug(f"Found {allocations.count()} allocations for invoice {invoice_id}")
         except Exception as e:
             logger.error(f"Failed to query allocations: {str(e)}")
-            return JsonResponse({'error': f'Failed to query allocations: {str(e)}'}, status=500)
+            return JsonResponse({'error': 'Failed to query allocations'}, status=500)
         formatted_allocations = []
         for alloc in allocations:
             try:
                 item = alloc.item
                 alloc_data = {
-                    'allocation_id': alloc.bill_allocations_pk,
+                    'allocation_id': alloc.bill_allocation_pk,
                     'allocation_pk': alloc.bill_allocation_pk,
                     'amount': float(alloc.amount) if alloc.amount else 0,
                     'gst_amount': float(alloc.gst_amount) if alloc.gst_amount else 0,
@@ -386,7 +411,7 @@ def get_bill_allocations(request, invoice_id):
                     alloc_data['item'] = item.item
                 formatted_allocations.append(alloc_data)
             except Exception as e:
-                logger.error(f"Failed to process allocation {alloc.bill_allocations_pk}: {str(e)}")
+                logger.error(f"Failed to process allocation {alloc.bill_allocation_pk}: {str(e)}")
                 continue
         contact_pk = invoice.contact_pk_id if invoice.contact_pk else None
         other_invoices = []
@@ -406,7 +431,7 @@ def get_bill_allocations(request, invoice_id):
                     for alloc in other_inv.bill_allocations.all():
                         item = alloc.item
                         if not item:
-                            logger.warning(f"Other allocation {alloc.bill_allocations_pk} has no item relationship")
+                            logger.warning(f"Other allocation {alloc.bill_allocation_pk} has no item relationship")
                             continue
                         formatted_other_allocations.append({
                             'item_pk': item.costing_pk,
@@ -435,7 +460,7 @@ def get_bill_allocations(request, invoice_id):
         return JsonResponse(response_data)
     except Exception as e:
         logger.exception(f"Critical error in get_bill_allocations: {str(e)}")
-        return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
+        return JsonResponse({'error': 'Server error'}, status=500)
 
 
 # NOTE: _pull_xero_accounts_for_instance, pull_xero_accounts_and_divisions, pull_xero_accounts,
@@ -486,7 +511,7 @@ def update_bill(request):
         
     except Exception as e:
         logger.error(f"Error updating invoice: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -518,7 +543,7 @@ def null_allocation_xero_fields(request):
         
     except Exception as e:
         logger.error(f"Error nulling allocation Xero fields: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def get_approved_bills(request):
@@ -528,9 +553,11 @@ def get_approved_bills(request):
     """
     from core.models import XeroInstances, Projects, XeroAccounts, StocktakeAllocations
     
-    # Get invoices with status 2 (approved) or 103 (PO approved, invoice uploaded & approved)
+    # Get invoices that are approved and ready for Xero (project bills with
+    # bill_status == STATUS_APPROVED, plus PO-uploaded bills approved for
+    # payment with status == STATUS_PO_APPROVED_BILL_FOR_PAYMENT).
     invoices = Bills.objects.filter(
-        bill_status__in=[2, 103]
+        bill_status__in=[Bills.STATUS_APPROVED, Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT]
     ).select_related(
         'contact_pk', 'project', 'xero_instance', 'xero_instance__xero_stocktake_account',
         'project__xero_instance', 'project__xero_instance__xero_stocktake_account', 'email_attachment'
@@ -646,9 +673,12 @@ def get_sent_bills(request):
     """
     from core.models import XeroInstances, Projects, XeroAccounts
     
-    # Get bills with status 3 (sent to Xero), 4 (paid), or 104 (PO sent to Xero)
     invoices = Bills.objects.filter(
-        bill_status__in=[3, 4, 104]
+        bill_status__in=[
+            Bills.STATUS_SENT_TO_XERO,
+            Bills.STATUS_PAID,
+            Bills.STATUS_PO_SENT_TO_XERO,
+        ]
     ).select_related(
         'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
     ).prefetch_related('bill_allocations__xero_account', 'bill_allocations__item').order_by('-updated_at')[:100]  # Limit to last 100
@@ -844,13 +874,11 @@ def bills_view(request):
         }
         return render(request, 'core/bills_project.html', context)
     
-    if template_type == 'approvals':
-        # Approvals - invoices approved and ready to send to Xero (status 2 or 103)
-        # Returns the approvals template which is loaded via AJAX into the approvals section
-        return render(request, 'core/bills_global_approvals.html')
-    
-    # Fallback - should not reach here
-    return render(request, 'core/bills_global_approvals.html')
+    # The legacy "approvals" template branch redirects to the consolidated
+    # global Bills view (which now hosts Inbox / Direct / Approvals modes
+    # via client-side switching). See P-8 in BEST_PRACTICE_AUDIT.md.
+    from django.shortcuts import redirect
+    return redirect('core:bills_global')
 
 
 @csrf_exempt
@@ -874,7 +902,7 @@ def update_allocated_bill(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f'Error updating allocated invoice {bill_pk}: {e}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def get_project_bills(request, project_pk):
@@ -887,12 +915,13 @@ def get_project_bills(request, project_pk):
     try:
         status = int(request.GET.get('status', 0))
         
-        # Get invoices for this project with the specified status
-        # For allocated invoices (status=1), also include PO claim invoices (status=102)
-        if status == 1:
+        # Get invoices for this project with the specified status. For
+        # allocated invoices (STATUS_ALLOCATED), also include PO claim
+        # invoices (STATUS_PO_APPROVED_BILL_UPLOADED).
+        if status == Bills.STATUS_ALLOCATED:
             invoices = Bills.objects.filter(
                 project_id=project_pk,
-                bill_status__in=[1, 102]
+                bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
             ).select_related('contact_pk', 'email_attachment').order_by('-bill_pk')
         else:
             invoices = Bills.objects.filter(
@@ -992,7 +1021,7 @@ def get_project_bills(request, project_pk):
         return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
     except Exception as e:
         logger.error(f'Error in get_project_bills: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def get_allocated_bills(request, project_pk):
@@ -1000,11 +1029,11 @@ def get_allocated_bills(request, project_pk):
     Get allocated invoices (status != 0) for a project.
     """
     try:
-        # Get invoices with status != 0 (allocated)
-        # Include status=1 (allocated) and status=102 (PO claim invoices)
+        # Allocated bills include manually-allocated bills and PO-uploaded
+        # bills awaiting approval (STATUS_ALLOCATED, STATUS_PO_APPROVED_BILL_UPLOADED).
         invoices = Bills.objects.filter(
             project_id=project_pk,
-            bill_status__in=[1, 102]
+            bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
         ).select_related('contact_pk', 'email_attachment').order_by('-bill_pk')
         
         # Build response data
@@ -1053,7 +1082,7 @@ def get_allocated_bills(request, project_pk):
         return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
     except Exception as e:
         logger.error(f'Error in get_allocated_bills: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1094,7 +1123,7 @@ def get_unallocated_bill_allocations(request, bill_pk):
         
     except Exception as e:
         logger.error(f'Error getting invoice allocations: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1131,7 +1160,7 @@ def create_unallocated_invoice_allocation(request):
         
     except Exception as e:
         logger.error(f'Error creating invoice allocation: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1204,7 +1233,7 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f'Error updating invoice allocation: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1225,7 +1254,7 @@ def delete_unallocated_invoice_allocation(request, allocation_pk):
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f'Error deleting invoice allocation: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1285,17 +1314,16 @@ def allocate_bill(request, bill_pk):
                     'message': 'All allocations with amounts must have a costing item selected'
                 }, status=400)
         
-        # All validations passed - mark as allocated
-        invoice.bill_status = 1
+        invoice.bill_status = Bills.STATUS_ALLOCATED
         invoice.save()
-        
+
         return JsonResponse({'status': 'success'})
         
     except Bills.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f'Error allocating invoice: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1308,7 +1336,7 @@ def unallocate_bill(request, bill_pk):
     
     try:
         invoice = Bills.objects.get(bill_pk=bill_pk)
-        invoice.bill_status = 0
+        invoice.bill_status = Bills.STATUS_CREATED
         invoice.save()
         
         return JsonResponse({'status': 'success'})
@@ -1317,7 +1345,7 @@ def unallocate_bill(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f'Error unallocating invoice: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def _supplier_has_quote_for_bill(contact_pk_id, project_id, tender_execution_mode=None):
@@ -1374,12 +1402,13 @@ def approve_bill(request, bill_pk):
         # Use current_status from request or fall back to invoice's actual status
         status_to_check = current_status if current_status is not None else invoice.bill_status
         
-        # PO claim invoices (102) go to 103, others go to 2
-        if status_to_check == 102:
-            invoice.bill_status = 103
+        # PO-uploaded bills graduate to STATUS_PO_APPROVED_BILL_FOR_PAYMENT;
+        # everything else goes to STATUS_APPROVED (the standard approve flow).
+        if status_to_check == Bills.STATUS_PO_APPROVED_BILL_UPLOADED:
+            invoice.bill_status = Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT
             invoice.bill_type = 2  # Progress claim
         else:
-            invoice.bill_status = 2
+            invoice.bill_status = Bills.STATUS_APPROVED
             project = invoice.project
             if desired_bill_type is None:
                 if invoice.bill_type in (1, 2):
@@ -1429,4 +1458,4 @@ def approve_bill(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f'Error approving invoice: {str(e)}')
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)

@@ -383,7 +383,11 @@ def send_bill(request):
             invoice.total_gst = Decimal(str(total_gst))
             invoice.bill_date = bill_date
             invoice.bill_due_date = bill_due_date
-            invoice.bill_status = 2  # Set status to 2 (sent to Xero)
+            # After a successful Xero create, the bill IS in Xero — record
+            # that explicitly. Earlier code set 2 (STATUS_APPROVED) here, which
+            # collided with the "approved, awaiting send" state and made the
+            # dashboard re-offer already-sent bills. Use STATUS_SENT_TO_XERO.
+            invoice.bill_status = Bills.STATUS_SENT_TO_XERO
             invoice.bill_type = 1  # Direct Cost
             # FX fields - added 2026-02-14
             invoice.currency = currency
@@ -417,7 +421,7 @@ def send_bill(request):
             invoice.total_gst = Decimal(str(total_gst))
             invoice.bill_date = bill_date
             invoice.bill_due_date = bill_due_date
-            invoice.bill_status = 0  # Set status to 0 (created, ready for allocation in Bills - Direct or Stocktake)
+            invoice.bill_status = Bills.STATUS_CREATED
             invoice.bill_type = 1  # Direct Cost
             # FX fields - added 2026-02-14
             invoice.currency = currency
@@ -446,7 +450,7 @@ def send_bill(request):
         logger.error(f"Error in send_bill: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -479,7 +483,7 @@ def get_project_categories(request, project_pk):
         logger.error(f"Error getting project categories: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting categories: {str(e)}'
+            'message': 'Error getting categories'
         }, status=500)
 
 
@@ -568,7 +572,7 @@ def get_project_items(request, project_pk):
         logger.error(f"Error getting project items: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting items: {str(e)}'
+            'message': 'Error getting items'
         }, status=500)
 
 
@@ -631,7 +635,7 @@ def get_categories_and_items_by_type(request):
         logger.error(f"Error getting categories and items by type: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -736,7 +740,7 @@ def create_category(request, project_pk):
         logger.error(f"Error creating category: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error creating category: {str(e)}'
+            'message': 'Error creating category'
         }, status=500)
 
 
@@ -867,7 +871,7 @@ def create_item(request, project_pk):
         logger.error(f"Error creating item: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error creating item: {str(e)}'
+            'message': 'Error creating item'
         }, status=500)
 
 
@@ -957,7 +961,7 @@ def reorder_category(request, project_pk, category_pk):
         logger.error(f"Error reordering category: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error reordering category: {str(e)}'
+            'message': 'Error reordering category'
         }, status=500)
 
 
@@ -1050,7 +1054,7 @@ def reorder_item(request, project_pk, item_pk):
         logger.error(f"Error reordering item: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error reordering item: {str(e)}'
+            'message': 'Error reordering item'
         }, status=500)
 
 
@@ -1345,7 +1349,7 @@ def get_po_status(request, project_pk):
         return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
     except Exception as e:
         logger.error(f"Error getting PO status: {e}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def preview_po(request, project_pk, supplier_pk):
@@ -1739,7 +1743,7 @@ Mason'''
         logger.error(f"Error sending PO email: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Failed to send email: {str(e)}'
+            'message': 'Failed to send email'
         }, status=500)
 
 
@@ -1832,7 +1836,7 @@ def download_po_pdf(request, project_pk, supplier_pk):
         logger.error(f"Error generating PO PDF: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Failed to generate PDF: {str(e)}'
+            'message': 'Failed to generate PDF'
         }, status=500)
 
 
@@ -1876,7 +1880,7 @@ def get_units(request):
         logger.error(f"Error getting units: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting units: {str(e)}'
+            'message': 'Error getting units'
         }, status=500)
 
 
@@ -1949,7 +1953,7 @@ def add_unit(request):
         logger.error(f"Error adding unit: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error adding unit: {str(e)}'
+            'message': 'Error adding unit'
         }, status=500)
 
 
@@ -2038,7 +2042,7 @@ def reorder_unit(request, unit_pk):
         logger.error(f"Error reordering unit: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error reordering unit: {str(e)}'
+            'message': 'Error reordering unit'
         }, status=500)
 
 
@@ -2113,7 +2117,7 @@ def delete_unit(request):
         logger.error(f"Error deleting unit: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error deleting unit: {str(e)}'
+            'message': 'Error deleting unit'
         }, status=500)
 
 
@@ -2140,10 +2144,9 @@ def get_recent_activities(request):
         
         activities = []
         
-        # 1. Archived Bills (email bills moved to archive - status -1)
         archived_bills = Bills.objects.filter(
             updated_at__gte=cutoff,
-            bill_status=-1,  # Archived status
+            bill_status=Bills.STATUS_ARCHIVED,
         ).filter(
             # Has email origin
             models.Q(email_attachment__isnull=False) | models.Q(received_email__isnull=False)
@@ -2166,10 +2169,9 @@ def get_recent_activities(request):
                 'project_pk': bill.project.projects_pk if bill.project else None,
             })
         
-        # 2. Bills Allocated (status = 1)
         allocated_bills = Bills.objects.filter(
             updated_at__gte=cutoff,
-            bill_status=1,  # Allocated status
+            bill_status=Bills.STATUS_ALLOCATED,
         ).exclude(
             # Exclude if created_at == updated_at (meaning just created, not moved)
             created_at=models.F('updated_at')
@@ -2182,17 +2184,16 @@ def get_recent_activities(request):
                 'type': 'bill_allocated',
                 'icon': 'fas fa-check-circle',
                 'color': '#17a2b8',  # info blue
-                'message': f'Bill allocated: {supplier_name}',
+                'message': 'Bill allocated',
                 'detail': f'Project: {project_name}',
                 'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
                 'link': None,
                 'project_pk': bill.project.projects_pk if bill.project else None,
             })
         
-        # 3. Bills sent for Approval (status = 2)
         approval_bills = Bills.objects.filter(
             updated_at__gte=cutoff,
-            bill_status=2,  # Sent for approval status
+            bill_status=Bills.STATUS_APPROVED,
         ).exclude(
             # Exclude if created_at == updated_at (meaning just created, not moved)
             created_at=models.F('updated_at')
@@ -2205,17 +2206,16 @@ def get_recent_activities(request):
                 'type': 'bill_approval',
                 'icon': 'fas fa-user-check',
                 'color': '#fd7e14',  # orange
-                'message': f'Bill sent for approval: {supplier_name}',
+                'message': 'Bill sent for approval',
                 'detail': f'Project: {project_name}',
                 'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
                 'link': None,
                 'project_pk': bill.project.projects_pk if bill.project else None,
             })
         
-        # 4. Bills sent to Xero (status = 3)
         xero_bills = Bills.objects.filter(
             updated_at__gte=cutoff,
-            bill_status=3,  # Sent to Xero status
+            bill_status=Bills.STATUS_SENT_TO_XERO,
         ).exclude(
             # Exclude if created_at == updated_at (meaning just created, not moved)
             created_at=models.F('updated_at')
@@ -2228,7 +2228,7 @@ def get_recent_activities(request):
                 'type': 'bill_xero',
                 'icon': 'fas fa-cloud-upload-alt',
                 'color': '#28a745',  # success green
-                'message': f'Bill sent to Xero: {supplier_name}',
+                'message': 'Bill sent to Xero',
                 'detail': f'Project: {project_name}',
                 'timestamp': bill.updated_at.isoformat() if bill.updated_at else None,
                 'link': None,
@@ -2265,7 +2265,7 @@ def get_recent_activities(request):
                 'type': 'quote_created',
                 'icon': 'fas fa-file-contract',
                 'color': '#20c997',  # teal
-                'message': f'Quote created for {contact_name}',
+                'message': 'Quote created for',
                 'detail': f'Project: {project_name}',
                 'timestamp': quote.created_at.isoformat() if quote.created_at else None,
                 'link': None,
@@ -2289,7 +2289,7 @@ def get_recent_activities(request):
                 'type': 'po_sent',
                 'icon': 'fas fa-shopping-cart',
                 'color': '#e83e8c',  # pink
-                'message': f'Purchase Order sent to {contact_name}',
+                'message': 'Purchase Order sent to',
                 'detail': f'Project: {project_name}',
                 'timestamp': po.updated_at.isoformat() if po.updated_at else None,
                 'link': None,
@@ -2393,7 +2393,7 @@ def get_recent_activities(request):
         logger.error(f"Error getting recent activities: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -2401,19 +2401,19 @@ def get_action_items(request):
     """
     Get action items for the dashboard.
     
-    Action items:
-    1. Bills in Inbox (bill_status = -2)
-    2. Bills to be Allocated in {project} (bill_status = 0, grouped by project)
-    3. Bills to be Approved in {project} (bill_status = 1 or 102, grouped by project)
-    4. Approved Bills ready to send to Xero (bill_status = 2 or 103)
-    5. Supplier Progress Claims awaiting Approval (bill_status = 100)
+    Action items (status names refer to Bills.STATUS_* in core/models.py):
+    1. Bills in Inbox (UNPROCESSED_EMAIL).
+    2. Bills to be Allocated (CREATED, grouped by project).
+    3. Bills to be Approved (ALLOCATED + PO_APPROVED_BILL_UPLOADED, grouped by project).
+    4. Approved Bills ready to send to Xero (APPROVED + PO_APPROVED_BILL_FOR_PAYMENT,
+       excluding rows that already have a Xero invoice id).
+    5. Supplier Progress Claims awaiting Approval (PO_PROGRESS_SUBMITTED).
     """
     try:
         action_items = []
-        
-        # 1. Bills in Inbox (status -2) - exclude archived projects
+
         inbox_count = Bills.objects.filter(
-            bill_status=-2
+            bill_status=Bills.STATUS_UNPROCESSED_EMAIL
         ).exclude(
             project__archived=1
         ).count()
@@ -2430,8 +2430,9 @@ def get_action_items(request):
                 'action_type': 'bills_inbox',
             })
         
-        # 2. Bills to be Allocated (status 0, grouped by project) - exclude archived projects
-        unallocated = Bills.objects.filter(bill_status=0).exclude(project__archived=1).select_related('project')
+        unallocated = Bills.objects.filter(
+            bill_status=Bills.STATUS_CREATED
+        ).exclude(project__archived=1).select_related('project')
         unallocated_by_project = {}
         for inv in unallocated:
             project_name = inv.project.project if inv.project else 'Unassigned'
@@ -2462,8 +2463,9 @@ def get_action_items(request):
                 'project_pk': project_pk,
             })
         
-        # 3. Bills to be Approved (status 1 or 102, grouped by project) - exclude archived projects
-        to_approve = Bills.objects.filter(bill_status__in=[1, 102]).exclude(project__archived=1).select_related('project')
+        to_approve = Bills.objects.filter(
+            bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
+        ).exclude(project__archived=1).select_related('project')
         approve_by_project = {}
         for inv in to_approve:
             project_name = inv.project.project if inv.project else 'Unassigned'
@@ -2488,8 +2490,13 @@ def get_action_items(request):
                 'project_pk': project_pk,
             })
         
-        # 4. Approved Bills ready to send to Xero (status 2 or 103) - exclude archived projects
-        ready_for_xero = Bills.objects.filter(bill_status__in=[2, 103]).exclude(project__archived=1).count()
+        # 4. Approved Bills ready to send to Xero - exclude archived projects.
+        # bill_xero_id IS NULL keeps already-pushed bills out of the count
+        # (their old status may still be 2/103 from the pre-fix workflow).
+        ready_for_xero = Bills.objects.filter(
+            bill_status__in=[Bills.STATUS_APPROVED, Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT],
+            bill_xero_id__isnull=True,
+        ).exclude(project__archived=1).count()
         if ready_for_xero > 0:
             action_items.append({
                 'type': 'xero',
@@ -2503,8 +2510,9 @@ def get_action_items(request):
                 'action_type': 'bills_approvals',
             })
         
-        # 5. Supplier Progress Claims awaiting Approval (status 100) - exclude archived projects
-        pending_claims = Bills.objects.filter(bill_status=100).exclude(project__archived=1).select_related('project', 'contact_pk')
+        pending_claims = Bills.objects.filter(
+            bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED
+        ).exclude(project__archived=1).select_related('project', 'contact_pk')
         claims_by_supplier = {}
         for inv in pending_claims:
             supplier_name = inv.contact_pk.name if inv.contact_pk else 'Unknown Supplier'
@@ -2550,5 +2558,5 @@ def get_action_items(request):
         logger.error(f"Error getting action items: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)

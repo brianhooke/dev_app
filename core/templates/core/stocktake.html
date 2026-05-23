@@ -908,10 +908,17 @@ Tabs:
         SENT: 2
     };
     
+    // Bill status enum — must match Bills.STATUS_* in core/models.py.
+    // The previous local copy was {PENDING:0, APPROVED:1, SENT:2}, which did
+    // not match the backend (where 0=CREATED, 1=ALLOCATED, 2=APPROVED, 3=SENT).
     var BILL_STATUS = {
-        PENDING: 0,
-        APPROVED: 1,
-        SENT: 2
+        UNPROCESSED_EMAIL: -2,
+        ARCHIVED: -1,
+        CREATED: 0,
+        ALLOCATED: 1,
+        APPROVED: 2,
+        SENT_TO_XERO: 3,
+        PAID: 4
     };
     
     // AJAX wrapper for standardized API calls
@@ -1427,7 +1434,7 @@ Tabs:
         
         var gstInput = row.find('.' + cls + '-gst-input');
         if (!gstInput.data('manually-edited')) {
-            gstInput.val((amount * 0.1).toFixed(2));
+            gstInput.val(Money.gstFromNet(amount).toFixed(2));
         }
         updateStocktakeStillToAllocate();
     }
@@ -1565,7 +1572,7 @@ Tabs:
                         return b.bill_pk == billPk; 
                     });
                     if (bill) {
-                        bill.bill_status = 2; // Approved status
+                        bill.bill_status = BILL_STATUS.APPROVED;
                     }
                 }
                 
@@ -1666,7 +1673,7 @@ Tabs:
             } else {
                 // Default: show unallocated bills (status 0)
                 stocktakeBills = response.bills.filter(function(bill) {
-                    return bill.is_stocktake === true && bill.bill_status === BILL_STATUS.PENDING;
+                    return bill.is_stocktake === true && bill.bill_status === BILL_STATUS.CREATED;
                 });
             }
             

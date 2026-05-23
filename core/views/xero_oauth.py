@@ -75,7 +75,7 @@ def xero_oauth_callback(request):
         logger.error(f"OAuth error: {error}")
         return JsonResponse({
             'status': 'error',
-            'message': f'Authorization failed: {error}'
+            'message': 'Authorization failed'
         }, status=400)
     
     if not code or not state:
@@ -183,7 +183,7 @@ def xero_oauth_callback(request):
         logger.error(f"OAuth callback error: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Unexpected error: {str(e)}'
+            'message': 'Unexpected error'
         }, status=500)
 
 

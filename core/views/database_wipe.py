@@ -5,8 +5,8 @@ DANGER: This module contains functionality to completely wipe all database table
 Use with extreme caution - this operation is irreversible.
 """
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import connection
 import logging
@@ -14,7 +14,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+# This view will TRUNCATE every business table. It must NEVER be reachable
+# without (a) staff auth, (b) CSRF, and (c) the diagnostics URL flag in
+# settings (`ENABLE_DIAGNOSTICS`). Even with all three, it is a footgun;
+# prefer running the equivalent management command.
+@staff_member_required
 @require_http_methods(["POST"])
 def wipe_database(request):
     """
@@ -63,7 +67,7 @@ def wipe_database(request):
             else:
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Unsupported database engine: {db_engine}'
+                    'message': 'Unsupported database engine'
                 }, status=400)
             
             tables = [row[0] for row in cursor.fetchall()]
@@ -116,5 +120,5 @@ def wipe_database(request):
         logger.error(f"Error wiping database: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error wiping database: {str(e)}'
+            'message': 'Error wiping database'
         }, status=500)

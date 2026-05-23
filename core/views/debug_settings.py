@@ -23,4 +23,4 @@ def debug_settings(request):
         return JsonResponse(info)
     except Exception as e:
         logger.error(f"Error in debug_settings: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)

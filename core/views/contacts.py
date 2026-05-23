@@ -177,7 +177,7 @@ def get_contacts_by_instance(request, instance_pk):
         except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
+                'message': 'Internal server error'
             }, status=400)
     
     return JsonResponse({

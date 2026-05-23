@@ -271,7 +271,7 @@ def get_project_folders(request, project_pk):
         logger.error(f"Error getting project folders: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting folders: {str(e)}'
+            'message': 'Error getting folders'
         }, status=500)
 
 
@@ -340,7 +340,7 @@ def create_folder(request):
         logger.error(f"Error creating folder: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error creating folder: {str(e)}'
+            'message': 'Error creating folder'
         }, status=500)
 
 
@@ -392,7 +392,7 @@ def rename_folder(request):
         logger.error(f"Error renaming folder: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error renaming folder: {str(e)}'
+            'message': 'Error renaming folder'
         }, status=500)
 
 
@@ -444,7 +444,7 @@ def rename_file(request):
         logger.error(f"Error renaming file: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error renaming file: {str(e)}'
+            'message': 'Error renaming file'
         }, status=500)
 
 
@@ -495,7 +495,7 @@ def delete_folder(request):
         logger.error(f"Error deleting folder: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error deleting folder: {str(e)}'
+            'message': 'Error deleting folder'
         }, status=500)
 
 
@@ -586,7 +586,7 @@ def upload_files(request):
         logger.error(f"Error uploading files: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error uploading files: {str(e)}'
+            'message': 'Error uploading files'
         }, status=500)
 
 
@@ -620,7 +620,7 @@ def download_file(request, file_pk):
         logger.error(f"Error downloading file: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error downloading file: {str(e)}'
+            'message': 'Error downloading file'
         }, status=500)
 
 
@@ -657,7 +657,7 @@ def download_folder(request, folder_pk):
         logger.error(f"Error downloading folder: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error downloading folder: {str(e)}'
+            'message': 'Error downloading folder'
         }, status=500)
 
 
@@ -734,7 +734,7 @@ def delete_file(request):
         logger.error(f"Error deleting file: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error deleting file: {str(e)}'
+            'message': 'Error deleting file'
         }, status=500)
 
 
@@ -809,7 +809,7 @@ def move_file(request):
         logger.error(f"Error moving file: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error moving file: {str(e)}'
+            'message': 'Error moving file'
         }, status=500)
 
 
@@ -899,5 +899,5 @@ def move_folder(request):
         logger.error(f"Error moving folder: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error moving folder: {str(e)}'
+            'message': 'Error moving folder'
         }, status=500)

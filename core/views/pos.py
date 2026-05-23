@@ -37,7 +37,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt
+from ._helpers import api_public, api_login_required, json_ok, json_err
 
 from ..models import (
     Bill_allocations, Bills, Contacts, Costing,
@@ -307,11 +307,12 @@ def view_po_by_unique_id(request, unique_id):
             'previous_claims_count': len(individual_claims),
             'previous_claims_range': range(1, len(individual_claims) + 1),
             'individual_claims': individual_claims,
-            # Only authenticated users (Mason staff) can approve / edit a
-            # supplier's claim. The supplier-facing page is public, so we
-            # hide the Approve/Edit-Claim buttons for anonymous viewers.
-            # The /po/<id>/approve/ endpoint also checks login server-side.
-            'is_admin': request.user.is_authenticated,
+            # Only Mason staff (`is_staff=True`) can approve / edit a supplier's
+            # claim. Authenticated-but-not-staff is *not* enough: the app
+            # has supplier accounts with logins, and they must not see the
+            # Approve/Edit-Claim controls on someone else's PO link. The
+            # /po/<id>/approve/ endpoint also enforces is_staff server-side.
+            'is_admin': request.user.is_authenticated and request.user.is_staff,
         }
         
         return render(request, 'core/po_public.html', context)
@@ -320,7 +321,10 @@ def view_po_by_unique_id(request, unique_id):
         return HttpResponse('Purchase Order not found', status=404)
 
 
-@csrf_exempt
+# Public landing-page route: supplier visits with a unique token; no Django
+# session. Authentication is the unique_id itself plus, for sensitive actions,
+# server-side checks (see B-7 fix in core/views/pos.py).
+@api_public
 def approve_po_claim(request, unique_id):
     """
     Approve a pending progress claim for a PO.
@@ -329,10 +333,12 @@ def approve_po_claim(request, unique_id):
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
-    if not request.user.is_authenticated:
+    # Approving a supplier's claim is a staff-only action. Plain
+    # `is_authenticated` is not enough because the app has supplier logins.
+    if not (request.user.is_authenticated and request.user.is_staff):
         return JsonResponse(
-            {'status': 'error', 'message': 'Login required to approve claims.'},
-            status=401,
+            {'status': 'error', 'message': 'Mason staff login required to approve claims.'},
+            status=403,
         )
 
     try:
@@ -354,7 +360,7 @@ def approve_po_claim(request, unique_id):
                 bill_pk=pending_bill_pk,
                 project=project,
                 contact_pk=supplier,
-                bill_status=100
+                bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED
             )
         except Bills.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Pending invoice not found'}, status=404)
@@ -387,7 +393,7 @@ def approve_po_claim(request, unique_id):
                 # Update the allocation if modified
                 if costing_pk and abs(submitted_amount - approved_amount) > Decimal('0.01'):
                     try:
-                        costing = Costing.objects.get(costing_pk=costing_pk)
+                        costing = Costing.objects.get(costing_pk=costing_pk, project=project)
                         allocation = Bill_allocations.objects.filter(
                             bill=invoice,
                             item=costing,
@@ -400,17 +406,21 @@ def approve_po_claim(request, unique_id):
                     except Costing.DoesNotExist:
                         logger.warning(f"Costing {costing_pk} not found when updating allocation")
 
-        # Recalculate invoice totals from allocations (in case any were modified)
-        totals = Bill_allocations.objects.filter(bill=invoice).aggregate(
-            total_net=Sum('amount'),
-            total_gst=Sum('gst_amount'),
-        )
-        invoice.total_net = totals['total_net'] or Decimal('0')
-        invoice.total_gst = totals['total_gst'] or Decimal('0')
-        
-        # Update status to approved (but no invoice uploaded yet)
-        invoice.bill_status = 101
-        invoice.save()
+        # B.V-C-12: allocation amount updates above + the totals/status save
+        # below must land or fail together. Without this wrapper, an error
+        # mid-loop could leave some allocations updated and the invoice's
+        # total_net/total_gst/bill_status untouched (so the dashboard still
+        # showed the supplier's submitted total instead of the approved one).
+        with transaction.atomic():
+            totals = Bill_allocations.objects.filter(bill=invoice).aggregate(
+                total_net=Sum('amount'),
+                total_gst=Sum('gst_amount'),
+            )
+            invoice.total_net = totals['total_net'] or Decimal('0')
+            invoice.total_gst = totals['total_gst'] or Decimal('0')
+
+            invoice.bill_status = Bills.STATUS_PO_APPROVED_NO_BILL
+            invoice.save()
         
         logger.info(f"Updated invoice {invoice.bill_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
         
@@ -593,10 +603,11 @@ Regards,
         return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
     except Exception as e:
         logger.error(f'Error approving claim: {e}', exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
+# Public landing-page route — see comment on approve_po_claim.
+@api_public
 def submit_po_claim(request, unique_id):
     """
     Submit or update a progress claim for a PO.
@@ -679,10 +690,19 @@ def submit_po_claim(request, unique_id):
                 amount = Decimal(str(claim.get('amount', 0)))
 
                 if amount > 0 and costing_pk:
+                    # B.V-C-09: scope the costing lookup to *this* project so a
+                    # malicious supplier can't post allocations into another
+                    # project's items via the public PO endpoint.
                     try:
-                        costing = Costing.objects.get(costing_pk=costing_pk)
+                        costing = Costing.objects.get(
+                            costing_pk=costing_pk,
+                            project=project,
+                        )
                     except Costing.DoesNotExist:
-                        logger.warning(f"Costing {costing_pk} not found")
+                        logger.warning(
+                            "submit_po_claim rejected costing_pk=%s for project_pk=%s",
+                            costing_pk, getattr(project, 'pk', None),
+                        )
                         continue
                     Bill_allocations.objects.create(
                         bill=invoice,
@@ -796,10 +816,11 @@ This is an automated notification from the Mason Build platform.
         return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
     except Exception as e:
         logger.error(f'Error submitting claim: {e}', exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
+# Public landing-page route — see comment on approve_po_claim.
+@api_public
 def upload_bill_pdf(request, unique_id):
     """
     Upload invoice PDF for an approved claim.
@@ -818,7 +839,7 @@ def upload_bill_pdf(request, unique_id):
             invoice = Bills.objects.get(
                 project=project,
                 contact_pk=supplier,
-                bill_status=101
+                bill_status=Bills.STATUS_PO_APPROVED_NO_BILL
             )
         except Bills.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'No approved claim awaiting invoice upload'}, status=404)
@@ -833,9 +854,8 @@ def upload_bill_pdf(request, unique_id):
         if not pdf_file.name.lower().endswith('.pdf'):
             return JsonResponse({'status': 'error', 'message': 'Only PDF files are allowed'}, status=400)
         
-        # Save the PDF
         invoice.pdf = pdf_file
-        invoice.bill_status = 102  # Approved and invoice uploaded
+        invoice.bill_status = Bills.STATUS_PO_APPROVED_BILL_UPLOADED
         invoice.save()
         
         logger.info(f"Invoice PDF uploaded for PO {unique_id}, Invoice {invoice.bill_pk}, status updated to 102")
@@ -935,7 +955,7 @@ This is an automated notification from the Mason Build platform.
         return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
     except Exception as e:
         logger.error(f'Error uploading invoice PDF: {e}', exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def view_po_pdf_by_unique_id(request, unique_id):
@@ -997,7 +1017,7 @@ def view_po_pdf_by_unique_id(request, unique_id):
         return HttpResponse('Purchase Order not found', status=404)
     except Exception as e:
         logger.error(f'Error serving PO PDF: {e}', exc_info=True)
-        return HttpResponse(f'Error: {str(e)}', status=500)
+        return HttpResponse('Error', status=500)
 
 
 def get_po_table_data_for_invoice(request, bill_pk):
@@ -1192,6 +1212,6 @@ def get_po_table_data_for_invoice(request, bill_pk):
         import traceback
         logger.error(f'Error in get_po_table_data_for_invoice for invoice {bill_pk}: {e}')
         logger.error(traceback.format_exc())
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 

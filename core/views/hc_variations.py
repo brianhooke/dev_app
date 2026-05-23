@@ -8,7 +8,7 @@ Template Rendering:
 import json
 import logging
 
-from django.db import models
+from django.db import models, transaction
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -130,7 +130,7 @@ def get_hc_variations(request, project_pk):
     
     except Exception as e:
         logger.error(f"Error getting HC variations: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -160,7 +160,7 @@ def get_hc_variation_allocations(request, variation_pk):
     
     except Exception as e:
         logger.error(f"Error getting HC variation allocations: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 def _create_new_item_for_variation(project, alloc_data):
@@ -301,82 +301,13 @@ def save_hc_variation(request):
                 variation = Hc_variation.objects.get(hc_variation_pk=variation_pk)
             except Hc_variation.DoesNotExist:
                 return JsonResponse({'error': 'Variation not found'}, status=404)
-            
-            # Delete existing allocations and recreate
-            Hc_variation_allocations.objects.filter(hc_variation=variation).delete()
-            
-            # Create new allocations
-            for alloc_data in allocations_data:
-                costing_pk = alloc_data.get('item_pk')
-                if not costing_pk:
-                    continue
-                
-                try:
-                    costing = Costing.objects.get(costing_pk=costing_pk)
-                    
-                    # Handle construction mode (qty/rate) vs simple mode (amount)
-                    qty = alloc_data.get('qty')
-                    rate = alloc_data.get('rate')
-                    if qty is not None and rate is not None:
-                        amount = float(qty) * float(rate)
-                    else:
-                        amount = alloc_data.get('amount', 0)
-                    
-                    Hc_variation_allocations.objects.create(
-                        hc_variation=variation,
-                        costing=costing,
-                        amount=amount,
-                        qty=qty,
-                        unit=alloc_data.get('unit', ''),
-                        rate=rate,
-                        notes=alloc_data.get('notes', '')
-                    )
-                except Costing.DoesNotExist:
-                    logger.warning(f"Costing {costing_pk} not found for variation allocation")
-            
-            logger.info(f"Updated HC variation {variation_pk} with {len(allocations_data)} allocations")
-            return JsonResponse({
-                'status': 'success',
-                'hc_variation_pk': variation.hc_variation_pk
-            })
-        
-        else:
-            # CREATE new variation
-            project_pk = data.get('project_pk')
-            date = data.get('date')
-            total_amount = data.get('total_amount', 0)
-            
-            if not project_pk or not date:
-                return JsonResponse({'error': 'project_pk and date required'}, status=400)
-            
-            # Get the project
-            try:
-                project = Projects.objects.get(projects_pk=project_pk)
-            except Projects.DoesNotExist:
-                return JsonResponse({'error': 'Project not found'}, status=404)
-            
-            # Create the variation with amount
-            from datetime import datetime
-            variation_date = datetime.strptime(date, '%Y-%m-%d').date()
-            variation = Hc_variation.objects.create(date=variation_date, amount=total_amount)
-            
-            created_items = []
-            
-            # Create allocations
-            for alloc_data in allocations_data:
-                is_new_item = alloc_data.get('is_new_item', False)
-                
-                if is_new_item:
-                    # Handle new item creation
-                    costing = _create_new_item_for_variation(project, alloc_data)
-                    if costing:
-                        created_items.append({
-                            'costing_pk': costing.costing_pk,
-                            'item': costing.item,
-                            'category': costing.category.category
-                        })
-                else:
-                    # Existing item
+
+            # B.V-C-12: delete-and-recreate must be atomic. Otherwise an
+            # exception inside the rebuild loop wipes the old allocations
+            # and leaves the variation with a partial (or empty) set.
+            with transaction.atomic():
+                Hc_variation_allocations.objects.filter(hc_variation=variation).delete()
+                for alloc_data in allocations_data:
                     costing_pk = alloc_data.get('item_pk')
                     if not costing_pk:
                         continue
@@ -385,16 +316,12 @@ def save_hc_variation(request):
                     except Costing.DoesNotExist:
                         logger.warning(f"Costing {costing_pk} not found for variation allocation")
                         continue
-                
-                if costing:
-                    # Handle construction mode (qty/rate) vs simple mode (amount)
                     qty = alloc_data.get('qty')
                     rate = alloc_data.get('rate')
                     if qty is not None and rate is not None:
                         amount = float(qty) * float(rate)
                     else:
                         amount = alloc_data.get('amount', 0)
-                    
                     Hc_variation_allocations.objects.create(
                         hc_variation=variation,
                         costing=costing,
@@ -402,19 +329,89 @@ def save_hc_variation(request):
                         qty=qty,
                         unit=alloc_data.get('unit', ''),
                         rate=rate,
-                        notes=alloc_data.get('notes', '')
+                        notes=alloc_data.get('notes', ''),
                     )
-            
-            logger.info(f"Created HC variation {variation.hc_variation_pk} with {len(allocations_data)} allocations, {len(created_items)} new items")
+
+            logger.info(f"Updated HC variation {variation_pk} with {len(allocations_data)} allocations")
             return JsonResponse({
                 'status': 'success',
                 'hc_variation_pk': variation.hc_variation_pk,
-                'created_items': created_items
             })
+
+        # CREATE new variation
+        project_pk = data.get('project_pk')
+        date = data.get('date')
+        total_amount = data.get('total_amount', 0)
+
+        if not project_pk or not date:
+            return JsonResponse({'error': 'project_pk and date required'}, status=400)
+
+        try:
+            project = Projects.objects.get(projects_pk=project_pk)
+        except Projects.DoesNotExist:
+            return JsonResponse({'error': 'Project not found'}, status=404)
+
+        from datetime import datetime
+        variation_date = datetime.strptime(date, '%Y-%m-%d').date()
+
+        # B.V-C-12: variation header + side-effect inserts (Categories,
+        # Costing, Units when is_new_item=True) + allocation rows must all
+        # land or fail together; otherwise the project ends up with new
+        # budget rows for a variation that doesn't exist.
+        created_items = []
+        with transaction.atomic():
+            variation = Hc_variation.objects.create(date=variation_date, amount=total_amount)
+            for alloc_data in allocations_data:
+                is_new_item = alloc_data.get('is_new_item', False)
+
+                if is_new_item:
+                    costing = _create_new_item_for_variation(project, alloc_data)
+                    if costing:
+                        created_items.append({
+                            'costing_pk': costing.costing_pk,
+                            'item': costing.item,
+                            'category': costing.category.category,
+                        })
+                else:
+                    costing_pk = alloc_data.get('item_pk')
+                    if not costing_pk:
+                        continue
+                    try:
+                        costing = Costing.objects.get(costing_pk=costing_pk)
+                    except Costing.DoesNotExist:
+                        logger.warning(f"Costing {costing_pk} not found for variation allocation")
+                        continue
+
+                if costing:
+                    qty = alloc_data.get('qty')
+                    rate = alloc_data.get('rate')
+                    if qty is not None and rate is not None:
+                        amount = float(qty) * float(rate)
+                    else:
+                        amount = alloc_data.get('amount', 0)
+                    Hc_variation_allocations.objects.create(
+                        hc_variation=variation,
+                        costing=costing,
+                        amount=amount,
+                        qty=qty,
+                        unit=alloc_data.get('unit', ''),
+                        rate=rate,
+                        notes=alloc_data.get('notes', ''),
+                    )
+
+        logger.info(
+            f"Created HC variation {variation.hc_variation_pk} with "
+            f"{len(allocations_data)} allocations, {len(created_items)} new items"
+        )
+        return JsonResponse({
+            'status': 'success',
+            'hc_variation_pk': variation.hc_variation_pk,
+            'created_items': created_items,
+        })
     
     except Exception as e:
         logger.error(f"Error saving HC variation: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -442,7 +439,7 @@ def delete_hc_variation(request):
         return JsonResponse({'status': 'error', 'message': 'Variation not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting HC variation: {e}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -473,7 +470,7 @@ def update_hc_variation_allocation(request, allocation_pk):
         return JsonResponse({'error': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f"Error updating HC variation allocation: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -491,4 +488,4 @@ def delete_hc_variation_allocation(request, allocation_pk):
         return JsonResponse({'error': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting HC variation allocation: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)

@@ -45,7 +45,7 @@ def toggle_stocktake_inclusion(request):
                 logger.info(f"Updated ProjectType {pk} stocktake to {stocktake_value}")
                 return JsonResponse({
                     'status': 'success',
-                    'message': f'Project type stocktake updated to {included}'
+                    'message': 'Project type stocktake updated to'
                 })
             except ProjectTypes.DoesNotExist:
                 return JsonResponse({
@@ -61,7 +61,7 @@ def toggle_stocktake_inclusion(request):
                 logger.info(f"Updated Costing {pk} stocktake to {stocktake_value}")
                 return JsonResponse({
                     'status': 'success',
-                    'message': f'Costing stocktake updated to {included}'
+                    'message': 'Costing stocktake updated to'
                 })
             except Costing.DoesNotExist:
                 return JsonResponse({
@@ -83,7 +83,7 @@ def toggle_stocktake_inclusion(request):
         logger.error(f"Error toggling stocktake inclusion: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -119,7 +119,7 @@ def toggle_xero_instance_stocktake(request):
             logger.info(f"Updated XeroInstance {xero_instance_pk} stocktake to {stocktake_value}")
             return JsonResponse({
                 'status': 'success',
-                'message': f'Xero instance stocktake updated to {included}'
+                'message': 'Xero instance stocktake updated to'
             })
         except XeroInstances.DoesNotExist:
             return JsonResponse({
@@ -136,7 +136,7 @@ def toggle_xero_instance_stocktake(request):
         logger.error(f"Error toggling Xero instance stocktake: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -199,7 +199,7 @@ def update_xero_stocktake_account(request):
         logger.error(f"Error updating Xero stocktake account: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -262,7 +262,7 @@ def update_xero_stocktake_writeoffs_account(request):
         logger.error(f"Error updating Xero stocktake writeoffs account: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -303,7 +303,7 @@ def get_stocktake_allocations(request, bill_pk):
         logger.error(f"Error getting stocktake allocations: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -360,7 +360,7 @@ def create_stocktake_allocation(request):
         logger.error(f"Error creating stocktake allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -436,7 +436,7 @@ def update_stocktake_allocation(request, allocation_pk):
         logger.error(f"Error updating stocktake allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -464,7 +464,7 @@ def delete_stocktake_allocation(request, allocation_pk):
         logger.error(f"Error deleting stocktake allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -486,7 +486,7 @@ def approve_stocktake_bill(request, bill_pk):
             }, status=404)
         
         # Update bill status to approved (2)
-        bill.bill_status = 2
+        bill.bill_status = Bills.STATUS_APPROVED
         bill.save(update_fields=['bill_status', 'updated_at'])
         
         logger.info(f"Approved stocktake bill {bill_pk}")
@@ -500,7 +500,7 @@ def approve_stocktake_bill(request, bill_pk):
         logger.error(f"Error approving stocktake bill: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -808,7 +808,7 @@ def get_stock_ledger(request):
         logger.error(f"Error getting stock ledger: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -845,7 +845,7 @@ def get_snap_list(request):
         logger.error(f"Error getting snap list: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -923,7 +923,7 @@ def create_snap(request):
         logger.error(f"Error creating snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1065,7 +1065,7 @@ def get_snap(request, snap_pk):
         logger.error(f"Error getting snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1131,7 +1131,7 @@ def update_snap(request, snap_pk):
         logger.error(f"Error updating snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1167,7 +1167,7 @@ def delete_snap(request, snap_pk):
         logger.error(f"Error deleting snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1216,7 +1216,7 @@ def update_snap_item(request, snap_item_pk):
         logger.error(f"Error updating snap item: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1323,7 +1323,7 @@ def create_snap_allocation(request):
         logger.error(f"Error creating snap allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1416,7 +1416,7 @@ def update_snap_allocation(request, allocation_pk):
         logger.error(f"Error updating snap allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1453,7 +1453,7 @@ def delete_snap_allocation(request, allocation_pk):
         logger.error(f"Error deleting snap allocation: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1508,7 +1508,7 @@ def finalise_snap(request, snap_pk):
         logger.error(f"Error finalising snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1564,7 +1564,7 @@ def unfinalise_snap(request, snap_pk):
         logger.error(f"Error unfinalising snap: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1936,7 +1936,7 @@ def send_snap_to_xero(request, snap_pk):
         logger.error(f"Error sending snap to Xero: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1988,7 +1988,7 @@ def get_opening_balances(request):
         logger.error(f"Error getting opening balances: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -2066,7 +2066,7 @@ def save_opening_balance(request):
         logger.error(f"Error saving opening balance: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -2125,7 +2125,7 @@ def update_opening_balance(request, balance_pk):
         logger.error(f"Error updating opening balance: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -2153,7 +2153,7 @@ def delete_opening_balance(request, balance_pk):
         logger.error(f"Error deleting opening balance: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -2184,7 +2184,7 @@ def get_projects_for_allocation(request):
         logger.error(f"Error getting projects: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -2327,5 +2327,5 @@ def get_item_history(request, item_pk):
         logger.error(f"Error getting item history: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)

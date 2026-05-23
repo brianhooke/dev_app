@@ -1,5 +1,12 @@
 # Local Email Testing Setup
 
+> **Heads up:** earlier revisions of this doc contained the live Lambda
+> `API_SECRET_KEY` in plain text. Treat that key as compromised. Rotate it
+> (Lambda + EB env vars must match) and use `$EMAIL_API_SECRET_KEY` from your
+> local environment for the snippets below — do not paste secrets back into
+> this file.
+
+
 ## Option A: Test with Real Emails via ngrok
 
 ### 1. Install ngrok (if not already installed)
@@ -25,7 +32,7 @@ This gives you a public URL like: `https://abc123.ngrok.io`
 # Get the ngrok URL from step 3, then:
 aws lambda update-function-configuration \
   --function-name email-processor \
-  --environment "Variables={DJANGO_API_URL=https://YOUR-NGROK-URL.ngrok.io/core/api/receive_email/,API_SECRET_KEY=05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e}" \
+  --environment "Variables={DJANGO_API_URL=https://YOUR-NGROK-URL.ngrok.io/core/api/receive_email/,API_SECRET_KEY=$EMAIL_API_SECRET_KEY}" \
   --region us-east-1
 ```
 
@@ -58,7 +65,7 @@ Restore Lambda to production URL:
 ```bash
 aws lambda update-function-configuration \
   --function-name email-processor \
-  --environment "Variables={DJANGO_API_URL=https://app.mason.build/core/api/receive_email/,API_SECRET_KEY=05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e}" \
+  --environment "Variables={DJANGO_API_URL=https://app.mason.build/core/api/receive_email/,API_SECRET_KEY=$EMAIL_API_SECRET_KEY}" \
   --region us-east-1
 ```
 
@@ -88,7 +95,7 @@ Test your local API directly:
 ```bash
 curl -X POST http://localhost:8000/core/api/receive_email/ \
   -H "Content-Type: application/json" \
-  -H "X-API-Secret: 05817a8c12b4f2d5b173953b3a0ab58a70a2f18b84ceaed32326e7e87cf6ed0e" \
+  -H "X-API-Secret: $EMAIL_API_SECRET_KEY" \
   -d '{
     "message_id": "test-'$(date +%s)'",
     "from_address": "sender@example.com",

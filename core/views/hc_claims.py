@@ -30,6 +30,7 @@ from datetime import datetime
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
 from django.db.models import Sum, Q
 
 from ..models import (
@@ -149,7 +150,7 @@ def get_hc_claims(request, project_pk):
 
     except Exception as e:
         logger.error(f"Error getting HC claims: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 def get_status_display(status):
@@ -243,7 +244,7 @@ def get_available_bills(request, project_pk):
 
     except Exception as e:
         logger.error(f"Error getting available bills: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -311,7 +312,7 @@ def get_available_stocktake_snaps(request, project_pk):
 
     except Exception as e:
         logger.error(f"Error getting available stocktake snaps: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -366,46 +367,52 @@ def create_hc_claim(request):
             }, status=400)
 
         claim_date_obj = datetime.strptime(claim_date, '%Y-%m-%d').date()
-        claim = HC_claims.objects.create(
-            date=claim_date_obj, status=0, project=project,
-        )
 
-        # B2: only attach bills that belong to this project AND are
-        # either unattached or attached to *this* project's draft.
-        valid_bill_pks = list(
-            Bills.objects
-            .filter(bill_pk__in=selected_bill_pks, project=project)
-            .filter(
-                Q(associated_hc_claim__isnull=True) |
-                Q(associated_hc_claim__project_id=project.pk,
-                  associated_hc_claim__status=0)
+        # B.V-C-12: claim header + bill attachments + snap attachments must
+        # land or fail together. A partial create would leave the operator
+        # with bills wired to a draft that doesn't exist, or a draft that
+        # silently dropped half its attachments.
+        with transaction.atomic():
+            claim = HC_claims.objects.create(
+                date=claim_date_obj, status=0, project=project,
             )
-            .values_list('bill_pk', flat=True)
-        )
-        if valid_bill_pks:
-            Bills.objects.filter(bill_pk__in=valid_bill_pks).update(associated_hc_claim=claim)
 
-        # B7: only attach snaps that
-        #   - have at least one allocation against this project, AND
-        #   - are finalised, AND
-        #   - are either unattached or attached to *this* project's draft.
-        valid_snap_pks = list(
-            StocktakeSnap.objects
-            .filter(
-                snap_pk__in=selected_snap_pks,
-                status__gte=StocktakeSnap.STATUS_FINALISED,
-                snap_items__allocations__project=project,
+            # B2: only attach bills that belong to this project AND are
+            # either unattached or attached to *this* project's draft.
+            valid_bill_pks = list(
+                Bills.objects
+                .filter(bill_pk__in=selected_bill_pks, project=project)
+                .filter(
+                    Q(associated_hc_claim__isnull=True) |
+                    Q(associated_hc_claim__project_id=project.pk,
+                      associated_hc_claim__status=0)
+                )
+                .values_list('bill_pk', flat=True)
             )
-            .filter(
-                Q(associated_hc_claim__isnull=True) |
-                Q(associated_hc_claim__project_id=project.pk,
-                  associated_hc_claim__status=0)
+            if valid_bill_pks:
+                Bills.objects.filter(bill_pk__in=valid_bill_pks).update(associated_hc_claim=claim)
+
+            # B7: only attach snaps that
+            #   - have at least one allocation against this project, AND
+            #   - are finalised, AND
+            #   - are either unattached or attached to *this* project's draft.
+            valid_snap_pks = list(
+                StocktakeSnap.objects
+                .filter(
+                    snap_pk__in=selected_snap_pks,
+                    status__gte=StocktakeSnap.STATUS_FINALISED,
+                    snap_items__allocations__project=project,
+                )
+                .filter(
+                    Q(associated_hc_claim__isnull=True) |
+                    Q(associated_hc_claim__project_id=project.pk,
+                      associated_hc_claim__status=0)
+                )
+                .distinct()
+                .values_list('snap_pk', flat=True)
             )
-            .distinct()
-            .values_list('snap_pk', flat=True)
-        )
-        if valid_snap_pks:
-            StocktakeSnap.objects.filter(snap_pk__in=valid_snap_pks).update(associated_hc_claim=claim)
+            if valid_snap_pks:
+                StocktakeSnap.objects.filter(snap_pk__in=valid_snap_pks).update(associated_hc_claim=claim)
 
         logger.info(
             "Created HC claim %s for project %s with %s bills (%s requested) "
@@ -427,7 +434,7 @@ def create_hc_claim(request):
 
     except Exception as e:
         logger.error(f"Error creating HC claim: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -661,7 +668,7 @@ def get_hc_claim_data(request, claim_pk):
         return JsonResponse({'error': 'Claim not found'}, status=404)
     except Exception as e:
         logger.error(f"Error getting HC claim data: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 def get_previous_claim_totals(project_pk, exclude_claim_pk=None):
@@ -822,19 +829,37 @@ def get_invoiced_amounts(project_pk, claim):
     """Get invoiced amounts per item from bill allocations.
 
     Returns dict with:
-    - invoiced: total invoiced amount across all bills allocated to the
-      item (used by the QS-claim formula)
-    - paid: amount on bills considered "settled" — i.e. through the AP
-      pipeline far enough to count toward the HC C2C. Driven by
-      Bills.STATUSES_SETTLED_FOR_HC_CLAIM (was a literal `[2, 3]`,
-      with a comment that disagreed with the model docstring — B15).
-    - in_claim: bills attached to this specific claim
+    - invoiced: total invoiced amount across bill allocations that
+      represent a real cost commitment for HC purposes. This applies the
+      same progress-claim filter that ``core/formulas.py:Committed`` uses:
+
+          bill_type in (0, 1)  OR  (bill_type == 2 AND allocation_type == 1)
+
+      Without this filter, progress-claim "wrap-up" allocation rows get
+      double-counted alongside their direct-cost siblings, inflating the
+      invoiced figure (audit A.M-C-12).
+    - paid: subset of `invoiced` whose bill is in
+      ``Bills.STATUSES_SETTLED_FOR_HC_CLAIM`` (currently
+      {STATUS_APPROVED, STATUS_SENT_TO_XERO}). The audit (A.M-C-02) flagged
+      that calling merely-approved-but-not-yet-sent bills "paid" suppresses
+      claimable amounts; the constant is the single point of edit when
+      that business decision lands. Document and test the chosen meaning.
+    - in_claim: subset of `invoiced` for bills attached to this specific
+      HC claim.
     """
     costing_pks = Costing.objects.filter(project_id=project_pk).values_list('costing_pk', flat=True)
 
-    allocations = Bill_allocations.objects.filter(
-        item__in=costing_pks,
-    ).select_related('bill')
+    # Apply the canonical progress-claim filter (matches
+    # core/formulas.py:Committed and core/services/costing_rollups.py).
+    allocations = (
+        Bill_allocations.objects
+        .filter(item__in=costing_pks)
+        .filter(
+            Q(bill__bill_type__in=[0, 1]) |
+            (Q(bill__bill_type=2) & Q(allocation_type=1))
+        )
+        .select_related('bill')
+    )
 
     settled_statuses = Bills.STATUSES_SETTLED_FOR_HC_CLAIM
     claim_pk = claim.hc_claim_pk if claim else None
@@ -895,12 +920,14 @@ def delete_hc_claim(request):
         if claim.status != 0:
             return JsonResponse({'error': 'Can only delete draft claims'}, status=400)
         
-        # Unassociate bills and snaps so they're available again
-        Bills.objects.filter(associated_hc_claim=claim).update(associated_hc_claim=None)
-        StocktakeSnap.objects.filter(associated_hc_claim=claim).update(associated_hc_claim=None)
-
-        # Delete claim (cascades to allocations)
-        claim.delete()
+        # B.V-C-12: detach bills/snaps and delete the claim atomically. A
+        # half-completed delete would leave bills detached from a claim
+        # that still exists, or a deleted claim with bills still pointing
+        # at it (FK constraint will then refuse the next operation).
+        with transaction.atomic():
+            Bills.objects.filter(associated_hc_claim=claim).update(associated_hc_claim=None)
+            StocktakeSnap.objects.filter(associated_hc_claim=claim).update(associated_hc_claim=None)
+            claim.delete()
         
         logger.info(f"Deleted HC claim {claim_pk}")
         return JsonResponse({'status': 'success', 'message': 'Claim deleted'})
@@ -909,7 +936,7 @@ def delete_hc_claim(request):
         return JsonResponse({'error': 'Claim not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting HC claim: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -994,62 +1021,66 @@ def finalize_hc_claim(request):
 
         kept = 0
         skipped = 0
-        for alloc_data in allocations_data:
-            item_pk = alloc_data.get('costing_pk')
-            category_pk = alloc_data.get('category_pk')
-            if not item_pk:
-                continue
+        # B.V-C-12: persist all allocations and the status flip atomically.
+        # If any single row fails we leave the claim as-is, in draft, with
+        # no half-written allocations.
+        with transaction.atomic():
+            for alloc_data in allocations_data:
+                item_pk = alloc_data.get('costing_pk')
+                category_pk = alloc_data.get('category_pk')
+                if not item_pk:
+                    continue
 
-            if _is_zero_activity(alloc_data):
-                skipped += 1
-                continue
+                if _is_zero_activity(alloc_data):
+                    skipped += 1
+                    continue
 
-            item = Costing.objects.get(costing_pk=item_pk)
-            category = Categories.objects.get(pk=category_pk) if category_pk else item.category
+                item = Costing.objects.get(costing_pk=item_pk)
+                category = Categories.objects.get(pk=category_pk) if category_pk else item.category
 
-            # Server-derived "previous" snapshot from prior approved claims
-            prev = prev_totals.get(
-                item_pk,
-                {'hc': 0.0, 'qs': 0.0, 'fixed_on_site': 0.0, 'sc_invoiced': 0.0},
-            )
-            prev_fos = float(prev.get('fixed_on_site') or 0)
+                # Server-derived "previous" snapshot from prior approved claims
+                prev = prev_totals.get(
+                    item_pk,
+                    {'hc': 0.0, 'qs': 0.0, 'fixed_on_site': 0.0, 'sc_invoiced': 0.0},
+                )
+                prev_fos = float(prev.get('fixed_on_site') or 0)
 
-            try:
-                fos_now = float(alloc_data.get('fixed_on_site') or 0)
-            except (TypeError, ValueError):
-                fos_now = 0.0
+                try:
+                    fos_now = float(alloc_data.get('fixed_on_site') or 0)
+                except (TypeError, ValueError):
+                    fos_now = 0.0
 
-            HC_claim_allocations.objects.update_or_create(
-                hc_claim_pk=claim,
-                item=item,
-                defaults={
-                    'category': category,
-                    'contract_budget': alloc_data.get('contract_budget', 0),
-                    'working_budget': alloc_data.get('working_budget', 0),
-                    'uncommitted': alloc_data.get('uncommitted', 0),
-                    'committed': alloc_data.get('committed', 0),
-                    # fixed_on_site is the current cumulative value;
-                    # _previous comes from server (B19), _this is the
-                    # delta the server computes.
-                    'fixed_on_site': fos_now,
-                    'fixed_on_site_previous': prev_fos,
-                    'fixed_on_site_this': fos_now - prev_fos,
-                    # sc_invoiced split: backend computes _previous (B20)
-                    'sc_invoiced_previous': float(prev.get('sc_invoiced') or 0),
-                    'sc_invoiced': alloc_data.get('sc_invoiced', 0),
-                    'adjustment': 0,  # Not used for now
-                    # hc/qs split: backend computes _previous (B20)
-                    'hc_claimed_previous': float(prev.get('hc') or 0),
-                    'hc_claimed': alloc_data.get('hc_claimed', 0),
-                    'qs_claimed_previous': float(prev.get('qs') or 0),
-                    'qs_claimed': alloc_data.get('qs_claimed', 0),
-                },
-            )
-            kept += 1
+                HC_claim_allocations.objects.update_or_create(
+                    hc_claim_pk=claim,
+                    item=item,
+                    defaults={
+                        'category': category,
+                        'contract_budget': alloc_data.get('contract_budget', 0),
+                        'working_budget': alloc_data.get('working_budget', 0),
+                        'uncommitted': alloc_data.get('uncommitted', 0),
+                        'committed': alloc_data.get('committed', 0),
+                        # fixed_on_site is the current cumulative value;
+                        # _previous comes from server (B19), _this is the
+                        # delta the server computes.
+                        'fixed_on_site': fos_now,
+                        'fixed_on_site_previous': prev_fos,
+                        'fixed_on_site_this': fos_now - prev_fos,
+                        # sc_invoiced split: backend computes _previous (B20)
+                        'sc_invoiced_previous': float(prev.get('sc_invoiced') or 0),
+                        'sc_invoiced': alloc_data.get('sc_invoiced', 0),
+                        'adjustment': 0,  # Not used for now
+                        # hc/qs split: backend computes _previous (B20)
+                        'hc_claimed_previous': float(prev.get('hc') or 0),
+                        'hc_claimed': alloc_data.get('hc_claimed', 0),
+                        'qs_claimed_previous': float(prev.get('qs') or 0),
+                        'qs_claimed': alloc_data.get('qs_claimed', 0),
+                    },
+                )
+                kept += 1
 
-        # Set claim status to approved (1)
-        claim.status = 1
-        claim.save()
+            # Set claim status to approved (1)
+            claim.status = 1
+            claim.save()
 
         logger.info(
             "Finalized HC claim %s for project %s: persisted %s allocations "
@@ -1067,4 +1098,4 @@ def finalize_hc_claim(request):
         return JsonResponse({'error': 'Claim not found'}, status=404)
     except Exception as e:
         logger.error(f"Error finalizing HC claim: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'Internal server error'}, status=500)

@@ -503,7 +503,14 @@ class StaffHoursAllocations(models.Model):
                 )
 
 
+class ProjectsQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(archived=0)
+
+
 class Projects(models.Model):
+    objects = ProjectsQuerySet.as_manager()
+
     projects_pk = models.AutoField(primary_key=True)
     project = models.CharField(max_length=100)
     project_type = models.ForeignKey(
@@ -785,6 +792,52 @@ class Document_files(models.Model):
     def __str__(self):
         return f"{self.file_name} in {self.folder.folder_name}"
 
+class BillsQuerySet(models.QuerySet):
+    """Reusable filter sets for the Bills status state machine.
+
+    Add new business rules here instead of writing `bill_status__in=[...]`
+    literals in views. This keeps the filter intent self-documenting and
+    means a status semantic change only has to be made in one place.
+    """
+
+    def in_inbox(self):
+        return self.filter(bill_status=Bills.STATUS_UNPROCESSED_EMAIL)
+
+    def unallocated(self):
+        return self.filter(bill_status=Bills.STATUS_CREATED)
+
+    def pending_approval(self):
+        """Bills allocated but not yet approved (incl. PO-uploaded bills)."""
+        return self.filter(bill_status__in=[
+            Bills.STATUS_ALLOCATED,
+            Bills.STATUS_PO_APPROVED_BILL_UPLOADED,
+        ])
+
+    def approved_for_xero(self):
+        """Bills approved but not yet pushed to Xero."""
+        return self.filter(
+            bill_status__in=[
+                Bills.STATUS_APPROVED,
+                Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT,
+            ],
+            bill_xero_id__isnull=True,
+        )
+
+    def in_xero(self):
+        """Bills that are in Xero (any post-send state, including paid)."""
+        return self.filter(bill_status__in=[
+            Bills.STATUS_SENT_TO_XERO,
+            Bills.STATUS_PAID,
+            Bills.STATUS_PO_SENT_TO_XERO,
+        ])
+
+    def settled_for_hc_claim(self):
+        return self.filter(bill_status__in=Bills.STATUSES_SETTLED_FOR_HC_CLAIM)
+
+    def pending_po_claims(self):
+        return self.filter(bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED)
+
+
 # SERVICE: bills
 class Bills(models.Model):
     # Named bill_status values. Pre-fix the codebase scattered numeric
@@ -803,12 +856,29 @@ class Bills(models.Model):
     STATUS_PO_APPROVED_BILL_UPLOADED = 102
     STATUS_PO_APPROVED_BILL_FOR_PAYMENT = 103
     STATUS_PO_SENT_TO_XERO = 104
-    # Statuses that count as "settled" for the HC-claim formula —
-    # i.e. fully through the AP workflow. The historical code used
-    # the set {APPROVED, SENT_TO_XERO} as the proxy for "paid" (see
-    # core/views/hc_claims.py::get_invoiced_amounts) and we preserve
-    # that behaviour here. Adding STATUS_PAID would arguably be more
-    # correct, but is a behaviour change deliberately deferred.
+
+    # Custom manager (uses the QuerySet methods above as manager methods).
+    objects = BillsQuerySet.as_manager()
+
+    # Statuses that count as "settled" for the HC-claim formula — i.e.
+    # this bill's allocations contribute to `paid` in
+    # core/views/hc_claims.py::get_invoiced_amounts.
+    #
+    # ⚠ AUDIT NOTE (A.M-C-02): the historical set is
+    # {STATUS_APPROVED, STATUS_SENT_TO_XERO}, which treats merely-approved
+    # bills (status 2) as "paid" for HC progress-claim purposes. The audit
+    # flagged that this *suppresses* claimable amounts because money that
+    # has only been approved internally — not yet sent to Xero, not yet
+    # paid by the bank — is counted as already-recovered cost. The
+    # commercially conservative reading is {STATUS_SENT_TO_XERO,
+    # STATUS_PAID} or {STATUS_PAID} alone.
+    #
+    # This is a business decision (impacts every HC progress claim's
+    # numbers) and is deliberately left as the historical default until
+    # the operations owner confirms which interpretation matches reality.
+    # When changing it, also write a regression test that pins the new
+    # set; the current value is preserved here verbatim from before the
+    # audit so callers don't see a silent shift.
     STATUSES_SETTLED_FOR_HC_CLAIM = {STATUS_APPROVED, STATUS_SENT_TO_XERO}
 
     bill_pk = models.AutoField(primary_key=True)
@@ -879,8 +949,28 @@ class Bills(models.Model):
             return self.foreign_gst * self.exchange_rate
         return self.total_gst
 
+class BillAllocationsQuerySet(models.QuerySet):
+    """Filters that the Contract Budget / HC Claims rollups need.
+
+    "Committed" matches the canonical filter at core/formulas.py and the
+    intent of `bill_type__in=[0,1]`-style literals scattered across the
+    contract-budget views.
+    """
+
+    def committed(self):
+        return self.filter(
+            bill__bill_status__gte=Bills.STATUS_ALLOCATED,
+            bill__bill_status__lt=Bills.STATUS_PO_PROGRESS_REJECTED,
+        )
+
+    def for_progress_claim(self):
+        return self.filter(allocation_type=1)
+
+
 # SERVICE: bills
 class Bill_allocations(models.Model):
+    objects = BillAllocationsQuerySet.as_manager()
+
     bill_allocation_pk = models.AutoField(primary_key=True)
     bill = models.ForeignKey(Bills, on_delete=models.CASCADE, related_name='bill_allocations')
     item = models.ForeignKey(Costing, on_delete=models.CASCADE, null=True, blank=True)  # Make nullable since we're using Xero accounts now

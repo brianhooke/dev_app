@@ -203,8 +203,8 @@ def get_committed_items_for_costing(costing_pk):
         return [], 0.0
     
     committed_items = [{
-        "supplier": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
-        "supplier_original": qa.quotes_pk.contact_pk.contact_name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
+        "supplier": qa.quotes_pk.contact_pk.name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
+        "supplier_original": qa.quotes_pk.contact_pk.name if qa.quotes_pk and qa.quotes_pk.contact_pk else 'Unknown',
         "quote_num": qa.quotes_pk.supplier_quote_number if qa.quotes_pk else '-',
         "amount": float(qa.amount)
     } for qa in quote_allocations]

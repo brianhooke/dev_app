@@ -1,12 +1,12 @@
 """
 Xero OAuth diagnostics to help troubleshoot configuration issues.
 """
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from ..models import XeroInstances
 
 
-@csrf_exempt
+@staff_member_required
 def xero_oauth_diagnostics(request, instance_pk):
     """
     Show OAuth configuration details for troubleshooting.

@@ -109,21 +109,5 @@ def get_current_project_info(request):
     return JsonResponse(response_data)
 
 
-def project_selector_view(request):
-    """
-    Render the project selector page.
-    
-    Shows available projects and allows switching between them.
-    """
-    projects = Projects.objects.all()
-    current_project = getattr(request, 'project', None)
-    current_project_type = get_project_type(request)
-    
-    context = {
-        'projects': projects,
-        'current_project': current_project,
-        'current_project_type': current_project_type,
-        'project_type_choices': ProjectTypes.PROJECT_TYPE_CHOICES,
-    }
-    
-    return render(request, 'core/project_selector.html', context)
+# Removed: project_selector_view rendered a template that has never existed
+# in the repo and was unreachable from any UI. P-8 in BEST_PRACTICE_AUDIT.md.

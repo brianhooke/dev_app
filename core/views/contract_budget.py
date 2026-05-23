@@ -384,34 +384,40 @@ def _compute_project_committed_billed(project, tender_or_execution):
         else:
             committed_dict[item.costing_pk] = float(total_amount)
     
-    # Add stocktake snap allocations to committed amounts
-    # Only include finalised snaps (status >= 1) allocated to this project
-    snap_allocations = StocktakeSnapAllocation.objects.filter(
-        project=project,
-        snap_item__snap__status__gte=1  # Finalised or sent to Xero
-    ).select_related('snap_item__snap', 'snap_item__item')
-    
-    # Build a map of item names to project costing_pk for matching
-    # (snap items link to global items, need to find project-specific costing)
-    project_costings = Costing.objects.filter(
-        project=project,
-        tender_or_execution=tender_or_execution
+    # Add stocktake snap allocations to committed amounts.
+    #
+    # A.M-C-13: previously this matched snap_item -> costing by **item name**
+    # (string lookup against `Costing.item`), while HC Claims matched the
+    # same relationship via the actual FK (`snap_item.item_id`). The two
+    # paths produced different totals when item names collided across
+    # projects or when a snap item had been re-pointed. We now use the FK
+    # directly (HC's approach) and gate it by `project=project` so a snap
+    # item belonging to another project doesn't leak in.
+    snap_allocations = (
+        StocktakeSnapAllocation.objects
+        .filter(project=project, snap_item__snap__status__gte=1)
+        .values('snap_item__item_id', 'qty', 'rate', 'amount')
     )
-    item_name_to_costing = {c.item: c.costing_pk for c in project_costings}
-    
+
+    project_costing_pks = set(
+        Costing.objects.filter(
+            project=project,
+            tender_or_execution=tender_or_execution,
+        ).values_list('costing_pk', flat=True)
+    )
+
     for snap_alloc in snap_allocations:
-        snap_item = snap_alloc.snap_item.item
-        if not snap_item:
+        costing_pk = snap_alloc['snap_item__item_id']
+        if costing_pk not in project_costing_pks:
+            # Snap item points at a costing that doesn't belong to this
+            # project's current tender/execution scope. Skip silently — the
+            # snap allocation either belongs to another project or to a
+            # tender/execution scope we're not rendering right now.
             continue
-        
-        # Match by item name to find the project's costing_pk
-        costing_pk = item_name_to_costing.get(snap_item.item)
-        if not costing_pk:
-            continue
-        
-        alloc_qty = float(snap_alloc.qty or 0)
-        alloc_rate = float(snap_alloc.rate or 0)
-        alloc_amount = float(snap_alloc.amount or 0)
+
+        alloc_qty = float(snap_alloc['qty'] or 0)
+        alloc_rate = float(snap_alloc['rate'] or 0)
+        alloc_amount = float(snap_alloc['amount'] or 0)
         
         if is_construction:
             if costing_pk in committed_dict:
@@ -582,7 +588,7 @@ def get_project_committed_amounts(request, project_pk):
         logger.error(f"Error getting committed amounts: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting committed amounts: {str(e)}'
+            'message': 'Error getting committed amounts'
         }, status=500)
 
 
@@ -908,7 +914,7 @@ def get_item_quote_allocations(request, item_pk):
         logger.error(f"Error getting item quote allocations: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting quote allocations: {str(e)}'
+            'message': 'Error getting quote allocations'
         }, status=500)
 
 
@@ -1035,7 +1041,7 @@ def get_item_bill_allocations(request, item_pk):
         logger.error(f"Error getting item bill allocations: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting bill allocations: {str(e)}'
+            'message': 'Error getting bill allocations'
         }, status=500)
 
 
@@ -1070,7 +1076,7 @@ def validate_fix_contract_budget(request, project_pk):
         logger.error(f"Error validating fix contract budget: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error validating: {str(e)}'
+            'message': 'Error validating'
         }, status=500)
 
 
@@ -1229,7 +1235,7 @@ def fix_contract_budget(request, project_pk):
         logger.error(f"Error fixing contract budget: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error fixing contract budget: {str(e)}'
+            'message': 'Error fixing contract budget'
         }, status=500)
 
 
@@ -1270,5 +1276,5 @@ def get_item_hc_variation_allocations(request, costing_pk):
         logger.error(f"Error getting HC variation allocations for item {costing_pk}: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting HC variation allocations: {str(e)}'
+            'message': 'Error getting HC variation allocations'
         }, status=500)

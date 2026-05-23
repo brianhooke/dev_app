@@ -1,7 +1,30 @@
+# --- VCS ---
 .git
+.gitattributes
 .gitignore
+.gitmodules
+
+# --- Virtualenvs (image installs from requirements.txt) ---
 .venv
 venv
+myenv
+env
+
+# --- Vendored Python packages from accidental `pip install -t .` ---
+bin
+certifi
+certifi-*.dist-info
+charset_normalizer
+charset_normalizer-*.dist-info
+idna
+idna-*.dist-info
+requests
+requests-*.dist-info
+urllib3
+urllib3-*.dist-info
+*.dist-info
+
+# --- Python build artefacts ---
 __pycache__
 *.pyc
 *.pyo
@@ -12,27 +35,51 @@ __pycache__
 *.egg-info
 dist
 build
+
+# --- IDE / OS ---
 .DS_Store
 .vscode
 .idea
-*.log
-db.sqlite3
-.ebextensions.backup
-set_eb_env_vars.sh
-eb_logs.txt
-dependency_tree.txt
+.cursor
 
-# Large directories that don't need to be in Docker image
-media/
-pdfs/
-csv/
-staticfiles/
+# --- Local dev databases / media ---
+db.sqlite3
+db_test.sqlite3
+*.sqlite3
+media
+media_test
+pdfs
+csv
+
+# --- Build artefacts / archives ---
 *.zip
 deploy.zip
+staticfiles
+node_modules
+playwright-report
+test-results
+playwright/.cache
 
-# Documentation and planning files
+# --- Secrets / scripts (must never reach the image) ---
+.env
+.env.*
+xero_instances_export.json
+
+# --- Logs ---
+*.log
+eb_logs.txt
+
+# --- Docs (do not need to ship in image) ---
 *.md
-*.txt
-!requirements.txt
+docs/
 REPO_GUIDE.txt
 DEPLOYMENT.txt
+DEPLOYMENT_CHECKLIST.md
+*.txt
+!requirements.txt
+
+# --- Test scaffolding ---
+tests
+playwright.config.js
+package.json
+package-lock.json

@@ -11,8 +11,11 @@ from datetime import datetime, timedelta
 import random
 
 # Configuration
-API_URL = "http://localhost:8000/core/api/receive_email/"
-API_SECRET_KEY = "change-me-in-production-use-strong-random-key"
+import os
+API_URL = os.environ.get("API_URL", "http://localhost:8000/core/api/receive_email/")
+# Read the dev API key from the env var (matches local.py / base.py defaults).
+# Never hardcode a production secret here.
+API_SECRET_KEY = os.environ.get("EMAIL_API_SECRET_KEY", "dev-only-email-api-secret-key")
 
 # Sample supplier email addresses and names
 suppliers = [

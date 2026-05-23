@@ -1,27 +1,20 @@
 """
-Bills Global views - serves bills_global_inbox/direct/approvals templates.
+Bills Global views - serves the consolidated bills_global.html template.
 
-These views handle the global Bills section accessible from the navbar,
-which includes Inbox, Direct, and Approvals modes.
+The single bills_global_view renders the navbar's Bills section in three
+modes (Inbox, Direct, Approvals) which switch via JS on the client. The
+older split views (inbox/direct/approvals) were removed in P-8 of the
+best-practice audit; their templates no longer exist on disk.
 
-Template Rendering:
-1. bills_global_inbox_view - Render Bills Inbox (status = -2, unprocessed email bills)
-2. bills_global_direct_view - Render Bills Direct (status = 0, ready for allocation)
-3. bills_global_approvals_view - Render Bills Approvals (status 2/103, approved bills)
-
-API Endpoints:
-4. send_bill_direct - Send bill to Xero (Bills Direct workflow)
-
-All templates use allocations_layout.html for consistent layout:
-- Inbox: hide_allocations=True (main table + PDF viewer only)
-- Direct: all 3 sections (main table, allocations table, PDF viewer)
-- Approvals: all 3 sections (main table, allocations table, PDF viewer)
+This module also hosts the supporting JSON API endpoints that the page
+uses (send_bill_direct, send_bill_to_xero, get_bills_list, etc.).
 """
 
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.db import transaction
 from decimal import Decimal
 from datetime import date
 import json
@@ -124,140 +117,47 @@ def bills_global_view(request):
     return render(request, 'core/bills_global.html', context)
 
 
-def bills_global_inbox_view(request):
-    """Render the Bills - Inbox section template using allocations_layout.
-    
-    Inbox mode shows unprocessed email bills (status = -2).
-    No allocations table - just main table and PDF viewer.
-    
-    DEPRECATED: Use bills_global_view for the consolidated template.
-    """
-    # Main table columns for Inbox view
-    main_table_columns = [
-        {'header': 'Xero / Project', 'width': '14%'},
-        {'header': 'Supplier', 'width': '18%'},
-        {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Gross', 'width': '11%'},
-        {'header': '$ Net', 'width': '11%'},
-        {'header': '$ GST', 'width': '11%'},
-        {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Send', 'width': '6%', 'class': 'col-action'},
-        {'header': 'Archive', 'width': '6%', 'class': 'col-action'},
-    ]
-    
-    context = {
-        'main_table_columns': main_table_columns,
-        'allocations_columns': [],  # Not used - allocations hidden
-    }
-    return render(request, 'core/bills_global_inbox.html', context)
-
-
-def bills_global_direct_view(request):
-    """Render the Bills - Direct section template using allocations_layout.
-    
-    Direct mode shows bills ready for allocation (status = 0, has xero_instance, no project).
-    Shows main table, allocations table, and PDF viewer.
-    """
-    # Main table columns for Direct view
-    main_table_columns = [
-        {'header': 'Xero / Project', 'width': '14%'},
-        {'header': 'Supplier', 'width': '20%'},
-        {'header': 'Bill #', 'width': '10%'},
-        {'header': '$ Gross', 'width': '9%'},
-        {'header': '$ Net', 'width': '9%'},
-        {'header': '$ GST', 'width': '9%'},
-        {'header': 'Email', 'width': '7%', 'class': 'col-action-first'},
-        {'header': 'Approve', 'width': '10%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '7%', 'class': 'col-action'},
-    ]
-    
-    # Allocations columns for Direct view
-    allocations_columns = [
-        {'header': 'Xero Account', 'width': '23%'},
-        {'header': 'Tracking', 'width': '18%'},
-        {'header': '$ Gross', 'width': '11%', 'still_to_allocate_id': 'RemainingGross'},
-        {'header': '$ Net', 'width': '11%', 'still_to_allocate_id': 'RemainingNet'},
-        {'header': '$ GST', 'width': '11%', 'still_to_allocate_id': 'RemainingGst'},
-        {'header': 'Notes', 'width': '21%'},
-        {'header': '', 'width': '5%', 'class': 'col-action-first'},  # Delete button
-    ]
-    
-    context = {
-        'main_table_columns': main_table_columns,
-        'allocations_columns': allocations_columns,
-    }
-    return render(request, 'core/bills_global_direct.html', context)
-
-
-def bills_global_approvals_view(request):
-    """Render the Bills - Approvals section template using allocations_layout.
-    
-    Approvals mode shows bills approved and ready to send to Xero (status 2 or 103).
-    Shows main table, allocations table, and PDF viewer.
-    """
-    # Main table columns for Approvals view
-    main_table_columns = [
-        {'header': 'Project', 'width': '11%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '11%', 'sortable': True},
-        {'header': 'Supplier', 'width': '11%', 'sortable': True},
-        {'header': 'Bill #', 'width': '9%', 'sortable': True},
-        {'header': '$ Gross', 'width': '9%', 'sortable': True},
-        {'header': '$ Net', 'width': '8%', 'sortable': True},
-        {'header': '$ GST', 'width': '8%', 'sortable': True},
-        {'header': 'Date', 'width': '8%', 'sortable': True},
-        {'header': 'Due Date', 'width': '7%', 'sortable': True},
-        {'header': 'Send', 'width': '6%', 'class': 'col-action-first'},
-        {'header': 'Mark X', 'width': '6%', 'class': 'col-action'},
-        {'header': 'Return', 'width': '6%', 'class': 'col-action'},
-    ]
-    
-    # Allocations columns for Approvals view (read-only)
-    allocations_columns = [
-        {'header': 'Xero Account', 'width': '18%'},
-        {'header': 'Tracking Category', 'width': '18%'},
-        {'header': 'Costing Item', 'width': '14%'},
-        {'header': '$ Gross', 'width': '12%', 'still_to_allocate_id': 'TotalGross'},
-        {'header': '$ Net', 'width': '12%', 'still_to_allocate_id': 'TotalNet'},
-        {'header': '$ GST', 'width': '12%', 'still_to_allocate_id': 'TotalGst'},
-        {'header': 'Notes', 'width': '14%'},
-    ]
-    
-    context = {
-        'main_table_columns': main_table_columns,
-        'allocations_columns': allocations_columns,
-        'readonly': True,
-    }
-    return render(request, 'core/bills_global_approvals.html', context)
+# Removed: bills_global_inbox_view / _direct_view / _approvals_view.
+# They rendered templates that no longer exist on disk and the consolidated
+# bills_global_view replaces all three. See P-8 in BEST_PRACTICE_AUDIT.md.
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def approve_bill_direct(request):
     """
-    Approve a bill from Direct mode - sets bill_status to 2 (approved).
-    Bill will then appear in Approvals section.
+    Approve a bill from Direct mode — promotes it to STATUS_APPROVED so it
+    can be picked up by the "ready to send to Xero" filter.
+
+    Accepts either of the two pre-approval states:
+      * STATUS_CREATED (0)   — typical Direct path, no allocations needed.
+      * STATUS_ALLOCATED (1) — bill came in via Approvals/Allocations, has
+        Bill_allocations rows; promoting from here preserves the allocations.
+
+    A.M-C-09: an earlier P-4 sweep narrowed this to `== STATUS_CREATED` only,
+    which broke approval of any bill that had been allocated first. We now
+    permit both pre-states explicitly and reject everything else.
     """
     try:
         data = json.loads(request.body)
         bill_pk = data.get('bill_pk')
-        
+
         if not bill_pk:
             return JsonResponse({'status': 'error', 'message': 'bill_pk required'}, status=400)
-        
+
         bill = Bills.objects.get(bill_pk=bill_pk)
-        
-        # Validate bill is in correct status (0 = ready for allocation)
-        if bill.bill_status != 0:
+
+        if bill.bill_status not in (Bills.STATUS_CREATED, Bills.STATUS_ALLOCATED):
             return JsonResponse({
                 'status': 'error',
-                'message': f'Bill status {bill.bill_status} cannot be approved from Direct mode'
+                'message': f'Bill status {bill.bill_status} cannot be approved from Direct mode '
+                           f'(must be CREATED or ALLOCATED).'
             }, status=400)
-        
-        # Update status to approved
-        bill.bill_status = 2
+
+        bill.bill_status = Bills.STATUS_APPROVED
         bill.save()
-        
-        logger.info(f"Bill {bill_pk} approved from Direct mode (status -> 2)")
+
+        logger.info(f"Bill {bill_pk} approved from Direct mode (status -> STATUS_APPROVED)")
         
         return JsonResponse({
             'status': 'success',
@@ -271,7 +171,7 @@ def approve_bill_direct(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"Error approving bill: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
@@ -912,16 +812,19 @@ def _send_bill_to_xero_core(invoice, workflow='approvals', force_update=False):
     logger.info(f"{'#'*80}")
     logger.info(f"")
     
-    # Update invoice status based on workflow
+    # Move the bill forward through the status state machine.
+    # NOTE on Direct: previous code set STATUS_APPROVED here even though the
+    # bill *is* in Xero, which collided with the "approved, awaiting send"
+    # state used by the dashboard "ready to send" filter. Use SENT_TO_XERO.
     if workflow == 'direct':
-        # Direct: status 0 -> 2 (sent to Xero)
-        invoice.bill_status = 2
+        invoice.bill_status = Bills.STATUS_SENT_TO_XERO
     else:
-        # Approvals: status 2 -> 3, status 103 -> 104
-        if invoice.bill_status == 2:
-            invoice.bill_status = 3
-        elif invoice.bill_status == 103:
-            invoice.bill_status = 104
+        # Approvals workflow: project bill (APPROVED -> SENT_TO_XERO) or
+        # PO-uploaded bill (PO_APPROVED_BILL_FOR_PAYMENT -> PO_SENT_TO_XERO).
+        if invoice.bill_status == Bills.STATUS_APPROVED:
+            invoice.bill_status = Bills.STATUS_SENT_TO_XERO
+        elif invoice.bill_status == Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT:
+            invoice.bill_status = Bills.STATUS_PO_SENT_TO_XERO
     
     invoice.bill_xero_id = xero_invoice_id
     invoice.save()
@@ -1058,7 +961,7 @@ def send_bill_direct(request):
         logger.error(f"Error in send_bill_direct: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1130,7 +1033,7 @@ def get_bill_pdf_info(request):
         logger.error(f"Error in get_bill_pdf_info: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1189,7 +1092,7 @@ def send_bill_to_xero(request):
         logger.error(f"Error in send_bill_to_xero: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1206,13 +1109,13 @@ def return_bill_to_project(request, invoice_id):
     try:
         invoice = Bills.objects.get(bill_pk=invoice_id)
         
-        if invoice.bill_status == 2:
-            invoice.bill_status = 0
-        elif invoice.bill_status == 103:
-            invoice.bill_status = 102
+        if invoice.bill_status == Bills.STATUS_APPROVED:
+            invoice.bill_status = Bills.STATUS_CREATED
+        elif invoice.bill_status == Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT:
+            invoice.bill_status = Bills.STATUS_PO_APPROVED_BILL_UPLOADED
         else:
             return JsonResponse({
-                'status': 'error', 
+                'status': 'error',
                 'message': f'Invoice status {invoice.bill_status} cannot be returned to project'
             }, status=400)
         
@@ -1227,7 +1130,7 @@ def return_bill_to_project(request, invoice_id):
         return JsonResponse({'status': 'error', 'message': 'Invoice not found'}, status=404)
     except Exception as e:
         logger.error(f"Error returning invoice to project: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1250,10 +1153,10 @@ def mark_bill_as_sent(request):
         
         invoice = Bills.objects.get(bill_pk=bill_pk)
         
-        if invoice.bill_status == 2:
-            invoice.bill_status = 3
-        elif invoice.bill_status == 103:
-            invoice.bill_status = 104
+        if invoice.bill_status == Bills.STATUS_APPROVED:
+            invoice.bill_status = Bills.STATUS_SENT_TO_XERO
+        elif invoice.bill_status == Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT:
+            invoice.bill_status = Bills.STATUS_PO_SENT_TO_XERO
         else:
             return JsonResponse({
                 'status': 'error',
@@ -1273,7 +1176,7 @@ def mark_bill_as_sent(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"Error marking bill as sent: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 # =============================================================================
@@ -1306,8 +1209,7 @@ def archive_bill(request):
                     'message': 'Invoice not found'
                 }, status=404)
             
-            # Update status to -1 (archived)
-            invoice.bill_status = -1
+            invoice.bill_status = Bills.STATUS_ARCHIVED
             invoice.save()
             
             logger.info(f"Archived invoice #{bill_pk}")
@@ -1327,7 +1229,7 @@ def archive_bill(request):
             logger.error(f"Error archiving bill: {str(e)}")
             return JsonResponse({
                 'status': 'error',
-                'message': f'Server error: {str(e)}'
+                'message': 'Server error'
             }, status=500)
     
     return JsonResponse({
@@ -1361,20 +1263,23 @@ def return_to_inbox(request):
                     'message': 'Invoice not found'
                 }, status=404)
             
-            # Delete all associated allocations
-            deleted_count = Bill_allocations.objects.filter(bill=invoice).delete()[0]
-            logger.info(f"Deleted {deleted_count} allocations for invoice {bill_pk}")
-            
-            # Clear fields and set status to -2
-            invoice.xero_instance = None
-            invoice.project = None
-            invoice.total_net = None
-            invoice.total_gst = None
-            invoice.supplier_bill_number = None
-            invoice.contact_pk = None
-            invoice.bill_status = -2
-            
-            invoice.save()
+            # B.V-C-12: deleting allocations and resetting bill fields must be
+            # atomic. Otherwise an interrupted run leaves the bill with no
+            # allocations but its old project/supplier/totals still set, and
+            # the operator sees a bill that "looks" allocated but isn't.
+            with transaction.atomic():
+                deleted_count = Bill_allocations.objects.filter(bill=invoice).delete()[0]
+                logger.info(f"Deleted {deleted_count} allocations for invoice {bill_pk}")
+
+                invoice.xero_instance = None
+                invoice.project = None
+                invoice.total_net = None
+                invoice.total_gst = None
+                invoice.supplier_bill_number = None
+                invoice.contact_pk = None
+                invoice.bill_status = Bills.STATUS_UNPROCESSED_EMAIL
+
+                invoice.save()
             
             return JsonResponse({
                 'status': 'success',
@@ -1390,7 +1295,7 @@ def return_to_inbox(request):
         except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': f'Server error: {str(e)}'
+                'message': 'Server error'
             }, status=500)
     
     return JsonResponse({
@@ -1683,7 +1588,7 @@ def pull_xero_accounts_and_divisions(request):
                 instance_results.append({
                     'instance_name': xero_instance.xero_name,
                     'status': 'error',
-                    'message': f'Error: {str(e)}',
+                    'message': 'Error',
                     'accounts_added': 0,
                     'accounts_updated': 0,
                     'accounts_unchanged': 0
@@ -1704,7 +1609,7 @@ def pull_xero_accounts_and_divisions(request):
         logger.error(f"Error in pull_xero_accounts_and_divisions: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -1750,7 +1655,7 @@ def pull_xero_accounts(request, instance_pk):
         logger.error(f"Error in pull_xero_accounts: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 
@@ -1780,7 +1685,7 @@ def get_xero_accounts_by_instance(request, instance_pk):
         logger.error(f"Error fetching Xero accounts for instance {instance_pk}: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error: {str(e)}'
+            'message': 'Error'
         }, status=500)
 
 
@@ -1827,7 +1732,7 @@ def create_bill_allocation(request):
         
     except Exception as e:
         logger.error(f"Error creating invoice allocation: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1880,7 +1785,7 @@ def update_bill_allocation(request):
         
     except Exception as e:
         logger.error(f"Error updating invoice allocation: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1910,7 +1815,7 @@ def delete_bill_allocation(request):
         
     except Exception as e:
         logger.error(f"Error deleting invoice allocation: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2068,5 +1973,5 @@ def send_bill_to_stocktake(request):
         logger.error(f"[SendToStocktake] Error: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)

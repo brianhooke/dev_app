@@ -1,20 +1,25 @@
 """
-Project management views
+Project management views.
+
+These endpoints all mutate first-class business state (projects, costings,
+items). They require an authenticated user. See core/views/_helpers.py for
+the decorator definitions and BEST_PRACTICE_AUDIT.md (P-3) for the broader
+auth migration plan.
 """
 import json
 import logging
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from core.models import (
     Projects, ProjectTypes, XeroInstances, XeroAccounts, Categories,
     Costing, Units, HC_claim_allocations,
 )
+from ._helpers import api_login_required
 
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def create_project(request):
     """
@@ -211,10 +216,11 @@ def create_project(request):
         logger.error(f"Error creating project: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error creating project: {str(e)}'
+            'message': 'Error creating project'
         }, status=500)
 
 
+@api_login_required
 @require_http_methods(["GET"])
 def get_projects(request):
     """
@@ -271,11 +277,11 @@ def get_projects(request):
         logger.error(f"Error getting projects: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting projects: {str(e)}'
+            'message': 'Error getting projects'
         }, status=500)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def update_project(request, project_pk):
     """
@@ -409,11 +415,11 @@ def update_project(request, project_pk):
         logger.error(f"Error updating project: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating project: {str(e)}'
+            'message': 'Error updating project'
         }, status=500)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def toggle_project_archive(request, project_pk):
     """
@@ -454,11 +460,11 @@ def toggle_project_archive(request, project_pk):
         logger.error(f"Error toggling project archive: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error toggling archive status: {str(e)}'
+            'message': 'Error toggling archive status'
         }, status=500)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def delete_category(request, project_pk, category_pk):
     """
@@ -515,11 +521,11 @@ def delete_category(request, project_pk, category_pk):
         logger.error(f"Error deleting category: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error deleting category: {str(e)}'
+            'message': 'Error deleting category'
         }, status=500)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def delete_item(request, project_pk, item_pk):
     """
@@ -565,11 +571,11 @@ def delete_item(request, project_pk, item_pk):
         logger.error(f"Error deleting item: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error deleting item: {str(e)}'
+            'message': 'Error deleting item'
         }, status=500)
 
 
-@csrf_exempt
+@api_login_required
 @require_http_methods(["POST"])
 def update_internal_committed(request):
     """
@@ -651,5 +657,5 @@ def update_internal_committed(request):
         logger.error(f"Error updating internal committed: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating committed amount: {str(e)}'
+            'message': 'Error updating committed amount'
         }, status=500)

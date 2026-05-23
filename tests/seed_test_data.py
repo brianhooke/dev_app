@@ -161,8 +161,8 @@ invoice2 = Bills.objects.create(
 
 # Create allocation for invoice2
 allocation1 = Bill_allocations.objects.create(
-    bill_allocations_pk=1,
-    bill_pk=invoice2,
+    bill_allocation_pk=1,
+    bill=invoice2,
     xero_account=account1,
     amount=Decimal('100.00'),
     gst_amount=Decimal('10.00'),

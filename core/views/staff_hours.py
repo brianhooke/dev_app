@@ -199,7 +199,7 @@ def get_employees(request):
         logger.error(f"Error fetching employees: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -266,7 +266,7 @@ def get_employee_detail(request, employee_id):
         logger.error(f"Error fetching employee detail: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -434,7 +434,7 @@ def sync_employee_pay_rates(request):
         logger.error(f"Error syncing pay rates: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -506,7 +506,7 @@ def get_leave_balances(request):
         logger.error(f"Error fetching leave balances: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -564,7 +564,7 @@ def get_pay_items(request):
         logger.error(f"Error fetching pay items: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -619,7 +619,7 @@ def get_payroll_calendars(request):
         logger.error(f"Error fetching payroll calendars: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -673,7 +673,7 @@ def get_super_funds(request):
         logger.error(f"Error fetching super funds: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -747,7 +747,7 @@ def get_public_holidays(request):
         logger.error(f"Error fetching public holidays: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -782,7 +782,7 @@ def get_holiday_calendars(request):
         logger.error(f"Error fetching holiday calendars: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -829,7 +829,7 @@ def create_holiday_calendar(request):
         logger.error(f"Error creating holiday calendar: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -879,7 +879,7 @@ def update_holiday_calendar(request, calendar_pk):
         logger.error(f"Error updating holiday calendar: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -906,7 +906,7 @@ def delete_holiday_calendar(request, calendar_pk):
         logger.error(f"Error deleting holiday calendar: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -947,7 +947,7 @@ def get_calendar_holidays(request, calendar_pk):
         logger.error(f"Error fetching calendar holidays: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1002,13 +1002,13 @@ def create_holiday(request, calendar_pk):
     except ValueError as e:
         return JsonResponse({
             'status': 'error',
-            'message': f'Invalid date format: {str(e)}'
+            'message': 'Invalid date format'
         }, status=400)
     except Exception as e:
         logger.error(f"Error creating holiday: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1046,13 +1046,13 @@ def update_holiday(request, holiday_pk):
     except ValueError as e:
         return JsonResponse({
             'status': 'error',
-            'message': f'Invalid date format: {str(e)}'
+            'message': 'Invalid date format'
         }, status=400)
     except Exception as e:
         logger.error(f"Error updating holiday: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1079,7 +1079,7 @@ def delete_holiday(request, holiday_pk):
         logger.error(f"Error deleting holiday: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1192,7 +1192,7 @@ def get_timesheets(request):
         logger.error(f"Error fetching timesheets: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1296,7 +1296,7 @@ def get_leave_applications(request):
         logger.error(f"Error fetching leave applications: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1477,7 +1477,7 @@ def get_employee_calendar_data(request):
         logger.error(f"Error fetching employee calendar data: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1713,7 +1713,7 @@ def save_timesheet(request):
                 pass
             return JsonResponse({
                 'status': 'error',
-                'message': f'Xero API error: {error_details}',
+                'message': 'Xero API error',
                 'details': response.text
             }, status=400)
         
@@ -1726,7 +1726,7 @@ def save_timesheet(request):
         logger.error(f"Error saving timesheet: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -1790,7 +1790,7 @@ def get_projects_for_allocation(request):
     except Exception as e:
         import traceback
         logger.error(f"Error getting projects: {str(e)}\n{traceback.format_exc()}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1824,7 +1824,7 @@ def get_costings_for_project(request):
         })
     except Exception as e:
         logger.error(f"Error getting costings: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def get_employee_pay_rate(employee, target_date):
@@ -2020,7 +2020,7 @@ def get_allocations(request):
         })
     except Exception as e:
         logger.error(f"Error getting allocations: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2103,7 +2103,7 @@ def save_allocation(request):
         })
     except Exception as e:
         logger.error(f"Error saving allocation: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2122,7 +2122,7 @@ def delete_allocation(request, allocation_pk):
         return JsonResponse({'status': 'error', 'message': 'Allocation not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting allocation: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2200,7 +2200,7 @@ def get_allocation_super_summary(request):
         })
     except Exception as e:
         logger.error(f"Error getting allocation super summary: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2310,7 +2310,7 @@ def create_leave_application(request):
         logger.error(f"Error creating leave application: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
@@ -2420,7 +2420,7 @@ def delete_timesheet_entry(request):
         
     except Exception as e:
         logger.error(f"Error deleting timesheet entry: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2510,7 +2510,7 @@ def delete_leave_application(request):
         
     except Exception as e:
         logger.error(f"Error deleting leave application: {str(e)}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2600,7 +2600,7 @@ def debug_allocations(request):
         return JsonResponse(result)
         
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -2784,4 +2784,4 @@ def get_staff_hours_report(request):
 
     except Exception as e:
         logger.exception("Error building staff hours report")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)

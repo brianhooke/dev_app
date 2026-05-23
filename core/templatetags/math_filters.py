@@ -1,21 +1,24 @@
 from django import template
-import locale
 import json
 
 register = template.Library()
+
 
 @register.filter
 def subtract(value, arg):
     return value - arg
 
+
 @register.filter
 def max_value(value1, value2):
     return max(value1, value2)
 
-@register.filter
-def numberformat(value, decimal_pos=2):
-    locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.UTF-8'
-    return locale.format_string(f"%%.%df" % decimal_pos, value, grouping=True)
+
+# Removed: numberformat. It called locale.setlocale(LC_ALL, '') on every
+# render, which mutates process-global state and races between requests.
+# Use Django's built-in {{ value|floatformat:2 }} or the Money helpers in
+# core/static/core/js/money.js instead.
+
 
 @register.filter
 def get_dict_value(dictionary, key):

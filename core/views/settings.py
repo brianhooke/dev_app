@@ -57,7 +57,7 @@ def get_project_types(request):
         logger.error(f"Error getting project types: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting project types: {str(e)}'
+            'message': 'Error getting project types'
         }, status=500)
 
 
@@ -98,7 +98,7 @@ def get_xero_instances_list(request):
         logger.error(f"Error getting Xero instances: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error getting Xero instances: {str(e)}'
+            'message': 'Error getting Xero instances'
         }, status=500)
 
 
@@ -171,7 +171,7 @@ def create_project_type(request):
         logger.error(f"Error creating project type: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error creating project type: {str(e)}'
+            'message': 'Error creating project type'
         }, status=500)
 
 
@@ -224,7 +224,7 @@ def update_project_type_name(request, project_type_pk):
         logger.error(f"Error updating project type name: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating project type name: {str(e)}'
+            'message': 'Error updating project type name'
         }, status=500)
 
 
@@ -264,7 +264,7 @@ def update_project_type_xero_instance(request, project_type_pk):
         logger.error(f"Error updating project type Xero instance: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating Xero instance: {str(e)}'
+            'message': 'Error updating Xero instance'
         }, status=500)
 
 
@@ -303,7 +303,7 @@ def update_project_type_rates_based(request, project_type_pk):
         logger.error(f"Error updating project type rates_based: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating rates based: {str(e)}'
+            'message': 'Error updating rates based'
         }, status=500)
 
 
@@ -336,7 +336,7 @@ def update_project_type_qs(request, project_type_pk):
         logger.error(f"Error updating project type qs: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error updating QS flag: {str(e)}'
+            'message': 'Error updating QS flag'
         }, status=500)
 
 
@@ -376,5 +376,5 @@ def toggle_project_type_archive(request, project_type_pk):
         logger.error(f"Error toggling project type archive: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error toggling archive status: {str(e)}'
+            'message': 'Error toggling archive status'
         }, status=500)

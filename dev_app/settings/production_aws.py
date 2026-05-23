@@ -9,12 +9,31 @@ This configuration is for AWS deployment using:
 """
 
 import os
+from django.core.exceptions import ImproperlyConfigured
 from .base import *
 
 DEBUG = False
 
-# Override SECRET_KEY from base.py
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7')
+
+def _required_env(name):
+    """Return os.environ[name] or raise a startup error.
+
+    Used to refuse to boot in production when a secret env var is missing
+    rather than silently fall back to a baked-in default.
+    """
+    value = os.environ.get(name)
+    if not value:
+        raise ImproperlyConfigured(
+            f"Production setting requires env var {name!r} to be set "
+            f"(see DEPLOYMENT_GUIDE.md / SECRET_ROTATION_RUNBOOK.md)."
+        )
+    return value
+
+
+# Hard-required production secrets. Any missing value blocks startup.
+SECRET_KEY = _required_env('SECRET_KEY')
+XERO_ENCRYPTION_KEY = _required_env('XERO_ENCRYPTION_KEY')
+EMAIL_API_SECRET_KEY = _required_env('EMAIL_API_SECRET_KEY')
 
 # Security Settings
 # ELB health checks are handled by CanonicalHostRedirectMiddleware
@@ -32,8 +51,16 @@ SESSION_COOKIE_SECURE = True  # Secure cookies over HTTPS
 SECURE_SSL_REDIRECT = False  # ALB handles HTTPS redirect, not Django
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust ALB's X-Forwarded-Proto
 X_FRAME_OPTIONS = 'DENY'
+
+# HSTS - tell browsers to talk HTTPS only. Start with a 1-day window so a
+# misconfiguration is recoverable, then bump to a year + preload once you're
+# confident HTTPS is working everywhere (including any subdomains).
+SECURE_HSTS_SECONDS = 86400  # 1 day; raise to 31536000 (1 yr) when stable
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # flip to True after testing subdomains
+SECURE_HSTS_PRELOAD = False  # flip to True only when ready for hstspreload.org
 
 # Session Configuration for OAuth flows
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Database-backed sessions
@@ -72,7 +99,16 @@ AWS_S3_OBJECT_PARAMETERS = {
 # Serve from local filesystem (baked into Docker image) - more reliable than S3
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
-# Note: collectstatic runs during container startup, files are in staticfiles/
+
+# WhiteNoise + content-hash filenames so cache-busting is automatic on every
+# deploy. `CompressedManifestStaticFilesStorage` writes a manifest mapping
+# logical name -> hashed name and rejects {% static %} references that don't
+# resolve, which catches stale references at deploy time instead of in the
+# browser. Run `manage.py collectstatic` during container start (start.sh).
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Don't 500 the whole page if a single asset is missing from the manifest;
+# log a warning instead. (Production still rejects writes outside STATIC_ROOT.)
+WHITENOISE_MANIFEST_STRICT = False
 
 # Media Files (User Uploads)
 AWS_MEDIA_LOCATION = 'media'

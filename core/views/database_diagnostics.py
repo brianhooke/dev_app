@@ -1,12 +1,12 @@
 """
 Database diagnostics to verify PostgreSQL connection.
 """
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse
 from django.db import connection
-from django.views.decorators.csrf import csrf_exempt
 
 
-@csrf_exempt
+@staff_member_required
 def database_diagnostics(request):
     """
     Show current database configuration and connection status.
@@ -52,5 +52,5 @@ def database_diagnostics(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500, json_dumps_params={'indent': 2})

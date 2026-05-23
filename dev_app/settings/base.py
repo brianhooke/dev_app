@@ -21,16 +21,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-z5h6c!k&m&6stz@jml@d@v19=!c0)zfeej2^p9!t+lf+!x6ut7'
+# --- Secrets ----------------------------------------------------------------
+# Dev defaults below are intentionally weak / well-known and exist ONLY so a
+# fresh checkout can run `manage.py runserver` without setting env vars.
+# `production_aws.py` overrides every value here and refuses to boot if the
+# corresponding env var is missing. Never paste a real production value into
+# this file.
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'dev-only-secret-key-not-for-production-use'
+)
 
-# Xero encryption key - keep this secret and consistent across deployments
-XERO_ENCRYPTION_KEY = os.environ.get('XERO_ENCRYPTION_KEY', 'yGUzgEzWkkCsHnb_lof7bmX0m8gBc3917sHYU2SYe8A=')
+XERO_ENCRYPTION_KEY = os.environ.get(
+    'XERO_ENCRYPTION_KEY',
+    # Dev-only Fernet key (32 url-safe base64 bytes). Production must override.
+    'TestKey-DevOnly-NOT-for-prod-AAAAAAAAAAAAAAAAAA='
+)
 
-# Email API secret key for Lambda authentication
-EMAIL_API_SECRET_KEY = os.environ.get('EMAIL_API_SECRET_KEY', 'change-me-in-production-use-strong-random-key')
+EMAIL_API_SECRET_KEY = os.environ.get(
+    'EMAIL_API_SECRET_KEY',
+    'dev-only-email-api-secret-key'
+)
 
-ALLOWED_HOSTS = ['herokuapp.com', 'app.mason.build', '*.elasticbeanstalk.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['app.mason.build', '.elasticbeanstalk.com', 'localhost', '127.0.0.1']
+
+# Diagnostics endpoints (DB wipe, secret previews, OAuth params) are off by
+# default. Enable temporarily via env var when troubleshooting:
+#   ENABLE_DIAGNOSTICS=1
+ENABLE_DIAGNOSTICS = os.environ.get('ENABLE_DIAGNOSTICS', '').lower() in ('1', 'true', 'yes')
 
 # CSRF trusted origins for HTTPS and local development
 # Note: Django doesn't support port wildcards, so we list common dev ports
@@ -73,15 +91,19 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'dev_app.middleware.CanonicalHostRedirectMiddleware',  # Redirect mason.build to landing page
-    # 'django.middleware.security.SecurityMiddleware',
+    # SecurityMiddleware first so HSTS/SSL-redirect/header rules apply before
+    # everything else (per Django's deployment checklist).
+    'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise as early as possible so static files don't pay the cost of
+    # auth/messages middleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'dev_app.middleware.CanonicalHostRedirectMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    # 'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'

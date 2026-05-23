@@ -832,7 +832,7 @@ $(document).ready(function() {
             // Auto-calculate GST when Net changes
             if ($(this).hasClass('net-input')) {
                 var netValue = parseFloat($(this).val()) || 0;
-                var gstValue = (netValue * 0.1).toFixed(2);
+                var gstValue = Money.gstFromNet(netValue).toFixed(2);
                 row.find('.gst-input').val(gstValue);
             }
             
@@ -1766,7 +1766,7 @@ $(document).ready(function() {
             var value = $(this).val();
             
             // Auto-calculate GST
-            var gstValue = (parseFloat(value) * 0.1).toFixed(2);
+            var gstValue = Money.gstFromNet(parseFloat(value)).toFixed(2);
             row.find('.allocation-gst-input').val(gstValue);
             
             // Update both amount and gst together to avoid race condition

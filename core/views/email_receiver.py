@@ -2,10 +2,10 @@
 API endpoint for receiving processed emails from Lambda
 """
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from core.models import ReceivedEmail, EmailAttachment, Bills
+from ._helpers import api_public, api_login_required
 from datetime import datetime
 import json
 import logging
@@ -18,7 +18,9 @@ if not API_SECRET_KEY:
     logger.warning("EMAIL_API_SECRET_KEY not configured - email API will reject all requests")
 
 
-@csrf_exempt
+# Public on purpose: Lambda has no Django session. Authenticates via the
+# X-API-Secret header (see EMAIL_API_SECRET_KEY) below.
+@api_public
 @require_http_methods(["POST"])
 def receive_email(request):
     """
@@ -143,7 +145,7 @@ def receive_email(request):
                         received_email=email,
                         email_attachment=attachment,
                         auto_created=True,
-                        bill_status=-2,  # -2 = unprocessed email bill (shows in Bills modal)
+                        bill_status=Bills.STATUS_UNPROCESSED_EMAIL,
                         bill_type=0,     # Default type
                     )
                     invoices_created.append(invoice.bill_pk)
@@ -178,17 +180,14 @@ def receive_email(request):
         logger.error(f"Error processing received email: {e}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Internal server error'
         }, status=500)
 
 
+@api_login_required
 @require_http_methods(["GET"])
 def email_list(request):
-    """
-    Simple view to list received emails (for testing/debugging)
-    """
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
+    """List received emails (for staff testing/debugging)."""
     
     emails = ReceivedEmail.objects.all()[:50]  # Latest 50 emails
     

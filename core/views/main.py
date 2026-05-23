@@ -62,21 +62,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-@csrf_exempt
-def create_contacts(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        contacts = data.get('contacts')
-        division = data.get('division')
-        if contacts:
-            for contact in contacts:
-                if contact['name']:
-                    Contacts.objects.create(contact_name=contact['name'], contact_email=contact['email'], division=division)
-            return JsonResponse({'status': 'success'})
-        else:
-            return JsonResponse({'status': 'error', 'message': 'No contacts provided'})
-    else:
-        return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'})
+# Removed: create_contacts wrote into renamed Contacts fields
+# (contact_name/contact_email/division) and had no live caller. The
+# replacements live in core/views/xero.py (create_contact, create_supplier)
+# which round-trip through Xero. P-7 in BEST_PRACTICE_AUDIT.md.
+
+
 def send_test_email():
     subject = 'Test Email - Developer App'
     message = 'If you are reading this, the Developer App is sending emails successfully.'
@@ -94,7 +85,7 @@ def send_test_email_view(request):
         return JsonResponse({'status': 'Email sent'})
     except Exception as e:
         logger.error(f'Error in send_test_email_view: {e}')
-        return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'Error', 'message': 'Internal server error'}, status=500)
 from django.core.files.storage import default_storage
 
 @csrf_exempt
@@ -151,8 +142,8 @@ def upload_costings(request):
                 logger.debug(f"Updated or created Costing for item: {row['item']}")
             return JsonResponse({'status': 'success'})
         except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=400)
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 @csrf_exempt
 def update_contract_budget_amounts(request):
@@ -249,7 +240,7 @@ def update_contract_budget_amounts(request):
         except Exception as e:
             logger.error(f"Error processing file: {str(e)}")
             return JsonResponse({
-                'error': f'Error processing file: {str(e)}',
+                'error': 'Error processing file',
                 'updated_rows': updated_rows,
                 'skipped_rows': skipped_rows
             }, status=400)
@@ -338,5 +329,5 @@ def upload_margin_category_and_lines(request):
             return JsonResponse({'status': 'success'})
         except Exception as e:
             logger.error(f'Error in upload_margin_category_and_lines: {str(e)}')
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'Internal server error'}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=405)

@@ -50,52 +50,90 @@ import requests
 from ratelimit import limits, sleep_and_retry
 from urllib.request import urlretrieve
 from django.http import HttpResponseBadRequest
-import ssl
 import urllib.request
 from django.core.exceptions import ValidationError
 from core.formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
-ssl._create_default_https_context = ssl._create_unverified_context
+# B.V-C-10: previously this module mutated `ssl._create_default_https_context`
+# to disable TLS verification for *every* outbound HTTPS call in the Python
+# process (Xero, Lambda, RDS metadata, anything). That is a MITM hole. The
+# line has been removed. If a specific outbound caller in this file needs to
+# pin a custom CA bundle, do it locally on that call site
+# (e.g. `requests.get(..., verify='/path/to/ca.pem')`), never globally.
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# B.V-L-02: process-wide log-level mutation removed; logging is configured
+# in dev_app/settings/*.py LOGGING.
 
 
 @csrf_exempt
 def associate_sc_claims_with_hc_claim(request):
-    """Associate selected SC invoices with a new HC claim."""
+    """Associate selected SC invoices with a new HC claim.
+
+    Audit fixes baked in:
+      * A.M-C-10: derive the project from the selected bills and stamp it
+        on the new `HC_claims` row, so two projects can each have their
+        own draft claim simultaneously.
+      * The "claim in progress" check is now scoped to that project
+        instead of being a global "is there ANY draft anywhere".
+      * Bill update + claim create wrapped in transaction.atomic so a
+        partial write can never leave bills associated with a non-existent
+        claim. (B.V-C-12 partial fix for this endpoint.)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
     try:
-        if request.method != 'POST':
-            return JsonResponse({'error': 'Invalid request method'}, status=400)
-        logger.info('Processing associate_sc_claims_with_hc_claim request')
         data = json.loads(request.body)
-        logger.info(f'Request data: {data}')
         selected_invoices = data.get('selectedInvoices', [])
-        logger.info(f'Selected invoices: {selected_invoices}')
         if not selected_invoices:
-            logger.warning('No invoices selected')
             return JsonResponse({'error': 'No invoices selected'}, status=400)
-        if HC_claims.objects.exists():
-            latest_hc_claim = HC_claims.objects.latest('hc_claim_pk')
-            logger.info(f'Latest HC claim status: {latest_hc_claim.status}')
-            if latest_hc_claim.status == 0:
-                logger.warning('Found existing HC claim in progress')
-                return JsonResponse({
-                    'error': 'There is a HC claim in progress. Complete this claim before starting another.'
-                }, status=400)
-        new_hc_claim = HC_claims.objects.create(date=datetime.now(), status=0)
-        logger.info(f'Created new HC claim with pk: {new_hc_claim.hc_claim_pk}')
-        update_result = Bills.objects.filter(bill_pk__in=selected_invoices).update(associated_hc_claim=new_hc_claim)
-        logger.info(f'Updated {update_result} invoices with new HC claim')
+
+        bills_qs = Bills.objects.filter(bill_pk__in=selected_invoices)
+        project_ids = set(bills_qs.values_list('project_id', flat=True))
+        if not project_ids:
+            return JsonResponse({'error': 'Selected invoices were not found'}, status=404)
+        if len(project_ids) > 1:
+            return JsonResponse(
+                {'error': 'Selected invoices belong to multiple projects; one HC claim covers a single project.'},
+                status=400,
+            )
+        project_id = project_ids.pop()
+        if project_id is None:
+            return JsonResponse(
+                {'error': 'Selected invoices have no project assigned.'},
+                status=400,
+            )
+
+        in_progress = HC_claims.objects.filter(project_id=project_id, status=0).first()
+        if in_progress is not None:
+            return JsonResponse(
+                {'error': 'There is an HC claim in progress for this project. Complete it before starting another.'},
+                status=400,
+            )
+
+        with transaction.atomic():
+            new_hc_claim = HC_claims.objects.create(
+                project_id=project_id, date=datetime.now(), status=0,
+            )
+            update_result = bills_qs.update(associated_hc_claim=new_hc_claim)
+
+        logger.info(
+            'associate_sc_claims_with_hc_claim: project_id=%s claim_pk=%s bills_attached=%s',
+            project_id, new_hc_claim.hc_claim_pk, update_result,
+        )
         return JsonResponse({
             'latest_hc_claim_pk': new_hc_claim.hc_claim_pk,
-            'invoices_updated': update_result
+            'invoices_updated': update_result,
         })
-    except Exception as e:
-        logger.error(f'Error in associate_sc_claims_with_hc_claim: {str(e)}', exc_info=True)
-        return JsonResponse({'error': 'Internal server error occurred'}, status=500)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+    except Exception:
+        # B.V-C-11: never echo the exception string; log it server-side and
+        # return a generic message.
+        logger.exception('associate_sc_claims_with_hc_claim failed')
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -113,17 +151,65 @@ def update_fixedonsite(request):
 
 @csrf_exempt
 def update_hc_claim_data(request):
-    """Update HC claim data with allocations."""
-    if request.method == 'POST':
+    """Update HC claim data with allocations.
+
+    A.M-C-11: previously this looked up the draft claim with
+    `HC_claims.objects.get(status=0)` — i.e. THE one global draft. With two
+    projects each holding a draft simultaneously, that returned a random
+    one and silently wrote allocations into the wrong project's claim.
+    Fix: derive the project from the costing items in the payload (every
+    item carries `project` via `Costing.project`) and require the draft to
+    belong to that project. If the payload spans projects we refuse rather
+    than guess.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        current_hc_claim_display_id = data.get('current_hc_claim_display_id', '0')
+        save_or_final = data.get('save_or_final', 0)
+        entries = data.get('hc_claim_data', [])
+        if not entries:
+            return JsonResponse({'status': 'error', 'message': 'No HC claim rows submitted.'}, status=400)
+
+        item_ids = [e.get('item_id') for e in entries if e.get('item_id') is not None]
+        if not item_ids:
+            return JsonResponse({'status': 'error', 'message': 'HC claim rows missing item_id.'}, status=400)
+        project_ids = set(
+            Costing.objects.filter(costing_pk__in=item_ids)
+            .values_list('project_id', flat=True)
+        )
+        if len(project_ids) != 1:
+            return JsonResponse(
+                {'status': 'error',
+                 'message': 'HC claim rows must all belong to a single project.'},
+                status=400,
+            )
+        project_id = project_ids.pop()
+
         try:
-            data = json.loads(request.body)
-            current_hc_claim_display_id = data.get('current_hc_claim_display_id', '0')
-            save_or_final = data.get('save_or_final', 0)
-            hc_claim = HC_claims.objects.get(status=0)
-            for entry in data.get('hc_claim_data', []):
+            hc_claim = HC_claims.objects.get(project_id=project_id, status=0)
+        except HC_claims.DoesNotExist:
+            return JsonResponse(
+                {'status': 'error',
+                 'message': 'No draft HC claim found for this project. Start one first.'},
+                status=404,
+            )
+        except HC_claims.MultipleObjectsReturned:
+            # Should be impossible after the associate-step fix, but be loud
+            # if the data ever drifts back into that state.
+            logger.error('Multiple draft HC claims for project_id=%s', project_id)
+            return JsonResponse(
+                {'status': 'error',
+                 'message': 'Multiple draft HC claims exist for this project; contact support.'},
+                status=500,
+            )
+
+        with transaction.atomic():
+            for entry in entries:
                 category = Categories.objects.get(category=entry['category'])
                 item = Costing.objects.get(costing_pk=entry['item_id'])
-                obj, created = HC_claim_allocations.objects.update_or_create(
+                HC_claim_allocations.objects.update_or_create(
                     hc_claim_pk=hc_claim,
                     category=category,
                     item=item,
@@ -142,19 +228,33 @@ def update_hc_claim_data(request):
                         'hc_claimed_previous': entry['hc_claimed_previous'],
                         'qs_claimed': entry['qs_claimed'],
                         'qs_claimed_previous': entry['qs_claimed_previous'],
-                    }
+                    },
                 )
             if current_hc_claim_display_id != '0':
-                hc_claim_to_update = HC_claims.objects.get(display_id=current_hc_claim_display_id)
+                # Same project scoping for finalisation: a display_id is unique
+                # only within a project (see HC_claims.save).
+                hc_claim_to_update = HC_claims.objects.get(
+                    project_id=project_id,
+                    display_id=current_hc_claim_display_id,
+                )
                 if save_or_final == 1:
                     hc_claim_to_update.status = 1
                     hc_claim_to_update.save()
-            return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': f"Unexpected error: {str(e)}"}, status=400)
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+        return JsonResponse({'status': 'success', 'message': 'Data saved successfully!'})
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON data.'}, status=400)
+    except (Costing.DoesNotExist, Categories.DoesNotExist, HC_claims.DoesNotExist) as exc:
+        # Bad references the client could realistically hit — surface a
+        # generic 400 with no traceback contents (B.V-C-11).
+        logger.warning('update_hc_claim_data: %s', type(exc).__name__)
+        return JsonResponse(
+            {'status': 'error', 'message': 'Referenced category, item, or claim not found.'},
+            status=400,
+        )
+    except Exception:
+        logger.exception('update_hc_claim_data failed')
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 def get_claim_table(request, claim_id):
@@ -205,7 +305,7 @@ def send_hc_claim_to_xero(request):
             return JsonResponse({"error": "Project not found"}, status=404)
         except Exception as e:
             logger.error(f"Error retrieving project: {str(e)}")
-            return JsonResponse({"error": f"Error retrieving project: {str(e)}"}, status=500)
+            return JsonResponse({"error": 'Error retrieving project'}, status=500)
         sales_account = project.xero_sales_account
         if not sales_account:
             return JsonResponse({'success': False, 'error': 'Sales account not configured'})
@@ -240,7 +340,7 @@ def send_hc_claim_to_xero(request):
                 return JsonResponse({"error": f"Category not found with ID: {cat_data['categories_pk']}"}, status=404)
             except Exception as e:
                 logger.error(f"Error processing category: {str(e)}")
-                return JsonResponse({"error": f"Error processing category: {str(e)}"}, status=500)
+                return JsonResponse({"error": 'Error processing category'}, status=500)
         invoice_data = {
             "Type": "ACCREC",
             "Contact": {"ContactID": xero_contact_id},
@@ -265,7 +365,7 @@ def send_hc_claim_to_xero(request):
                 'error': f"Xero API error: {response_data.get('ErrorNumber', 'Unknown error')} - {response_data}"
             })
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': 'Internal server error'})
 
 
 @csrf_exempt
@@ -290,7 +390,7 @@ def delete_variation(request):
         variation.delete()
         return JsonResponse({'success': True})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -338,7 +438,7 @@ def create_variation(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
     except Exception as e:
         logger.error(f"Error creating HC variation: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': f'Error creating variation: {str(e)}'}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Error creating variation'}, status=500)
 
 
 @csrf_exempt
@@ -362,9 +462,9 @@ def post_progress_claim_data(request):
             invoice.bill_type = 2
             invoice.save()
             if updating:
-                existing_count = Bill_allocations.objects.filter(bill_pk=invoice).count()
-                Bill_allocations.objects.filter(bill_pk=invoice).delete()
-                print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
+                existing_count = Bill_allocations.objects.filter(bill=invoice).count()
+                Bill_allocations.objects.filter(bill=invoice).delete()
+                logger.info(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
             for alloc in allocations:
                 item_pk = alloc.get("item_pk")
                 net = alloc.get("net", 0)
@@ -378,14 +478,14 @@ def post_progress_claim_data(request):
                 except Costing.DoesNotExist:
                     raise ValueError(f"Costing object not found for pk: {item_pk}")
                 new_alloc = Bill_allocations.objects.create(
-                    bill_pk=invoice,
+                    bill=invoice,
                     item=costing_obj,
                     amount=net,
                     gst_amount=gst,
                     notes=notes,
                     allocation_type=allocation_type
                 )
-                new_allocations.append(new_alloc.bill_allocations_pk)
+                new_allocations.append(new_alloc.bill_allocation_pk)
         message = "Progress claim allocations updated successfully" if updating else "Progress claim data posted successfully"
         return JsonResponse({
             "success": True,
@@ -397,11 +497,11 @@ def post_progress_claim_data(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Bills.DoesNotExist:
-        return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
+        return JsonResponse({"error": 'Invoice not found with id'}, status=404)
     except ValueError as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        return JsonResponse({"error": 'Internal server error'}, status=400)
     except Exception as e:
-        return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
+        return JsonResponse({"error": 'Unexpected error'}, status=500)
 
 
 @csrf_exempt
@@ -417,35 +517,43 @@ def post_direct_cost_data(request):
         if not invoice_id:
             return JsonResponse({"error": "No invoice_id provided"}, status=400)
         invoice = Bills.objects.get(pk=invoice_id)
-        invoice.bill_status = 1
-        invoice.bill_type = 1
-        invoice.save()
-        if updating:
-            existing_count = Bill_allocations.objects.filter(bill_pk=invoice).count()
-            Bill_allocations.objects.filter(bill_pk=invoice).delete()
-            print(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
+
+        # B.V-C-12: bill status flip + delete-and-recreate of allocations +
+        # Costing.uncommitted_amount updates must all land or fail together.
+        # Without the wrapper, an exception mid-loop leaves the bill marked
+        # "ALLOCATED" with only some of its lines and Costing.uncommitted
+        # values out of sync. (post_progress_claim_data already wraps; this
+        # is the matching pair that was missing.)
         new_allocations = []
-        for alloc in allocations:
-            item_pk = alloc.get("item_pk")
-            net = alloc.get("net", 0)
-            gst = alloc.get("gst", 0)
-            notes = alloc.get("notes", "")
-            uncommitted_new = alloc.get("uncommitted_new")
-            if not item_pk:
-                continue
-            costing_obj = Costing.objects.get(pk=item_pk)
-            if uncommitted_new is not None:
-                costing_obj.uncommitted_amount = uncommitted_new
-                costing_obj.save()
-            new_alloc = Bill_allocations.objects.create(
-                bill_pk=invoice,
-                item=costing_obj,
-                amount=net,
-                gst_amount=gst,
-                notes=notes,
-                allocation_type=0
-            )
-            new_allocations.append(new_alloc.bill_allocations_pk)
+        with transaction.atomic():
+            invoice.bill_status = Bills.STATUS_ALLOCATED
+            invoice.bill_type = 1
+            invoice.save()
+            if updating:
+                existing_count = Bill_allocations.objects.filter(bill=invoice).count()
+                Bill_allocations.objects.filter(bill=invoice).delete()
+                logger.info(f"Deleted {existing_count} existing allocations for invoice {invoice_id}")
+            for alloc in allocations:
+                item_pk = alloc.get("item_pk")
+                net = alloc.get("net", 0)
+                gst = alloc.get("gst", 0)
+                notes = alloc.get("notes", "")
+                uncommitted_new = alloc.get("uncommitted_new")
+                if not item_pk:
+                    continue
+                costing_obj = Costing.objects.get(pk=item_pk)
+                if uncommitted_new is not None:
+                    costing_obj.uncommitted_amount = uncommitted_new
+                    costing_obj.save()
+                new_alloc = Bill_allocations.objects.create(
+                    bill=invoice,
+                    item=costing_obj,
+                    amount=net,
+                    gst_amount=gst,
+                    notes=notes,
+                    allocation_type=0,
+                )
+                new_allocations.append(new_alloc.bill_allocation_pk)
         message = "Direct cost allocations updated successfully" if updating else "Direct cost data posted successfully"
         return JsonResponse({
             "message": message,
@@ -456,8 +564,8 @@ def post_direct_cost_data(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Bills.DoesNotExist:
-        return JsonResponse({"error": f"Invoice not found with id: {invoice_id}"}, status=404)
+        return JsonResponse({"error": 'Invoice not found with id'}, status=404)
     except Costing.DoesNotExist as e:
-        return JsonResponse({"error": f"Costing object not found: {str(e)}"}, status=400)
+        return JsonResponse({"error": 'Costing object not found'}, status=400)
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse({"error": 'Internal server error'}, status=500)

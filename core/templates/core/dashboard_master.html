@@ -24,6 +24,70 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
+<!--
+  C.T-C-02 / D.F-C-01: Bootstrap 4 is loaded above, but several screens
+  (bills_global, staff_hours, stocktake) use the Bootstrap 5 JS API
+  (`new bootstrap.Modal(el).show()`, `data-bs-dismiss`, etc.). On a BS4
+  page `window.bootstrap` is undefined so those modals/tabs silently fail
+  to open. Until the codebase is moved off BS4, this shim wires the
+  BS5-shape calls onto BS4's jQuery API. It is intentionally tiny: only
+  the surface the templates actually use is implemented.
+  Tabs use `data-bs-toggle="tab"` markup; we attach a click handler that
+  promotes the bare BS5 attributes to the BS4 equivalents at runtime.
+-->
+<script>
+(function () {
+    if (typeof window.bootstrap === 'undefined') {
+        window.bootstrap = {};
+    }
+    if (typeof window.bootstrap.Modal === 'undefined' && typeof jQuery !== 'undefined') {
+        var BS5ModalShim = function (element, options) {
+            this.$el = (element instanceof jQuery) ? element : jQuery(element);
+            if (options && (options.backdrop !== undefined || options.keyboard !== undefined)) {
+                // BS4 reads these from the data-* attrs at construction time, so
+                // syncing them onto the element is enough.
+                if (options.backdrop !== undefined) this.$el.attr('data-backdrop', options.backdrop);
+                if (options.keyboard !== undefined) this.$el.attr('data-keyboard', options.keyboard);
+            }
+        };
+        BS5ModalShim.prototype.show = function () { this.$el.modal('show'); };
+        BS5ModalShim.prototype.hide = function () { this.$el.modal('hide'); };
+        BS5ModalShim.prototype.toggle = function () { this.$el.modal('toggle'); };
+        BS5ModalShim.prototype.dispose = function () { this.$el.modal('dispose'); };
+        BS5ModalShim.getInstance = function (element) {
+            // BS5 returns null when no instance exists; we just always return
+            // a fresh shim — same behaviour from the caller's POV.
+            return new BS5ModalShim(element);
+        };
+        BS5ModalShim.getOrCreateInstance = BS5ModalShim.getInstance;
+        window.bootstrap.Modal = BS5ModalShim;
+    }
+    // BS5 close-button: any element with `data-bs-dismiss="modal"` should
+    // close its enclosing modal.
+    jQuery(document).on('click', '[data-bs-dismiss="modal"]', function () {
+        jQuery(this).closest('.modal').modal('hide');
+    });
+    // BS5 tabs/dropdowns/collapse: BS4's plugins use the un-prefixed
+    // `data-toggle` / `data-target` attributes, so promote any BS5-style
+    // attributes we encounter at parse time. This keeps existing BS5
+    // markup (tabs in staff_hours.html, stocktake.html) working on a BS4
+    // page without each template having to be rewritten.
+    jQuery(function () {
+        jQuery('[data-bs-toggle]').each(function () {
+            var $el = jQuery(this);
+            if (!$el.attr('data-toggle')) $el.attr('data-toggle', $el.attr('data-bs-toggle'));
+        });
+        jQuery('[data-bs-target]').each(function () {
+            var $el = jQuery(this);
+            var target = $el.attr('data-bs-target');
+            if (!$el.attr('data-target')) $el.attr('data-target', target);
+            // BS4's tab plugin specifically reads href on anchors.
+            if ($el.is('a') && !$el.attr('href')) $el.attr('href', target);
+        });
+    });
+})();
+</script>
+
 <!-- Centralized Background Sync (runs once per session) -->
 <script>
 (function() {
@@ -35,21 +99,8 @@
         return;
     }
     
-    // Get CSRF token
-    function getCSRFToken() {
-        var cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            var cookies = document.cookie.split(';');
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].trim();
-                if (cookie.substring(0, 10) === 'csrftoken=') {
-                    cookieValue = decodeURIComponent(cookie.substring(10));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
+    // CSRF token (uses shared helper from core/static/core/js/utils.js).
+    function getCSRFToken() { return Utils.getCSRFToken(); }
     
     // Fetch Xero instances and sync contacts for each
     $.ajax({

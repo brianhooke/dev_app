@@ -1,12 +1,12 @@
 """
 Diagnostic endpoint to check API configuration
 """
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse
 from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
 
 
-@csrf_exempt
+@staff_member_required
 def api_diagnostics(request):
     """Show API configuration for debugging"""
     # Get the configured API key (first 10 chars only for security)

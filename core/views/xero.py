@@ -89,7 +89,7 @@ def get_xero_auth(instance_pk):
         logger.error(f"OAuth token failed for instance {instance_pk}: {token_or_error}")
         return None, JsonResponse({
             'status': 'error',
-            'message': f'OAuth authentication failed: {token_or_error}',
+            'message': 'OAuth authentication failed',
             'needs_auth': True
         }, status=401), None
     
@@ -199,7 +199,7 @@ def handle_xero_request_errors(func):
             logger.error(f"Unexpected error in {func.__name__}: {str(e)}", exc_info=True)
             return JsonResponse({
                 'status': 'error',
-                'message': f'Unexpected error: {str(e)}'
+                'message': 'Unexpected error'
             }, status=500)
     return wrapper
 
@@ -262,7 +262,7 @@ def create_xero_instance(request):
         except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
+                'message': 'Internal server error'
             }, status=500)
     
     return JsonResponse({
@@ -300,7 +300,7 @@ def update_staff_hours_tracking(request, instance_pk):
         except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
+                'message': 'Internal server error'
             }, status=500)
     
     return JsonResponse({
@@ -362,7 +362,7 @@ def update_xero_instance(request, instance_pk):
             logger.error(f"Error updating Xero instance {instance_pk}: {str(e)}", exc_info=True)
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
+                'message': 'Internal server error'
             }, status=500)
     
     return JsonResponse({
@@ -396,7 +396,7 @@ def delete_xero_instance(request, instance_pk):
         except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
+                'message': 'Internal server error'
             }, status=500)
     
     return JsonResponse({
@@ -623,7 +623,7 @@ def migrate_xero_to_ssm(request):
         logger.error(f"Error in migrate_xero_to_ssm: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': f'Server error: {str(e)}'
+            'message': 'Server error'
         }, status=500)
 
 

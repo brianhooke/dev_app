@@ -938,28 +938,13 @@
 (function() {
     'use strict';
     
-    // Local CSRF token getter for this component
+    // CSRF token (uses shared helper from core/static/core/js/utils.js, with
+    // a hidden-input fallback for templates that don't set the cookie).
     function getCSRFToken() {
-        // First try to get from cookie
-        var cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            var cookies = document.cookie.split(';');
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].trim();
-                if (cookie.substring(0, 10) === 'csrftoken=') {
-                    cookieValue = decodeURIComponent(cookie.substring(10));
-                    break;
-                }
-            }
-        }
-        // Fallback to hidden input
-        if (!cookieValue) {
-            var $input = $('input[name=csrfmiddlewaretoken]');
-            if ($input.length) {
-                cookieValue = $input.val();
-            }
-        }
-        return cookieValue;
+        var cookieValue = Utils.getCSRFToken();
+        if (cookieValue) return cookieValue;
+        var $input = $('input[name=csrfmiddlewaretoken]');
+        return $input.length ? $input.val() : null;
     }
     
     // Track collapsed state for categories (shared across instances)
@@ -1207,7 +1192,7 @@
                 var rateCell = $('<div class="col-rate"></div>');
                 var rateDisplayValue = '';
                 if (item.rate !== null && item.rate !== undefined) {
-                    rateDisplayValue = parseFloat(item.rate).toLocaleString('en-US', {
+                    rateDisplayValue = parseFloat(item.rate).toLocaleString('en-AU', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 5
                     });
@@ -1250,7 +1235,7 @@
                 // Format with thousand separators, preserving up to 5dp
                 var displayValue = '';
                 if (item.operator_value !== null && item.operator_value !== undefined) {
-                    displayValue = parseFloat(item.operator_value).toLocaleString('en-US', {
+                    displayValue = parseFloat(item.operator_value).toLocaleString('en-AU', {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 5
                     });
@@ -1289,7 +1274,7 @@
                     quantityCell.attr('data-unit-name', item.unit || '');
                     var quantityDisplayValue = '';
                     if (calculatedQty !== null) {
-                        quantityDisplayValue = calculatedQty.toLocaleString('en-US', {
+                        quantityDisplayValue = calculatedQty.toLocaleString('en-AU', {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 2
                         });
@@ -1307,7 +1292,7 @@
                     }
                     var totalDisplayValue = '';
                     if (totalValue !== null) {
-                        totalDisplayValue = totalValue.toLocaleString('en-US', {
+                        totalDisplayValue = totalValue.toLocaleString('en-AU', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                         });
@@ -1342,7 +1327,7 @@
             tableWrapper.find('.col-total[data-total-value]').each(function() {
                 totalSum += parseFloat($(this).attr('data-total-value')) || 0;
             });
-            var totalSumDisplay = totalSum.toLocaleString('en-US', {
+            var totalSumDisplay = totalSum.toLocaleString('en-AU', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
@@ -1412,7 +1397,7 @@
             var $qtyCell = $itemRow.find('.col-quantity');
             $qtyCell.attr('data-unit-name', unitName);
             if (calculatedQty !== null) {
-                $qtyCell.text(calculatedQty.toLocaleString('en-US', {
+                $qtyCell.text(calculatedQty.toLocaleString('en-AU', {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 2
                 }));
@@ -1430,7 +1415,7 @@
             
             var $totalCell = $itemRow.find('.col-total');
             if (totalValue !== null) {
-                $totalCell.text(totalValue.toLocaleString('en-US', {
+                $totalCell.text(totalValue.toLocaleString('en-AU', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
                 }));
@@ -1467,7 +1452,7 @@
             container.find('.col-total[data-total-value]').not('#ratesTableTotalSum').each(function() {
                 totalSum += parseFloat($(this).attr('data-total-value')) || 0;
             });
-            var totalSumDisplay = totalSum.toLocaleString('en-US', {
+            var totalSumDisplay = totalSum.toLocaleString('en-AU', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
@@ -1849,7 +1834,7 @@
                     if (response.status === 'success') {
                         var formattedValue = '';
                         if (newValue !== null) {
-                            formattedValue = parseFloat(newValue).toLocaleString('en-US', {
+                            formattedValue = parseFloat(newValue).toLocaleString('en-AU', {
                                 minimumFractionDigits: 0,
                                 maximumFractionDigits: 5
                             });
@@ -1947,7 +1932,7 @@
                     if (response.status === 'success') {
                         var formattedRate = '';
                         if (newRate !== null) {
-                            formattedRate = parseFloat(newRate).toLocaleString('en-US', {
+                            formattedRate = parseFloat(newRate).toLocaleString('en-AU', {
                                 minimumFractionDigits: 0,
                                 maximumFractionDigits: 5
                             });

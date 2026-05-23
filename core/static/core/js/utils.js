@@ -40,36 +40,49 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// D.F-C-06: every money formatter on the page uses the AUSTRALIAN locale.
+// Previously `formatNumber` defaulted to `en-US`, while `formatMoney`
+// defaulted to `en-AU`, and `formatCurrency` used `formatNumber` (US)
+// then prepended a `$`. The same screen could show inconsistent
+// thousand-separators depending on which helper a caller happened to
+// pick. Both helpers now route through `Money.formatAUD` (see
+// core/static/core/js/money.js) so there is exactly one currency pipeline.
+
 /**
- * Format a number with thousand separators and 2 decimal places.
+ * Format a number with AU thousand separators and 2 decimal places.
  * Handles null, undefined, and NaN gracefully.
- * 
+ *
  * @param {number|string} num - Number to format
  * @returns {string} Formatted number string (e.g., "1,234.56")
  */
 function formatNumber(num) {
-    if (num === null || num === undefined || isNaN(num)) {
+    if (num === null || num === undefined || isNaN(parseFloat(num))) {
         return '0.00';
     }
-    return parseFloat(num).toLocaleString('en-US', {
+    return parseFloat(num).toLocaleString('en-AU', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
     });
 }
 
 /**
- * Format amount as currency with $ symbol.
- * 
+ * Format amount as currency with $ symbol (AU locale). Uses Money.formatAUD
+ * when available so the symbol/locale stay in lock-step with the canonical
+ * money pipeline.
+ *
  * @param {number|string} amount - Amount to format
  * @returns {string} Formatted currency string (e.g., "$1,234.56")
  */
 function formatCurrency(amount) {
+    if (window.Money && typeof window.Money.formatAUD === 'function') {
+        return window.Money.formatAUD(amount);
+    }
     return '$' + formatNumber(amount);
 }
 
 /**
  * Safely parse a float value, returning 0 for invalid inputs.
- * 
+ *
  * @param {any} value - Value to parse
  * @returns {number} Parsed float or 0
  */
@@ -79,17 +92,14 @@ function parseFloatSafe(value) {
 }
 
 /**
- * Format a number as currency with thousand separators (Australian locale).
- * Used for displaying monetary values consistently across the app.
- * 
+ * Alias for formatNumber. Kept so existing callers don't break. New code
+ * should call `Utils.formatNumber` (or Money.formatAUD) directly.
+ *
  * @param {number|string} num - Number to format
  * @returns {string} Formatted string (e.g., "1,234.56")
  */
 function formatMoney(num) {
-    return parseFloat(num || 0).toLocaleString('en-AU', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-    });
+    return formatNumber(num);
 }
 
 /**
@@ -281,6 +291,111 @@ function getJSONHeaders() {
         'X-CSRFToken': getCSRFToken()
     };
 }
+
+/**
+ * Unified HTTP client for the dev_app frontend.
+ *
+ * Wraps `fetch` so callers don't have to reinvent CSRF, JSON parsing, or
+ * status/error handling on every call site. Pairs with the server-side
+ * `json_ok` / `json_err` envelopes in `core/views/_helpers.py`:
+ *
+ *     {status: "success", ...}        -> resolves with the parsed JSON
+ *     {status: "error", message, ...} -> rejects with an Error whose
+ *                                        `.message`, `.status`, and `.body`
+ *                                        carry the server payload
+ *
+ * Usage:
+ *
+ *     Utils.api('/api/foo/', { method: 'POST', body: { x: 1 } })
+ *         .then(function(data) { ... })
+ *         .catch(function(err) { showToast(err.message); });
+ *
+ * Options:
+ *   - method:  HTTP verb (default 'GET')
+ *   - body:    plain object (auto JSON.stringify-ed) OR FormData/string
+ *              (passed through; CSRF header still added)
+ *   - headers: extra headers merged on top of defaults
+ *   - signal:  AbortSignal (optional)
+ *
+ * Notes:
+ *   - GET requests do NOT set Content-Type and do NOT send a body.
+ *   - Non-2xx responses always reject; the server's JSON `message` is
+ *     surfaced if available, otherwise `HTTP <status>`.
+ *   - Network failures reject with a synthetic `{status:0}` error so
+ *     callers can branch on offline/CORS independently of API errors.
+ */
+function apiRequest(url, options) {
+    var opts = options || {};
+    var method = (opts.method || 'GET').toUpperCase();
+    var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+
+    // CSRF for any state-changing verb (Django checks SAFE_METHODS)
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method) !== -1) {
+        headers['X-CSRFToken'] = getCSRFToken();
+    }
+
+    // Body handling: plain object -> JSON; FormData/string -> pass-through
+    var fetchInit = { method: method, credentials: 'same-origin' };
+    var body = opts.body;
+    if (body !== undefined && body !== null && method !== 'GET' && method !== 'HEAD') {
+        if (typeof FormData !== 'undefined' && body instanceof FormData) {
+            // Let the browser set the Content-Type with the multipart boundary.
+            fetchInit.body = body;
+        } else if (typeof body === 'string') {
+            fetchInit.body = body;
+        } else {
+            headers['Content-Type'] = 'application/json';
+            fetchInit.body = JSON.stringify(body);
+        }
+    }
+
+    // Merge user headers last so callers can override anything above.
+    if (opts.headers) {
+        Object.keys(opts.headers).forEach(function (k) { headers[k] = opts.headers[k]; });
+    }
+    fetchInit.headers = headers;
+    if (opts.signal) fetchInit.signal = opts.signal;
+
+    return fetch(url, fetchInit).then(function (resp) {
+        var contentType = resp.headers.get('Content-Type') || '';
+        var parser = contentType.indexOf('application/json') !== -1
+            ? resp.json()
+            : resp.text();
+        return parser.then(function (parsed) {
+            if (!resp.ok) {
+                var msg = (parsed && parsed.message)
+                    ? parsed.message
+                    : ('HTTP ' + resp.status);
+                var err = new Error(msg);
+                err.status = resp.status;
+                err.body = parsed;
+                throw err;
+            }
+            // Server-side json_err uses 4xx/5xx, but defensively also reject
+            // {status:"error"} responses that slipped through with HTTP 200.
+            if (parsed && parsed.status === 'error') {
+                var err2 = new Error(parsed.message || 'Request failed');
+                err2.status = resp.status;
+                err2.body = parsed;
+                throw err2;
+            }
+            return parsed;
+        });
+    }, function (networkErr) {
+        // Convert AbortError / TypeError into our error shape.
+        var err = new Error(networkErr.message || 'Network error');
+        err.status = 0;
+        err.cause = networkErr;
+        throw err;
+    });
+}
+
+// Convenience verbs.
+function apiGet(url, opts)         { return apiRequest(url, Object.assign({}, opts, { method: 'GET' })); }
+function apiPost(url, body, opts)  { return apiRequest(url, Object.assign({}, opts, { method: 'POST',  body: body })); }
+function apiPut(url, body, opts)   { return apiRequest(url, Object.assign({}, opts, { method: 'PUT',   body: body })); }
+function apiPatch(url, body, opts) { return apiRequest(url, Object.assign({}, opts, { method: 'PATCH', body: body })); }
+function apiDelete(url, opts)      { return apiRequest(url, Object.assign({}, opts, { method: 'DELETE' })); }
 
 /**
  * Initialize sortable table functionality.
@@ -633,7 +748,6 @@ function createSearchableDropdown(selectElement, options) {
     }
     
     $dropdown.on('click', '.searchable-dropdown-item:not(.disabled)', function(e) {
-        console.log('[SearchableDropdown] Item clicked, value:', $(this).attr('data-value'));
         e.stopPropagation();
         selectOption($(this).attr('data-value'));
     });
@@ -696,6 +810,12 @@ window.Utils = {
     formatQty: formatQty,
     getCSRFToken: getCSRFToken,
     getJSONHeaders: getJSONHeaders,
+    api: apiRequest,
+    apiGet: apiGet,
+    apiPost: apiPost,
+    apiPut: apiPut,
+    apiPatch: apiPatch,
+    apiDelete: apiDelete,
     initSortableTable: initSortableTable,
     addTruncationTooltips: addTruncationTooltips,
     createSearchableDropdown: createSearchableDropdown
@@ -821,338 +941,10 @@ window.Utils = {
     document.head.appendChild(style);
 })();
 
-/**
- * Verify sticky header implementation for a table.
- * Call from browser console: verifyStickyHeader('bill')
- * 
- * @param {string} sectionId - Section identifier (e.g., 'bill', 'quote')
- * @returns {Object} Verification result with details
- */
-function verifyStickyHeader(sectionId) {
-    var tableId = sectionId + 'MainTable';
-    var containerId = sectionId + 'TableContainer';
-    
-    var table = document.getElementById(tableId);
-    var container = document.getElementById(containerId);
-    var thead = table ? table.querySelector('thead') : null;
-    
-    var result = {
-        sectionId: sectionId,
-        tableFound: !!table,
-        containerFound: !!container,
-        theadFound: !!thead,
-        issues: [],
-        recommendations: [],
-        critical: {}
-    };
-    
-    if (!table) {
-        result.issues.push('Table #' + tableId + ' not found');
-        return result;
-    }
-    
-    if (!container) {
-        result.issues.push('Container #' + containerId + ' not found');
-        return result;
-    }
-    
-    if (!thead) {
-        result.issues.push('thead not found in table');
-        return result;
-    }
-    
-    // CRITICAL: Check table vs container dimensions
-    var tableRect = table.getBoundingClientRect();
-    var containerRect = container.getBoundingClientRect();
-    result.critical.tableHeight = Math.round(tableRect.height);
-    result.critical.containerHeight = Math.round(containerRect.height);
-    result.critical.tableOverflows = tableRect.height > containerRect.height;
-    result.critical.containerScrollHeight = container.scrollHeight;
-    result.critical.containerClientHeight = container.clientHeight;
-    result.critical.canScroll = container.scrollHeight > container.clientHeight;
-    
-    // CRITICAL: Check current scroll position
-    result.critical.containerScrollTop = container.scrollTop;
-    
-    // CRITICAL: Find the ACTUAL scrolling element by walking up the DOM
-    var scrollingElements = [];
-    var el = container;
-    while (el && el !== document.body) {
-        if (el.scrollHeight > el.clientHeight) {
-            var style = window.getComputedStyle(el);
-            scrollingElements.push({
-                element: el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : ''),
-                scrollHeight: el.scrollHeight,
-                clientHeight: el.clientHeight,
-                scrollTop: el.scrollTop,
-                overflowY: style.overflowY,
-                isScrollable: style.overflowY === 'auto' || style.overflowY === 'scroll'
-            });
-        }
-        el = el.parentElement;
-    }
-    result.critical.scrollingElements = scrollingElements;
-    
-    // Check thead sticky positioning
-    var theadStyle = window.getComputedStyle(thead);
-    result.theadPosition = theadStyle.position;
-    result.theadTop = theadStyle.top;
-    result.theadZIndex = theadStyle.zIndex;
-    
-    if (theadStyle.position !== 'sticky') {
-        result.issues.push('thead position is "' + theadStyle.position + '" (should be "sticky")');
-        result.recommendations.push('Add CSS: #' + tableId + ' thead { position: sticky; top: 0; z-index: 11; }');
-    }
-    
-    // Check container overflow
-    var containerStyle = window.getComputedStyle(container);
-    result.containerOverflowY = containerStyle.overflowY;
-    result.containerHeight = containerStyle.height;
-    result.containerMaxHeight = containerStyle.maxHeight;
-    result.containerDisplay = containerStyle.display;
-    result.containerFlex = containerStyle.flex;
-    
-    if (containerStyle.overflowY !== 'auto' && containerStyle.overflowY !== 'scroll') {
-        result.issues.push('Container overflow-y is "' + containerStyle.overflowY + '" (should be "auto" or "scroll")');
-        result.recommendations.push('Add CSS: #' + containerId + ' { overflow-y: auto; }');
-    }
-    
-    // CRITICAL: Check if container can actually scroll (has constrained height)
-    if (!result.critical.canScroll && result.critical.tableOverflows) {
-        result.issues.push('CRITICAL: Table overflows container but container cannot scroll - height not constrained');
-    }
-    
-    // Check for parent containers with overflow that might be scrolling instead
-    var parent = container.parentElement;
-    var problematicParents = [];
-    var actualScrollParent = null;
-    while (parent && parent !== document.body) {
-        var parentStyle = window.getComputedStyle(parent);
-        var parentInfo = {
-            element: parent.tagName + (parent.id ? '#' + parent.id : '') + (parent.className ? '.' + parent.className.split(' ').join('.') : ''),
-            overflow: parentStyle.overflow,
-            overflowY: parentStyle.overflowY,
-            height: parentStyle.height,
-            scrollHeight: parent.scrollHeight,
-            clientHeight: parent.clientHeight
-        };
-        
-        // Check if THIS parent is actually scrolling
-        if (parent.scrollHeight > parent.clientHeight && 
-            (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll')) {
-            parentInfo.isActuallyScrolling = true;
-            if (!actualScrollParent) actualScrollParent = parentInfo;
-        }
-        
-        if (parentStyle.overflow === 'hidden' || parentStyle.overflowY === 'hidden') {
-            problematicParents.push(parentInfo);
-        }
-        parent = parent.parentElement;
-    }
-    
-    if (actualScrollParent) {
-        result.critical.actualScrollParent = actualScrollParent;
-        result.issues.push('CRITICAL: A parent element is the actual scroll container: ' + actualScrollParent.element);
-        result.recommendations.push('The scroll should happen in #' + containerId + ', not in a parent');
-    }
-    
-    if (problematicParents.length > 0) {
-        result.problematicParents = problematicParents;
-    }
-    
-    // Check th background color
-    var ths = thead.querySelectorAll('th');
-    if (ths.length > 0) {
-        var thStyle = window.getComputedStyle(ths[0]);
-        result.thBackground = thStyle.backgroundColor;
-        if (thStyle.backgroundColor === 'rgba(0, 0, 0, 0)' || thStyle.backgroundColor === 'transparent') {
-            result.issues.push('th background is transparent - content will show through when scrolling');
-            result.recommendations.push('Add CSS: #' + tableId + ' thead th { background: #fff; }');
-        }
-    }
-    
-    // Summary
-    result.isValid = result.issues.length === 0;
-    result.summary = result.isValid 
-        ? 'Sticky header is correctly configured' 
-        : 'Found ' + result.issues.length + ' issue(s) with sticky header';
-    
-    console.log('=== Sticky Header Verification for "' + sectionId + '" ===');
-    console.log('');
-    console.log('📊 CRITICAL MEASUREMENTS:');
-    console.log('   Table height:', result.critical.tableHeight + 'px');
-    console.log('   Container height:', result.critical.containerHeight + 'px');
-    console.log('   Container scrollHeight:', result.critical.containerScrollHeight + 'px');
-    console.log('   Container clientHeight:', result.critical.containerClientHeight + 'px');
-    console.log('   Table overflows container:', result.critical.tableOverflows);
-    console.log('   Container CAN scroll:', result.critical.canScroll);
-    console.log('');
-    console.log('🔍 SCROLLING ELEMENTS (has scrollHeight > clientHeight):');
-    if (result.critical.scrollingElements.length === 0) {
-        console.log('   None found - this is the problem!');
-    } else {
-        result.critical.scrollingElements.forEach(function(el, i) {
-            console.log('   ' + (i+1) + '. ' + el.element);
-            console.log('      scrollHeight: ' + el.scrollHeight + ', clientHeight: ' + el.clientHeight);
-            console.log('      overflow-y: ' + el.overflowY + ', isScrollable: ' + el.isScrollable);
-        });
-    }
-    console.log('');
-    if (result.critical.actualScrollParent) {
-        console.log('⚠️  ACTUAL SCROLL PARENT: ' + result.critical.actualScrollParent.element);
-        console.log('   This is wrong - scroll should be on #' + containerId);
-    }
-    console.log('');
-    console.log('Summary:', result.summary);
-    if (result.issues.length > 0) {
-        console.log('Issues:', result.issues);
-        console.log('Recommendations:', result.recommendations);
-    }
-    
-    return result;
-}
-
-// Expose to Utils namespace
-if (typeof Utils !== 'undefined') {
-    Utils.verifyStickyHeader = verifyStickyHeader;
-}
-// Also expose globally for easy console access
-window.verifyStickyHeader = verifyStickyHeader;
-
-/**
- * Deep diagnostic for sticky header issues.
- * Checks for transform/filter/perspective that break sticky, and does live scroll test.
- * Call from console: debugStickyHeader('bill')
- */
-function debugStickyHeader(sectionId) {
-    var tableId = sectionId + 'MainTable';
-    var containerId = sectionId + 'TableContainer';
-    
-    var table = document.getElementById(tableId);
-    var container = document.getElementById(containerId);
-    var thead = table ? table.querySelector('thead') : null;
-    
-    if (!table || !container || !thead) {
-        console.log('ERROR: Required elements not found');
-        return;
-    }
-    
-    console.log('=== DEEP STICKY HEADER DEBUG for "' + sectionId + '" ===\n');
-    
-    // 1. Check for transform/filter/perspective/will-change that break sticky
-    console.log('🔬 CHECKING FOR STICKY-BREAKING CSS PROPERTIES:');
-    var breakingProps = ['transform', 'filter', 'perspective', 'willChange', 'contain'];
-    var el = thead;
-    var foundBreakingProp = false;
-    while (el && el !== document.body) {
-        var style = window.getComputedStyle(el);
-        var elName = el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : '');
-        
-        breakingProps.forEach(function(prop) {
-            var value = style[prop];
-            if (value && value !== 'none' && value !== 'auto' && value !== '' && value !== 'normal') {
-                console.log('   ⚠️  ' + elName + ' has ' + prop + ': ' + value);
-                foundBreakingProp = true;
-            }
-        });
-        el = el.parentElement;
-    }
-    if (!foundBreakingProp) {
-        console.log('   ✓ No breaking properties found');
-    }
-    
-    // 2. Check the exact DOM structure
-    console.log('\n📐 DOM STRUCTURE (thead to scroll container):');
-    el = thead;
-    var depth = 0;
-    while (el && el !== container.parentElement) {
-        var style = window.getComputedStyle(el);
-        var elName = el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ')[0] : '');
-        var indent = '   ' + '  '.repeat(depth);
-        console.log(indent + elName);
-        console.log(indent + '  position: ' + style.position + ', overflow: ' + style.overflow);
-        el = el.parentElement;
-        depth++;
-    }
-    
-    // 3. Live scroll test
-    console.log('\n🎯 LIVE SCROLL TEST:');
-    var theadRect1 = thead.getBoundingClientRect();
-    var containerRect = container.getBoundingClientRect();
-    console.log('   Before scroll - thead.top: ' + Math.round(theadRect1.top) + 'px, container.top: ' + Math.round(containerRect.top) + 'px');
-    
-    // Scroll the container programmatically
-    var originalScrollTop = container.scrollTop;
-    container.scrollTop = 100;
-    
-    var theadRect2 = thead.getBoundingClientRect();
-    console.log('   After scroll 100px - thead.top: ' + Math.round(theadRect2.top) + 'px');
-    
-    var stickyWorking = Math.abs(theadRect2.top - containerRect.top) < 5;
-    if (stickyWorking) {
-        console.log('   ✓ STICKY IS WORKING! thead stayed at container top');
-    } else {
-        console.log('   ✗ STICKY NOT WORKING - thead moved with scroll');
-        console.log('   Expected thead.top ≈ ' + Math.round(containerRect.top) + ', got ' + Math.round(theadRect2.top));
-    }
-    
-    // Restore scroll position
-    container.scrollTop = originalScrollTop;
-    
-    // 4. Check if scroll events go to the right element
-    console.log('\n🖱️  SCROLL EVENT TEST (scroll the table manually, watch console):');
-    
-    // Remove any existing listeners
-    if (window._stickyDebugListeners) {
-        window._stickyDebugListeners.forEach(function(item) {
-            item.el.removeEventListener('scroll', item.fn);
-        });
-    }
-    window._stickyDebugListeners = [];
-    
-    // Add scroll listeners to container and parents
-    var addScrollListener = function(element) {
-        var elName = element.tagName + (element.id ? '#' + element.id : '') + (element.className ? '.' + element.className.split(' ')[0] : '');
-        var fn = function() {
-            console.log('   SCROLL EVENT on: ' + elName + ' (scrollTop: ' + element.scrollTop + ')');
-        };
-        element.addEventListener('scroll', fn);
-        window._stickyDebugListeners.push({el: element, fn: fn});
-    };
-    
-    addScrollListener(container);
-    var parent = container.parentElement;
-    while (parent && parent !== document.body) {
-        addScrollListener(parent);
-        parent = parent.parentElement;
-    }
-    addScrollListener(document.body);
-    addScrollListener(document.documentElement);
-    
-    console.log('   Listeners added. Now scroll the Bills table and watch which element receives scroll events.');
-    console.log('   Run debugStickyHeader.cleanup() when done to remove listeners.');
-    
-    return {
-        stickyWorking: stickyWorking,
-        foundBreakingProp: foundBreakingProp
-    };
-}
-
-debugStickyHeader.cleanup = function() {
-    if (window._stickyDebugListeners) {
-        window._stickyDebugListeners.forEach(function(item) {
-            item.el.removeEventListener('scroll', item.fn);
-        });
-        window._stickyDebugListeners = [];
-        console.log('Scroll listeners removed.');
-    }
-};
-
-window.debugStickyHeader = debugStickyHeader;
 
 // ============================================================================
-// FX (Foreign Currency) Utilities - Added 2026-02-14
-// See FX_IMPLEMENTATION_PLAN.md for full spec
+// FX (Foreign Currency) Utilities
+// See FX_IMPLEMENTATION_PLAN.md for full spec.
 // ============================================================================
 
 /**
@@ -1206,285 +998,8 @@ function calculateEstimatedAud(foreignAmount, exchangeRate) {
     return null;
 }
 
-/**
- * Debug function to log FX state for a bill.
- * Call from console: Utils.debugFxBill(billPk) or debugFxBill(billData)
- * @param {number|Object} billOrPk - Bill PK or bill data object
- */
-function debugFxBill(billOrPk) {
-    console.log('');
-    console.log('========== FX BILL DEBUG ==========');
-    
-    var bill = billOrPk;
-    if (typeof billOrPk === 'number' || typeof billOrPk === 'string') {
-        // Try to find bill in global data
-        var pk = parseInt(billOrPk);
-        if (window.billsInboxData && window.billsInboxData.bills) {
-            bill = window.billsInboxData.bills.find(function(b) { return b.bill_pk === pk; });
-        }
-        if (!bill && window.billsDirectData && window.billsDirectData.bills) {
-            bill = window.billsDirectData.bills.find(function(b) { return b.bill_pk === pk; });
-        }
-        if (!bill) {
-            console.log('Bill not found in global data. Pass bill object directly.');
-            console.log('==========================================');
-            return;
-        }
-    }
-    
-    console.log('Bill PK:', bill.bill_pk);
-    console.log('--- Core Fields ---');
-    console.log('  total_net:', bill.total_net);
-    console.log('  total_gst:', bill.total_gst);
-    console.log('  bill_status:', bill.bill_status);
-    console.log('');
-    console.log('--- FX Fields ---');
-    console.log('  currency:', bill.currency || 'AUD (default)');
-    console.log('  foreign_amount:', bill.foreign_amount);
-    console.log('  foreign_gst:', bill.foreign_gst);
-    console.log('  exchange_rate:', bill.exchange_rate);
-    console.log('  is_fx_fixed:', bill.is_fx_fixed);
-    console.log('  is_fx_bill:', bill.is_fx_bill);
-    console.log('');
-    console.log('--- Computed ---');
-    console.log('  isFxBill():', isFxBill(bill));
-    console.log('  isUnfixedFxBill():', isUnfixedFxBill(bill));
-    if (bill.foreign_amount && bill.exchange_rate) {
-        console.log('  estimated AUD net:', calculateEstimatedAud(bill.foreign_amount, bill.exchange_rate));
-    }
-    console.log('==========================================');
-    console.log('');
-    
-    return bill;
-}
 
-/**
- * Debug function to show all FX bills in current data.
- * Call from console: Utils.debugAllFxBills()
- */
-function debugAllFxBills() {
-    console.log('');
-    console.log('========== ALL FX BILLS DEBUG ==========');
-    
-    var allBills = [];
-    if (window.billsInboxData && window.billsInboxData.bills) {
-        allBills = allBills.concat(window.billsInboxData.bills);
-    }
-    if (window.billsDirectData && window.billsDirectData.bills) {
-        allBills = allBills.concat(window.billsDirectData.bills);
-    }
-    
-    var fxBills = allBills.filter(isFxBill);
-    var unfixedFxBills = allBills.filter(isUnfixedFxBill);
-    
-    console.log('Total bills in memory:', allBills.length);
-    console.log('FX bills (non-AUD):', fxBills.length);
-    console.log('Unfixed FX bills:', unfixedFxBills.length);
-    console.log('');
-    
-    if (fxBills.length > 0) {
-        console.log('FX Bills:');
-        console.table(fxBills.map(function(b) {
-            return {
-                bill_pk: b.bill_pk,
-                currency: b.currency,
-                foreign_amount: b.foreign_amount,
-                exchange_rate: b.exchange_rate,
-                is_fx_fixed: b.is_fx_fixed,
-                supplier_bill_number: b.supplier_bill_number
-            };
-        }));
-    }
-    
-    // Group by currency
-    var byCurrency = {};
-    fxBills.forEach(function(b) {
-        var curr = b.currency || 'AUD';
-        if (!byCurrency[curr]) byCurrency[curr] = [];
-        byCurrency[curr].push(b);
-    });
-    
-    console.log('');
-    console.log('By Currency:');
-    Object.keys(byCurrency).forEach(function(curr) {
-        var bills = byCurrency[curr];
-        var unfixed = bills.filter(function(b) { return !b.is_fx_fixed; }).length;
-        console.log('  ' + curr + ': ' + bills.length + ' bills (' + unfixed + ' unfixed)');
-    });
-    
-    console.log('==========================================');
-    console.log('');
-    
-    return { fxBills: fxBills, unfixedFxBills: unfixedFxBills, byCurrency: byCurrency };
-}
 
-/**
- * COMPREHENSIVE debug function to diagnose why FX rows aren't orange.
- * Call from console: debugFxOrange() or debugFxOrange(67)
- * @param {number} specificBillPk - Optional specific bill PK to focus on
- */
-function debugFxOrange(specificBillPk) {
-    console.log('');
-    console.log('╔══════════════════════════════════════════════════════════════╗');
-    console.log('║         FX ORANGE HIGHLIGHTING DEBUG                         ║');
-    console.log('╚══════════════════════════════════════════════════════════════╝');
-    console.log('');
-    
-    // 1. Find all rows with fx-unfixed class
-    var fxUnfixedRows = $('tr.fx-unfixed');
-    console.log('=== STEP 1: Rows with .fx-unfixed class ===');
-    console.log('Count:', fxUnfixedRows.length);
-    
-    fxUnfixedRows.each(function(i) {
-        var row = $(this);
-        var billPk = row.attr('data-bill-pk') || row.attr('data-pk');
-        console.log('  Row', i + 1, '- bill_pk:', billPk);
-    });
-    console.log('');
-    
-    // 2. Check specific bill or all fx-unfixed rows
-    var rowsToCheck = fxUnfixedRows;
-    if (specificBillPk) {
-        var specificRow = $('tr[data-bill-pk="' + specificBillPk + '"], tr[data-pk="' + specificBillPk + '"]');
-        if (specificRow.length) {
-            rowsToCheck = specificRow;
-            console.log('=== Focusing on bill_pk:', specificBillPk, '===');
-        } else {
-            console.log('WARNING: No row found for bill_pk', specificBillPk);
-        }
-    }
-    
-    // 3. Analyze each row
-    console.log('=== STEP 2: Row-by-row CSS analysis ===');
-    rowsToCheck.each(function(i) {
-        var row = $(this);
-        var billPk = row.attr('data-bill-pk') || row.attr('data-pk');
-        var domElement = this;
-        
-        console.log('');
-        console.log('--- Row bill_pk:', billPk, '---');
-        
-        // Check classes
-        console.log('  Classes:', row.attr('class'));
-        console.log('  Has .fx-unfixed:', row.hasClass('fx-unfixed'));
-        
-        // Check inline style
-        var inlineStyle = row.attr('style') || '(none)';
-        console.log('  Inline style attr:', inlineStyle);
-        
-        // Check jQuery .css() values
-        console.log('  jQuery .css("background-color"):', row.css('background-color'));
-        console.log('  jQuery .css("background"):', row.css('background'));
-        
-        // Check computed style
-        var computed = window.getComputedStyle(domElement);
-        console.log('  Computed backgroundColor:', computed.backgroundColor);
-        console.log('  Computed background:', computed.background);
-        
-        // Check if any parent is overriding
-        var parent = row.parent();
-        var parentTag = parent.prop('tagName');
-        var parentComputed = window.getComputedStyle(parent[0]);
-        console.log('  Parent <' + parentTag + '> background:', parentComputed.backgroundColor);
-        
-        // Check table
-        var table = row.closest('table');
-        if (table.length) {
-            console.log('  Table classes:', table.attr('class'));
-            console.log('  Table ID:', table.attr('id'));
-        }
-        
-        // Check tbody
-        var tbody = row.closest('tbody');
-        if (tbody.length) {
-            console.log('  Tbody ID:', tbody.attr('id'));
-        }
-    });
-    console.log('');
-    
-    // 4. Check CSS rules
-    console.log('=== STEP 3: CSS Rule Check ===');
-    var stylesheets = document.styleSheets;
-    var fxRules = [];
-    
-    for (var i = 0; i < stylesheets.length; i++) {
-        try {
-            var rules = stylesheets[i].cssRules || stylesheets[i].rules;
-            if (rules) {
-                for (var j = 0; j < rules.length; j++) {
-                    var rule = rules[j];
-                    if (rule.selectorText && rule.selectorText.indexOf('fx-unfixed') !== -1) {
-                        fxRules.push({
-                            sheet: stylesheets[i].href || 'inline',
-                            selector: rule.selectorText,
-                            style: rule.style.cssText
-                        });
-                    }
-                }
-            }
-        } catch (e) {
-            // Cross-origin stylesheets will throw
-        }
-    }
-    
-    console.log('Found', fxRules.length, 'CSS rules mentioning fx-unfixed:');
-    fxRules.forEach(function(r, idx) {
-        console.log('  Rule', idx + 1 + ':');
-        console.log('    Sheet:', r.sheet);
-        console.log('    Selector:', r.selector);
-        console.log('    Style:', r.style);
-    });
-    console.log('');
-    
-    // 5. Check data in memory
-    console.log('=== STEP 4: Bill Data in Memory ===');
-    var allBills = [];
-    if (window.billsInboxData && window.billsInboxData.bills) {
-        console.log('  billsInboxData.bills:', window.billsInboxData.bills.length, 'bills');
-        allBills = allBills.concat(window.billsInboxData.bills);
-    }
-    if (window.billsDirectData && window.billsDirectData.bills) {
-        console.log('  billsDirectData.bills:', window.billsDirectData.bills.length, 'bills');
-        allBills = allBills.concat(window.billsDirectData.bills);
-    }
-    
-    var fxBillsInMemory = allBills.filter(function(b) {
-        return b.currency && b.currency !== 'AUD';
-    });
-    
-    console.log('  FX bills in memory:', fxBillsInMemory.length);
-    fxBillsInMemory.forEach(function(b) {
-        console.log('    bill_pk:', b.bill_pk, 'currency:', b.currency, 'is_fx_fixed:', b.is_fx_fixed, 'isUnfixedFxBill():', isUnfixedFxBill(b));
-    });
-    console.log('');
-    
-    // 6. Manual test - try to apply style directly
-    console.log('=== STEP 5: Manual Style Test ===');
-    if (fxUnfixedRows.length > 0) {
-        var testRow = fxUnfixedRows.first();
-        var testPk = testRow.attr('data-bill-pk') || testRow.attr('data-pk');
-        console.log('  Testing on row bill_pk:', testPk);
-        console.log('  BEFORE - computed bg:', window.getComputedStyle(testRow[0]).backgroundColor);
-        
-        // Try different methods
-        testRow[0].style.setProperty('background-color', 'rgba(255, 165, 0, 0.5)', 'important');
-        console.log('  AFTER style.setProperty() - computed bg:', window.getComputedStyle(testRow[0]).backgroundColor);
-        
-        console.log('  ^^^ If AFTER shows orange (rgb(255, 165, 0) or similar), the style IS working.');
-        console.log('  If AFTER is same as BEFORE, something is overriding at a higher level.');
-    }
-    
-    console.log('');
-    console.log('╔══════════════════════════════════════════════════════════════╗');
-    console.log('║         END DEBUG                                            ║');
-    console.log('╚══════════════════════════════════════════════════════════════╝');
-    
-    return {
-        fxUnfixedRows: fxUnfixedRows.length,
-        cssRules: fxRules,
-        fxBillsInMemory: fxBillsInMemory
-    };
-}
 
 // Make FX utilities globally available
 window.FX_CURRENCIES = FX_CURRENCIES;
@@ -1492,9 +1007,6 @@ window.isFxBill = isFxBill;
 window.isUnfixedFxBill = isUnfixedFxBill;
 window.formatFxAmount = formatFxAmount;
 window.calculateEstimatedAud = calculateEstimatedAud;
-window.debugFxBill = debugFxBill;
-window.debugAllFxBills = debugAllFxBills;
-window.debugFxOrange = debugFxOrange;
 
 // Add to Utils namespace if it exists
 if (typeof Utils !== 'undefined') {
@@ -1503,9 +1015,5 @@ if (typeof Utils !== 'undefined') {
     Utils.isUnfixedFxBill = isUnfixedFxBill;
     Utils.formatFxAmount = formatFxAmount;
     Utils.calculateEstimatedAud = calculateEstimatedAud;
-    Utils.debugFxBill = debugFxBill;
-    Utils.debugAllFxBills = debugAllFxBills;
-    Utils.debugFxOrange = debugFxOrange;
 }
 
-console.log('[FX] Foreign Currency utilities loaded. Debug: debugFxOrange(), debugFxBill(pk), debugAllFxBills()');

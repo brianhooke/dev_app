@@ -40,7 +40,7 @@ def get_rates_data(request):
         logger.warning(f"[get_rates_data] Invalid project_type: {project_type}")
         return JsonResponse({
             'status': 'error',
-            'message': f'Invalid project_type: {project_type}'
+            'message': 'Invalid project_type'
         }, status=400)
     
     try:
@@ -142,7 +142,7 @@ def get_rates_data(request):
         logger.error(f"[get_rates_data] Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e),
+            'message': 'Internal server error',
             'traceback': traceback.format_exc()
         }, status=500)
 
@@ -211,7 +211,7 @@ def create_new_category_costing_unit_quantity(request):
             if not ProjectTypes.objects.filter(project_type=project_type).exists():
                 return JsonResponse({
                     'status': 'error',
-                    'message': f'Invalid project_type: {project_type}'
+                    'message': 'Invalid project_type'
                 }, status=400)
         
         # Item requires category_pk
@@ -319,9 +319,9 @@ def create_new_category_costing_unit_quantity(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except ValueError as e:
-        return JsonResponse({'status': 'error', 'message': f'Invalid value: {str(e)}'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'Invalid value'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -491,9 +491,9 @@ def update_category_costing_order_in_list(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except ValueError as e:
-        return JsonResponse({'status': 'error', 'message': f'Invalid value: {str(e)}'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'Invalid value'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -545,7 +545,7 @@ def update_item_unit(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -591,7 +591,7 @@ def update_item_operator(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -647,7 +647,7 @@ def update_item_operator_value(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_item_operator_value] Exception: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -694,7 +694,7 @@ def update_item_rate(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -737,7 +737,7 @@ def update_category_name(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -780,7 +780,7 @@ def update_item_name(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -890,7 +890,7 @@ def delete_category_or_item(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[delete_category_or_item] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -937,7 +937,7 @@ def update_unit_qty(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_unit_qty] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1016,7 +1016,7 @@ def copy_to_contract_budget(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[copy_to_contract_budget] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1082,7 +1082,7 @@ def update_unit_name(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_unit_name] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1125,7 +1125,7 @@ def update_unit_order(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_unit_order] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @login_required
@@ -1217,7 +1217,7 @@ def get_xero_dropdown_data(request):
         
     except Exception as e:
         logger.error(f"[get_xero_dropdown_data] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @login_required
@@ -1275,7 +1275,7 @@ def get_xero_sales_accounts(request):
         
     except Exception as e:
         logger.error(f"[get_xero_sales_accounts] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
 @csrf_exempt
@@ -1319,6 +1319,6 @@ def update_item_xero_account(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
         logger.error(f"[update_item_xero_account] Error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 

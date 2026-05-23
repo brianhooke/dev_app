@@ -1762,7 +1762,7 @@ var AllocationsManager = (function() {
                         if (!gstInputEl.data('manually-edited')) {
                             var netVal = parseFloat($(this).val());
                             if (!isNaN(netVal)) {
-                                gstInputEl.val((netVal * 0.1).toFixed(2));
+                                gstInputEl.val(Money.gstFromNet(netVal).toFixed(2));
                             }
                         }
                         // Update $ Gross cell
