@@ -112,8 +112,9 @@ urlpatterns = [
     # path('get_xero_token/', views.get_xero_token, name='get_xero_token'),
     # path('get_xero_contacts/', views.get_xero_contacts, name='get_xero_contacts'),
     path('update_contacts', views.update_contacts, name='update_contacts'),
-    path('post_bill/', views.post_bill, name='post_bill'),
-    path('test_xero_bill/', views.test_xero_bill, name='test_xero_bill'),
+    # post_bill / test_xero_bill (legacy pre-OAuth2 Xero endpoints) deleted as
+    # part of A.M-H-16 / A.M-C-01. Use the OAuth2 send path in
+    # core/views/bills_global.py instead.
     path('associate_sc_claims_with_hc_claim/', views.associate_sc_claims_with_hc_claim, name='associate_sc_claims_with_hc_claim'),
     path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data'),
     path('get_claim_table/<int:claim_id>/', get_claim_table, name='get_claim_table'),

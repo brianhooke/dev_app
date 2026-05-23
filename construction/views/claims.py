@@ -52,7 +52,6 @@ from urllib.request import urlretrieve
 from django.http import HttpResponseBadRequest
 import urllib.request
 from django.core.exceptions import ValidationError
-from core.formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
@@ -458,8 +457,8 @@ def post_progress_claim_data(request):
         new_allocations = []
         with transaction.atomic():
             invoice = Bills.objects.get(pk=invoice_id)
-            invoice.bill_status = 1
-            invoice.bill_type = 2
+            invoice.bill_status = Bills.STATUS_ALLOCATED
+            invoice.bill_type = 2  # progress claim
             invoice.save()
             if updating:
                 existing_count = Bill_allocations.objects.filter(bill=invoice).count()

@@ -54,7 +54,6 @@ from django.db.models import Q, Sum
 import ssl
 import urllib.request
 from django.core.exceptions import ValidationError
-from ..formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 

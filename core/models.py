@@ -837,6 +837,16 @@ class BillsQuerySet(models.QuerySet):
     def pending_po_claims(self):
         return self.filter(bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED)
 
+    def direct_cost(self):
+        """Bills classified as direct cost (``bill_type`` 0 or 1).
+
+        Excludes progress claims (``bill_type=2``) which are folded into
+        Contract Budget's billed side but not its committed side. The
+        Bill_allocations equivalent is
+        ``BillAllocationsQuerySet.direct_cost_lines``.
+        """
+        return self.filter(bill_type__in=[0, 1])
+
 
 # SERVICE: bills
 class Bills(models.Model):
@@ -952,19 +962,65 @@ class Bills(models.Model):
 class BillAllocationsQuerySet(models.QuerySet):
     """Filters that the Contract Budget / HC Claims rollups need.
 
-    "Committed" matches the canonical filter at core/formulas.py and the
-    intent of `bill_type__in=[0,1]`-style literals scattered across the
-    contract-budget views.
+    Audit context (A.M-R-03 / A.M-H-02): the canonical bill-type filter
+    used to be a `Q(bill__bill_type__in=[0,1]) | (Q(bill__bill_type=2) &
+    Q(allocation_type=1))` literal that was duplicated in several views
+    and the (now-deleted) `core/formulas.Committed`. Promoting it to a
+    queryset method (``counts_toward_hc_invoiced``) makes the intent
+    self-documenting and gives us one place to edit when the business
+    semantic changes (e.g. tightening the settled-status set).
     """
 
     def committed(self):
+        """Allocations on bills in the active workflow.
+
+        Bills in any status from STATUS_ALLOCATED (1) to just before
+        STATUS_PO_PROGRESS_REJECTED (99) are considered "in the
+        committed pipeline" — anything from "allocated" through "paid"
+        and the PO-flow analogues. Used by the per-item rollup
+        primitives in ``core/services/costing_rollups.py``.
+        """
         return self.filter(
             bill__bill_status__gte=Bills.STATUS_ALLOCATED,
             bill__bill_status__lt=Bills.STATUS_PO_PROGRESS_REJECTED,
         )
 
     def for_progress_claim(self):
+        """Allocation rows tagged ``allocation_type=1`` ("direct cost in PC")."""
         return self.filter(allocation_type=1)
+
+    def direct_cost_lines(self):
+        """Allocations on direct-cost bills (``bill_type`` 0 or 1).
+
+        Used by Contract Budget when it folds direct-cost bills into the
+        committed roll-up (progress claims are deliberately excluded
+        from that side — they sit on the billed side instead) and by
+        the per-item allocations endpoint that lists "the bills behind
+        this Costing item".
+        """
+        return self.filter(bill__bill_type__in=[0, 1])
+
+    def counts_toward_hc_invoiced(self):
+        """Allocations that count toward HC-claim "invoiced".
+
+        Canonical filter::
+
+            bill_type IN (0, 1)              -- direct-cost bills, all lines
+            OR (bill_type == 2               -- progress claims, only the
+                AND allocation_type == 1)        "direct cost in PC" lines
+
+        Without the ``allocation_type`` filter on progress claims, every
+        wrap-up allocation row would double-count alongside its
+        direct-cost siblings, inflating the invoiced figure (audit
+        A.M-C-12). The filter intentionally does NOT touch
+        ``bill_status`` — callers are expected to combine this with
+        ``Bills.STATUSES_SETTLED_FOR_HC_CLAIM`` (or ``.paid_for_hc()``
+        equivalent) when they need a "paid only" subset.
+        """
+        return self.filter(
+            models.Q(bill__bill_type__in=[0, 1]) |
+            (models.Q(bill__bill_type=2) & models.Q(allocation_type=1))
+        )
 
 
 # SERVICE: bills

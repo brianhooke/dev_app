@@ -39,9 +39,11 @@ Allocation Management (Project Bills):
 18. update_unallocated_invoice_allocation - Update allocation for unallocated invoice
 19. delete_unallocated_invoice_allocation - Delete allocation for unallocated invoice
 
-Xero Integration (Legacy):
-20. post_bill - Post invoice to Xero (legacy - deprecated)
-21. test_xero_bill - Test Xero invoice creation (legacy - deprecated)
+Xero Integration:
+- The current OAuth2 Xero send path lives in ``core/views/bills_global.py``
+  (``send_bill_direct`` / ``send_bill_approvals`` / ``_send_bill_to_xero_core``).
+- The legacy pre-OAuth2 ``post_bill`` and ``test_xero_bill`` endpoints have
+  been deleted (A.M-H-16 / A.M-C-01).
 
 Note: Uses helper functions from xero.py:
 - get_xero_auth() - OAuth authentication + tenant ID retrieval
@@ -69,21 +71,18 @@ from datetime import datetime, date, timedelta
 import re
 from django.db import connection
 from collections import defaultdict
-import requests
 from .xero import handle_xero_request_errors, get_xero_auth
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from django.core.mail import EmailMessage
-from urllib.parse import urljoin
 import textwrap
 from django.core import serializers
 from reportlab.lib import colors
 from ratelimit import limits, sleep_and_retry
 import ssl
 from django.core.exceptions import ValidationError
-from ..formulas import Committed
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
@@ -136,7 +135,7 @@ def upload_bill(request):
             supplier_bill_number=bill_number,
             total_net=invoice_total,
             total_gst=invoice_total_gst,
-            bill_status=Bills.STATUS_UNALLOCATED if hasattr(Bills, 'STATUS_UNALLOCATED') else 0,
+            bill_status=Bills.STATUS_CREATED,
             bill_date=bill_date,
             bill_due_date=bill_due_date,
             project=project,
@@ -197,149 +196,20 @@ def upload_bill_allocations(request):
     except Exception:
         logger.exception('upload_bill_allocations failed')
         return JsonResponse({'success': False, 'error': 'Internal server error'})
-@csrf_exempt
-def post_bill(request):
-    logger.info('Starting post_bill function')
-    body = json.loads(request.body)
-    bill_pk = body.get('bill_pk')
-    division = int(body.get('division', 0))  
-    logger.info(f'Division: {division}')
-    logger.info(f'Invoice PK: {bill_pk}')
-    invoice = Bills.objects.get(pk=bill_pk)
-    contact = Contacts.objects.get(pk=invoice.contact_pk_id)
-    bill_allocations = Bill_allocations.objects.filter(bill_pk_id=bill_pk)
-    line_items = []
-    for invoice_allocation in bill_allocations:
-        costing = Costing.objects.get(pk=invoice_allocation.item_id)
-        line_item = {
-            "Description": invoice_allocation.notes,
-            "Quantity": 1,
-            "UnitAmount": str(invoice_allocation.amount),
-            "AccountCode": costing.xero_account_code,
-            "TaxType": "INPUT",
-            "TaxAmount": str(invoice_allocation.gst_amount),
-        }
-        line_items.append(line_item)
-    
-    # DEPRECATED: Old custom connection - needs OAuth2 implementation
-    # TODO: Replace with OAuth2 flow using XeroInstances
-    raise NotImplementedError("This endpoint needs to be updated to use OAuth2. Use contacts.html and xero.py endpoints instead.")
-    
-    # get_xero_token(request, division)
-    # access_token = request.session.get('access_token')
-    # logger.info(f'Access Token: {access_token}')
-    headers = {
-        'Authorization': 'Bearer ' + access_token,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        "Type": "ACCPAY",
-        "Contact": {"ContactID": contact.xero_contact_id},
-        "Date": invoice.bill_date.isoformat(),
-        "DueDate": invoice.bill_due_date.isoformat(),
-        "InvoiceNumber": invoice.supplier_bill_number,
-        "Url": request.build_absolute_uri(invoice.pdf.url),  
-        "LineItems": line_items
-    }
-    logger.info('Sending request to Xero API')
-    logger.info('Data: %s', json.dumps(data))  
-    response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
-    try:
-        response_data = response.json()
-    except json.JSONDecodeError:
-        logger.error('Empty response from Xero API')
-        return JsonResponse({'status': 'error', 'message': 'Empty response from Xero API'})
-    if 'Status' in response_data and response_data['Status'] == 'OK':
-        invoice_id = response_data['Invoices'][0]['InvoiceID']
-        logger.info(f'Invoice created with ID: {invoice_id}')
-        # Legacy direct-to-Xero path; keep behaviour but use named constant.
-        invoice.bill_status = Bills.STATUS_APPROVED
-        invoice.bill_xero_id = invoice_id
-        invoice.save()
-        file_url = invoice.pdf.url
-        file_name = file_url.split('/')[-1]
-        urlretrieve(file_url, file_name)
-        with open(file_name, 'rb') as f:
-            file_data = f.read()
-        headers['Content-Type'] = 'application/octet-stream'
-        logger.info('Sending request to attach file to invoice')
-        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
-        if response.status_code == 200:
-            logger.info('File attached successfully')
-            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
-        else:
-            logger.error('Failed to attach file to invoice')
-            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
-    else:
-        logger.error('Unexpected response from Xero API: %s', response_data)
-        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
-@csrf_exempt
-def test_xero_bill(request):
-    logger.info('Starting post_bill function')
-    body = json.loads(request.body)
-    bill_pk = body.get('bill_pk')
-    logger.info(f'Invoice PK: {bill_pk}')
-    invoice = Bills.objects.get(pk=bill_pk)
-    contact = Contacts.objects.get(pk=invoice.contact_pk_id)
-    bill_allocations = Bill_allocations.objects.filter(bill_pk_id=bill_pk)
-    line_items = []
-    for invoice_allocation in bill_allocations:
-        costing = Costing.objects.get(pk=invoice_allocation.item_id)
-        line_item = {
-            "Description": invoice_allocation.notes,
-            "Quantity": 1,
-            "UnitAmount": str(invoice_allocation.amount),
-            "AccountCode": costing.xero_account_code,
-            "TaxType": "INPUT",
-            "TaxAmount": str(invoice_allocation.gst_amount),
-        }
-        line_items.append(line_item)
-    
-    # DEPRECATED: Old custom connection - needs OAuth2 implementation
-    # TODO: Replace with OAuth2 flow using XeroInstances
-    raise NotImplementedError("This endpoint needs to be updated to use OAuth2. Use contacts.html and xero.py endpoints instead.")
-    
-    # get_xero_token(request)
-    # access_token = request.session.get('access_token')
-    headers = {
-        'Authorization': 'Bearer ' + access_token,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        "Type": "ACCPAY",
-        "Contact": {"ContactID": Contacts.objects.first().xero_contact_id},
-        "Date": invoice.bill_date.isoformat(),
-        "DueDate": invoice.bill_due_date.isoformat(),
-        "InvoiceNumber": invoice.supplier_bill_number,
-        "Url": "https://precastappbucket.s3.amazonaws.com/drawings/P071.pdf",
-        "LineItems": line_items
-    }
-    logger.info('Sending request to Xero API')
-    logger.info('Data: %s', json.dumps(data))  
-    response = requests.post('https://api.xero.com/api.xro/2.0/Invoices', headers=headers, data=json.dumps(data))
-    response_data = response.json()
-    if 'Status' in response_data and response_data['Status'] == 'OK':
-        invoice_id = response_data['Invoices'][0]['InvoiceID']
-        logger.info(f'Invoice created with ID: {invoice_id}')
-        file_url = 'https://precastappbucket.s3.amazonaws.com/drawings/P071.pdf'
-        file_name = file_url.split('/')[-1]
-        urlretrieve(file_url, file_name)
-        with open(file_name, 'rb') as f:
-            file_data = f.read()
-        headers['Content-Type'] = 'application/octet-stream'
-        logger.info('Sending request to attach file to invoice')
-        response = requests.post(f'https://api.xero.com/api.xro/2.0/Invoices/{invoice_id}/Attachments/{file_name}', headers=headers, data=file_data)
-        if response.status_code == 200:
-            logger.info('File attached successfully')
-            return JsonResponse({'status': 'success', 'message': 'Invoice and attachment created successfully.'})
-        else:
-            logger.error('Failed to attach file to invoice')
-            return JsonResponse({'status': 'error', 'message': 'Invoice created but attachment failed to upload.'})
-    else:
-        logger.error('Unexpected response from Xero API: %s', response_data)
-        return JsonResponse({'status': 'error', 'message': 'Unexpected response from Xero API', 'response_data': response_data})
+
+
+# A.M-H-16 / A.M-C-01: ``post_bill`` and ``test_xero_bill`` were the legacy
+# pre-OAuth2 direct-to-Xero send endpoints. They had been gated by
+# ``raise NotImplementedError`` for years (no UI calls them, the OAuth2 send
+# path lives in ``bills_global._send_bill_to_xero_core``), and they still
+# carried the historical ``bill_status = STATUS_APPROVED`` write after a
+# Xero send — which is exactly the overloaded-status bug A.M-C-01 flagged.
+# The functions, their URL routes, their ``core/views/__init__`` re-exports,
+# and the header docstring entries have all been deleted as part of the
+# A.M-C-01 fix. The live send path lives in ``bills_global.py`` and lands on
+# ``STATUS_SENT_TO_XERO``.
+
+
 def get_bills_by_supplier(request):
     supplier_name = request.GET.get('supplier', '')
     contact = Contacts.objects.filter(contact_name=supplier_name).first()
@@ -553,12 +423,13 @@ def get_approved_bills(request):
     """
     from core.models import XeroInstances, Projects, XeroAccounts, StocktakeAllocations
     
-    # Get invoices that are approved and ready for Xero (project bills with
-    # bill_status == STATUS_APPROVED, plus PO-uploaded bills approved for
-    # payment with status == STATUS_PO_APPROVED_BILL_FOR_PAYMENT).
-    invoices = Bills.objects.filter(
-        bill_status__in=[Bills.STATUS_APPROVED, Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT]
-    ).select_related(
+    # Approved bills not yet pushed to Xero. ``BillsQuerySet.approved_for_xero``
+    # owns the filter (status in {APPROVED, PO_APPROVED_BILL_FOR_PAYMENT}
+    # AND bill_xero_id IS NULL). The ``bill_xero_id`` clause matters: once a
+    # bill is sent to Xero its status may legitimately stay at 2/103 in some
+    # historical data (audit A.M-C-01), so we filter on the actual side
+    # effect (``bill_xero_id``) to keep already-sent bills out of this list.
+    invoices = Bills.objects.approved_for_xero().select_related(
         'contact_pk', 'project', 'xero_instance', 'xero_instance__xero_stocktake_account',
         'project__xero_instance', 'project__xero_instance__xero_stocktake_account', 'email_attachment'
     ).prefetch_related(
@@ -673,13 +544,10 @@ def get_sent_bills(request):
     """
     from core.models import XeroInstances, Projects, XeroAccounts
     
-    invoices = Bills.objects.filter(
-        bill_status__in=[
-            Bills.STATUS_SENT_TO_XERO,
-            Bills.STATUS_PAID,
-            Bills.STATUS_PO_SENT_TO_XERO,
-        ]
-    ).select_related(
+    # Bills already in Xero (any post-send state, including paid). Owned by
+    # ``BillsQuerySet.in_xero`` so the "what counts as in Xero" rule lives
+    # in one place — see also ``approved_for_xero`` (its complement).
+    invoices = Bills.objects.in_xero().select_related(
         'contact_pk', 'project', 'xero_instance', 'project__xero_instance', 'email_attachment'
     ).prefetch_related('bill_allocations__xero_account', 'bill_allocations__item').order_by('-updated_at')[:100]  # Limit to last 100
     
@@ -916,12 +784,12 @@ def get_project_bills(request, project_pk):
         status = int(request.GET.get('status', 0))
         
         # Get invoices for this project with the specified status. For
-        # allocated invoices (STATUS_ALLOCATED), also include PO claim
-        # invoices (STATUS_PO_APPROVED_BILL_UPLOADED).
+        # allocated invoices (STATUS_ALLOCATED), the ``pending_approval``
+        # queryset method also folds in PO-uploaded bills awaiting approval
+        # (STATUS_PO_APPROVED_BILL_UPLOADED).
         if status == Bills.STATUS_ALLOCATED:
-            invoices = Bills.objects.filter(
+            invoices = Bills.objects.pending_approval().filter(
                 project_id=project_pk,
-                bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
             ).select_related('contact_pk', 'email_attachment').order_by('-bill_pk')
         else:
             invoices = Bills.objects.filter(
@@ -1030,10 +898,10 @@ def get_allocated_bills(request, project_pk):
     """
     try:
         # Allocated bills include manually-allocated bills and PO-uploaded
-        # bills awaiting approval (STATUS_ALLOCATED, STATUS_PO_APPROVED_BILL_UPLOADED).
-        invoices = Bills.objects.filter(
+        # bills awaiting approval. The set is owned by
+        # ``BillsQuerySet.pending_approval``.
+        invoices = Bills.objects.pending_approval().filter(
             project_id=project_pk,
-            bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
         ).select_related('contact_pk', 'email_attachment').order_by('-bill_pk')
         
         # Build response data

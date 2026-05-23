@@ -31,7 +31,7 @@ from .hc_claims import (
 # Bill/Invoice views
 from .bills import (
     delete_bill, upload_bill, upload_bill_allocations,
-    post_bill, test_xero_bill, get_bills_by_supplier,
+    get_bills_by_supplier,
     get_bill_allocations
 )
 

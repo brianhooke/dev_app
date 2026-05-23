@@ -1944,7 +1944,7 @@ def send_bill_to_stocktake(request):
         # Update the bill
         bill.is_stocktake = True
         bill.xero_instance = xero_instance
-        bill.bill_status = 0  # Ready for stocktake allocation
+        bill.bill_status = Bills.STATUS_CREATED  # Ready for stocktake allocation
         bill.project = None  # Stocktake bills have no project
         bill.contact_pk = supplier
         bill.supplier_bill_number = bill_number

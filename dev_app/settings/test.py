@@ -1,6 +1,16 @@
 """
-Test settings for Playwright E2E tests.
+Test settings for Playwright E2E tests + Django unit tests.
 Uses a separate SQLite database to avoid modifying production data.
+
+Audit note (F.Q-C-05): Django's normal test runner cannot build a fresh
+test DB by replaying migrations because the historical migration set has
+ordering-vs-current-models mismatches (the squash & db_table cleanup is
+the eventual fix). Until then we sidestep the test runner's migrate step
+by setting ``MIGRATION_MODULES`` to ``None`` for every app, which makes
+``manage.py test --keepdb`` create tables straight from the current model
+state via ``syncdb``. The on-disk ``db_test.sqlite3`` is still used as
+the connection target so contributors can inspect post-test state, but
+the schema served to tests is always derived from ``models.py``.
 """
 
 from .local import *
@@ -12,6 +22,24 @@ DATABASES = {
         'NAME': os.path.join(BASE_DIR, 'db_test.sqlite3'),
     }
 }
+
+
+class _DisableMigrations:
+    """Make every ``MIGRATION_MODULES[app]`` lookup return ``None``.
+
+    Django interprets ``None`` as "no migration module for this app", so
+    ``migrate --run-syncdb`` (which the test runner triggers under the
+    hood for ``--keepdb``) creates tables from current model state.
+    """
+
+    def __contains__(self, item):
+        return True
+
+    def __getitem__(self, item):
+        return None
+
+
+MIGRATION_MODULES = _DisableMigrations()
 
 # Disable debug toolbar and other dev tools during tests
 DEBUG_TOOLBAR_CONFIG = {

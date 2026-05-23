@@ -40,6 +40,18 @@ from ..models import (
     StocktakeSnap, StocktakeSnapItem, StocktakeSnapAllocation,
     Quote_allocations, Hc_variation, Hc_variation_allocations
 )
+from ..services.costing_rollups import (
+    hc_committed_amounts,
+    hc_invoiced_amounts,
+)
+
+# Backwards-compatible aliases for the legacy module-private names. The
+# canonical home is ``core/services/costing_rollups.py`` (audit
+# A.M-R-02 / P-5). The old names are preserved so any debug shell or
+# orphan import path keeps working; in-module callers below use the
+# new aliases.
+get_committed_amounts = hc_committed_amounts
+get_invoiced_amounts = hc_invoiced_amounts
 
 logger = logging.getLogger(__name__)
 
@@ -713,173 +725,11 @@ def get_previous_claim_totals(project_pk, exclude_claim_pk=None):
     return totals
 
 
-def get_committed_amounts(project_pk):
-    """Get committed amounts per item from quote and snap allocations.
-
-    Returns dict with qty/rate/amount per costing_pk for construction
-    projects (mirrors contract_budget.py); for non-construction
-    projects returns just the amount.
-
-    Stocktake snap allocations are folded in for *both* project types.
-    Pre-fix, snap allocations were skipped entirely on non-construction
-    projects (B9) — yet a non-construction project with stock pulled
-    from inventory would understate its committed total.
-
-    Snap-allocation -> costing matching uses StocktakeSnapItem.item
-    (which is itself an FK to Costing). The previous code matched by
-    string `Costing.item` name, which silently broke if the costing
-    line was renamed (B8).
-    """
-    from collections import defaultdict
-
-    project = Projects.objects.get(pk=project_pk)
-    is_construction = (project.project_type and project.project_type.rates_based == 1)
-
-    # Get quotes for execution mode (tender_or_execution=2)
-    project_quotes = Quotes.objects.filter(project=project, tender_or_execution=2)
-
-    # Snap allocations linked to this project, on finalised+ snaps. We
-    # use snap_item.item_id directly — that's the FK on
-    # StocktakeSnapItem -> Costing.
-    snap_allocations = list(
-        StocktakeSnapAllocation.objects
-        .filter(project=project, snap_item__snap__status__gte=StocktakeSnap.STATUS_FINALISED)
-        .values('snap_item__item_id', 'qty', 'rate', 'amount')
-    )
-
-    if is_construction:
-        # For construction types, return qty, rate, amount per item
-        allocations = Quote_allocations.objects.filter(
-            quotes_pk__in=project_quotes
-        ).values('item__costing_pk', 'qty', 'rate', 'amount')
-
-        # Group allocations by costing_pk
-        allocations_by_item = defaultdict(list)
-        for alloc in allocations:
-            allocations_by_item[alloc['item__costing_pk']].append(alloc)
-
-        # Convert to dictionary with qty, rate, amount
-        committed_dict = {}
-        for costing_pk, allocs in allocations_by_item.items():
-            total_qty = sum(float(a['qty'] or 0) for a in allocs)
-            total_amount = sum(float(a['amount'] or 0) for a in allocs)
-
-            # Get unique non-null rates
-            unique_rates = set(float(a['rate']) for a in allocs if a['rate'] is not None)
-
-            if len(unique_rates) > 1:
-                committed_dict[costing_pk] = {
-                    'qty': total_qty,
-                    'rate': None,
-                    'amount': total_amount,
-                    'has_multiple_rates': True,
-                }
-            else:
-                rate = list(unique_rates)[0] if unique_rates else 0
-                committed_dict[costing_pk] = {
-                    'qty': total_qty,
-                    'rate': round(rate, 2),
-                    'amount': total_amount,
-                    'has_multiple_rates': False,
-                }
-
-        # Fold in snap allocations (B8 + B9)
-        for sa in snap_allocations:
-            costing_pk = sa['snap_item__item_id']
-            if not costing_pk:
-                continue
-            alloc_qty = float(sa['qty'] or 0)
-            alloc_rate = float(sa['rate'] or 0)
-            alloc_amount = float(sa['amount'] or 0)
-
-            if costing_pk in committed_dict:
-                existing = committed_dict[costing_pk]
-                existing['qty'] = (existing.get('qty') or 0) + alloc_qty
-                existing['amount'] = (existing.get('amount') or 0) + alloc_amount
-                if existing.get('rate') is not None and existing['rate'] != alloc_rate:
-                    existing['has_multiple_rates'] = True
-            else:
-                committed_dict[costing_pk] = {
-                    'qty': alloc_qty,
-                    'rate': alloc_rate,
-                    'amount': alloc_amount,
-                    'has_multiple_rates': False,
-                }
-
-        return committed_dict
-
-    # Non-construction: just amounts per item, but include snap
-    # allocations too (B9).
-    quote_totals = (
-        Quote_allocations.objects
-        .filter(quotes_pk__in=project_quotes)
-        .values('item__costing_pk')
-        .annotate(total=Sum('amount'))
-    )
-    result = {r['item__costing_pk']: float(r['total'] or 0) for r in quote_totals}
-    for sa in snap_allocations:
-        costing_pk = sa['snap_item__item_id']
-        if not costing_pk:
-            continue
-        result[costing_pk] = result.get(costing_pk, 0.0) + float(sa['amount'] or 0)
-    return result
-
-
-def get_invoiced_amounts(project_pk, claim):
-    """Get invoiced amounts per item from bill allocations.
-
-    Returns dict with:
-    - invoiced: total invoiced amount across bill allocations that
-      represent a real cost commitment for HC purposes. This applies the
-      same progress-claim filter that ``core/formulas.py:Committed`` uses:
-
-          bill_type in (0, 1)  OR  (bill_type == 2 AND allocation_type == 1)
-
-      Without this filter, progress-claim "wrap-up" allocation rows get
-      double-counted alongside their direct-cost siblings, inflating the
-      invoiced figure (audit A.M-C-12).
-    - paid: subset of `invoiced` whose bill is in
-      ``Bills.STATUSES_SETTLED_FOR_HC_CLAIM`` (currently
-      {STATUS_APPROVED, STATUS_SENT_TO_XERO}). The audit (A.M-C-02) flagged
-      that calling merely-approved-but-not-yet-sent bills "paid" suppresses
-      claimable amounts; the constant is the single point of edit when
-      that business decision lands. Document and test the chosen meaning.
-    - in_claim: subset of `invoiced` for bills attached to this specific
-      HC claim.
-    """
-    costing_pks = Costing.objects.filter(project_id=project_pk).values_list('costing_pk', flat=True)
-
-    # Apply the canonical progress-claim filter (matches
-    # core/formulas.py:Committed and core/services/costing_rollups.py).
-    allocations = (
-        Bill_allocations.objects
-        .filter(item__in=costing_pks)
-        .filter(
-            Q(bill__bill_type__in=[0, 1]) |
-            (Q(bill__bill_type=2) & Q(allocation_type=1))
-        )
-        .select_related('bill')
-    )
-
-    settled_statuses = Bills.STATUSES_SETTLED_FOR_HC_CLAIM
-    claim_pk = claim.hc_claim_pk if claim else None
-
-    result = {}
-    for alloc in allocations:
-        item_pk = alloc.item_id
-        amount = float(alloc.amount or 0)
-        bill = alloc.bill
-
-        bucket = result.setdefault(item_pk, {'invoiced': 0, 'paid': 0, 'in_claim': 0})
-        bucket['invoiced'] += amount
-
-        if bill.bill_status in settled_statuses:
-            bucket['paid'] += amount
-
-        if claim_pk is not None and bill.associated_hc_claim_id == claim_pk:
-            bucket['in_claim'] += amount
-
-    return result
+# Note: ``get_committed_amounts`` and ``get_invoiced_amounts`` previously
+# lived here as ~170 lines of inline rollup code. They have been moved
+# verbatim into ``core/services/costing_rollups.py`` (audit
+# A.M-R-02 / P-5) and re-exported above as legacy aliases so existing
+# in-module callers and any external imports keep working.
 
 
 def get_variation_amounts(project_pk, up_to_date):

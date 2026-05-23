@@ -2463,9 +2463,11 @@ def get_action_items(request):
                 'project_pk': project_pk,
             })
         
-        to_approve = Bills.objects.filter(
-            bill_status__in=[Bills.STATUS_ALLOCATED, Bills.STATUS_PO_APPROVED_BILL_UPLOADED]
-        ).exclude(project__archived=1).select_related('project')
+        to_approve = (
+            Bills.objects.pending_approval()
+            .exclude(project__archived=1)
+            .select_related('project')
+        )
         approve_by_project = {}
         for inv in to_approve:
             project_name = inv.project.project if inv.project else 'Unassigned'
@@ -2491,12 +2493,16 @@ def get_action_items(request):
             })
         
         # 4. Approved Bills ready to send to Xero - exclude archived projects.
-        # bill_xero_id IS NULL keeps already-pushed bills out of the count
-        # (their old status may still be 2/103 from the pre-fix workflow).
-        ready_for_xero = Bills.objects.filter(
-            bill_status__in=[Bills.STATUS_APPROVED, Bills.STATUS_PO_APPROVED_BILL_FOR_PAYMENT],
-            bill_xero_id__isnull=True,
-        ).exclude(project__archived=1).count()
+        # The ``approved_for_xero`` queryset method folds together both the
+        # status set ({APPROVED, PO_APPROVED_BILL_FOR_PAYMENT}) and the
+        # ``bill_xero_id IS NULL`` filter — the latter keeps already-pushed
+        # bills out of the count (their old status may still be 2/103 from
+        # the pre-A.M-C-01 Direct workflow).
+        ready_for_xero = (
+            Bills.objects.approved_for_xero()
+            .exclude(project__archived=1)
+            .count()
+        )
         if ready_for_xero > 0:
             action_items.append({
                 'type': 'xero',
