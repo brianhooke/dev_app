@@ -7,10 +7,11 @@
 
 ## Deploy state (resolved)
 
-- **Live on EB**: `app-ALL_IN_ONE_WORKING_VERSION-507-g894f-260523_210204880177` (commit `894ff43`, v250). All P-1..P-12 + Section 3 critical fixes are now in front of users.
-- **GitHub `main`**: at v250 + handoff updates.
-- **RDS state**: All 80 core migrations applied (was at 0046 before; jumped from 5-month-stale to current).
-- Verification: `curl http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: SAMEORIGIN`. Login-required middleware and clickjacking protection both confirmed active.
+- **Live on EB**: `v252` (deployed 23 May 2026 13:32 UTC, commit `f0078ee`). Costing-rollup migration + bill-allocation queryset helpers + bill-status filter sweep + A.M-C-01 lock-in + A.M-H-16 dead-Xero-endpoint deletion + A.M-H-01 dead-formulas-cleanup all in front of users. Status: `Ready`. Health: `Grey` (cosmetic — the `/health/` endpoint doesn't actually probe the DB; see "Remaining deploy hygiene to-dos" below).
+- **GitHub `main`**: at `f0078ee` (v252).
+- **RDS state**: All 80 core migrations applied. v252 is a code-only deploy (no new migrations).
+- **Predecessor**: v251 (`13718ed`) was the surgical RDS-migration-state reconciliation that recovered the v250 deploy crash; that history is preserved in the "Recovery story" section below.
+- Verification: `curl http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: SAMEORIGIN` and `X-Content-Type-Options: nosniff`. Login-required middleware and clickjacking protection both confirmed active post-v252.
 
 ### Recovery story (what happened and why it now works)
 
