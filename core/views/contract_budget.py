@@ -594,9 +594,15 @@ def _compute_project_export_totals(project):
 
     Returns a dict with:
         working_budget               — Σ(uncommitted) + Σ(committed)        (all in-scope items)
-        revenue_receivable           — Σ(contract_budget) − Σ(hc_claimed)   (all in-scope items;
-                                       only approved+ HC claims, mirroring
-                                       core/views/hc_claims.py:472)
+        revenue_receivable           — (Σ(contract_budget) + Σ(hc_variations))
+                                       − Σ(hc_claimed)
+                                       Mirrors the "Still to Claim — HC" cell
+                                       on the finalised-claim report
+                                       (core/templates/core/hc_claims.html
+                                       ::renderFinalizedReport): total claimable
+                                       contract value (base + all approved
+                                       variations) less every HC dollar already
+                                       raised against an approved claim.
         c2c_incl_margin_and_labour   — Σ(uncommitted) + Σ(committed) − Σ(billed) over ALL in-scope items
         c2c_margin                   — same formula but only over Internal-category items
                                        (Categories.division == -10)
@@ -679,6 +685,12 @@ def _compute_project_export_totals(project):
     # HC claims already raised against this project's in-scope costings.
     # Match the precedent in core/views/hc_claims.py:460-472: only approved
     # claims (status >= 1) count as "revenue claimed".
+    #
+    # HC variations are folded into the contract value here too — they
+    # represent additional scope that has been agreed with the client and
+    # so adds to the total claimable amount. Mirrors the finalised-claim
+    # report, where "Still to Claim — HC" is computed as
+    # (base contract budget + Σ HC variations) − total HC claimed.
     if in_scope_pks:
         hc_claimed_total = float(
             HC_claim_allocations.objects.filter(
@@ -686,8 +698,14 @@ def _compute_project_export_totals(project):
                 hc_claim_pk__status__gte=1,
             ).aggregate(total=Sum('hc_claimed'))['total'] or 0
         )
+        hc_variations_total = float(
+            Hc_variation_allocations.objects.filter(
+                costing_id__in=in_scope_pks,
+            ).aggregate(total=Sum('amount'))['total'] or 0
+        )
     else:
         hc_claimed_total = 0.0
+        hc_variations_total = 0.0
 
     # Non-revenue projects (Projects.is_revenue_project=False) are internal /
     # expense-only — they never bill the client, so revenue receivable is
@@ -695,7 +713,9 @@ def _compute_project_export_totals(project):
     # remain meaningful (these projects still incur cost), so they are not
     # zeroed.
     if getattr(project, 'is_revenue_project', True):
-        revenue_receivable = contract_budget_total - hc_claimed_total
+        revenue_receivable = (
+            (contract_budget_total + hc_variations_total) - hc_claimed_total
+        )
     else:
         revenue_receivable = 0.0
 
