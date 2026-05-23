@@ -56,17 +56,25 @@ def hc_claims_view(request):
     """
     project_pk = request.GET.get('project_pk')
     is_construction = False
+    # Default to True so projects without an assigned type still get
+    # the historical (HC + QS) layout. The settings.html "QS" toggle
+    # on the project type is the only way to flip this off.
+    has_qs = True
 
     if project_pk:
         try:
             project = Projects.objects.get(pk=project_pk)
-            is_construction = (project.project_type and project.project_type.rates_based == 1)
+            ptype = project.project_type
+            if ptype:
+                is_construction = (ptype.rates_based == 1)
+                has_qs = bool(ptype.qs)
         except Projects.DoesNotExist:
             pass
 
     context = {
         'project_pk': project_pk,
         'is_construction': is_construction,
+        'has_qs': has_qs,
     }
     return render(request, 'core/hc_claims.html', context)
 

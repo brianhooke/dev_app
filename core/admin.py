@@ -3,7 +3,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import (
     Categories, Projects, ProjectTypes, XeroInstances, XeroAccounts, Contacts, Quotes, Costing, Quote_allocations, DesignCategories,
-    PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_globals, Po_orders, Po_order_detail,
+    PlanPdfs, ReportPdfs, ReportCategories, Models_3d, Po_orders, Po_order_detail,
     SPVData, Letterhead, Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Hc_variation, Hc_variation_allocations, ReceivedEmail, EmailAttachment, Units,
     Document_folders, Document_files,
@@ -158,8 +158,9 @@ class UnitsAdmin(admin.ModelAdmin):
     list_filter = ('project', 'project_type')
 
 class ProjectTypesAdmin(admin.ModelAdmin):
-    list_display = ("project_type_pk", "project_type", "xero_instance", "rates_based", "stocktake", "archived", "created_at", "updated_at")
-    list_filter = ('xero_instance', 'archived', 'rates_based', 'stocktake')
+    list_display = ("project_type_pk", "project_type", "xero_instance", "rates_based", "qs", "stocktake", "archived", "created_at", "updated_at")
+    list_filter = ('xero_instance', 'archived', 'rates_based', 'qs', 'stocktake')
+    list_editable = ('qs',)
     search_fields = ('project_type',)
 
 class XeroInstancesAdmin(admin.ModelAdmin):
@@ -255,13 +256,6 @@ class ReportPdfsAdmin(admin.ModelAdmin):
 
 class Models_3dAdmin(admin.ModelAdmin):
     list_display = ("id", "file", "filename", "created_at", "updated_at")
-
-class Po_globalsAdmin(admin.ModelAdmin):
-    list_display = (
-        "id", "reference", "invoicee", "address", "project_address",
-        "ABN", "email", "note1", "note2", "note3",
-        "created_at", "updated_at",
-    )
 
 class Po_ordersForm(forms.ModelForm):
     class Meta:
@@ -365,7 +359,6 @@ admin.site.register(PlanPdfs, PlanPdfsAdmin)
 admin.site.register(ReportCategories, ReportCategoriesAdmin)
 admin.site.register(ReportPdfs, ReportPdfsAdmin)
 admin.site.register(Models_3d, Models_3dAdmin)
-admin.site.register(Po_globals, Po_globalsAdmin)
 admin.site.register(Po_orders, Po_ordersAdmin)
 admin.site.register(Po_order_detail, PoOrderDetailAdmin)
 admin.site.register(SPVData, SPVDataAdmin)

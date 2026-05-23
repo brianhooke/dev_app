@@ -169,11 +169,12 @@
                         <table id="settingsMainTable" class="reusable-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 30%; text-align: left;">Project Type</th>
-                                    <th style="width: 30%; text-align: left;">Xero Instance</th>
-                                    <th style="width: 15%; text-align: left;">Rates Based</th>
+                                    <th style="width: 28%; text-align: left;">Project Type</th>
+                                    <th style="width: 28%; text-align: left;">Xero Instance</th>
+                                    <th style="width: 12%; text-align: left;">Rates Based</th>
+                                    <th style="width: 8%; text-align: center;" title="Show QS columns in HC Claims for this project type">QS</th>
                                     <th style="width: 10%; text-align: center;">Add</th>
-                                    <th style="width: 15%; text-align: center;">Archive</th>
+                                    <th style="width: 14%; text-align: center;">Archive</th>
                                 </tr>
                                 <tr class="input-row">
                                     <td>
@@ -192,6 +193,9 @@
                                         </select>
                                     </td>
                                     <td style="text-align: center;">
+                                        <input type="checkbox" id="newQsCheckbox" checked title="Show QS columns in HC Claims">
+                                    </td>
+                                    <td style="text-align: center;">
                                         <button id="addProjectTypeBtn" class="add-btn disabled" disabled>Add</button>
                                     </td>
                                     <td></td>
@@ -199,7 +203,7 @@
                             </thead>
                             <tbody id="settingsMainTableBody">
                                 <tr>
-                                    <td colspan="5" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
+                                    <td colspan="6" style="text-align: center; padding: 40px; color: var(--color-text-muted);">
                                         Loading...
                                     </td>
                                 </tr>
@@ -544,7 +548,7 @@ $(document).ready(function() {
             
             if (projectTypes.length === 0) {
                 var message = showArchived ? 'No archived project types found.' : 'No project types found.';
-                tbody.html('<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--color-text-muted);">' + message + '</td></tr>');
+                tbody.html('<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--color-text-muted);">' + message + '</td></tr>');
                 return;
             }
             
@@ -581,7 +585,19 @@ $(document).ready(function() {
                     .attr('data-rates-based', pt.rates_based || 0);
                 ratesCell.append(ratesDisplay);
                 row.append(ratesCell);
-                
+
+                // QS checkbox column - flips visibility of QS columns
+                // in the HC-claims editor / report for projects of
+                // this type. Direct checkbox click toggles via AJAX
+                // (no display swap needed).
+                var qsCell = $('<td class="qs-cell" style="text-align: center;"></td>');
+                var qsCheckbox = $('<input type="checkbox" class="qs-checkbox">')
+                    .prop('checked', !!pt.qs)
+                    .attr('data-project-type-pk', pt.project_type_pk)
+                    .attr('title', 'Show QS columns in HC Claims for this project type');
+                qsCell.append(qsCheckbox);
+                row.append(qsCell);
+
                 // Empty cell for Add column
                 row.append('<td></td>');
                 
@@ -601,7 +617,7 @@ $(document).ready(function() {
             });
         }).catch(function(error) {
             console.error('Error loading settings:', error);
-            tbody.html('<tr><td colspan="3" style="text-align: center; color: #dc3545; padding: 20px;">Error loading data</td></tr>');
+            tbody.html('<tr><td colspan="6" style="text-align: center; color: #dc3545; padding: 20px;">Error loading data</td></tr>');
         });
     };
     
@@ -633,7 +649,8 @@ $(document).ready(function() {
         var projectType = $('#newProjectTypeInput').val().trim();
         var xeroInstancePk = $('#newXeroInstanceSelect').val();
         var ratesBased = $('#newRatesBasedSelect').val();
-        
+        var qs = $('#newQsCheckbox').is(':checked');
+
         if (!projectType || !xeroInstancePk || ratesBased === '') {
             alert('Please enter a project type, select a Xero instance, and select Rates Based.');
             return;
@@ -653,7 +670,8 @@ $(document).ready(function() {
             data: JSON.stringify({
                 project_type: projectType,
                 xero_instance_pk: xeroInstancePk,
-                rates_based: parseInt(ratesBased)
+                rates_based: parseInt(ratesBased),
+                qs: qs
             }),
             success: function(response) {
                 if (response.status === 'success') {
@@ -661,6 +679,7 @@ $(document).ready(function() {
                     $('#newProjectTypeInput').val('');
                     $('#newXeroInstanceSelect').val('');
                     $('#newRatesBasedSelect').val('');
+                    $('#newQsCheckbox').prop('checked', true);
                     $('#addProjectTypeBtn').removeClass('enabled').addClass('disabled').prop('disabled', true);
                     
                     // Reload table
@@ -679,6 +698,37 @@ $(document).ready(function() {
         });
     });
     
+    // ============================================
+    // TOGGLE QS FLAG (per project type)
+    // ============================================
+    $(document).on('change', '.qs-checkbox', function() {
+        var $checkbox = $(this);
+        var projectTypePk = $checkbox.attr('data-project-type-pk');
+        var qs = $checkbox.is(':checked');
+        $checkbox.prop('disabled', true);
+        $.ajax({
+            url: '/core/update_project_type_qs/' + projectTypePk + '/',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            data: JSON.stringify({ qs: qs }),
+            success: function(response) {
+                if (response.status !== 'success') {
+                    alert('Error: ' + response.message);
+                    $checkbox.prop('checked', !qs);
+                }
+            },
+            error: function(xhr) {
+                var message = (xhr.responseJSON && xhr.responseJSON.message) || 'Error updating QS flag';
+                alert(message);
+                $checkbox.prop('checked', !qs);
+            },
+            complete: function() {
+                $checkbox.prop('disabled', false);
+            }
+        });
+    });
+
     // ============================================
     // CLICK TO EDIT PROJECT TYPE NAME
     // ============================================

@@ -251,6 +251,11 @@ class ProjectTypes(models.Model):
     rates_based = models.IntegerField(default=0)  # 0 = not rates-based, 1 = rates-based
     archived = models.IntegerField(default=0)
     stocktake = models.IntegerField(null=True, blank=True)  # null/0 = not included, 1 = included in stocktake
+    # When True, the HC-claim editor / report show the QS columns
+    # for projects of this type. When False, only HC columns are
+    # rendered. Defaults to True so existing project types keep the
+    # full set of columns.
+    qs = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     
@@ -441,21 +446,23 @@ class StaffHoursAllocations(models.Model):
     ALLOCATION_TYPE_PROJECT = 1
     ALLOCATION_TYPE_UNCHARGEABLE = 2
     ALLOCATION_TYPE_OTHER_CHARGEABLE = 3
-    
+    ALLOCATION_TYPE_R_AND_D = 4
+
     ALLOCATION_TYPE_CHOICES = [
         (ALLOCATION_TYPE_PROJECT, 'Project'),
         (ALLOCATION_TYPE_UNCHARGEABLE, 'Unchargeable'),
         (ALLOCATION_TYPE_OTHER_CHARGEABLE, 'Other Chargeable'),
+        (ALLOCATION_TYPE_R_AND_D, 'R&D'),
     ]
-    
+
     allocation_pk = models.AutoField(primary_key=True)
     staff_hours = models.ForeignKey(
         StaffHours, on_delete=models.CASCADE, related_name='allocations'
     )
     allocation_type = models.IntegerField(
-        choices=ALLOCATION_TYPE_CHOICES, 
+        choices=ALLOCATION_TYPE_CHOICES,
         default=ALLOCATION_TYPE_PROJECT,
-        help_text='1=Project, 2=Unchargeable, 3=Other Chargeable'
+        help_text='1=Project, 2=Unchargeable, 3=Other Chargeable, 4=R&D'
     )
     project = models.ForeignKey(
         'Projects', on_delete=models.CASCADE, related_name='staff_allocations',
@@ -468,7 +475,7 @@ class StaffHoursAllocations(models.Model):
     hours = models.DecimalField(max_digits=5, decimal_places=2)
     note = models.CharField(
         max_length=500, null=True, blank=True,
-        help_text='Required for Unchargeable and Other Chargeable allocations'
+        help_text='Required for Unchargeable, Other Chargeable, and R&D allocations'
     )
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
@@ -491,7 +498,9 @@ class StaffHoursAllocations(models.Model):
                 raise ValidationError('Project and Costing are required for Project allocations.')
         else:
             if not self.note:
-                raise ValidationError('Note is required for Unchargeable and Other Chargeable allocations.')
+                raise ValidationError(
+                    'Note is required for Unchargeable, Other Chargeable, and R&D allocations.'
+                )
 
 
 class Projects(models.Model):
@@ -586,21 +595,13 @@ class Models_3d(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
-# SERVICE: pos
-class Po_globals(models.Model):
-    reference = models.CharField(max_length=255)
-    invoicee = models.CharField(max_length=255)
-    address = models.CharField(max_length=255)
-    project_address = models.CharField(max_length=255)
-    ABN = models.CharField(max_length=255)
-    email = models.CharField(max_length=255)
-    note1 = models.CharField(max_length=1000)
-    note2 = models.CharField(max_length=1000)
-    note3 = models.CharField(max_length=1000)
-    created_at = models.DateTimeField(auto_now_add=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True)
-    def __str__(self):
-        return f"Reference: {self.reference}, Invoicee: {self.invoicee}, Address: {self.address}, ABN: {self.ABN}, Email: {self.email}, Note1: {self.note1}, Note2: {self.note2}, Note3: {self.note3}"
+# NOTE: The Po_globals model used to live here. It stored a single row of
+# "company-wide PO header" fields (reference, ABN, project_address, three
+# free-form notes, etc.) that the legacy generate_po_pdf view stamped onto
+# every PO PDF. The live PO send path (core/views/dashboard.py:send_po_email
+# -> generate_po_html) doesn't read from it, so the table was dead. It was
+# removed during the PO audit fix-pass — see migration
+# 0079_drop_po_globals.py.
 
 # ============================================================================
 # BUILDER/DEVELOPER MODEL SET 1
@@ -1268,25 +1269,45 @@ class Contacts(models.Model):
 
 # SERVICE: pos
 class Po_orders(models.Model):
+    # Lifecycle status. po_sent (the legacy boolean) only ever told us
+    # "did the email leave the building" — there was no way to mark a
+    # PO as cancelled, replaced, or otherwise withdrawn (B24 in the PO
+    # audit). The new `status` field is the authoritative state and
+    # po_sent is kept around for backwards compatibility (it's still
+    # flipped to True when STATUS_SENT is reached).
+    STATUS_DRAFT = 0
+    STATUS_SENT = 1
+    STATUS_CANCELLED = 2
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
     po_order_pk = models.AutoField(primary_key=True)
     po_supplier = models.ForeignKey(Contacts, on_delete=models.CASCADE)
     project = models.ForeignKey(Projects, on_delete=models.CASCADE, null=True, blank=True)
     unique_id = models.CharField(max_length=64, unique=True, db_index=True, null=True, blank=True)  # UUID for shareable URL
     pdf = models.FileField(upload_to='po_pdfs/', null=True, blank=True)  # Stored PDF for record keeping
     po_sent = models.BooleanField(default=False)
+    status = models.IntegerField(choices=STATUS_CHOICES, default=STATUS_DRAFT)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
-    
+
     def __str__(self):
         return f"PO Order #{self.po_order_pk} - {self.po_supplier.name}" + (f" ({self.unique_id})" if self.unique_id else "")
 
 # SERVICE: pos
 class Po_order_detail(models.Model):
     po_order_detail_pk = models.AutoField(primary_key=True)
-    po_order_pk= models.ForeignKey(Po_orders, on_delete=models.CASCADE)
+    po_order_pk = models.ForeignKey(Po_orders, on_delete=models.CASCADE)
     date = models.DateField()
     costing = models.ForeignKey(Costing, on_delete=models.CASCADE)
-    quote = models.ForeignKey(Quotes, on_delete=models.CASCADE, null=True) #if quote is null, then it is a variation.
+    quote = models.ForeignKey(Quotes, on_delete=models.CASCADE, null=True)  # if quote is null, then it is a variation
+    # `amount` is intentionally allowed to be negative to mirror the
+    # negative-amount support the rest of the system grew for credit
+    # notes (see bills_inbox / stocktake / contract_budget). A negative
+    # PO line represents a reversal of a previously-issued commitment.
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     qty = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     unit = models.CharField(max_length=50, null=True, blank=True)
@@ -1294,6 +1315,7 @@ class Po_order_detail(models.Model):
     variation_note = models.CharField(max_length=1000, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+
     def __str__(self):
         return f"PO Order Detail - PK: {self.po_order_detail_pk}, Date: {self.date}, Amount: {self.amount}, Variation_note: {self.variation_note}"
 

@@ -1,7 +1,7 @@
 from django.urls import path
 from django.views.generic import RedirectView
 from . import views
-from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, create_po_order, generate_po_pdf, send_po_email_view, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
+from .views import commit_data, update_quote, create_contacts, delete_quote, delete_bill, upload_design_pdf, create_plan, send_test_email_view, upload_report_pdf, get_design_pdf_url, get_report_pdf_url, upload_categories, upload_costings, upload_bill, associate_sc_claims_with_hc_claim, update_hc_claim_data, get_claim_table, get_bills_by_supplier, post_progress_claim_data, post_direct_cost_data, update_contract_budget_amounts, upload_margin_category_and_lines, create_variation, delete_variation, get_bill_allocations, wipe_database, view_po_by_unique_id, get_po_table_data_for_invoice
 from .views.bills import update_bill, null_allocation_xero_fields, get_approved_bills, get_sent_bills
 from .views.bills import bills_view, get_project_bills, get_allocated_bills, get_unallocated_bill_allocations, create_unallocated_invoice_allocation, update_unallocated_invoice_allocation, delete_unallocated_invoice_allocation, allocate_bill, unallocate_bill, approve_bill, update_allocated_bill
 from .views.bills_global import (
@@ -26,7 +26,7 @@ from .views.hc_claims import (
     hc_claims_view, get_hc_claims, get_available_bills, get_available_stocktake_snaps,
     create_hc_claim, get_hc_claim_data, delete_hc_claim, finalize_hc_claim,
 )
-from .views.pos import get_quotes_by_supplier, po_view
+from .views.pos import po_view
 from .views.documents import get_project_folders, create_folder, rename_folder, rename_file, delete_folder, upload_files, download_file, download_folder, delete_file, move_file, move_folder
 from .views.xero import (
     get_xero_instances, create_xero_instance, update_xero_instance, update_staff_hours_tracking, delete_xero_instance, 
@@ -41,7 +41,7 @@ from .views.database_diagnostics import database_diagnostics
 from .views.email_receiver import receive_email, email_list
 from .views.api_diagnostics import api_diagnostics
 from .views.rates import get_rates_data, create_new_category_costing_unit_quantity, update_category_costing_order_in_list, update_item_unit, update_item_operator, update_item_operator_value, update_item_rate, update_category_name, update_item_name, delete_category_or_item, update_unit_qty, copy_to_contract_budget, update_unit_name, update_unit_order, update_item_xero_account, get_xero_dropdown_data, get_xero_sales_accounts
-from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based
+from .views.settings import get_project_types, get_xero_instances_list, update_project_type_xero_instance, update_project_type_name, create_project_type, toggle_project_type_archive, update_project_type_rates_based, update_project_type_qs
 from .views.stocktake import (
     toggle_stocktake_inclusion, toggle_xero_instance_stocktake, update_xero_stocktake_account, update_xero_stocktake_writeoffs_account, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
@@ -58,6 +58,7 @@ from .views.stocktake import (
 )
 from .views.staff_hours import (
     staff_hours, get_employees, get_employee_detail, get_leave_balances,
+    get_staff_hours_report,
     get_pay_items, get_payroll_calendars, get_super_funds, get_public_holidays,
     sync_employee_pay_rates, get_projects_for_allocation, get_costings_for_project,
     get_allocations, save_allocation, delete_allocation, create_leave_application,
@@ -102,9 +103,6 @@ urlpatterns = [
     path('send_test_email/', send_test_email_view, name='send_test_email'),
     path('get_quote_allocations/<int:supplier_id>/', views.get_quote_allocations, name='get_quote_allocations'),
     path('get_quote_allocations/', views.get_quote_allocations_by_quotes, name='get_quote_allocations_by_quotes'),
-    path('create_po_order/', create_po_order, name='create_po_order'),
-    path('generate_po_pdf/<int:po_order_pk>/', generate_po_pdf, name='generate_po_pdf'),
-    path('send_po_emails/', send_po_email_view, name='send_po_emails'),
     path('upload_categories/', views.upload_categories, name='upload_categories'),
     path('upload_costings/', upload_costings, name='upload_costings'),
     path('update_contract_budget_amounts/', views.update_contract_budget_amounts, name='update_contract_budget_amounts'),
@@ -122,7 +120,6 @@ urlpatterns = [
     path('update_hc_claim_data/', views.update_hc_claim_data, name='update_hc_claim_data'),
     path('get_claim_table/<int:claim_id>/', get_claim_table, name='get_claim_table'),
     path('get_bills_by_supplier/', get_bills_by_supplier, name='get_bills_by_supplier'),
-    path('get_quotes_by_supplier/', views.get_quotes_by_supplier, name='get_quotes_by_supplier'),
     path('get_project_contacts/<int:project_pk>/', get_project_contacts, name='get_project_contacts'),
     path('save_project_quote/', save_project_quote, name='save_project_quote'),
     path('get_project_quotes/<int:project_pk>/', get_project_quotes, name='get_project_quotes'),
@@ -348,6 +345,7 @@ urlpatterns = [
     path('update_project_type_name/<int:project_type_pk>/', update_project_type_name, name='update_project_type_name'),
     path('update_project_type_xero_instance/<int:project_type_pk>/', update_project_type_xero_instance, name='update_project_type_xero_instance'),
     path('update_project_type_rates_based/<int:project_type_pk>/', update_project_type_rates_based, name='update_project_type_rates_based'),
+    path('update_project_type_qs/<int:project_type_pk>/', update_project_type_qs, name='update_project_type_qs'),
     path('toggle_project_type_archive/<int:project_type_pk>/', toggle_project_type_archive, name='toggle_project_type_archive'),
     
     # Staff Hours section
@@ -388,6 +386,7 @@ urlpatterns = [
     path('staff_hours/allocations/<int:allocation_pk>/delete/', delete_allocation, name='staff_hours_delete_allocation'),
     path('staff_hours/allocations/super-summary/', get_allocation_super_summary, name='staff_hours_allocation_super_summary'),
     path('staff_hours/debug_allocations/', debug_allocations, name='staff_hours_debug_allocations'),
+    path('staff_hours/report/', get_staff_hours_report, name='staff_hours_report'),
     
     # path('upload_csv/', views.upload_csv, name='upload_csv'),
     # path('model_viewer/', views.model_viewer, name='model_viewer'),

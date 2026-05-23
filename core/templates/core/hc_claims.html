@@ -586,6 +586,10 @@
         window.hcClaimsProjectPk = '{{ project_pk }}';
     }
     window.hcClaimsIsConstruction = {{ is_construction|yesno:"true,false" }};
+    // Project-type-level toggle: if false, the HC claim editor and
+    // report skip every QS-related cell (header, body, footer,
+    // category subtotals, finalised report subheadings).
+    window.hcClaimsHasQs = {{ has_qs|yesno:"true,false" }};
 </script>
 
 <!-- Self-Contained HC Claims Section JS -->
@@ -600,7 +604,10 @@
                     (typeof Utils !== 'undefined' && Utils.getProjectPkFromUrl ? Utils.getProjectPkFromUrl() : null);
     
     var isConstruction = window.hcClaimsIsConstruction || false;
-    
+    // hasQs gates every QS cell. Default to true so older callers
+    // that haven't wired the flag through keep the existing layout.
+    var hasQs = (typeof window.hcClaimsHasQs === 'boolean') ? window.hcClaimsHasQs : true;
+
     // State
     var currentClaimPk = null;
     var currentClaimData = null;
@@ -641,7 +648,10 @@
     //   HC Prev/This,
     //   QS Prev/This
     function getColCount() {
-        return isConstruction ? 18 : 12;
+        var base = isConstruction ? 18 : 12;
+        // Two columns (QS Prev, QS This) drop out when the project
+        // type has qs=False.
+        return hasQs ? base : (base - 2);
     }
     
     // Build table header based on construction mode
@@ -663,9 +673,11 @@
             $row1.append('<th rowspan="2" style="min-width: 75px;">Fixed on Site</th>');
             $row1.append('<th colspan="2" class="invoiced-group">Invoiced</th>');
             $row1.append('<th colspan="2" class="hc-claim-group">HC Claim</th>');
-            $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
-            
-            // Row 2: Subheadings for Budget, Uncommitted, Committed, Invoiced, HC Claim, QS Claim
+            if (hasQs) {
+                $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
+            }
+
+            // Row 2: Subheadings for Budget, Uncommitted, Committed, Invoiced, HC Claim, (QS Claim)
             $row2.append('<th>Contract</th>');
             $row2.append('<th>Working</th>');
             $row2.append('<th>Qty</th>');
@@ -679,9 +691,11 @@
             $row2.append('<th>This</th>');
             $row2.append('<th>Prev</th>');
             $row2.append('<th>This</th>');
-            $row2.append('<th>Prev</th>');
-            $row2.append('<th>This</th>');
-            
+            if (hasQs) {
+                $row2.append('<th>Prev</th>');
+                $row2.append('<th>This</th>');
+            }
+
             $thead.append($row1);
             $thead.append($row2);
         } else {
@@ -696,17 +710,21 @@
             $row1.append('<th rowspan="2" style="min-width: 75px;">Fixed on Site</th>');
             $row1.append('<th colspan="2" class="invoiced-group">Invoiced</th>');
             $row1.append('<th colspan="2" class="hc-claim-group">HC Claim</th>');
-            $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
-            
+            if (hasQs) {
+                $row1.append('<th colspan="2" class="qs-claim-group">QS Claim</th>');
+            }
+
             $row2.append('<th>Contract</th>');
             $row2.append('<th>Working</th>');
             $row2.append('<th>Prev</th>');
             $row2.append('<th>This</th>');
             $row2.append('<th>Prev</th>');
             $row2.append('<th>This</th>');
-            $row2.append('<th>Prev</th>');
-            $row2.append('<th>This</th>');
-            
+            if (hasQs) {
+                $row2.append('<th>Prev</th>');
+                $row2.append('<th>This</th>');
+            }
+
             $thead.append($row1);
             $thead.append($row2);
         }
@@ -744,9 +762,11 @@
         $footerRow.append('<td id="totalInvoicedThis">0.00</td>');
         $footerRow.append('<td id="totalPrevHcClaimed">0.00</td>');
         $footerRow.append('<td id="totalThisHcClaim">0.00</td>');
-        $footerRow.append('<td id="totalPrevQsClaimed">0.00</td>');
-        $footerRow.append('<td id="totalThisQsClaim">0.00</td>');
-        
+        if (hasQs) {
+            $footerRow.append('<td id="totalPrevQsClaimed">0.00</td>');
+            $footerRow.append('<td id="totalThisQsClaim">0.00</td>');
+        }
+
         $footerBody.append($footerRow);
     }
     
@@ -1673,26 +1693,35 @@
         //  row 2: 3 + 3 + 2 + 2 = 10 sub-headers under the colspan'd
         //         groups.
         // Total leaf columns = 1 + 1 + 3 + 3 + 2 + 2 = 12.
+        // When the project type has qs=False the QS sub-headings
+        // and matching cells drop out completely. Group colspans
+        // shrink: This Claim / Prev Claims become 2 (variation + HC),
+        // and Total Claimed / Still to Claim become 1 (HC only).
+        var thisClaimSpan = hasQs ? 3 : 2;
+        var prevClaimSpan = hasQs ? 3 : 2;
+        var totalClaimedSpan = hasQs ? 2 : 1;
+        var stillToClaimSpan = hasQs ? 2 : 1;
+
         html += '<thead>';
         html += '<tr>';
         html += '<th class="left" rowspan="2">Category</th>';
         html += '<th rowspan="2">Contract Budget</th>';
-        html += '<th class="group-this" colspan="3">This Claim</th>';
-        html += '<th class="group-prev" colspan="3">Prev Claims</th>';
-        html += '<th colspan="2">Total Claimed</th>';
-        html += '<th class="group-still" colspan="2">Still to Claim</th>';
+        html += '<th class="group-this" colspan="' + thisClaimSpan + '">This Claim</th>';
+        html += '<th class="group-prev" colspan="' + prevClaimSpan + '">Prev Claims</th>';
+        html += '<th colspan="' + totalClaimedSpan + '">Total Claimed</th>';
+        html += '<th class="group-still" colspan="' + stillToClaimSpan + '">Still to Claim</th>';
         html += '</tr>';
         html += '<tr>';
         html += '<th class="group-this">HC Variation</th>';
         html += '<th class="group-this">HC Claim</th>';
-        html += '<th class="group-this">QS Claim</th>';
+        if (hasQs) html += '<th class="group-this">QS Claim</th>';
         html += '<th class="group-prev">HC Variation</th>';
         html += '<th class="group-prev">HC Claim</th>';
-        html += '<th class="group-prev">QS Claim</th>';
+        if (hasQs) html += '<th class="group-prev">QS Claim</th>';
         html += '<th>HC</th>';
-        html += '<th>QS</th>';
+        if (hasQs) html += '<th>QS</th>';
         html += '<th class="group-still">HC</th>';
-        html += '<th class="group-still">QS</th>';
+        if (hasQs) html += '<th class="group-still">QS</th>';
         html += '</tr>';
         html += '</thead>';
 
@@ -1704,14 +1733,14 @@
             html += '<td>' + formatMoney(c.contract_budget) + '</td>';
             html += '<td class="group-this">' + formatMoney(c.this_hc_var) + '</td>';
             html += '<td class="group-this">' + formatMoney(c.this_hc) + '</td>';
-            html += '<td class="group-this">' + formatMoney(c.this_qs) + '</td>';
+            if (hasQs) html += '<td class="group-this">' + formatMoney(c.this_qs) + '</td>';
             html += '<td class="group-prev">' + formatMoney(c.prev_hc_var) + '</td>';
             html += '<td class="group-prev">' + formatMoney(c.prev_hc) + '</td>';
-            html += '<td class="group-prev">' + formatMoney(c.prev_qs) + '</td>';
+            if (hasQs) html += '<td class="group-prev">' + formatMoney(c.prev_qs) + '</td>';
             html += '<td>' + formatMoney(c.total_hc) + '</td>';
-            html += '<td>' + formatMoney(c.total_qs) + '</td>';
+            if (hasQs) html += '<td>' + formatMoney(c.total_qs) + '</td>';
             html += '<td class="group-still">' + formatMoney(c.still_hc) + '</td>';
-            html += '<td class="group-still">' + formatMoney(c.still_qs) + '</td>';
+            if (hasQs) html += '<td class="group-still">' + formatMoney(c.still_qs) + '</td>';
             html += '</tr>';
         });
         html += '</tbody>';
@@ -1721,14 +1750,14 @@
         html += '<td>' + formatMoney(grand.contract_budget) + '</td>';
         html += '<td class="group-this">' + formatMoney(grand.this_hc_var) + '</td>';
         html += '<td class="group-this">' + formatMoney(grand.this_hc) + '</td>';
-        html += '<td class="group-this">' + formatMoney(grand.this_qs) + '</td>';
+        if (hasQs) html += '<td class="group-this">' + formatMoney(grand.this_qs) + '</td>';
         html += '<td class="group-prev">' + formatMoney(grand.prev_hc_var) + '</td>';
         html += '<td class="group-prev">' + formatMoney(grand.prev_hc) + '</td>';
-        html += '<td class="group-prev">' + formatMoney(grand.prev_qs) + '</td>';
+        if (hasQs) html += '<td class="group-prev">' + formatMoney(grand.prev_qs) + '</td>';
         html += '<td>' + formatMoney(grand.total_hc) + '</td>';
-        html += '<td>' + formatMoney(grand.total_qs) + '</td>';
+        if (hasQs) html += '<td>' + formatMoney(grand.total_qs) + '</td>';
         html += '<td class="group-still">' + formatMoney(grand.still_hc) + '</td>';
-        html += '<td class="group-still">' + formatMoney(grand.still_qs) + '</td>';
+        if (hasQs) html += '<td class="group-still">' + formatMoney(grand.still_qs) + '</td>';
         html += '</tr></tfoot>';
 
         html += '</table></div>';
@@ -1819,8 +1848,10 @@
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.invoiced_this) + '</td>');
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.prev_hc_claimed) + '</td>');
         $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.this_hc_claim) + '</td>');
-        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.prev_qs_claimed) + '</td>');
-        $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.this_qs_claim) + '</td>');
+        if (hasQs) {
+            $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.prev_qs_claimed) + '</td>');
+            $catRow.append('<td class="subtotal-cell">' + formatMoney(catTotals.this_qs_claim) + '</td>');
+        }
 
         $catRow.on('click', function() {
             toggleCategory(catName);
@@ -2017,21 +2048,23 @@
                 }
                 totals.this_hc_claim += item.this_hc_claim;
                 
-                // QS Claim - Previous
-                $row.append($('<td class="qs-claim-cell">').text(formatMoney(item.prev_qs_claimed)));
-                totals.prev_qs_claimed += item.prev_qs_claimed;
-                
-                // QS Claim - This Claim
-                if (isSpecialCategory) {
-                    // Special categories (Internal/Labour): editable input, not formula
-                    var $qsThisLink = $('<a href="#" class="click-to-edit qs-claim-display" data-item-pk="' + item.costing_pk + '" data-value="' + (item.this_qs_claim || 0) + '">' + formatMoney(item.this_qs_claim) + '</a>');
-                    $qsThisLink.on('click', function(e) { e.preventDefault(); convertClaimToInput(item.costing_pk, 'qs', $row); });
-                    $row.append($('<td class="qs-claim-cell this-qs-claim">').append($qsThisLink));
-                } else {
-                    // Normal categories: calculated formula cell
-                    $row.append($('<td class="qs-claim-cell this-qs-claim">').text(formatMoney(item.this_qs_claim)));
+                if (hasQs) {
+                    // QS Claim - Previous
+                    $row.append($('<td class="qs-claim-cell">').text(formatMoney(item.prev_qs_claimed)));
+                    totals.prev_qs_claimed += item.prev_qs_claimed;
+
+                    // QS Claim - This Claim
+                    if (isSpecialCategory) {
+                        // Special categories (Internal/Labour): editable input, not formula
+                        var $qsThisLink = $('<a href="#" class="click-to-edit qs-claim-display" data-item-pk="' + item.costing_pk + '" data-value="' + (item.this_qs_claim || 0) + '">' + formatMoney(item.this_qs_claim) + '</a>');
+                        $qsThisLink.on('click', function(e) { e.preventDefault(); convertClaimToInput(item.costing_pk, 'qs', $row); });
+                        $row.append($('<td class="qs-claim-cell this-qs-claim">').append($qsThisLink));
+                    } else {
+                        // Normal categories: calculated formula cell
+                        $row.append($('<td class="qs-claim-cell this-qs-claim">').text(formatMoney(item.this_qs_claim)));
+                    }
+                    totals.this_qs_claim += item.this_qs_claim;
                 }
-                totals.this_qs_claim += item.this_qs_claim;
                 
                 // Store item data on row
                 $row.data('item', item);
@@ -2050,9 +2083,11 @@
         $('#totalInvoicedThis').text(formatMoney(totals.invoiced_this));
         $('#totalPrevHcClaimed').text(formatMoney(totals.prev_hc_claimed));
         $('#totalThisHcClaim').text(formatMoney(totals.this_hc_claim));
-        $('#totalPrevQsClaimed').text(formatMoney(totals.prev_qs_claimed));
-        $('#totalThisQsClaim').text(formatMoney(totals.this_qs_claim));
-        
+        if (hasQs) {
+            $('#totalPrevQsClaimed').text(formatMoney(totals.prev_qs_claimed));
+            $('#totalThisQsClaim').text(formatMoney(totals.this_qs_claim));
+        }
+
         $fixedFooter.show();
     }
     
@@ -2116,10 +2151,13 @@
         // Update display
         item.this_hc_claim = Math.round(hc_claim * 100) / 100;
         item.this_qs_claim = Math.round(qs_claim * 100) / 100;
-        
+
         $row.find('.this-hc-claim').text(formatMoney(item.this_hc_claim));
+        // .this-qs-claim cell is only emitted when hasQs is true;
+        // the find() is a no-op otherwise, so this stays safe in
+        // both modes.
         $row.find('.this-qs-claim').text(formatMoney(item.this_qs_claim));
-        
+
         // Update totals
         recalculateTotals();
     }

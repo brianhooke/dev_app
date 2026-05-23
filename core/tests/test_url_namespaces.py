@@ -34,11 +34,10 @@ class URLNamespaceTestCase(TestCase):
         url = reverse('core:commit_data')
         self.assertEqual(url, '/commit_data/')
     
-    def test_core_create_po_order_url(self):
-        """Should resolve core:create_po_order URL."""
-        url = reverse('core:create_po_order')
-        self.assertEqual(url, '/create_po_order/')
-    
+    # NOTE: core:create_po_order URL was removed during the PO audit
+    # fix-pass (B16). The legacy create_po_order view referenced model
+    # fields that no longer existed and was never wired to a template.
+
     def test_core_upload_bill_url(self):
         """Should resolve core:upload_bill URL."""
         url = reverse('core:upload_bill')
@@ -76,11 +75,11 @@ class URLNamespaceTestCase(TestCase):
         resolver = get_resolver()
         self.assertIn('general', resolver.namespace_dict)
     
-    def test_url_resolution_with_parameters(self):
-        """Should resolve URLs with parameters correctly."""
-        url = reverse('core:generate_po_pdf', kwargs={'po_order_pk': 123})
-        self.assertEqual(url, '/generate_po_pdf/123/')
-    
+    # NOTE: core:generate_po_pdf URL was removed during the PO audit
+    # fix-pass (B17). The legacy generate_po_pdf view referenced model
+    # fields that no longer existed (po_note_1/2/3) and contact fields
+    # that were renamed.
+
     def test_url_resolution_with_multiple_parameters(self):
         """Should resolve URLs with multiple parameters."""
         url = reverse('core:get_design_pdf_url_with_rev', kwargs={

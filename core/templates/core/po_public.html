@@ -711,6 +711,11 @@
         const isConstruction = {{ is_construction|yesno:"true,false" }};
         const previousClaimsCount = {{ previous_claims_count|default:"0" }};
         const poUrl = '/po/{{ po_order.unique_id }}/pdf/';
+        // True when an authenticated Mason user is viewing the page.
+        // Suppliers always see this as false, which hides Approve/Edit-Claim
+        // and the Edit-Unapproved buttons. Server-side, /approve/ also
+        // requires login (B7).
+        const isAdmin = {{ is_admin|yesno:"true,false" }};
         let isEditMode = false;  // Track if user clicked "Edit Unapproved"
         let isEditClaimMode = false;  // Track if user clicked "Edit Claim"
         let claimsExpanded = false;  // Track if individual claims are expanded
@@ -968,14 +973,16 @@
             // Set up claims expand/collapse toggle
             setupClaimsToggle();
             
-            // Show/hide buttons based on claim status
+            // Show/hide buttons based on claim status.
+            // Edit-Unapproved / Edit-Claim / Approve are admin-only.
             if (hasPendingClaim) {
-                // Pending claim: show Edit Unapproved, Edit Claim, and Approve buttons
-                document.getElementById('editUnapprovedBtn').classList.add('show', 'active');
-                document.getElementById('editClaimBtn').classList.add('show');
-                document.getElementById('approveBtn').classList.add('show');
+                if (isAdmin) {
+                    document.getElementById('editUnapprovedBtn').classList.add('show', 'active');
+                    document.getElementById('editClaimBtn').classList.add('show');
+                    document.getElementById('approveBtn').classList.add('show');
+                }
                 document.getElementById('submitForApprovalBtn').style.display = 'inline-block';
-                
+
                 // Save current claim values for potential restore
                 saveCurrentClaimValues();
             } else if (hasApprovedClaim) {
@@ -1588,9 +1595,9 @@
             
             try {
                 const formData = new FormData();
-                formData.append('bill_pdf', file);
-                
-                const response = await fetch(`/po/${uniqueId}/upload-bill/`, {
+                formData.append('invoice_pdf', file);
+
+                const response = await fetch(`/po/${uniqueId}/upload-invoice/`, {
                     method: 'POST',
                     body: formData
                 });

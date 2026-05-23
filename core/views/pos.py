@@ -2,59 +2,50 @@
 PO (Purchase Order) related views.
 
 Template Rendering:
-1. po_view - Render PO section template (supports project_pk query param)
+- po_view -- Render the PO section template (supports project_pk query param).
 
-PO Creation:
-2. create_po_order - Create new PO order from supplier and line items
-
-PDF Generation:
-3. generate_po_pdf - Generate PO PDF document with letterhead
-4. generate_po_pdf_bytes - Generate PO PDF as bytes (for email attachment)
-5. wrap_text - Helper: Wrap text for PDF layout
-
-Email:
-6. send_po_email - Send PO email to supplier with PDF and quote attachments
-7. send_po_email_view - View handler for sending PO email (POST endpoint)
-
-Public PO Pages (Supplier Access):
-8. view_po_by_unique_id - Public landing page for suppliers to view PO and submit claims
-9. view_po_pdf_by_unique_id - Serve saved PDF for PO via unique_id
+Public PO Pages (Supplier-Facing):
+- view_po_by_unique_id -- Public landing page for suppliers to view a PO
+  and submit/edit progress claims.
+- view_po_pdf_by_unique_id -- Serve the saved PDF for a PO via its unique_id.
 
 Progress Claims:
-10. submit_po_claim - Submit or update a progress claim (creates Invoice with status=100)
-11. approve_po_claim - Approve pending progress claim (status 100 -> 101)
-12. upload_bill_pdf - Upload invoice PDF for approved claim (status 101 -> 102)
+- submit_po_claim   -- Supplier submits/updates a progress claim
+                       (creates a Bills row with status 100).
+- approve_po_claim  -- Principal approves a pending progress claim
+                       (100 -> 101). Login-required.
+- upload_bill_pdf   -- Supplier uploads the invoice PDF for an approved
+                       claim (101 -> 102).
 
-Data Retrieval:
-13. get_po_table_data_for_invoice - Get PO table data for invoice (allocated bills view)
-14. get_quotes_by_supplier - Get quotes filtered by supplier
+Internal Read APIs:
+- get_po_table_data_for_invoice -- Pivot the PO/claims data for an
+  already-allocated bill (used in the allocated-invoices view).
+
+Note: the legacy create/generate/send endpoints were deleted in the
+audit fix-pass (B16-B19). The live "send PO" path lives in
+core/views/dashboard.py:send_po_email and reads from quotes directly,
+so the parallel implementation that used to live here is now dead.
 """
 import json
 import logging
-import ssl
+from collections import defaultdict
 from datetime import date
-from io import BytesIO
+from decimal import Decimal
 
-import requests
-from django.conf import settings
-from django.core.files.storage import default_storage
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
+from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
-from PyPDF2 import PdfReader, PdfWriter
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
 
-from ..models import Letterhead, Po_globals, Po_orders, Po_order_detail, Projects
-from ..services import pos as pos_service
-
-ssl._create_default_https_context = ssl._create_unverified_context
+from ..models import (
+    Bill_allocations, Bills, Contacts, Costing,
+    Po_orders, Po_order_detail, Projects, Quotes,
+)
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  
+logger.setLevel(logging.INFO)
 
 
 def po_view(request):
@@ -96,426 +87,194 @@ def po_view(request):
     return render(request, 'core/po.html', context)
 
 
-@csrf_exempt
-def create_po_order(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        supplier_pk = data.get('supplierPk')
-        notes = data.get('notes', {})
-        rows = data.get('rows', [])
-        po_order = pos_service.create_po_order(supplier_pk, notes, rows)
-        return JsonResponse({'status': 'success', 'message': 'PO Order created successfully.'})
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})
-def generate_po_pdf(request, po_order_pk):
-    po_globals = pos_service.get_po_globals()
-    po_order, po_order_details = pos_service.get_po_order_details(po_order_pk)
-    company_details = po_globals
-    letterhead = Letterhead.objects.first()
-    if letterhead is not None:
-        letterhead_path = letterhead.letterhead_path.name  
-        if settings.DEBUG:  
-            letterhead_full_path = default_storage.path(letterhead_path)
-            with open(letterhead_full_path, "rb") as f:
-                letterhead_pdf_content = f.read()
-            letterhead_pdf = PdfReader(BytesIO(letterhead_pdf_content))
-        else:
-            letterhead_url = letterhead.letterhead_path.url
-            response = requests.get(letterhead_url)
-            letterhead_pdf = PdfReader(BytesIO(response.content))
-    else:
-        raise Exception("No Letterhead instance found.")
-    content_buffer = BytesIO()
-    p = canvas.Canvas(content_buffer, pagesize=A4)
-    if company_details:
-        details = [
-            ("PO Reference: ", company_details.reference),
-            ("Invoicee: ", company_details.invoicee),
-            ("ABN: ", company_details.ABN),
-            ("Email: ", company_details.email),
-            ("Address: ", company_details.address)
-        ]
-        y_position = A4[1] - 2.5 * inch  
-        max_length = 40  
-        for label, text in details:
-            wrapped_lines = wrap_text(f"{label}{text}", max_length)
-            for line in wrapped_lines:
-                if label in line:
-                    bold_text, regular_text = line.split(label, 1)
-                    p.setFont("Helvetica-Bold", 10)
-                    p.drawString(5.5 * inch, y_position, f"{label}{bold_text}")
-                    p.setFont("Helvetica", 10)
-                    p.drawString(5.5 * inch + p.stringWidth(f"{label}{bold_text}", "Helvetica-Bold", 10), y_position, regular_text.strip())
-                else:
-                    p.setFont("Helvetica", 10)
-                    p.drawString(5.5 * inch, y_position, line)
-                y_position -= 12  
-        y_position -= 12
-        today = date.today().strftime("%d %b %Y")
-        p.setFont("Helvetica", 12)
-        p.drawString(inch/2, y_position, today)
-        y_position -= 12  
-    p.setFont("Helvetica-Bold", 15)
-    supplier_name = po_order.po_supplier.contact_name  
-    project_address = po_globals.project_address  
-    purchase_order_text = f"{project_address} Purchase Order - {supplier_name}"
-    wrapped_po_text = wrap_text(purchase_order_text, 80)
-    text_widths = [p.stringWidth(line, "Helvetica-Bold", 15) for line in wrapped_po_text]
-    max_text_width = max(text_widths)
-    x_position = (A4[0] - max_text_width) / 2  
-    y_position = A4[1] / 1.6
-    for line in wrapped_po_text:
-        p.drawString(x_position, y_position, line)
-        y_position -= 22  
-    p.setLineWidth(1)
-    p.line(x_position, y_position - 2, x_position + max_text_width, y_position - 2)
-    y_position -= 36
-    p.setFont("Helvetica-Bold", 12)
-    table_headers = ["Claim Category", "Quote # or Variation", "Amount ($)*"]
-    col_widths = [2.5 * inch, 3.5 * inch, 1 * inch]  
-    x_start = inch / 2
-    cell_height = 18
-    for i, header in enumerate(table_headers):
-        header_x_position = x_start + sum(col_widths[:i]) + 2
-        if i == 2:  
-            header_x_position = x_start + sum(col_widths[:i]) + col_widths[i] / 2 - p.stringWidth(header, "Helvetica-Bold", 12) / 2
-        p.drawString(header_x_position, y_position + 2, header)  
-        p.line(header_x_position, y_position, header_x_position + p.stringWidth(header, "Helvetica-Bold", 12), y_position)  
-    y_position -= cell_height
-    total_amount = 0  
-    p.setFont("Helvetica", 10)  
-    for detail in po_order_details:
-        row_data = [
-            detail.costing.item,  
-            f"Variation: {detail.variation_note}" if detail.quote is None else detail.quote.supplier_quote_number,  
-            f"{detail.amount:,.2f}"  
-        ]
-        max_line_lengths = [
-            int(col_widths[0] / 7),  
-            int(col_widths[1] / 5),  
-            int(col_widths[2] / 7)   
-        ]
-        total_amount += detail.amount
-        row_heights = []
-        for i, cell in enumerate(row_data):
-            wrapped_lines = wrap_text(str(cell), max_line_lengths[i])
-            row_heights.append(len(wrapped_lines) * cell_height)
-            p.setStrokeColor(colors.grey, 0.25)  
-            p.line(x_start, y_position, x_start + sum(col_widths), y_position)  
-            p.setStrokeColor(colors.black)  
-            max_row_height = max(row_heights)
-        for i, cell in enumerate(row_data):
-            wrapped_lines = wrap_text(str(cell), max_line_lengths[i])
-            for line_num, line in enumerate(wrapped_lines):
-                if i == 2:  
-                    line_width = p.stringWidth(line, "Helvetica", 10)
-                    p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2 - (line_num * cell_height), line)  
-                else:
-                    p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2 - (line_num * cell_height), line)  
-        y_position -= max_row_height
-    p.setFont("Helvetica-Bold", 12)
-    total_row_data = [
-        "Total",
-        "",  
-        f"{total_amount:,.2f}"  
-    ]
-    for i, cell in enumerate(total_row_data):
-        if i == 2:  
-            line_width = p.stringWidth(cell, "Helvetica-Bold", 12)
-            p.drawString(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position + 2, cell)  
-            p.line(x_start + sum(col_widths[:i+1]) - line_width - 2, y_position, x_start + sum(col_widths[:i+1]) - line_width - 2 + p.stringWidth(cell, "Helvetica-Bold", 12), y_position)  
-        else:
-            p.drawString(x_start + sum(col_widths[:i]) + 2, y_position + 2, cell)  
-    y_position -= (cell_height * 2.5)
-    p.setFont("Helvetica", 10)
-    fixed_text = "* All amounts are net of GST. Supplier to add GST if applicable."
-    for line in wrap_text(fixed_text, 110):
-        p.drawString(x_start, y_position, line)
-        y_position -= (cell_height) * 0.75  
-    y_position -= (cell_height) * 0.75  
-    notes = [po_order.po_note_1, po_order.po_note_2, po_order.po_note_3]
-    for note in notes:
-        for line in wrap_text(note, 115):
-            p.drawString(x_start, y_position, line)
-            y_position -= (cell_height) * 0.75  
-        y_position -= (cell_height) * 0.75  
-    p.showPage()
-    p.save()
-    content_buffer.seek(0)
-    content_pdf = PdfReader(content_buffer)
-    output_pdf = PdfWriter()
-    page = letterhead_pdf.pages[0]
-    page.merge_page(content_pdf.pages[0])
-    output_pdf.add_page(page)
-    merged_buffer = BytesIO()
-    output_pdf.write(merged_buffer)
-    merged_buffer.seek(0)
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="PO_{po_order_pk}.pdf"'
-    response.write(merged_buffer.getvalue())
-    merged_buffer.close()
-    return response
-def wrap_text(text, max_length):
-    words = text.split(' ')
-    lines = []
-    current_line = ''
-    for word in words:
-        if len(current_line) + len(word) + 1 <= max_length:
-            current_line += ' ' + word if current_line else word
-        else:
-            lines.append(current_line)
-            current_line = word
-    if current_line:
-        lines.append(current_line)
-    return lines
-@csrf_exempt
-def send_po_email(request, po_order_pk, recipient_list):
-    po_order = Po_orders.objects.get(po_order_pk=po_order_pk)
-    contact_name = po_order.po_supplier.contact_name  
-    subject = 'Purchase Order'
-    message = f'''Dear {contact_name},
-Please see Purchase Order from Mason attached for the specified works and amount.
-
-Ensure your claim clearly specifies the PO number and the amount being claimed against each claim category as specified in the PO to ensure there are no delays processing your claim.
-
-Best regards,
-Brian Hooke.
-    '''
-    from_email = settings.DEFAULT_FROM_EMAIL
-
-    pdf_buffer = generate_po_pdf_bytes(request, po_order_pk)
-
-    email = EmailMessage(subject, message, from_email, recipient_list)
-    email.attach(f'PO_{po_order_pk}.pdf', pdf_buffer, 'application/pdf')
-
-    po_order_details = Po_order_detail.objects.filter(po_order_pk=po_order_pk)
-    processed_quotes = set()
-    for po_order_detail in po_order_details:
-        if po_order_detail.quote is not None and po_order_detail.quote.quotes_pk not in processed_quotes:
-            quote_pdf_path = po_order_detail.quote.pdf.name
-            if default_storage.exists(quote_pdf_path):
-                with default_storage.open(quote_pdf_path, 'rb') as f:
-                    email.attach(f'Quote_{po_order_detail.quote.quotes_pk}.pdf', f.read(), 'application/pdf')
-                processed_quotes.add(po_order_detail.quote.quotes_pk)
-
-    cc_addresses = settings.EMAIL_CC.split(';')
-    email.cc = cc_addresses
-
-    try:
-        email.send()
-        po_order.po_sent = True  
-        po_order.save()
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)})
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
-
-@csrf_exempt
-def generate_po_pdf_bytes(request, po_order_pk):
-    response = generate_po_pdf(request, po_order_pk)
-    return response.content
-@csrf_exempt
-def send_po_email_view(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            po_order_pks = data.get('po_order_pks', [])
-            for po_order_pk in po_order_pks:
-                po_order = Po_orders.objects.get(po_order_pk=po_order_pk)
-                recipient_list = [po_order.po_supplier.contact_email]
-                send_po_email(request, po_order_pk, recipient_list)
-            return JsonResponse({'status': 'Emails sent'})
-        except Exception as e:
-            logger.error(f'Error in send_po_email_view: {e}')
-            return JsonResponse({'status': 'Error', 'message': str(e)}, status=500)
-    return JsonResponse({'status': 'Error', 'message': 'Invalid request method.'}, status=400)
-
-
 def view_po_by_unique_id(request, unique_id):
     """
     Public view for suppliers to access their PO via unique URL.
     Displays payment schedule table for supplier to fill out.
     """
     try:
-        po_order = Po_orders.objects.get(unique_id=unique_id)
+        po_order = Po_orders.objects.select_related(
+            'po_supplier', 'project', 'project__project_type'
+        ).get(unique_id=unique_id)
         supplier = po_order.po_supplier
         project = po_order.project
-        
-        # Get the most recent PO for this supplier/project (same as PDF view)
-        # This ensures we show details from the same PO that the PDF displays
-        most_recent_po = Po_orders.objects.filter(
-            po_supplier=supplier,
-            project=project
-        ).order_by('-created_at').first()
-        
-        if most_recent_po:
-            po_order = most_recent_po
-        
+
         # Check if construction project - use rates_based flag
-        is_construction = (project.project_type and project.project_type.rates_based == 1)
+        is_construction = bool(
+            project.project_type and project.project_type.rates_based == 1
+        )
         
         # Get all quotes for this project and supplier
         quotes = Quotes.objects.filter(
             project=project,
             contact_pk=supplier
         ).prefetch_related('quote_allocations')
-        
-        # Group allocations by item
-        from collections import defaultdict
-        import logging
-        logger = logging.getLogger(__name__)
-        
+
+        # Group every dict below by costing_pk (not the costing's item
+        # string) so two costings with the same display name in
+        # different categories can't silently collapse into one row,
+        # and so the costing_pk we send to the supplier always
+        # round-trips back to the right Costing on submit (B13).
         if is_construction:
-            # For construction: aggregate from Po_order_detail
             items_map = defaultdict(lambda: {
                 'contract_sum': Decimal('0'),
                 'contract_qty': Decimal('0'),
                 'quote_numbers': [],
-                'costing_pk': None,
-                'unit': None
+                'description': None,
+                'unit': None,
             })
-            
-            # Get all Po_order_details for this PO
-            po_details = Po_order_detail.objects.filter(po_order_pk=po_order)
-            logger.info(f"PO Public URL - PO pk={po_order.po_order_pk}, found {po_details.count()} Po_order_detail records")
-            
+
+            po_details = Po_order_detail.objects.select_related(
+                'costing', 'costing__unit', 'quote'
+            ).filter(po_order_pk=po_order)
+            logger.info(
+                f"PO Public URL - PO pk={po_order.po_order_pk}, "
+                f"found {po_details.count()} Po_order_detail records"
+            )
+
             for detail in po_details:
-                item_name = detail.costing.item
-                items_map[item_name]['costing_pk'] = detail.costing.costing_pk
-                items_map[item_name]['unit'] = detail.costing.unit or '-'
-                
-                # Sum qty and calculate contract sum (qty * rate)
+                if not detail.costing:
+                    continue
+                key = detail.costing.costing_pk
+                bucket = items_map[key]
+                bucket['description'] = detail.costing.item
+                bucket['unit'] = (
+                    str(detail.costing.unit) if detail.costing.unit else '-'
+                )
                 if detail.qty and detail.rate:
-                    items_map[item_name]['contract_sum'] += detail.qty * detail.rate
-                    items_map[item_name]['contract_qty'] += detail.qty
+                    bucket['contract_sum'] += detail.qty * detail.rate
+                    bucket['contract_qty'] += detail.qty
                 elif detail.amount:
-                    items_map[item_name]['contract_sum'] += detail.amount
-                
-                # Track quote numbers
+                    bucket['contract_sum'] += detail.amount
+
                 if detail.quote and detail.quote.supplier_quote_number:
-                    if detail.quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                        items_map[item_name]['quote_numbers'].append(detail.quote.supplier_quote_number)
+                    qn = detail.quote.supplier_quote_number
+                    if qn not in bucket['quote_numbers']:
+                        bucket['quote_numbers'].append(qn)
         else:
-            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None})
-            
+            items_map = defaultdict(lambda: {
+                'amount': Decimal('0'),
+                'quote_numbers': [],
+                'description': None,
+            })
+
             for quote in quotes:
                 for allocation in quote.quote_allocations.all():
-                    item_name = allocation.item.item
-                    items_map[item_name]['amount'] += allocation.amount
-                    items_map[item_name]['costing_pk'] = allocation.item.costing_pk
-                    
-                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+                    if not allocation.item:
+                        continue
+                    key = allocation.item.costing_pk
+                    bucket = items_map[key]
+                    bucket['description'] = allocation.item.item
+                    bucket['amount'] += allocation.amount or Decimal('0')
+
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in bucket['quote_numbers']:
+                        bucket['quote_numbers'].append(quote.supplier_quote_number)
         
-        # Get previous approved claims (bill_status = 102, approved AND invoice uploaded)
-        from core.models import Bill_allocations, Bills
+        # Get previous approved claims. We include every status from
+        # "approved + bill uploaded" (102) onward so claims that have
+        # since been pushed to Xero (104) or settled don't silently
+        # drop out of the supplier's history (B8). The set lives on
+        # the Bills model so other reports stay in sync.
         completed_invoices = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            bill_status=102
+            bill_status__gte=Bills.STATUS_PO_APPROVED_BILL_UPLOADED,
         ).order_by('bill_date', 'bill_pk')
         
-        # Build list of individual claims for expandable view
-        individual_claims = []  # List of {claim_number, bill_pk, allocations_by_item}
+        # Build list of individual claims for expandable view.
+        # Allocation totals are bucketed by costing_pk to match items_map (B13).
+        individual_claims = []
         claim_number = 1
-        
-        # Calculate previous claims by item (only status 102)
-        previous_claims_by_item = defaultdict(Decimal)
+
+        previous_claims_by_costing = defaultdict(Decimal)
         for invoice in completed_invoices:
-            # Get invoice PDF URL if available
             invoice_pdf_url = None
             if invoice.pdf and hasattr(invoice.pdf, 'url'):
                 invoice_pdf_url = invoice.pdf.url
-            
+
             claim_data = {
                 'claim_number': claim_number,
                 'bill_pk': invoice.bill_pk,
                 'invoice_pdf_url': invoice_pdf_url,
-                'allocations': {}  # item_name -> {amount, percent}
+                'allocations': {},  # costing_pk -> claim amount (float)
             }
-            allocations = Bill_allocations.objects.filter(bill_pk=invoice)
+            allocations = Bill_allocations.objects.filter(bill=invoice)
             for alloc in allocations:
-                if alloc.item:
-                    item_name = alloc.item.item
-                    # For construction: use amount if available, else qty * rate
-                    if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
-                        claim_amount = alloc.qty * alloc.rate
-                    else:
-                        claim_amount = alloc.amount or Decimal('0')
-                    previous_claims_by_item[item_name] += claim_amount
-                    claim_data['allocations'][item_name] = float(claim_amount)
+                if not alloc.item:
+                    continue
+                key = alloc.item.costing_pk
+                # For construction: use amount if available, else qty * rate
+                if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
+                    claim_amount = alloc.qty * alloc.rate
+                else:
+                    claim_amount = alloc.amount or Decimal('0')
+                previous_claims_by_costing[key] += claim_amount
+                claim_data['allocations'][key] = float(claim_amount)
             individual_claims.append(claim_data)
             claim_number += 1
-        
-        # Check for pending claim (bill_status = 100)
+
+        # Check for pending claim (bill_status = STATUS_PO_PROGRESS_SUBMITTED, 100)
         pending_invoice = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            bill_status=100
+            bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
         ).first()
-        
-        # Check for approved claim awaiting invoice upload (bill_status = 101)
+
+        # Check for approved claim awaiting invoice upload (bill_status = STATUS_PO_APPROVED_NO_BILL, 101)
         approved_invoice = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            bill_status=101
+            bill_status=Bills.STATUS_PO_APPROVED_NO_BILL,
         ).first()
-        
-        pending_claims_by_item = {}
-        approved_claims_by_item = {}
-        
+
+        pending_claims_by_costing = {}
+        approved_claims_by_costing = {}
+
         if pending_invoice:
-            allocations = Bill_allocations.objects.filter(bill_pk=pending_invoice)
-            for alloc in allocations:
+            for alloc in Bill_allocations.objects.filter(bill=pending_invoice):
                 if alloc.item:
-                    item_name = alloc.item.item
-                    pending_claims_by_item[item_name] = float(alloc.amount)
-        
+                    pending_claims_by_costing[alloc.item.costing_pk] = float(alloc.amount)
+
         if approved_invoice:
-            allocations = Bill_allocations.objects.filter(bill_pk=approved_invoice)
-            for alloc in allocations:
+            for alloc in Bill_allocations.objects.filter(bill=approved_invoice):
                 if alloc.item:
-                    item_name = alloc.item.item
-                    approved_claims_by_item[item_name] = float(alloc.amount)
+                    approved_claims_by_costing[alloc.item.costing_pk] = float(alloc.amount)
         
-        # Convert to list
         items = []
-        for item_name, data in items_map.items():
+        for costing_pk, data in items_map.items():
             if is_construction:
                 contract_sum = float(data['contract_sum'])
                 contract_qty = float(data['contract_qty'])
-                # Calculate contract rate as contract_sum / contract_qty
                 contract_rate = contract_sum / contract_qty if contract_qty > 0 else 0.0
             else:
                 contract_sum = float(data['amount'])
                 contract_qty = 0.0
                 contract_rate = 0.0
-                
-            previous_claims = float(previous_claims_by_item.get(item_name, Decimal('0')))
-            this_claim = pending_claims_by_item.get(item_name, 0.0) or approved_claims_by_item.get(item_name, 0.0)
+
+            previous_claims = float(previous_claims_by_costing.get(costing_pk, Decimal('0')))
+            this_claim = (
+                pending_claims_by_costing.get(costing_pk, 0.0)
+                or approved_claims_by_costing.get(costing_pk, 0.0)
+            )
             still_to_claim = contract_sum - previous_claims - this_claim
-            
-            # Calculate percentages
+
             previous_claims_percent = (previous_claims / contract_sum * 100) if contract_sum > 0 else 0.0
             this_claim_percent = (this_claim / contract_sum * 100) if contract_sum > 0 else 0.0
             still_to_claim_percent = (still_to_claim / contract_sum * 100) if contract_sum > 0 else 0.0
-            
-            # Build individual claim data for this item
+
             item_individual_claims = []
             for claim in individual_claims:
-                claim_amount = claim['allocations'].get(item_name, 0.0)
+                claim_amount = claim['allocations'].get(costing_pk, 0.0)
                 claim_percent = (claim_amount / contract_sum * 100) if contract_sum > 0 else 0.0
                 item_individual_claims.append({
                     'claim_number': claim['claim_number'],
                     'amount': claim_amount,
-                    'percent': claim_percent
+                    'percent': claim_percent,
                 })
-            
+
             item_data = {
-                'description': item_name,
-                'costing_pk': data['costing_pk'],
+                'description': data['description'],
+                'costing_pk': costing_pk,
                 'contract_sum': contract_sum,
                 'quote_numbers': ', '.join(data['quote_numbers']),
                 'complete_percent': 0.0,
@@ -527,13 +286,12 @@ def view_po_by_unique_id(request, unique_id):
                 'still_to_claim_percent': still_to_claim_percent,
                 'individual_claims': item_individual_claims,
             }
-            
-            # Add construction-specific fields
+
             if is_construction:
                 item_data['unit'] = data.get('unit', '-')
                 item_data['contract_qty'] = contract_qty
                 item_data['contract_rate'] = contract_rate
-            
+
             items.append(item_data)
         
         context = {
@@ -549,6 +307,11 @@ def view_po_by_unique_id(request, unique_id):
             'previous_claims_count': len(individual_claims),
             'previous_claims_range': range(1, len(individual_claims) + 1),
             'individual_claims': individual_claims,
+            # Only authenticated users (Mason staff) can approve / edit a
+            # supplier's claim. The supplier-facing page is public, so we
+            # hide the Approve/Edit-Claim buttons for anonymous viewers.
+            # The /po/<id>/approve/ endpoint also checks login server-side.
+            'is_admin': request.user.is_authenticated,
         }
         
         return render(request, 'core/po_public.html', context)
@@ -566,16 +329,17 @@ def approve_po_claim(request, unique_id):
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
-    
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Login required to approve claims.'},
+            status=401,
+        )
+
     try:
-        import json
-        from core.models import Bills, Bill_allocations, Costing
-        from decimal import Decimal
-        
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
         project = po_order.project
-        
+
         data = json.loads(request.body)
         pending_bill_pk = data.get('pending_bill_pk')
         is_edit_claim_mode = data.get('is_edit_claim_mode', False)
@@ -625,22 +389,21 @@ def approve_po_claim(request, unique_id):
                     try:
                         costing = Costing.objects.get(costing_pk=costing_pk)
                         allocation = Bill_allocations.objects.filter(
-                            bill_pk=invoice,
-                            item=costing
+                            bill=invoice,
+                            item=costing,
                         ).first()
-                        
+
                         if allocation:
                             allocation.amount = approved_amount
                             allocation.save()
                             logger.info(f"Updated allocation for costing {costing_pk}: {submitted_amount} -> {approved_amount}")
                     except Costing.DoesNotExist:
                         logger.warning(f"Costing {costing_pk} not found when updating allocation")
-        
+
         # Recalculate invoice totals from allocations (in case any were modified)
-        from django.db.models import Sum
-        totals = Bill_allocations.objects.filter(bill_pk=invoice).aggregate(
+        totals = Bill_allocations.objects.filter(bill=invoice).aggregate(
             total_net=Sum('amount'),
-            total_gst=Sum('gst_amount')
+            total_gst=Sum('gst_amount'),
         )
         invoice.total_net = totals['total_net'] or Decimal('0')
         invoice.total_gst = totals['total_gst'] or Decimal('0')
@@ -841,16 +604,12 @@ def submit_po_claim(request, unique_id):
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
-    
+
     try:
-        import json
-        from datetime import date
-        from core.models import Bill_allocations, Bills, Costing
-        
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
         project = po_order.project
-        
+
         data = json.loads(request.body)
         claims = data.get('claims', [])
         pending_bill_pk = data.get('pending_bill_pk')
@@ -858,66 +617,86 @@ def submit_po_claim(request, unique_id):
         if not claims:
             return JsonResponse({'status': 'error', 'message': 'No claims provided'}, status=400)
         
-        # Track if this is a resubmission
+        # Track if this is a resubmission.
         is_resubmission = False
-        
-        # Check if updating existing pending invoice or creating new
+        invoice = None
+
+        # Check if updating an existing pending invoice or creating a new one.
         if pending_bill_pk:
             try:
-                invoice = Bills.objects.get(
+                invoice = Bills.objects.select_for_update().get(
                     bill_pk=pending_bill_pk,
                     project=project,
                     contact_pk=supplier,
-                    bill_status=100
+                    bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
                 )
-                # This is a resubmission
                 is_resubmission = True
-                # Delete existing allocations to replace with new ones
-                Bill_allocations.objects.filter(bill_pk=invoice).delete()
             except Bills.DoesNotExist:
-                # Pending invoice not found, create new
+                # Stale pending_bill_pk (already approved or different project) —
+                # fall through to the lookup below so we don't accidentally
+                # create a second pending row for the same supplier (B15).
                 invoice = None
-        else:
-            invoice = None
-        
-        # Create new invoice if needed
+
+        # If the client didn't pass a pending_bill_pk, or the one it passed
+        # has already moved on, look up any existing pending row for this
+        # supplier+project before creating a new one.
         if not invoice:
-            invoice = Bills.objects.create(
-                project=project,
-                contact_pk=supplier,
-                bill_status=100,  # Submitted awaiting approval
-                bill_type=2,  # Progress Claim
-                bill_date=date.today(),
-                total_net=Decimal('0'),
-                total_gst=Decimal('0')
+            invoice = (
+                Bills.objects
+                .select_for_update()
+                .filter(
+                    project=project,
+                    contact_pk=supplier,
+                    bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
+                )
+                .order_by('-bill_pk')
+                .first()
             )
-        
-        # Create invoice allocations
-        total_net = Decimal('0')
-        for claim in claims:
-            costing_pk = claim.get('costing_pk')
-            amount = Decimal(str(claim.get('amount', 0)))
-            
-            if amount > 0 and costing_pk:
-                try:
-                    costing = Costing.objects.get(costing_pk=costing_pk)
+            if invoice is not None:
+                is_resubmission = True
+
+        # Atomically replace allocations on the existing pending invoice,
+        # or create a fresh one if no pending row exists. The whole
+        # delete + recreate runs inside transaction.atomic() so a mid-way
+        # failure can't leave the supplier with no allocations (B14).
+        with transaction.atomic():
+            if invoice is None:
+                invoice = Bills.objects.create(
+                    project=project,
+                    contact_pk=supplier,
+                    bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
+                    bill_type=2,  # Progress Claim
+                    bill_date=date.today(),
+                    total_net=Decimal('0'),
+                    total_gst=Decimal('0'),
+                )
+            else:
+                Bill_allocations.objects.filter(bill=invoice).delete()
+
+            total_net = Decimal('0')
+            for claim in claims:
+                costing_pk = claim.get('costing_pk')
+                amount = Decimal(str(claim.get('amount', 0)))
+
+                if amount > 0 and costing_pk:
+                    try:
+                        costing = Costing.objects.get(costing_pk=costing_pk)
+                    except Costing.DoesNotExist:
+                        logger.warning(f"Costing {costing_pk} not found")
+                        continue
                     Bill_allocations.objects.create(
-                        bill_pk=invoice,
+                        bill=invoice,
                         item=costing,
                         amount=amount,
                         gst_amount=Decimal('0.00'),
                         allocation_type=0,
-                        notes='Payment claim submitted by contractor'
+                        notes='Payment claim submitted by contractor',
                     )
                     total_net += amount
-                except Costing.DoesNotExist:
-                    logger.warning(f"Costing {costing_pk} not found")
-                    continue
-        
-        # Update invoice totals
-        invoice.total_net = total_net
-        invoice.total_gst = Decimal('0.00')
-        invoice.save()
+
+            invoice.total_net = total_net
+            invoice.total_gst = Decimal('0.00')
+            invoice.save()
         
         logger.info(f"Progress claim submitted for PO {unique_id}, Invoice {invoice.bill_pk}")
         
@@ -1028,14 +807,12 @@ def upload_bill_pdf(request, unique_id):
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
-    
+
     try:
-        from core.models import Bills
-        
         po_order = Po_orders.objects.get(unique_id=unique_id)
         supplier = po_order.po_supplier
         project = po_order.project
-        
+
         # Get the approved invoice (status 101)
         try:
             invoice = Bills.objects.get(
@@ -1165,51 +942,57 @@ def view_po_pdf_by_unique_id(request, unique_id):
     """
     Serve the saved PDF for a PO by unique_id.
     Used in iframe on the public landing page.
-    Returns the most recent PDF (by created_at) for this supplier/project.
+
+    Now that send_po_email upserts a single canonical Po_orders row per
+    (project, supplier), we just serve that one row's PDF (B9/B10).
     """
     try:
         po_order = Po_orders.objects.get(unique_id=unique_id)
-        supplier = po_order.po_supplier
-        project = po_order.project
-        
-        # Get the most recent Po_orders for this supplier and project that has a PDF
-        # Exclude both null and empty string values
-        from django.db.models import Q
-        most_recent_po = Po_orders.objects.filter(
-            po_supplier=supplier,
-            project=project
-        ).exclude(
-            Q(pdf__isnull=True) | Q(pdf='')
-        ).order_by('-created_at').first()
-        
-        if not most_recent_po or not most_recent_po.pdf or not most_recent_po.pdf.name:
-            logger.warning(f'PDF not found for PO unique_id={unique_id}, supplier={supplier}, project={project}')
-            return HttpResponse('PDF not found. Please re-send the PO email to generate a new PDF.', status=404)
-        
-        # Serve the saved PDF file
+
+        if not po_order.pdf or not po_order.pdf.name:
+            logger.warning(
+                f'PDF not found for PO unique_id={unique_id}, '
+                f'supplier={po_order.po_supplier_id}, project={po_order.project_id}'
+            )
+            return HttpResponse(
+                'PDF not found. Please re-send the PO email to generate a new PDF.',
+                status=404,
+            )
+
         try:
-            logger.info(f'Serving PDF: {most_recent_po.pdf.name}')
-            
-            # Check if file exists in storage before trying to open
-            if not most_recent_po.pdf.storage.exists(most_recent_po.pdf.name):
-                logger.warning(f'PDF file does not exist in storage: {most_recent_po.pdf.name}')
-                return HttpResponse('PDF file not found in storage. Please re-send the PO email to regenerate.', status=404)
-            
-            # Open the file explicitly before reading (required for S3)
-            most_recent_po.pdf.open('rb')
-            pdf_content = most_recent_po.pdf.read()
+            logger.info(f'Serving PDF: {po_order.pdf.name}')
+
+            if not po_order.pdf.storage.exists(po_order.pdf.name):
+                logger.warning(f'PDF file does not exist in storage: {po_order.pdf.name}')
+                return HttpResponse(
+                    'PDF file not found in storage. Please re-send the PO email to regenerate.',
+                    status=404,
+                )
+
+            po_order.pdf.open('rb')
+            pdf_content = po_order.pdf.read()
             response = HttpResponse(pdf_content, content_type='application/pdf')
-            response['Content-Disposition'] = f'inline; filename="{most_recent_po.pdf.name.split("/")[-1]}"'
-            # Close the file after reading
-            most_recent_po.pdf.close()
+            response['Content-Disposition'] = (
+                f'inline; filename="{po_order.pdf.name.split("/")[-1]}"'
+            )
+            po_order.pdf.close()
             return response
-        except FileNotFoundError as e:
-            logger.error(f'PDF file not found: {most_recent_po.pdf.name}. This may be a legacy record from before S3 storage was configured.')
-            return HttpResponse('PDF file not found. Please re-send the PO email to regenerate.', status=404)
+        except FileNotFoundError:
+            logger.error(
+                f'PDF file not found: {po_order.pdf.name}. '
+                f'May be a legacy record from before S3 storage was configured.'
+            )
+            return HttpResponse(
+                'PDF file not found. Please re-send the PO email to regenerate.',
+                status=404,
+            )
         except Exception as e:
-            logger.error(f'Error reading PDF file {most_recent_po.pdf.name}: {e}', exc_info=True)
-            return HttpResponse(f'Error reading PDF file. Please re-send the PO email to regenerate.', status=500)
-        
+            logger.error(f'Error reading PDF file {po_order.pdf.name}: {e}', exc_info=True)
+            return HttpResponse(
+                'Error reading PDF file. Please re-send the PO email to regenerate.',
+                status=500,
+            )
+
     except Po_orders.DoesNotExist:
         return HttpResponse('Purchase Order not found', status=404)
     except Exception as e:
@@ -1254,93 +1037,96 @@ def get_po_table_data_for_invoice(request, bill_pk):
             contact_pk=supplier
         ).prefetch_related('quote_allocations')
         
+        # Group by costing_pk (B13) — see view_po_by_unique_id for the
+        # rationale.
         if is_construction:
-            # For construction: aggregate from Po_order_detail
             items_map = defaultdict(lambda: {
                 'contract_sum': Decimal('0'),
                 'contract_qty': Decimal('0'),
                 'quote_numbers': [],
-                'costing_pk': None,
-                'unit': None
+                'description': None,
+                'unit': None,
             })
-            
-            # Get all Po_order_details for this PO
-            po_details = Po_order_detail.objects.select_related('costing', 'quote').filter(po_order_pk=po_order)
-            
+
+            po_details = Po_order_detail.objects.select_related(
+                'costing', 'costing__unit', 'quote'
+            ).filter(po_order_pk=po_order)
+
             for detail in po_details:
                 if not detail.costing:
-                    continue  # Skip if no costing linked
-                    
-                item_name = detail.costing.item
-                items_map[item_name]['costing_pk'] = detail.costing.costing_pk
-                # Convert unit to string (it's a ForeignKey to Units model)
-                items_map[item_name]['unit'] = str(detail.costing.unit) if detail.costing.unit else '-'
-                
-                # Sum qty and calculate contract sum (qty * rate)
+                    continue
+                key = detail.costing.costing_pk
+                bucket = items_map[key]
+                bucket['description'] = detail.costing.item
+                bucket['unit'] = (
+                    str(detail.costing.unit) if detail.costing.unit else '-'
+                )
                 if detail.qty and detail.rate:
-                    items_map[item_name]['contract_sum'] += detail.qty * detail.rate
-                    items_map[item_name]['contract_qty'] += detail.qty
+                    bucket['contract_sum'] += detail.qty * detail.rate
+                    bucket['contract_qty'] += detail.qty
                 elif detail.amount:
-                    items_map[item_name]['contract_sum'] += detail.amount
-                
-                # Track quote numbers
+                    bucket['contract_sum'] += detail.amount
+
                 if detail.quote and detail.quote.supplier_quote_number:
-                    if detail.quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                        items_map[item_name]['quote_numbers'].append(detail.quote.supplier_quote_number)
+                    qn = detail.quote.supplier_quote_number
+                    if qn not in bucket['quote_numbers']:
+                        bucket['quote_numbers'].append(qn)
         else:
-            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': [], 'costing_pk': None})
-            
+            items_map = defaultdict(lambda: {
+                'amount': Decimal('0'),
+                'quote_numbers': [],
+                'description': None,
+            })
+
             for quote in quotes:
                 for allocation in quote.quote_allocations.all():
                     if not allocation.item:
-                        continue  # Skip if no item linked
-                    item_name = allocation.item.item
-                    items_map[item_name]['amount'] += allocation.amount or Decimal('0')
-                    items_map[item_name]['costing_pk'] = allocation.item.costing_pk
-                    
-                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
-        
-        # Get all approved claims (bill_status = 102)
+                        continue
+                    key = allocation.item.costing_pk
+                    bucket = items_map[key]
+                    bucket['description'] = allocation.item.item
+                    bucket['amount'] += allocation.amount or Decimal('0')
+
+                    if quote.supplier_quote_number and quote.supplier_quote_number not in bucket['quote_numbers']:
+                        bucket['quote_numbers'].append(quote.supplier_quote_number)
+
+        # Get all approved claims. Include 102+ so claims that have
+        # advanced to 103 (paid) or 104 (sent to Xero) stay visible (B8).
         completed_invoices = Bills.objects.filter(
             project=project,
             contact_pk=supplier,
-            bill_status=102
+            bill_status__gte=Bills.STATUS_PO_APPROVED_BILL_UPLOADED,
         ).order_by('bill_date', 'bill_pk')
-        
-        # Build list of individual claims
+
         individual_claims = []
         claim_number = 1
-        
-        # Calculate previous claims by item (only status 102)
-        previous_claims_by_item = defaultdict(Decimal)
+        previous_claims_by_costing = defaultdict(Decimal)
         for inv in completed_invoices:
             invoice_pdf_url = None
             if inv.pdf and hasattr(inv.pdf, 'url'):
                 invoice_pdf_url = inv.pdf.url
-            
+
             claim_data = {
                 'claim_number': claim_number,
                 'bill_pk': inv.bill_pk,
                 'invoice_pdf_url': invoice_pdf_url,
-                'allocations': {}
+                'allocations': {},
             }
-            allocations = Bill_allocations.objects.filter(bill_pk=inv)
-            for alloc in allocations:
-                if alloc.item:
-                    item_name = alloc.item.item
-                    if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
-                        claim_amount = alloc.qty * alloc.rate
-                    else:
-                        claim_amount = alloc.amount or Decimal('0')
-                    previous_claims_by_item[item_name] += claim_amount
-                    claim_data['allocations'][item_name] = float(claim_amount)
+            for alloc in Bill_allocations.objects.filter(bill=inv):
+                if not alloc.item:
+                    continue
+                key = alloc.item.costing_pk
+                if is_construction and alloc.amount is None and alloc.qty and alloc.rate:
+                    claim_amount = alloc.qty * alloc.rate
+                else:
+                    claim_amount = alloc.amount or Decimal('0')
+                previous_claims_by_costing[key] += claim_amount
+                claim_data['allocations'][key] = float(claim_amount)
             individual_claims.append(claim_data)
             claim_number += 1
-        
-        # Convert to list
+
         items = []
-        for item_name, data in items_map.items():
+        for costing_pk, data in items_map.items():
             if is_construction:
                 contract_sum = float(data['contract_sum'])
                 contract_qty = float(data['contract_qty'])
@@ -1349,29 +1135,27 @@ def get_po_table_data_for_invoice(request, bill_pk):
                 contract_sum = float(data['amount'])
                 contract_qty = 0.0
                 contract_rate = 0.0
-                
-            previous_claims = float(previous_claims_by_item.get(item_name, Decimal('0')))
+
+            previous_claims = float(previous_claims_by_costing.get(costing_pk, Decimal('0')))
             still_to_claim = contract_sum - previous_claims
-            
-            # Calculate percentages
+
             previous_claims_percent = (previous_claims / contract_sum * 100) if contract_sum > 0 else 0.0
             still_to_claim_percent = (still_to_claim / contract_sum * 100) if contract_sum > 0 else 0.0
-            complete_percent = previous_claims_percent  # Complete = what's been claimed
-            
-            # Build individual claim data for this item
+            complete_percent = previous_claims_percent
+
             item_individual_claims = []
             for claim in individual_claims:
-                claim_amount = claim['allocations'].get(item_name, 0.0)
+                claim_amount = claim['allocations'].get(costing_pk, 0.0)
                 claim_percent = (claim_amount / contract_sum * 100) if contract_sum > 0 else 0.0
                 item_individual_claims.append({
                     'claim_number': claim['claim_number'],
                     'amount': claim_amount,
-                    'percent': claim_percent
+                    'percent': claim_percent,
                 })
-            
+
             item_data = {
-                'description': item_name,
-                'costing_pk': data['costing_pk'],
+                'description': data['description'],
+                'costing_pk': costing_pk,
                 'contract_sum': contract_sum,
                 'quote_numbers': ', '.join(data['quote_numbers']),
                 'complete_percent': complete_percent,
@@ -1381,13 +1165,12 @@ def get_po_table_data_for_invoice(request, bill_pk):
                 'still_to_claim_percent': still_to_claim_percent,
                 'individual_claims': item_individual_claims,
             }
-            
-            # Add construction-specific fields
+
             if is_construction:
                 item_data['unit'] = data.get('unit', '-')
                 item_data['contract_qty'] = contract_qty
                 item_data['contract_rate'] = contract_rate
-            
+
             items.append(item_data)
         
         logger.info(f"Returning PO data: {len(items)} items, {len(individual_claims)} claims")
@@ -1412,28 +1195,3 @@ def get_po_table_data_for_invoice(request, bill_pk):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-def get_quotes_by_supplier(request):
-    supplier_name = request.GET.get('supplier', '')
-    contact = Contacts.objects.filter(contact_name=supplier_name).first()
-    if not contact:
-        return JsonResponse({"error": "Supplier not found"}, status=404)
-    quotes = Quotes.objects.filter(contact_pk=contact).prefetch_related(
-        Prefetch('quote_allocations_set', queryset=Quote_allocations.objects.all(), to_attr='fetched_allocations')  
-    )
-    quotes_data = []
-    for quote in quotes:
-        quote_info = {
-            "quotes_pk": quote.quotes_pk,
-            "supplier_quote_number": quote.supplier_quote_number,
-            "total_cost": str(quote.total_cost),  
-            "quote_allocations": [
-                {
-                    "quote_allocations_pk": allocation.quote_allocations_pk,
-                    "item": allocation.item.item,  
-                    "amount": str(allocation.amount),
-                    "notes": allocation.notes or ""
-                } for allocation in quote.fetched_allocations  
-            ]
-        }
-        quotes_data.append(quote_info)
-    return JsonResponse(quotes_data, safe=False)

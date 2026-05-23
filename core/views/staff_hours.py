@@ -2601,3 +2601,187 @@ def debug_allocations(request):
         
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@login_required
+def get_staff_hours_report(request):
+    """
+    Project × Employee pivot of project-allocated staff hours over a
+    date range, with both an hours total and a labour-cost total per
+    cell.
+
+    Query params:
+      xero_instance_id (required) — restricts to one company's staff
+                                    and projects
+      date_from        (required, YYYY-MM-DD)
+      date_to          (required, YYYY-MM-DD)
+
+    Cost is computed at the rate that applied on the day the hours
+    were logged (per StaffHoursAllocations.staff_hours.date), pulled
+    from EmployeePayRate just like the daily cost in get_allocations.
+    Pay rates are pre-loaded once per employee then resolved
+    in-memory to keep the bulk pivot cheap.
+
+    Only PROJECT-type allocations are reported. Unchargeable / Other
+    Chargeable / R&D never had a project to pivot on. Rows
+    (projects) and columns (employees) with no non-zero cells are
+    omitted from the response — the frontend doesn't need them.
+    """
+    try:
+        xero_instance_id = request.GET.get('xero_instance_id')
+        date_from_str = request.GET.get('date_from')
+        date_to_str = request.GET.get('date_to')
+
+        if not all([xero_instance_id, date_from_str, date_to_str]):
+            return JsonResponse(
+                {'status': 'error',
+                 'message': 'xero_instance_id, date_from and date_to are required'},
+                status=400,
+            )
+
+        try:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Dates must be YYYY-MM-DD'},
+                status=400,
+            )
+        if date_from > date_to:
+            return JsonResponse(
+                {'status': 'error', 'message': 'date_from must be on or before date_to'},
+                status=400,
+            )
+
+        allocations = (
+            StaffHoursAllocations.objects
+            .filter(
+                allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+                project__isnull=False,
+                staff_hours__employee__xero_instance_id=xero_instance_id,
+                staff_hours__date__gte=date_from,
+                staff_hours__date__lte=date_to,
+            )
+            .select_related('staff_hours__employee', 'project')
+        )
+
+        # Pre-load every relevant employee's ordinary pay rates once,
+        # ordered most-recent-first so we can short-circuit the
+        # "applicable rate as of date" lookup with a single linear
+        # scan.
+        employee_ids = {a.staff_hours.employee_id for a in allocations}
+        pay_rates_by_employee = {}
+        if employee_ids:
+            for rate in EmployeePayRate.objects.filter(
+                employee_id__in=employee_ids,
+                is_ordinary_rate=True,
+            ).order_by('-effective_date'):
+                pay_rates_by_employee.setdefault(rate.employee_id, []).append(rate)
+
+        def _hourly_rate_for(employee_id, day):
+            for r in pay_rates_by_employee.get(employee_id, ()):
+                if r.effective_date and r.effective_date <= day:
+                    if r.rate_per_unit:
+                        return float(r.rate_per_unit)
+                    if r.annual_salary and r.units_per_week:
+                        weekly_hours = float(r.units_per_week)
+                        if weekly_hours > 0:
+                            return float(r.annual_salary) / (weekly_hours * 52)
+                    # First applicable rate had no usable amount — keep
+                    # walking earlier rates rather than silently zero.
+                    continue
+            return None
+
+        cells = {}        # key: (project_pk, employee_pk) -> {'hours', 'cost'}
+        employees_seen = {}  # employee_pk -> name
+        projects_seen = {}   # project_pk  -> name
+
+        for alloc in allocations:
+            hours = float(alloc.hours or 0)
+            if hours == 0:
+                # Zero rows can creep in via edits — skip so the
+                # output stays "non-zero only".
+                continue
+            employee = alloc.staff_hours.employee
+            project = alloc.project
+            day = alloc.staff_hours.date
+
+            rate = _hourly_rate_for(employee.employee_pk, day)
+            cost = hours * rate if rate is not None else 0.0
+
+            key = (project.projects_pk, employee.employee_pk)
+            cell = cells.get(key)
+            if cell is None:
+                cell = {'hours': 0.0, 'cost': 0.0}
+                cells[key] = cell
+            cell['hours'] += hours
+            cell['cost'] += cost
+
+            employees_seen.setdefault(employee.employee_pk, employee.name)
+            projects_seen.setdefault(project.projects_pk, project.project)
+
+        # Drop rows / columns whose totals are all zero (defensive —
+        # we already skipped zero hours, so this only catches the
+        # edge case of equal-and-opposite entries summing to zero).
+        emp_totals = {pk: {'hours': 0.0, 'cost': 0.0} for pk in employees_seen}
+        proj_totals = {pk: {'hours': 0.0, 'cost': 0.0} for pk in projects_seen}
+        for (proj_pk, emp_pk), v in cells.items():
+            emp_totals[emp_pk]['hours'] += v['hours']
+            emp_totals[emp_pk]['cost'] += v['cost']
+            proj_totals[proj_pk]['hours'] += v['hours']
+            proj_totals[proj_pk]['cost'] += v['cost']
+
+        active_employee_ids = {pk for pk, t in emp_totals.items() if t['hours'] > 0}
+        active_project_ids = {pk for pk, t in proj_totals.items() if t['hours'] > 0}
+
+        employees = sorted(
+            ({'employee_pk': pk, 'name': employees_seen[pk]} for pk in active_employee_ids),
+            key=lambda e: e['name'].lower(),
+        )
+        projects = sorted(
+            ({'project_pk': pk, 'name': projects_seen[pk]} for pk in active_project_ids),
+            key=lambda p: p['name'].lower(),
+        )
+
+        # Use string keys so the JSON object survives the round-trip
+        # cleanly (frontend does composite "p_e" lookups).
+        matrix = {
+            f"{proj_pk}_{emp_pk}": {
+                'hours': round(v['hours'], 2),
+                'cost': round(v['cost'], 2),
+            }
+            for (proj_pk, emp_pk), v in cells.items()
+            if proj_pk in active_project_ids and emp_pk in active_employee_ids
+        }
+
+        grand_hours = sum(t['hours'] for pk, t in proj_totals.items() if pk in active_project_ids)
+        grand_cost = sum(t['cost'] for pk, t in proj_totals.items() if pk in active_project_ids)
+
+        return JsonResponse({
+            'status': 'success',
+            'date_from': date_from.isoformat(),
+            'date_to': date_to.isoformat(),
+            'employees': employees,
+            'projects': projects,
+            'matrix': matrix,
+            'totals': {
+                'by_employee': {
+                    str(pk): {'hours': round(t['hours'], 2), 'cost': round(t['cost'], 2)}
+                    for pk, t in emp_totals.items() if pk in active_employee_ids
+                },
+                'by_project': {
+                    str(pk): {'hours': round(t['hours'], 2), 'cost': round(t['cost'], 2)}
+                    for pk, t in proj_totals.items() if pk in active_project_ids
+                },
+                'grand': {
+                    'hours': round(grand_hours, 2),
+                    'cost': round(grand_cost, 2),
+                },
+            },
+        })
+
+    except Exception as e:
+        logger.exception("Error building staff hours report")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

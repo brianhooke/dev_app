@@ -416,6 +416,9 @@ Backend Endpoints:
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="holidays-tab" data-bs-toggle="tab" data-bs-target="#holidays" type="button" role="tab">Public Holidays</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="report-tab" data-bs-toggle="tab" data-bs-target="#report" type="button" role="tab">Report</button>
+            </li>
         </ul>
 
         <!-- Tab Content -->
@@ -793,6 +796,36 @@ Backend Endpoints:
                     </div>
                 </div>
             </div>
+
+            <!-- Report Tab -->
+            <div class="tab-pane fade" id="report" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="reusable-table-title">Project &times; Staff Report</div>
+                    <div class="d-flex align-items-center" style="gap: 8px;">
+                        <label for="reportDateFrom" style="font-size: 12px; margin: 0;">From</label>
+                        <input type="date" id="reportDateFrom" class="form-control form-control-sm" style="width: 140px; height: 28px; font-size: 12px;">
+                        <label for="reportDateTo" style="font-size: 12px; margin: 0;">To</label>
+                        <input type="date" id="reportDateTo" class="form-control form-control-sm" style="width: 140px; height: 28px; font-size: 12px;">
+                        <button id="reportRefreshBtn" class="btn btn-sm btn-outline-primary" style="height: 28px; font-size: 12px;">Refresh</button>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Report unit toggle">
+                            <button type="button" id="reportUnitHoursBtn" class="btn btn-outline-secondary active" style="height: 28px; font-size: 12px;">Hours</button>
+                            <button type="button" id="reportUnitDollarsBtn" class="btn btn-outline-secondary" style="height: 28px; font-size: 12px;">$</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="reportStatus" style="font-size: 12px; color: var(--manila-text-muted); margin-bottom: 4px;"></div>
+                <div class="reusable-table-container" style="overflow: auto; max-height: calc(100vh - 280px);">
+                    <table id="reportTable" class="reusable-table">
+                        <thead id="reportTableHead">
+                            <tr><th>Project</th></tr>
+                        </thead>
+                        <tbody id="reportTableBody">
+                            <tr><td style="text-align: center; padding: 40px; color: var(--manila-text-muted);">Select a Xero instance and date range, then click Refresh.</td></tr>
+                        </tbody>
+                        <tfoot id="reportTableFoot"></tfoot>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -817,11 +850,13 @@ Backend Endpoints:
     const mainContent = document.getElementById('mainContent');
     const statusFilter = document.getElementById('statusFilter');
     
-    // Allocation type constants
+    // Allocation type constants. Keep these in sync with
+    // StaffHoursAllocations.ALLOCATION_TYPE_* in core/models.py.
     const ALLOC_TYPE = {
         PROJECT: 1,
         UNCHARGEABLE: 2,
-        OTHER_CHARGEABLE: 3
+        OTHER_CHARGEABLE: 3,
+        R_AND_D: 4
     };
     
     // Standardized error message extraction
@@ -912,6 +947,15 @@ Backend Endpoints:
         // Xero instance change
         xeroInstanceSelect.addEventListener('change', function() {
             currentXeroInstanceId = this.value;
+            // The report pivot is per-instance — drop any cached
+            // pivot so switching companies doesn't show stale data.
+            reportData = null;
+            const reportTbody = document.getElementById('reportTableBody');
+            if (reportTbody) {
+                reportTbody.innerHTML = '<tr><td style="text-align: center; padding: 40px; color: var(--manila-text-muted);">Click Refresh to load the report.</td></tr>';
+            }
+            const reportStatus = document.getElementById('reportStatus');
+            if (reportStatus) reportStatus.textContent = '';
             if (currentXeroInstanceId) {
                 refreshDataBtn.disabled = false;
                 loadAllData();
@@ -932,7 +976,173 @@ Backend Endpoints:
         statusFilter.addEventListener('change', function() {
             loadEmployees();
         });
+
+        setupReportTab();
     }
+
+    // ---- Report tab ---------------------------------------------------
+    //
+    // Project x Staff pivot of project-allocated hours over a date
+    // range. The toggle flips the table cells between hours and labour
+    // dollars (cost = hours * pay_rate_on_the_day, sourced from
+    // EmployeePayRate at the same date the hours were logged).
+    //
+    // Data structure expected from /core/staff_hours/report/:
+    //   employees: [{employee_pk, name}]   already non-empty
+    //   projects:  [{project_pk, name}]    already non-empty
+    //   matrix:    {"<project_pk>_<employee_pk>": {hours, cost}}
+    //   totals:    {by_employee, by_project, grand}
+    let reportData = null;
+    let reportUnit = 'hours'; // 'hours' or 'dollars'
+
+    function setupReportTab() {
+        const fromInput = document.getElementById('reportDateFrom');
+        const toInput   = document.getElementById('reportDateTo');
+        const refreshBtn = document.getElementById('reportRefreshBtn');
+        const hoursBtn  = document.getElementById('reportUnitHoursBtn');
+        const dollarsBtn = document.getElementById('reportUnitDollarsBtn');
+        if (!fromInput || !toInput || !refreshBtn) return;
+
+        // Defaults: 1-Jul-25 to today.
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0, 10);
+        fromInput.value = '2025-07-01';
+        toInput.value = todayStr;
+
+        refreshBtn.addEventListener('click', loadReport);
+
+        // Refresh automatically the first time the tab is opened so the
+        // user sees data without having to click.
+        const reportTabBtn = document.getElementById('report-tab');
+        if (reportTabBtn) {
+            reportTabBtn.addEventListener('click', function() {
+                if (currentXeroInstanceId && reportData === null) loadReport();
+            });
+        }
+
+        hoursBtn.addEventListener('click', function() {
+            if (reportUnit === 'hours') return;
+            reportUnit = 'hours';
+            hoursBtn.classList.add('active');
+            dollarsBtn.classList.remove('active');
+            renderReport();
+        });
+        dollarsBtn.addEventListener('click', function() {
+            if (reportUnit === 'dollars') return;
+            reportUnit = 'dollars';
+            dollarsBtn.classList.add('active');
+            hoursBtn.classList.remove('active');
+            renderReport();
+        });
+    }
+
+    function loadReport() {
+        const fromInput = document.getElementById('reportDateFrom');
+        const toInput   = document.getElementById('reportDateTo');
+        const status    = document.getElementById('reportStatus');
+        const tbody     = document.getElementById('reportTableBody');
+
+        if (!currentXeroInstanceId) {
+            status.textContent = 'Select a Xero instance to load the report.';
+            return;
+        }
+        const dateFrom = fromInput.value;
+        const dateTo   = toInput.value;
+        if (!dateFrom || !dateTo) {
+            status.textContent = 'Please pick both a From and To date.';
+            return;
+        }
+        status.textContent = 'Loading...';
+        tbody.innerHTML = '<tr><td style="text-align:center; padding: 40px; color: var(--manila-text-muted);">Loading...</td></tr>';
+
+        const url = `/core/staff_hours/report/?xero_instance_id=${encodeURIComponent(currentXeroInstanceId)}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
+        fetch(url, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    status.textContent = 'Error: ' + (data.message || 'failed to load report');
+                    tbody.innerHTML = '';
+                    return;
+                }
+                reportData = data;
+                renderReport();
+            })
+            .catch(err => {
+                status.textContent = 'Error: ' + err.message;
+                tbody.innerHTML = '';
+            });
+    }
+
+    function renderReport() {
+        const status = document.getElementById('reportStatus');
+        const thead  = document.getElementById('reportTableHead');
+        const tbody  = document.getElementById('reportTableBody');
+        const tfoot  = document.getElementById('reportTableFoot');
+        if (!reportData) return;
+
+        const { employees, projects, matrix, totals } = reportData;
+        const isDollars = reportUnit === 'dollars';
+
+        if (!projects.length || !employees.length) {
+            thead.innerHTML = '<tr><th>Project</th></tr>';
+            tbody.innerHTML = '<tr><td style="text-align:center; padding: 40px; color: var(--manila-text-muted);">No project hours in this date range.</td></tr>';
+            tfoot.innerHTML = '';
+            status.textContent = `${reportData.date_from} \u2192 ${reportData.date_to}: no project allocations.`;
+            return;
+        }
+
+        // Header row
+        let headHtml = '<tr><th style="text-align: left; min-width: 200px;">Project</th>';
+        employees.forEach(e => {
+            headHtml += `<th style="text-align: right; min-width: 90px;">${escapeHtml(e.name)}</th>`;
+        });
+        headHtml += '<th style="text-align: right; min-width: 90px; background: var(--manila-light);">Total</th></tr>';
+        thead.innerHTML = headHtml;
+
+        // Body
+        let bodyHtml = '';
+        projects.forEach(p => {
+            bodyHtml += `<tr><td style="text-align: left;">${escapeHtml(p.name)}</td>`;
+            employees.forEach(e => {
+                const cell = matrix[`${p.project_pk}_${e.employee_pk}`];
+                bodyHtml += `<td style="text-align: right;">${formatCell(cell, isDollars)}</td>`;
+            });
+            const projTotal = totals.by_project[String(p.project_pk)];
+            bodyHtml += `<td style="text-align: right; font-weight: 600; background: var(--manila-light);">${formatCell(projTotal, isDollars)}</td>`;
+            bodyHtml += '</tr>';
+        });
+        tbody.innerHTML = bodyHtml;
+
+        // Footer (column totals)
+        let footHtml = '<tr style="font-weight: 600; background: var(--manila-light);">';
+        footHtml += '<td style="text-align: left;">Total</td>';
+        employees.forEach(e => {
+            const empTotal = totals.by_employee[String(e.employee_pk)];
+            footHtml += `<td style="text-align: right;">${formatCell(empTotal, isDollars)}</td>`;
+        });
+        footHtml += `<td style="text-align: right;">${formatCell(totals.grand, isDollars)}</td>`;
+        footHtml += '</tr>';
+        tfoot.innerHTML = footHtml;
+
+        status.textContent = `${reportData.date_from} \u2192 ${reportData.date_to} \u00B7 ${projects.length} project${projects.length === 1 ? '' : 's'}, ${employees.length} staff`;
+    }
+
+    function formatCell(cell, isDollars) {
+        if (!cell) return '';
+        const value = isDollars ? cell.cost : cell.hours;
+        if (!value) return '';
+        if (isDollars) {
+            return '$' + value.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        return value.toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, function(c) {
+            return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c];
+        });
+    }
+    // ---- end Report tab ----------------------------------------------
     
     function showLoading() {
         loadingIndicator.classList.remove('d-none');
@@ -2359,6 +2569,7 @@ Backend Endpoints:
                     <option value="${ALLOC_TYPE.PROJECT}" ${allocType == ALLOC_TYPE.PROJECT ? 'selected' : ''}>Project</option>
                     <option value="${ALLOC_TYPE.UNCHARGEABLE}" ${allocType == ALLOC_TYPE.UNCHARGEABLE ? 'selected' : ''}>Unchargeable</option>
                     <option value="${ALLOC_TYPE.OTHER_CHARGEABLE}" ${allocType == ALLOC_TYPE.OTHER_CHARGEABLE ? 'selected' : ''}>Other Chargeable</option>
+                    <option value="${ALLOC_TYPE.R_AND_D}" ${allocType == ALLOC_TYPE.R_AND_D ? 'selected' : ''}>R&amp;D</option>
                 </select>
             </td>
             <td style="padding: 2px;">
@@ -2537,10 +2748,21 @@ Backend Endpoints:
         }
     }
     
+    // Local fallback for the human-readable type name when the
+    // backend hasn't provided allocation_type_display. Prefer the
+    // server's value when it's present; this just keeps the table
+    // sensible during in-memory editing.
+    const ALLOC_TYPE_LABELS = {
+        [ALLOC_TYPE.PROJECT]: 'Project',
+        [ALLOC_TYPE.UNCHARGEABLE]: 'Unchargeable',
+        [ALLOC_TYPE.OTHER_CHARGEABLE]: 'Other Chargeable',
+        [ALLOC_TYPE.R_AND_D]: 'R&D'
+    };
+
     function createDisplayRow(allocation) {
         const tr = document.createElement('tr');
         const allocType = allocation.allocation_type || ALLOC_TYPE.PROJECT;
-        const typeName = allocation.allocation_type_display || (allocType === ALLOC_TYPE.PROJECT ? 'Project' : allocType === ALLOC_TYPE.UNCHARGEABLE ? 'Unchargeable' : 'Other Chargeable');
+        const typeName = allocation.allocation_type_display || ALLOC_TYPE_LABELS[allocType] || 'Project';
         
         let details = '';
         if (allocType === ALLOC_TYPE.PROJECT) {
@@ -2605,6 +2827,9 @@ Backend Endpoints:
                     }
                 } else if (a.allocation_type === ALLOC_TYPE.UNCHARGEABLE || a.allocation_type_display === 'Unchargeable') {
                     label = `<span class="text-secondary">Unchargeable</span>`;
+                    if (a.note) label += ` <span class="text-muted">(${a.note})</span>`;
+                } else if (a.allocation_type === ALLOC_TYPE.R_AND_D || a.allocation_type_display === 'R&D') {
+                    label = `<span class="text-warning">R&amp;D</span>`;
                     if (a.note) label += ` <span class="text-muted">(${a.note})</span>`;
                 } else {
                     label = `<span class="text-info">Other Chargeable</span>`;

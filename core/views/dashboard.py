@@ -41,7 +41,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from core.models import Contacts, SPVData, XeroInstances, Bills, Projects, Bill_allocations, Categories, Costing, Quotes, Quote_allocations, Po_orders, Po_order_detail, Units
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -1511,33 +1511,60 @@ def send_po_email(request, project_pk, supplier_pk):
         
         # Calculate total
         total_amount = sum(item['amount'] for item in items)
-        
-        # Create Po_orders entry with unique URL (before PDF generation)
-        unique_id = str(uuid.uuid4())
-        po_order = Po_orders.objects.create(
-            po_supplier=supplier,
-            project=project,
-            unique_id=unique_id,
-            po_sent=True
-        )
-        
-        # Create Po_order_detail records for each quote allocation
+
+        # Upsert: if a PO already exists for this (project, supplier),
+        # reuse the same row + unique_id + URL, and refresh its line
+        # items + PDF in place. This keeps any existing supplier link
+        # working, avoids accumulating orphan rows on every re-send,
+        # and avoids B9 (the old "always show the latest" override). (B10)
         from datetime import date
-        for quote in quotes:
-            for allocation in quote.quote_allocations.all():
-                Po_order_detail.objects.create(
-                    po_order_pk=po_order,
-                    date=date.today(),
-                    costing=allocation.item,
-                    quote=quote,
-                    amount=allocation.amount,
-                    qty=allocation.qty if hasattr(allocation, 'qty') and allocation.qty else None,
-                    unit=allocation.item.unit if hasattr(allocation.item, 'unit') else None,
-                    rate=allocation.rate if hasattr(allocation, 'rate') and allocation.rate else None,
-                    variation_note=None
+        with transaction.atomic():
+            po_order = (
+                Po_orders.objects
+                .select_for_update()
+                .filter(po_supplier=supplier, project=project)
+                .first()
+            )
+            if po_order is None:
+                po_order = Po_orders.objects.create(
+                    po_supplier=supplier,
+                    project=project,
+                    unique_id=str(uuid.uuid4()),
+                    po_sent=False,
                 )
-        
-        logger.info(f"Created Po_order with {Po_order_detail.objects.filter(po_order_pk=po_order).count()} detail records")
+            else:
+                # Make sure we always have a unique_id (older rows may not).
+                if not po_order.unique_id:
+                    po_order.unique_id = str(uuid.uuid4())
+                    po_order.save(update_fields=['unique_id', 'updated_at'])
+                # Drop any prior line items so the new ones are authoritative.
+                Po_order_detail.objects.filter(po_order_pk=po_order).delete()
+
+            unique_id = po_order.unique_id
+
+            # Refresh line items from the supplier's current quote allocations.
+            for quote in quotes:
+                for allocation in quote.quote_allocations.all():
+                    if not allocation.item:
+                        continue
+                    Po_order_detail.objects.create(
+                        po_order_pk=po_order,
+                        date=date.today(),
+                        costing=allocation.item,
+                        quote=quote,
+                        amount=allocation.amount,
+                        qty=allocation.qty if allocation.qty else None,
+                        # Costing.unit is a Units FK; coerce to its string
+                        # representation since Po_order_detail.unit is a CharField (B22).
+                        unit=str(allocation.item.unit) if allocation.item.unit else None,
+                        rate=allocation.rate if allocation.rate else None,
+                        variation_note=None,
+                    )
+
+        logger.info(
+            f"Po_order pk={po_order.po_order_pk} now has "
+            f"{Po_order_detail.objects.filter(po_order_pk=po_order).count()} detail records"
+        )
         
         # Generate URL dynamically from the request
         # This ensures the URL matches the environment (local/AWS) automatically
@@ -1681,15 +1708,21 @@ Mason'''
             cc_addresses = settings.EMAIL_CC.split(';')
             email.cc = cc_addresses
         
-        # Send email
+        # Send email. Only mark the row as sent if the send actually
+        # succeeds, otherwise the dashboard would show "✓ Sent" for a
+        # PO that never reached the supplier (B11). status mirrors
+        # po_sent and lets us represent richer lifecycle states (B24).
         email.send()
-        
+        po_order.po_sent = True
+        po_order.status = Po_orders.STATUS_SENT
+        po_order.save(update_fields=['po_sent', 'status', 'updated_at'])
+
         logger.info(f"PO email sent to {supplier.email} for project {project.project}")
-        
+
         return JsonResponse({
             'status': 'success',
             'message': f'Purchase order sent to {supplier.email}',
-            'pdf_url': po_order.pdf.url if po_order.pdf else None
+            'pdf_url': po_order.pdf.url if po_order.pdf else None,
         })
         
     except Projects.DoesNotExist:

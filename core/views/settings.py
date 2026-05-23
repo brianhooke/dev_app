@@ -43,6 +43,7 @@ def get_project_types(request):
                 'xero_instance_pk': pt.xero_instance.xero_instance_pk if pt.xero_instance else None,
                 'xero_instance_name': pt.xero_instance.xero_name if pt.xero_instance else None,
                 'rates_based': pt.rates_based,
+                'qs': bool(pt.qs),
                 'archived': pt.archived,
                 'stocktake': pt.stocktake or 0,
             })
@@ -112,6 +113,9 @@ def create_project_type(request):
         project_type_name = data.get('project_type', '').strip()
         xero_instance_pk = data.get('xero_instance_pk')
         rates_based = data.get('rates_based', 0)
+        # qs flag — defaults to True (existing behaviour) when the
+        # request omits the field, so old clients keep working.
+        qs = bool(data.get('qs', True))
         
         if not project_type_name:
             return JsonResponse({
@@ -141,9 +145,10 @@ def create_project_type(request):
         project_type = ProjectTypes.objects.create(
             project_type=project_type_name,
             xero_instance=xero_instance,
-            rates_based=rates_based
+            rates_based=rates_based,
+            qs=qs,
         )
-        
+
         return JsonResponse({
             'status': 'success',
             'message': 'Project type created successfully',
@@ -153,6 +158,7 @@ def create_project_type(request):
                 'xero_instance_pk': project_type.xero_instance.xero_instance_pk if project_type.xero_instance else None,
                 'xero_instance_name': project_type.xero_instance.xero_name if project_type.xero_instance else None,
                 'rates_based': project_type.rates_based,
+                'qs': bool(project_type.qs),
             }
         })
         
@@ -298,6 +304,39 @@ def update_project_type_rates_based(request, project_type_pk):
         return JsonResponse({
             'status': 'error',
             'message': f'Error updating rates based: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_project_type_qs(request, project_type_pk):
+    """
+    Toggle the QS flag for a project type. When False the HC-claim
+    editor and report hide the QS columns for projects of this type.
+    """
+    try:
+        data = json.loads(request.body)
+        qs = data.get('qs')
+        if qs not in [True, False, 0, 1]:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid qs value. Must be true or false.'
+            }, status=400)
+        project_type = get_object_or_404(ProjectTypes, pk=project_type_pk)
+        project_type.qs = bool(qs)
+        project_type.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'QS flag updated successfully',
+            'qs': bool(project_type.qs),
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        logger.error(f"Error updating project type qs: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error updating QS flag: {str(e)}'
         }, status=500)
 
 

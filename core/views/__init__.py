@@ -35,11 +35,14 @@ from .bills import (
     get_bill_allocations
 )
 
-# PO views
+# PO views.
+# The legacy create/generate/send-* endpoints (and the obsolete
+# get_quotes_by_supplier helper) were deleted as part of the audit
+# fix-pass — see core/views/pos.py header.
 from .pos import (
-    create_po_order, generate_po_pdf, wrap_text,
-    send_po_email, generate_po_pdf_bytes, send_po_email_view, view_po_by_unique_id, view_po_pdf_by_unique_id, submit_po_claim, approve_po_claim, upload_bill_pdf, get_po_table_data_for_invoice,
-    get_quotes_by_supplier
+    po_view, view_po_by_unique_id, view_po_pdf_by_unique_id,
+    submit_po_claim, approve_po_claim, upload_bill_pdf,
+    get_po_table_data_for_invoice,
 )
 
 # Claims views - now imported from construction app for backward compatibility

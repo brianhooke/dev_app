@@ -13,7 +13,7 @@ from django.http import HttpResponse, JsonResponse
 from core.models import (
     Categories, Contacts, Quotes, Costing, Quote_allocations,
     DesignCategories, PlanPdfs, ReportPdfs, ReportCategories,
-    Po_globals, Po_orders, Po_order_detail, SPVData, Letterhead,
+    Po_orders, Po_order_detail, SPVData, Letterhead,
     Bills, Bill_allocations, HC_claims, HC_claim_allocations,
     Projects, Hc_variation, Hc_variation_allocations
 )
