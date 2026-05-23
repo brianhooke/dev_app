@@ -1,7 +1,54 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 23 May 2026 (after v250 deploy)
+**Last updated:** 23 May 2026 (v250 commit pushed; v250 deploy FAILED → rolled back to Feb 7 build)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
+
+---
+
+## ⚠ URGENT — Deploy state right now
+
+- **Live on EB**: `app-ALL_IN_ONE_WORKING_VERSION-460-g513d-260207_222940776796` (commit `513d…`, Feb 7 2026). This was rolled back to manually after v250 crash-looped.
+- **GitHub `main`**: at v250 (commit `894ff43`). Includes all priority-queue (P-1..P-12) and Section 3 critical fixes documented below.
+- **The two are out of sync.** The next session **must** reconcile schema drift on RDS before re-deploying main.
+
+### What happened
+
+The v250 deploy uploaded fine and EB reported "Environment update completed successfully", but the gunicorn container crash-looped on `start.sh` migrate step:
+
+```
+psycopg2.errors.DuplicateTable: relation "core_invoices" already exists
+django.db.utils.ProgrammingError: relation "core_invoices" already exists
+```
+
+The migration that hit this is whichever one Django decided to apply first against RDS. The error means RDS has the `core_invoices` table but `django_migrations` does not have the corresponding `core.<NNNN>` row marked applied.
+
+**Important context:**
+
+- There were **zero migration file changes between v249 and v250** (`git diff 8777b06..HEAD -- 'core/migrations/' 'construction/migrations/'` is empty), so v250 didn't add any migration that would explain this.
+- The previously deployed EB version (`460-g513d`, Feb 7) ran the same `start.sh` against the same RDS without crashing. So either (a) Feb 7's container was crash-looping silently and the user never noticed because requests went somewhere stale, or (b) the RDS schema/migration state changed since Feb 7 (`migrate --fake` somewhere, restored backup, manual `RENAME TABLE`, partial run of `0037_rename_invoice_to_bill`, etc.).
+- The user rotated `RDS_PASSWORD` earlier today via `docs/SECRET_ROTATION_RUNBOOK.md`. That should not have touched schema, but it's worth verifying the RDS instance ID is still the same one that holds production data.
+- This is the same family of issue as `F.Q-C-05` in the audit (migration FK mismatch) but in production rather than tests.
+
+### What the next session needs to do, in order
+
+1. **Don't deploy v250 again until this is fixed** — it will crash-loop and the rollback target may not be the same next time.
+2. **Connect to RDS read-only** (e.g. `psql` from a developer machine, or `python manage.py dbshell` against `production_aws`) and inspect:
+   - `SELECT name FROM django_migrations WHERE app = 'core' ORDER BY name;` — what's the latest applied migration?
+   - `\dt core_*` — what tables actually exist?
+   - Specifically: does `core_invoices` exist, does `core_bills` exist, both, neither?
+   - Does `django_migrations` have a row for `core.0037_rename_invoice_to_bill`?
+3. **Compare against `core/migrations/`** in the v250 tree (which is what's on `main`). Find the gap.
+4. The most likely fix is one of:
+   - `python manage.py migrate core --fake <appropriate_migration>` to align state, then redeploy. Do this from a one-off `eb ssh` shell, **not** baked into start.sh, so the user controls the timing.
+   - Apply the table rename migration manually (`ALTER TABLE core_invoices RENAME TO core_bills;` etc.) and then `--fake` `0037`.
+5. After RDS state is sane, run `eb deploy` to land v250 again.
+6. **Don't take a backup with `dumpdata core` in start.sh** — it raises `Unable to serialize database: cursor "..." does not exist` on every start, which suggests a serialiser bug (possibly tied to the same model-vs-table mismatch).
+
+### Other deploy-related notes for the next session
+
+- The previous deploy attempts at 09:43, 10:05, 10:12 today were **config changes** (env-var rotations), not code deploys. So v250 was the first new code in production since Feb 7.
+- The custom domain the user actually hits is **not** the EB CNAME (`dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com` returns 400 on the bare hostname). Find the real hostname in EB env config or Route 53 before health-checking with curl.
+- `health_endpoint` in `core/views/main.py` is currently a 200-OK Django view that doesn't actually check the DB. After this incident, consider giving it a real systems check (`SELECT 1;` on the DB) so EB can detect crash loops.
 
 ---
 
