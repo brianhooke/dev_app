@@ -10,7 +10,33 @@
 - **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
 - **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
 - **Live version**: `v250-audit-and-onyx-import` (deployed 24 May 2026, commit on `main`). Costing-rollup migration + bill-allocation queryset helpers + bill-status filter sweep + A.M-C-01 lock-in + A.M-H-16 dead-Xero-endpoint deletion + A.M-H-01 dead-formulas-cleanup + the `import_onyx_subbie` management command. Code-only, no new migrations.
-- **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: SAMEORIGIN` and `X-Content-Type-Options: nosniff`.
+- **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `strict-transport-security: max-age=86400`. EB env: `Status=Ready`, `Health=Green`.
+
+### How to run management commands on the live instance
+
+The live RDS is private (no public IP) and the EB instance has no SSH key configured. The supported path is **SSM Run Command** against the EB EC2 instance:
+
+```bash
+INSTANCE_ID=$(aws --profile default --region us-east-1 \
+  elasticbeanstalk describe-environment-resources \
+  --environment-name dev-app-prod \
+  --query 'EnvironmentResources.Instances[0].Id' --output text)
+
+# Inside the running web container is `current-web-1`.
+aws --profile default --region us-east-1 ssm send-command \
+  --instance-ids "$INSTANCE_ID" \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["docker exec current-web-1 python manage.py <subcommand>"]'
+
+# To pipe a longer Django shell script:
+B64=$(base64 -i your_script.py | tr -d '\n')
+aws --profile default --region us-east-1 ssm send-command \
+  --instance-ids "$INSTANCE_ID" \
+  --document-name AWS-RunShellScript \
+  --parameters "commands=[\"echo $B64 | base64 -d > /tmp/x.py\",\"docker cp /tmp/x.py current-web-1:/tmp/x.py\",\"docker exec -i current-web-1 sh -c 'python manage.py shell < /tmp/x.py' 2>&1\"]"
+```
+
+The IAM user `dev-app-deployer` was granted `AmazonSSMFullAccess` in this session to enable the above. The EC2 instance role (`aws-elasticbeanstalk-ec2-role`) already has `AdministratorAccess`, so the SSM agent on the instance can register and execute commands.
 
 ### Canonical deploy procedure (from `DEPLOYMENT.txt`)
 
@@ -54,7 +80,33 @@ Key facts:
 
 A separate sandbox env exists in **ap-southeast-2** (`dev_app` / `dev-app-docker` on RDS `dev-app-db.crda6mduzc63.ap-southeast-2.rds.amazonaws.com`, sg `sg-0205bb6f6e3d2f7fd`). The previous session's `eb deploy` calls and the v251/v252/v253 version labels all landed there, NOT on the live env. Treat that env and its RDS as orphaned — do not `eb deploy` to it again, and ignore claims in earlier session transcripts that v250+ was "live".
 
-The Onyx Factory (Subbie) project pk=2 written during the previous session is in the **wrong** RDS (the ap-southeast-2 one). It is **not** in the live `dev-app-db` (us-east-1). The re-import is part of this session.
+The Onyx Factory (Subbie) project pk=2 written during the previous session is in the **wrong** RDS (the ap-southeast-2 one). It is **not** there for users — those rows are orphaned. The re-import was redone this session against the correct RDS — see **Onyx Factory (Subbie) import (live)** below.
+
+### Onyx Factory (Subbie) import (live)
+
+Re-run on 24 May 2026 against the production RDS via SSM Run Command (the live RDS rejected direct connections from outside the EB SG, and the previous session's RDS-SG-open trick was useless because RDS is in a private subnet anyway).
+
+Mapping vs. the original CSV intent:
+
+- **project_type**: live DB has no `general` type. Used `General - MDG` (pk=1) — closest to the user's chosen `General` and matches the only other Onyx project that uses this type (pk=17 `Onyx Factory (Developer)`).
+- **xero_instance**: `Mason Development Group` (pk=4), again matching the (Developer) sibling. The CSV said "Mason Build" but pairing General-MDG with Mason Build would have been semantically wrong.
+- All other fields per CSV: `xero_sales_account=4110`, `manager='Brian Hooke'`, `manager_email='brian.hooke@mason.build'`, `contracts_admin_emails='dylan.bridge@mason.build'`, `project_status=1` (tender), `is_revenue_project=True`.
+
+Result on live RDS:
+
+- **Project pk=34** `Onyx Factory (Subbie)` (the 31st project on the system, after pks 1-32 + a transient pk=33 burned by the dry-run rollback).
+- 13 categories (11 phase categories pk=299..pk=309 + Internal pk=310 + Labour pk=311).
+- 60 costing items totalling **$2,186,724.86** — matches the source CSV grand total.
+
+The override mechanism (so the deployed `import_onyx_subbie` can target the live names without redeploying) was monkey-patching at runtime:
+
+```python
+import core.management.commands.import_onyx_subbie as onyx
+onyx.PROJECT_TYPE = "General - MDG"
+onyx.XERO_NAME = "Mason Development Group"
+from django.core.management import call_command
+call_command("import_onyx_subbie", commit=True)
+```
 
 ### Remaining deploy hygiene to-dos
 

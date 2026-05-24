@@ -16,14 +16,14 @@ Mapping decisions (validated with the user before writing any rows):
   Works.
 - **Internal items** (special, division=-10): one item per phase that has
   a non-zero Margin column value, named after the phase, with
-  ``contract_budget`` = Margin column. (User chose ``per_phase`` over the
-  single rolled-up ``Margin`` item the bootstrap normally creates.)
+  ``uncommitted_amount`` = Margin column. (User chose ``per_phase`` over
+  the single rolled-up ``Margin`` item the bootstrap normally creates.)
 - **Labour items** (special, division=-5): one item per phase that has
   a non-zero Staff column value (External Works is **negative** in the
   CSV — kept as-is per the source data), named after the phase, with
-  ``contract_budget`` = Staff column. ``costing_rollups`` recomputes the
-  *actual* committed for Labour from ``StaffHoursAllocations``;
-  ``contract_budget`` is the budgeted figure.
+  ``uncommitted_amount`` = Staff column. ``costing_rollups`` recomputes
+  the *actual* committed for Labour from ``StaffHoursAllocations``;
+  ``uncommitted_amount`` is the budgeted figure for the tender stage.
 - **Concrete / Steel**: one item per phase that has a non-zero column
   value, named ``Concrete`` / ``Steel``, sitting inside that phase's
   Category.
@@ -32,8 +32,11 @@ Mapping decisions (validated with the user before writing any rows):
   as a single ``Other`` line each.
 - **Items**: ``tender_or_execution=1`` (matches project_status=1=tender),
   ``order_in_list`` is sequential per category, ``xero_account_code=''``
-  (no per-line account codes given), all the
-  uncommitted/fixed/sc_invoiced/sc_paid initialise to 0.
+  (no per-line account codes given). Budgeted amount goes into
+  ``uncommitted_amount`` (tender convention — matches Onyx Factory
+  (Builder) pk=19 on production); ``contract_budget`` stays at 0 until
+  the project graduates to execution. ``fixed_on_site/sc_invoiced/sc_paid``
+  all initialise to 0.
 
 Usage::
 
@@ -329,8 +332,12 @@ class Command(BaseCommand):
                 rows["Categories"] += 1
                 self._line(f"  Labour    (pk={labour.categories_pk}, division=-5)")
 
-                # 4. Items.
-                def _mk_item(category, item_name, contract_budget, order_in_list):
+                # 4. Items. For tender-stage projects (project_status=1)
+                # the budgeted figures live in ``uncommitted_amount`` and
+                # ``contract_budget`` stays at 0 until the project is
+                # graduated to execution. Verified against pk=19 'Onyx
+                # Factory (Builder)' on production RDS (24 May 2026).
+                def _mk_item(category, item_name, amount, order_in_list):
                     row = Costing.objects.create(
                         project=project,
                         project_type=None,
@@ -338,8 +345,8 @@ class Command(BaseCommand):
                         item=item_name,
                         order_in_list=order_in_list,
                         xero_account_code="",
-                        contract_budget=contract_budget,
-                        uncommitted_amount=Decimal("0"),
+                        contract_budget=Decimal("0"),
+                        uncommitted_amount=amount,
                         fixed_on_site=Decimal("0"),
                         sc_invoiced=Decimal("0"),
                         sc_paid=Decimal("0"),
