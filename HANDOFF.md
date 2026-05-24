@@ -1,55 +1,66 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 23 May 2026 (v252 — P-5 / A.M-R-02 + A.M-R-03 + B.V-H-02 + A.M-C-01 + dead-code cleanup)
+**Last updated:** 24 May 2026 (v250 — first audit-batch deploy that actually reaches the live env)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
 
 ---
 
-## Deploy state (resolved)
+## Deploy state
 
-- **Live on EB**: `v252` (deployed 23 May 2026 13:32 UTC, commit `f0078ee`). Costing-rollup migration + bill-allocation queryset helpers + bill-status filter sweep + A.M-C-01 lock-in + A.M-H-16 dead-Xero-endpoint deletion + A.M-H-01 dead-formulas-cleanup all in front of users. Status: `Ready`. Health: `Grey` (cosmetic — the `/health/` endpoint doesn't actually probe the DB; see "Remaining deploy hygiene to-dos" below).
-- **GitHub `main`**: at `f0078ee` (v252).
-- **RDS state**: All 80 core migrations applied. v252 is a code-only deploy (no new migrations).
-- **Predecessor**: v251 (`13718ed`) was the surgical RDS-migration-state reconciliation that recovered the v250 deploy crash; that history is preserved in the "Recovery story" section below.
-- Verification: `curl http://dev-app-docker.eba-mkynfeyv.ap-southeast-2.elasticbeanstalk.com/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: SAMEORIGIN` and `X-Content-Type-Options: nosniff`. Login-required middleware and clickjacking protection both confirmed active post-v252.
+- **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
+- **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
+- **Live version**: `v250-audit-and-onyx-import` (deployed 24 May 2026, commit on `main`). Costing-rollup migration + bill-allocation queryset helpers + bill-status filter sweep + A.M-C-01 lock-in + A.M-H-16 dead-Xero-endpoint deletion + A.M-H-01 dead-formulas-cleanup + the `import_onyx_subbie` management command. Code-only, no new migrations.
+- **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: SAMEORIGIN` and `X-Content-Type-Options: nosniff`.
 
-### Recovery story (what happened and why it now works)
+### Canonical deploy procedure (from `DEPLOYMENT.txt`)
 
-The v250 deploy initially crashed because production RDS was 5 months behind on migrations (last applied `0046` from Jan 14 2026), but the Feb 7 `start.sh` had `migrate --noinput || echo "Migrations failed, continuing..."` — migrations were silently failing on every container start and the app was running on a half-applied schema. The audit pass made `migrate` fatal (correctly), which surfaced the issue.
+The live env is **not** managed by `eb deploy`. Use raw AWS CLI:
 
-To fix:
+```bash
+# 1. Bump version markers
+#    core/templates/core/components/reusable_navbar.html  ("vNNN")
+#    core/templates/core/dashboard.html                   (header docstring)
+# 2. Commit + push to GitHub main
+# 3. Zip the working tree
+zip -r deploy.zip . \
+  -x "*.git*" "*__pycache__*" "*.pyc" ".venv/*" "*.sqlite3" \
+     ".DS_Store" "*.log" "csv/*" "pdfs/*" \
+     ".elasticbeanstalk/*" "venv/*" "media/*"
+# 4. Upload to the EB S3 bucket
+aws s3 cp deploy.zip \
+  s3://elasticbeanstalk-us-east-1-629256540295/dev-app/deploy-vNNN-description.zip \
+  --profile default --region us-east-1
+# 5. Create the application version
+aws elasticbeanstalk create-application-version \
+  --application-name dev-app \
+  --version-label vNNN-description \
+  --source-bundle S3Bucket=elasticbeanstalk-us-east-1-629256540295,S3Key=dev-app/deploy-vNNN-description.zip \
+  --profile default --region us-east-1
+# 6. Roll the env to that version
+aws elasticbeanstalk update-environment \
+  --application-name dev-app \
+  --environment-name dev-app-prod \
+  --version-label vNNN-description \
+  --profile default --region us-east-1
+```
 
-1. **Snapshot taken**: `dev-app-db-pre-v250-fix-20260523-221139` (still in RDS, available).
-2. **Schema drift mapped**: `core_invoices` had bill_* columns from migration 0037's column rename, but Django's `Bills` model state had never been recorded. Tables `project_types` / column `core_categories.division` / column `core_invoices.contact_pk_id` and similar already existed because someone had applied the schema parts manually outside Django's tracking.
-3. **Surgical migration sequence**:
-   - **Faked** 0047 (CreateModel(Bills) where the table already existed with matching columns).
-   - **Faked** 0048 (CreateModel(ProjectTypes) where the table already existed).
-   - **Faked** 0049 (project_type FK migration where `project_type_id` already existed).
-   - **Manually dropped** the orphan `core_categories.division` column (0 rows), then ran 0050 normally to re-add it cleanly along with `project_types.archived`.
-   - **Manually added** `core_costing.xero_tracking_category` (because faked 0047 said it was added but didn't actually run).
-   - **Real-applied** 0051..0067 (project types updates, public holiday tables, employee/staff hours, stocktake tables, bills.is_stocktake, FX fields, etc.).
-   - **Real-applied** 0068 onward (drops the tracking_category trio + `xero_tracking_categories` table; data migrations were no-ops since all tables had 0 rows).
-4. **v250 redeployed**: clean migrate, gunicorn responding.
+Key facts:
+- Application name on AWS is `dev-app` (hyphen). The repo directory and Django project module are `dev_app` (underscore).
+- Region is `us-east-1`, **not** `ap-southeast-2`.
+- `start.sh` runs `migrate --noinput` and `collectstatic` on container start.
+- `.elasticbeanstalk/config.yml` now points at `dev-app` / `dev-app-prod` / `us-east-1` so any opportunistic `eb status` / `eb logs` / `eb open` use targets the right env. Avoid `eb deploy` — it bypasses the S3-zip flow.
 
-The diagnostic and migration scripts that did this work are in `scripts/`:
+### Wrong-env deploys to clean up later
 
-- `scripts/inspect_rds_state.py` — read-only RDS inspector. Pulls EB env vars via boto3, connects, prints migration state and key columns.
-- `scripts/inspect_rds_state2.py` — round-2 (lists all public tables, not just `core_*`).
-- `scripts/preflight_migrations.py` — symbolically scans pending migrations vs the actual schema and predicts conflicts before you run `migrate`.
+A separate sandbox env exists in **ap-southeast-2** (`dev_app` / `dev-app-docker` on RDS `dev-app-db.crda6mduzc63.ap-southeast-2.rds.amazonaws.com`, sg `sg-0205bb6f6e3d2f7fd`). The previous session's `eb deploy` calls and the v251/v252/v253 version labels all landed there, NOT on the live env. Treat that env and its RDS as orphaned — do not `eb deploy` to it again, and ignore claims in earlier session transcripts that v250+ was "live".
 
-If you ever need to redo this kind of reconciliation: snapshot first, run preflight, then apply with selective `--fake`s as needed.
-
-### Important production-data note
-
-**RDS has 0 rows in every business table.** `core_projects`, `core_costing`, `core_invoices`, `core_po_orders`, `core_hc_claims`, `core_quotes`, etc., are all empty. Only `auth_user` has 2 rows. The user has confirmed the data isn't on this instance — possibly local docker, possibly somewhere I don't have visibility into. The other RDS instance (`pod-app-aws-db`) is in `inaccessible-encryption-credentials` state (KMS key was deleted) and is effectively dead.
-
-If you need to know where the user actually keeps production data, **ask before assuming**.
+The Onyx Factory (Subbie) project pk=2 written during the previous session is in the **wrong** RDS (the ap-southeast-2 one). It is **not** in the live `dev-app-db` (us-east-1). The re-import is part of this session.
 
 ### Remaining deploy hygiene to-dos
 
-- `start.sh` still does `dumpdata core --natural-foreign --natural-primary` as a "pre-migration backup" but this raises `CommandError: Unable to serialize database: cursor "..." does not exist` on every start (the script swallows it). Either fix the serialiser bug (probably an FK ordering issue post-rename) or replace this with a scheduled RDS snapshot job.
-- `health_endpoint` (`core/views/main.py`) is a 200-OK Django view that doesn't actually check the DB. EB Health stays Grey because of this. Consider making it `SELECT 1;` against the DB so EB can detect crash loops automatically next time.
-- The deploy that succeeded was triggered with `eb deploy --version <label>` (re-deploying v250 by version label rather than by archive). Direct `eb deploy` from the working tree also works once RDS is at 0080.
+- `start.sh` still does `dumpdata core --natural-foreign --natural-primary` as a "pre-migration backup" but this raises `CommandError: Unable to serialize database: cursor "..." does not exist` on every start (the script swallows it). Either fix the serialiser bug or replace this with a scheduled RDS snapshot job.
+- `health_endpoint` (`core/views/main.py`) is a 200-OK Django view that doesn't actually check the DB. EB Health stays `Grey` because of this. Consider making it `SELECT 1;` against the DB so EB can detect crash loops automatically.
+- Decide whether to terminate the orphan ap-southeast-2 env + RDS to stop accruing cost and to avoid future confusion.
 
 ---
 
