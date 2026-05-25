@@ -1,6 +1,6 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 25 May 2026 (v252 — staged for deploy: stocktake two-step approval + Unexpected Line Items category)
+**Last updated:** 26 May 2026 (v253 — staged for deploy: stocktake snap routes orphan allocations to ULI)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
 
 ---
@@ -9,10 +9,9 @@
 
 - **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
 - **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
-- **Live version (currently serving)**: `v251-onyx-builder-overwrite-and-email-fix` (deployed 25 May 2026 — the previous batch).
-- **Local code-state version**: `v252` — staged for next deploy. Two new feature batches on top of v251:
-  1. **Stocktake two-step approval / shelf-lock** (introduces `Bills.pm_approved`, `Bills.stock_on_shelf_date`, `update_stocktake_bill_meta` endpoint, server-side guards in `approve_stocktake_bill`, two new columns in the Allocations tab main table). Migration `0081_bills_pm_approved_stock_on_shelf_date`.
-  2. **Unexpected Line Items category** (`Categories.DIVISION_ULI = -15`, auto-seeded on every project, undeletable, single same-named costing, exposed to staff hours / stocktake snaps for execution projects, Committed dropdown aggregates bills + snaps + wages). Migration `0082_seed_uli_for_existing_projects` backfills 35 categories / 35 tender costings / 7 execution costings on local; production count is similar (verify via SSM probe before deploy).
+- **Live version (currently serving)**: `v252-stocktake-2step-and-uli` (deployed 25 May 2026 — Stocktake two-step approval + ULI category seed).
+- **Local code-state version**: `v253` — staged for next deploy. One bug fix on top of v252:
+  - **Stocktake snap dropdown — universal project selector with ULI fallback** (no migration). The Allocations dropdown on each snap item now lists every active execution project; entries that don't have a costing matching the snap item's name are rendered in red and route to that project's "Unexpected Line Items" line. The contract budget's ULI Committed/Billed dropdowns and the costing-rollup totals (`compute_project_committed_billed`) all use the new `resolve_snap_allocation_costing_pk` helper so the dropdowns and the row-totals stay in lockstep. Side-effect fix: pre-A.M-C-13 the rollup gated snap allocations by FK only, which silently skipped *every* allocation in production (snap_item.item is the project=None master) — totals at the top of the contract budget were chronically lower than the sum of dropdown rows. v253 fixes that as a side-effect of the routing change.
 - **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `strict-transport-security: max-age=86400`. EB env: `Status=Ready`, `Health=Green`.
 
 ### How to run management commands on the live instance
@@ -232,6 +231,66 @@ Notes for whoever picks this up next:
 - The audit's recurring `-5` / `-10` literals scattered across `contract_budget.py` / `costing_rollups.py` / `staff_hours.py` are still mostly inline integers (audit `A.M-H-11`). The v252 ULI batch added the constants in `Categories.DIVISION_ULI` / `PROTECTED_DIVISIONS` and uses them in new code, but did **not** sweep existing `-5`/`-10` literals — that's a separate cleanup pass.
 - The C2C export slices in `contract_budget.export_projects_c2c_csv` (Margin/Labour columns) currently treat ULI as a normal cost line (folded into `c2c_incl_margin_and_labour` and `cost_to_complete`). If ULI should get its own export column, that's a separate ask.
 - `fix_contract_budget` (tender → execution clone) duplicates ULI like every other costing — no special handling required there.
+
+---
+
+## Stocktake snap → ULI orphan routing (26 May 2026, v253)
+
+**User-visible behaviour change.** When a user opens a stocktake snap and picks a project from the per-item Allocations dropdown:
+
+- Every active execution project is selectable (previously only projects whose costings included an item matching the snap item's name).
+- Projects without a costing matching the snap item's name are rendered in **red** (foreground colour `#c0392b`) with a tooltip explaining "allocation will land in Unexpected Line Items".
+- The closed `<select>` itself paints red whenever the currently-selected project routes to ULI, so the user can see the routing without having to open the dropdown.
+- Auto-create / new-row defaults prefer a project with the named costing (`pickDefaultProject` helper); falls back to a "red" project only when no execution project carries the named costing.
+
+**Backend state-of-the-world.**
+
+- `StocktakeSnapItem.item` is FK to a `Costing` row. In production every `Costing` flagged `stocktake=1` is a global "stockroom" row with `project=None` (probe `core/views/stocktake.py:create_snap` iterates `Costing.objects.filter(stocktake=1)` once globally, not per project). So `snap_item.item.project_id is None` for every snap item in production.
+- This means the rollup gate at `core/services/costing_rollups.py` (pre-v253: `if costing_pk not in project_costing_pks: continue`) silently skipped 100% of snap allocations on production — totals at the top of contract-budget rows undercounted snap-driven movements while the dropdowns (which match by name) showed them. v253 closes that gap as a side-effect of the routing helper.
+
+**The new routing helper** (single source of truth for "given a snap allocation on project P, which costing on P should receive it?"):
+
+```python
+core/services/costing_rollups.py
+def resolve_snap_allocation_costing_pk(
+    snap_item_costing_pk,
+    snap_item_name,
+    project_costing_pks,
+    project_costings_by_name,
+    project_uli_costing_pk,
+):
+    # 1) FK direct: snap_item.item is itself one of the project's costings.
+    # 2) Name match: project has a costing with the same item name.
+    # 3) ULI fallback: route to project's "Unexpected Line Items" line.
+    # 4) None: skip silently — no plausible target on this project.
+```
+
+Used by:
+
+- `compute_project_committed_billed` — both the committed loop and the billed loop. Replaces the old FK-only gate.
+- `get_item_quote_allocations` (Committed dropdown) — for ULI costings, after the existing logic, additionally pulls in snap allocations to this project where `snap_item.item.item` is *not* a costing name on this project (orphan-routed). Each appears with notes `Routed to ULI from "<original snap item name>"` and contact `Stocktake <date> (<original name>)` so the user can tell at a glance which physical-stock item produced the entry.
+- `get_item_bill_allocations` (Billed dropdown) — same orphan extension as above, on the ULI costing only.
+
+**`get_snap` payload change.** Each entry in `snap_item.valid_projects` now carries `has_named_costing: bool`. For the ULI snap item (`item_name == 'Unexpected Line Items'`) every project gets `True` since every project carries ULI. Sort order: named-match projects first, alphabetical within each group.
+
+**Frontend changes** (`core/templates/core/stocktake.html`, all in `createAllocationRow`):
+
+- `<option>` colour + `title` set per-project from `has_named_costing`.
+- New helper `applyRoutingStyleToSelect()` mirrors the colour onto the `<select>` itself based on the currently-selected option.
+- New `pickDefaultProject(validProjects)` used by `autoCreateFirstAllocation` and `createNewAllocation` to bias toward named-match projects.
+
+**No schema changes; no data migration.** Routing is derived from existing data. Dropdown UX, contract-budget dropdowns and rollup totals all converge on the same answer via the same helper.
+
+**Verification path post-deploy:**
+
+1. Open any active execution project's contract budget → expand Committed for "Unexpected Line Items" → confirm orphan-snap rows appear with `Routed to ULI from "<snap item name>"` notes (only if any snap allocations exist on that project against orphan-named items — for the active 4 exec projects, this should produce visible rows since the production probe found 21 cross-project allocs).
+2. Open the most-recent stocktake snap → for any non-ULI snap item, confirm the project dropdown lists every active exec project, with red font on those without the costing name.
+3. Confirm row totals at the top of the contract budget for "50MPa" / "SL102 (6m x 2.4m)" / etc. now include snap-driven amounts (previously chronically lower than the dropdown sum).
+
+**Known follow-ups deferred:**
+
+- The HC Claims rollup (`hc_committed_amounts`) still uses FK-only matching. Same helper would apply, but no user complaint yet — defer until needed.
+- v252's `_compute_project_committed_billed` test fixture (`core/tests/test_costing_rollups.py`) uses `snap_item.item = C1` (a project costing) so the FK-direct path covers it. The new name + ULI fallback paths aren't covered by tests yet — add when the F.Q-C-05 SQLite blocker is resolved or when the next test pass adds prod-shape fixtures.
 
 ---
 

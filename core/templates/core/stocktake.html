@@ -2943,12 +2943,22 @@ Tabs:
     function createAllocationRow(item, alloc, isEditable) {
         var row = $('<div class="snap-alloc-row" style="display: flex; gap: 6px; margin-bottom: 4px;">');
         row.attr('data-allocation-pk', alloc.allocation_pk);
-        
-        // Project select - use item's valid_projects (projects that have this item)
+
+        // Project select. ``valid_projects`` is now every active
+        // execution project; entries with ``has_named_costing === false``
+        // are rendered in red because picking them routes the snap
+        // allocation to the project's "Unexpected Line Items" line
+        // instead of a costing matching the snap item's name (added
+        // 2026-05-26).
         var projectSelect = $('<select class="form-select form-select-sm" style="flex: 1; font-size: 11px;">');
         var validProjects = item.valid_projects || [];
+        var snapNameForTitle = item.item_name || 'this stocktake item';
         validProjects.forEach(function(p) {
             var opt = $('<option>').val(p.project_pk).text(p.project_name);
+            if (p.has_named_costing === false) {
+                opt.css('color', '#c0392b');
+                opt.attr('title', 'Project has no costing matching "' + snapNameForTitle + '" — allocation will land in Unexpected Line Items');
+            }
             if (!alloc.is_writeoff && parseInt(p.project_pk) === parseInt(alloc.project_pk)) opt.prop('selected', true);
             projectSelect.append(opt);
         });
@@ -2966,8 +2976,33 @@ Tabs:
             projectSelect.append(optgroup);
         }
         projectSelect.prop('disabled', !isEditable);
+
+        // Visual cue when the currently-selected option is a "ULI-route"
+        // project (no costing matching the snap item's name): paint the
+        // closed select itself red so the user can see the routing
+        // without having to open the dropdown.
+        function applyRoutingStyleToSelect() {
+            var selectedVal = projectSelect.val();
+            if (!selectedVal || selectedVal.toString().indexOf('writeoff_') === 0) {
+                projectSelect.css('color', '');
+                projectSelect.removeAttr('title');
+                return;
+            }
+            var pk = parseInt(selectedVal);
+            var match = validProjects.find(function(p) { return parseInt(p.project_pk) === pk; });
+            if (match && match.has_named_costing === false) {
+                projectSelect.css('color', '#c0392b');
+                projectSelect.attr('title', 'No costing matching "' + snapNameForTitle + '" on this project — allocation routes to Unexpected Line Items');
+            } else {
+                projectSelect.css('color', '');
+                projectSelect.removeAttr('title');
+            }
+        }
+        applyRoutingStyleToSelect();
+
         projectSelect.on('change', function() {
             var selectedVal = $(this).val();
+            applyRoutingStyleToSelect();
             if (selectedVal && selectedVal.toString().indexOf('writeoff_') === 0) {
                 var xiPk = parseInt(selectedVal.replace('writeoff_', ''));
                 updateAllocation(alloc.allocation_pk, { is_writeoff: true, writeoff_xero_instance_pk: xiPk });
@@ -3024,6 +3059,17 @@ Tabs:
         });
     }
     
+    // Pick the project the dropdown should land on by default. Prefer
+    // projects that have a costing matching the snap item's name so the
+    // initial choice doesn't accidentally route into the project's ULI
+    // line; only fall back to a "red" project when none of the
+    // execution projects carry the named costing.
+    function pickDefaultProject(validProjects) {
+        if (!validProjects || validProjects.length === 0) return null;
+        var named = validProjects.find(function(p) { return p.has_named_costing !== false; });
+        return named || validProjects[0];
+    }
+
     // Auto-create first allocation when variance becomes non-zero
     function autoCreateFirstAllocation(item) {
         var validProjects = item.valid_projects || [];
@@ -3038,9 +3084,10 @@ Tabs:
             snap_item_pk: item.snap_item_pk,
             qty: 1
         };
-        
-        if (validProjects.length > 0) {
-            postData.project_pk = validProjects[0].project_pk;
+
+        var preferred = pickDefaultProject(validProjects);
+        if (preferred) {
+            postData.project_pk = preferred.project_pk;
         } else {
             postData.is_writeoff = true;
             postData.writeoff_xero_instance_pk = writeoffOptions[0].xero_instance_pk;
@@ -3068,9 +3115,10 @@ Tabs:
             snap_item_pk: item.snap_item_pk,
             qty: 1
         };
-        
-        if (validProjects.length > 0) {
-            postData.project_pk = validProjects[0].project_pk;
+
+        var preferred = pickDefaultProject(validProjects);
+        if (preferred) {
+            postData.project_pk = preferred.project_pk;
         } else {
             // No valid projects - default to first writeoff option
             postData.is_writeoff = true;

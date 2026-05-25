@@ -50,6 +50,64 @@ from ..models import (
 
 
 # ---------------------------------------------------------------------------
+# Stocktake snap allocation routing
+# ---------------------------------------------------------------------------
+#
+# In production every Costing flagged ``stocktake=1`` is a global "stockroom"
+# row with ``project=None``. ``StocktakeSnapItem.item`` therefore points at
+# that project-less master, *not* at the per-project copy with the same
+# name. So when the user allocates a snap of "50MPa" to project B, a naive
+# FK match (``snap_item.item_id == project's costing_pk``) NEVER hits — B's
+# "50MPa" lives at a different ``costing_pk``.
+#
+# Pre-2026-05-26 the rollup gated snap allocations by FK only and silently
+# skipped them, while the Committed/Billed dropdowns matched by *name* —
+# leaving the totals at the top of the contract budget chronically lower
+# than the sum of dropdown rows.
+#
+# 2026-05-26 also introduced the user-facing requirement that *every*
+# execution project be selectable in the snap allocation dropdown: when the
+# project doesn't have a costing of the snap item's name, the allocation
+# routes to that project's "Unexpected Line Items" line.
+#
+# This helper unifies both behaviours in one place. Call sites pass in a
+# pre-built name index + ULI fallback for the project + tender/execution
+# scope they care about and get back the destination ``costing_pk`` (or
+# ``None`` if the allocation has nowhere plausible to land).
+def resolve_snap_allocation_costing_pk(
+    snap_item_costing_pk,
+    snap_item_name,
+    project_costing_pks,
+    project_costings_by_name,
+    project_uli_costing_pk,
+):
+    """Pick the project costing that should receive a snap allocation.
+
+    Resolution order:
+      1. ``snap_item.item_id`` is itself one of the project's costings
+         (covers the legacy/test fixture where snap_item.item *is* a
+         project costing).
+      2. The snap item's name matches a costing on this project (the
+         normal production path: snap_item.item is the project=None
+         master, but the project has its own row with the same name).
+      3. The project's "Unexpected Line Items" costing — the universal
+         contingency line every project carries.
+      4. ``None`` — no plausible target on this project (e.g. a project
+         that pre-dates the ULI backfill and lacks the named costing).
+    """
+    if snap_item_costing_pk and snap_item_costing_pk in project_costing_pks:
+        return snap_item_costing_pk
+
+    if snap_item_name:
+        normalised = snap_item_name.strip().lower()
+        target = project_costings_by_name.get(normalised)
+        if target:
+            return target
+
+    return project_uli_costing_pk
+
+
+# ---------------------------------------------------------------------------
 # Per-item rollups (small, simple primitives — used by callers that just
 # need a single number, e.g. the dashboard action-item summary).
 # ---------------------------------------------------------------------------
@@ -392,33 +450,54 @@ def compute_project_committed_billed(project, tender_or_execution):
 
     # Add stocktake snap allocations to committed amounts.
     #
-    # A.M-C-13: previously this matched snap_item -> costing by **item name**
-    # (string lookup against `Costing.item`), while HC Claims matched the
-    # same relationship via the actual FK (`snap_item.item_id`). The two
-    # paths produced different totals when item names collided across
-    # projects or when a snap item had been re-pointed. We now use the FK
-    # directly (HC's approach) and gate it by `project=project` so a snap
-    # item belonging to another project doesn't leak in.
+    # 2026-05-26: routing is delegated to ``resolve_snap_allocation_costing_pk``
+    # so the dropdown (``get_item_quote_allocations`` / ``get_item_bill_allocations``)
+    # and the rollup totals stay in lockstep. Resolution order is FK direct
+    # match → project costing of the same name → ULI fallback → skip. The
+    # name-match path covers production data (snap_item.item is the
+    # project=None master), and the ULI fallback covers projects that
+    # don't have the named costing — the user has explicitly asked for
+    # those to flow into the universal "Unexpected Line Items" line so
+    # the snap is still visible in the contract budget.
+    #
+    # Pre-2026-05-26 (A.M-C-13) this gated by FK only and silently
+    # skipped every snap allocation in production, leaving the dropdown
+    # totals out of sync with the row total at the top of the page.
     snap_allocations = list(
         StocktakeSnapAllocation.objects
         .filter(project=project, snap_item__snap__status__gte=1)
-        .values('snap_item__item_id', 'qty', 'rate', 'amount')
+        .values(
+            'snap_item__item_id',
+            'snap_item__item__item',
+            'qty', 'rate', 'amount',
+        )
     )
 
-    project_costing_pks = set(
-        Costing.objects.filter(
-            project=project,
-            tender_or_execution=tender_or_execution,
-        ).values_list('costing_pk', flat=True)
+    scoped_costings = Costing.objects.filter(
+        project=project,
+        tender_or_execution=tender_or_execution,
+    ).select_related('category')
+    project_costing_pks = set(c.costing_pk for c in scoped_costings)
+    project_costings_by_name = {
+        (c.item or '').strip().lower(): c.costing_pk
+        for c in scoped_costings
+        if c.item
+    }
+    project_uli_costing_pk = next(
+        (c.costing_pk for c in scoped_costings
+         if c.category and c.category.division == Categories.DIVISION_ULI),
+        None,
     )
 
     for snap_alloc in snap_allocations:
-        costing_pk = snap_alloc['snap_item__item_id']
-        if costing_pk not in project_costing_pks:
-            # Snap item points at a costing that doesn't belong to this
-            # project's current tender/execution scope. Skip silently — the
-            # snap allocation either belongs to another project or to a
-            # tender/execution scope we're not rendering right now.
+        costing_pk = resolve_snap_allocation_costing_pk(
+            snap_alloc['snap_item__item_id'],
+            snap_alloc['snap_item__item__item'],
+            project_costing_pks,
+            project_costings_by_name,
+            project_uli_costing_pk,
+        )
+        if costing_pk is None:
             continue
 
         alloc_qty = float(snap_alloc['qty'] or 0)
@@ -521,17 +600,21 @@ def compute_project_committed_billed(project, tender_or_execution):
     # desired behaviour: consumed stock should not still be expected
     # cost-to-complete.
     #
-    # AUDIT FIX: pre-A.M-C-13 this loop tried to access object attributes
-    # on what is now a `.values(...)` queryset, AND referenced an
-    # `item_name_to_costing` map that A.M-C-13 deleted from this function
-    # — meaning the first finalised snap allocation on any project would
-    # raise NameError/AttributeError in production. The code was never hit
-    # because no snap allocations existed at the time A.M-C-13 landed.
-    # Re-using the same FK path + project_costing_pks scope filter as the
-    # committed-side loop above keeps the two halves consistent.
+    # 2026-05-26: same routing helper as the committed-side loop, so
+    # billed and committed agree on which costing receives each snap
+    # allocation (FK → name → ULI fallback). The Working Budget − Billed
+    # = C2C identity therefore holds for snap-driven movements
+    # regardless of whether the destination is a named costing or the
+    # ULI fallback line.
     for snap_alloc in snap_allocations:
-        costing_pk = snap_alloc['snap_item__item_id']
-        if not costing_pk or costing_pk not in project_costing_pks:
+        costing_pk = resolve_snap_allocation_costing_pk(
+            snap_alloc['snap_item__item_id'],
+            snap_alloc['snap_item__item__item'],
+            project_costing_pks,
+            project_costings_by_name,
+            project_uli_costing_pk,
+        )
+        if costing_pk is None:
             continue
         billed_dict[costing_pk] = (
             billed_dict.get(costing_pk, 0.0) + float(snap_alloc['amount'] or 0)

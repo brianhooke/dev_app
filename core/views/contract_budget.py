@@ -597,6 +597,60 @@ def get_item_quote_allocations(request, item_pk):
                     'type': 'wages',
                 })
 
+        # ULI orphan-snap routing (added 2026-05-26).
+        # The stocktake snap dropdown lets users allocate any snap to any
+        # execution project, even when the project doesn't have a
+        # costing matching the snap item's name (the project entry is
+        # rendered red in the dropdown to signal "this lands in ULI").
+        # Mirror that routing here so the user can see the same
+        # allocations in the ULI Committed dropdown.
+        # ``resolve_snap_allocation_costing_pk`` is the canonical helper;
+        # we use a lightweight version inline because we only need to
+        # decide "does this allocation belong on ULI?" rather than
+        # produce a full destination map.
+        if project and is_uli_costing:
+            project_named_costings = set(
+                (n or '').strip().lower()
+                for n in Costing.objects.filter(
+                    project=project,
+                ).values_list('item', flat=True)
+                if n and (n or '').strip().lower() != 'unexpected line items'
+            )
+            orphan_snap_allocs = StocktakeSnapAllocation.objects.filter(
+                project=project,
+                snap_item__snap__status__gte=1,
+            ).exclude(
+                snap_item__item__item__iexact=item_name,
+            ).select_related('snap_item__snap', 'snap_item__item')
+
+            for snap_alloc in orphan_snap_allocs:
+                snap_name = (
+                    snap_alloc.snap_item.item.item
+                    if snap_alloc.snap_item and snap_alloc.snap_item.item
+                    else ''
+                )
+                if (snap_name or '').strip().lower() in project_named_costings:
+                    # The project has a costing with the same name —
+                    # the allocation shows on that costing's dropdown,
+                    # not on ULI.
+                    continue
+
+                snap = snap_alloc.snap_item.snap
+                snap_date = snap.date.strftime('%d-%b-%y') if snap.date else 'Unknown Date'
+                allocations_list.append({
+                    'allocation_pk': snap_alloc.snap_allocation_pk,
+                    'qty': float(snap_alloc.qty) if snap_alloc.qty else 0,
+                    'rate': float(snap_alloc.rate) if snap_alloc.rate else 0,
+                    'amount': float(snap_alloc.amount) if snap_alloc.amount else 0,
+                    'unit': '',
+                    'notes': f'Routed to ULI from "{snap_name}"' if snap_name else 'Routed to ULI',
+                    'snap_pk': snap.snap_pk,
+                    'snap_date': snap_date,
+                    'contact_name': f'Stocktake {snap_date} ({snap_name})' if snap_name else f'Stocktake {snap_date}',
+                    'supplier_quote_number': f'Snap {snap.snap_pk}',
+                    'type': 'snap',
+                })
+
         return JsonResponse({
             'status': 'success',
             'allocations': allocations_list
@@ -627,6 +681,9 @@ def get_item_bill_allocations(request, item_pk):
     try:
         costing = get_object_or_404(Costing, pk=item_pk)
         project = costing.project
+        is_uli_costing = bool(
+            costing.category and costing.category.division == Categories.DIVISION_ULI
+        )
 
         allocations_list = []
 
@@ -689,6 +746,54 @@ def get_item_bill_allocations(request, item_pk):
                         'snap_pk': snap.snap_pk,
                         'snap_date': snap_date,
                         'contact_name': f'Stocktake {snap_date}',
+                        'bill_number': f'Snap {snap.snap_pk}',
+                        'bill_type': None,
+                        'bill_type_display': 'Stocktake',
+                        'type': 'snap',
+                    })
+
+            # ---------- ULI orphan-snap routing (added 2026-05-26) ----------
+            # Symmetry with ``get_item_quote_allocations``: snap allocations
+            # to this project whose snap_item.item.item doesn't match any
+            # named costing in this project land on the ULI Billed
+            # dropdown. Working Budget − Billed = C2C identity holds
+            # because the same allocations are also folded into ULI's
+            # committed/billed totals by ``compute_project_committed_billed``.
+            if is_uli_costing:
+                project_named_costings = set(
+                    (n or '').strip().lower()
+                    for n in Costing.objects.filter(
+                        project=project,
+                    ).values_list('item', flat=True)
+                    if n and (n or '').strip().lower() != 'unexpected line items'
+                )
+                orphan_snap_allocs = StocktakeSnapAllocation.objects.filter(
+                    project=project,
+                    snap_item__snap__status__gte=1,
+                ).exclude(
+                    snap_item__item__item__iexact=item_name or '',
+                ).select_related('snap_item__snap', 'snap_item__item')
+
+                for snap_alloc in orphan_snap_allocs:
+                    snap_name = (
+                        snap_alloc.snap_item.item.item
+                        if snap_alloc.snap_item and snap_alloc.snap_item.item
+                        else ''
+                    )
+                    if (snap_name or '').strip().lower() in project_named_costings:
+                        continue
+                    snap = snap_alloc.snap_item.snap
+                    snap_date = snap.date.strftime('%d-%b-%y') if snap.date else 'Unknown Date'
+                    allocations_list.append({
+                        'allocation_pk': snap_alloc.snap_allocation_pk,
+                        'qty': float(snap_alloc.qty) if snap_alloc.qty else 0,
+                        'rate': float(snap_alloc.rate) if snap_alloc.rate else 0,
+                        'amount': float(snap_alloc.amount) if snap_alloc.amount else 0,
+                        'unit': '',
+                        'notes': f'Routed to ULI from "{snap_name}"' if snap_name else 'Routed to ULI',
+                        'snap_pk': snap.snap_pk,
+                        'snap_date': snap_date,
+                        'contact_name': f'Stocktake {snap_date} ({snap_name})' if snap_name else f'Stocktake {snap_date}',
                         'bill_number': f'Snap {snap.snap_pk}',
                         'bill_type': None,
                         'bill_type_display': 'Stocktake',

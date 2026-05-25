@@ -1175,25 +1175,37 @@ def get_snap(request, snap_pk):
             if snap_item.item and snap_item.item.project_type:
                 project_type_name = snap_item.item.project_type
             
-            # Get projects that have this item.
+            # Build the project allocation dropdown for this snap item.
             #
-            # Special case: "Unexpected Line Items" is a universal
-            # contingency line that every execution project carries
-            # (auto-seeded — see Categories.DIVISION_ULI). Even if a
-            # given project somehow lacks the costing (legacy data,
-            # mid-migration), we still want it to be a valid snap
-            # target so the snap can dump variance against ULI.
+            # 2026-05-26: every active execution project is selectable.
+            # If the project has a costing matching the snap item's name
+            # (e.g. project A has its own "50MPa" costing) the entry is
+            # rendered normally and the allocation lands on that named
+            # costing. Otherwise the entry is flagged
+            # ``has_named_costing=false`` and the frontend renders it in
+            # red — when the user picks one of these the allocation
+            # routes to that project's "Unexpected Line Items" line.
+            # The contract budget's ULI Committed/Billed dropdowns and
+            # the costing-rollup totals fold these orphan-routed
+            # allocations in via ``resolve_snap_allocation_costing_pk``.
             item_name = snap_item.item.item if snap_item.item else ''
-            if item_name.strip().lower() == 'unexpected line items':
-                valid_project_pks = set(project_lookup.keys())
-            else:
-                valid_project_pks = item_to_projects.get(item_name, set())
-            valid_projects = [
-                {'project_pk': pk, 'project_name': project_lookup[pk]}
-                for pk in valid_project_pks
-                if pk in project_lookup
-            ]
-            valid_projects.sort(key=lambda x: x['project_name'])
+            item_name_lc = item_name.strip().lower()
+            named_project_pks = item_to_projects.get(item_name, set())
+            valid_projects = []
+            for pk in project_lookup:
+                has_named = (
+                    pk in named_project_pks
+                    # ULI is always a "named" hit — every project carries it.
+                    or item_name_lc == 'unexpected line items'
+                )
+                valid_projects.append({
+                    'project_pk': pk,
+                    'project_name': project_lookup[pk],
+                    'has_named_costing': has_named,
+                })
+            valid_projects.sort(
+                key=lambda x: (not x['has_named_costing'], x['project_name'])
+            )
             
             future_qty = future_bills_by_item.get(snap_item.item_id, 0)
             items.append({
