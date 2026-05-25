@@ -3,11 +3,32 @@ Stocktake views - handles stocktake configuration and data management.
 """
 import json
 import logging
+from datetime import date, timedelta
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
+
+
+def _latest_finalised_snap_date():
+    """Return the date of the most recent finalised (or sent-to-Xero)
+    StocktakeSnap, or None if there isn't one yet.
+
+    Used as the lower bound for `Bills.stock_on_shelf_date` — once a
+    snap is taken, the shelf is locked so prior dates can't be
+    back-filled and inflate the historical balance (the 50MPa bug, see
+    HANDOFF.md). Mirrors the convention already used by the snap
+    creation/update views (`status__gte=STATUS_FINALISED`).
+    """
+    from core.models import StocktakeSnap
+    snap = (
+        StocktakeSnap.objects
+        .filter(status__gte=StocktakeSnap.STATUS_FINALISED)
+        .order_by('-date', '-snap_pk')
+        .first()
+    )
+    return snap.date if snap else None
 
 
 @csrf_exempt
@@ -468,15 +489,144 @@ def delete_stocktake_allocation(request, allocation_pk):
         }, status=500)
 
 
+@require_http_methods(["GET"])
+def get_latest_finalised_snap_info(request):
+    """Tiny helper endpoint the stocktake JS calls to set the
+    `min` attribute on the stock_on_shelf_date input — i.e. the
+    earliest date a bill can claim to have landed on the shelf is
+    one day after the most recent finalised snap.
+    """
+    snap_date = _latest_finalised_snap_date()
+    earliest = (snap_date + timedelta(days=1)) if snap_date else None
+    return JsonResponse({
+        'status': 'success',
+        'latest_finalised_snap_date': snap_date.isoformat() if snap_date else None,
+        'earliest_stock_on_shelf_date': earliest.isoformat() if earliest else None,
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_stocktake_bill_meta(request, bill_pk):
+    """Save the per-bill stocktake metadata edited from the
+    Allocations tab main row — currently `pm_approved` and
+    `stock_on_shelf_date`.
+
+    Validation:
+      * `stock_on_shelf_date` must be strictly after the most recent
+        finalised snap (the shelf is locked for any prior date).
+      * If `pm_approved` is being toggled on and `stock_on_shelf_date`
+        is empty, default it to today (still subject to the snap-lock
+        check above).
+    """
+    from core.models import Bills
+
+    try:
+        bill = Bills.objects.get(bill_pk=bill_pk)
+    except Bills.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Bill with pk {bill_pk} not found',
+        }, status=404)
+
+    if not bill.is_stocktake:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'This endpoint only updates stocktake bills.',
+        }, status=400)
+
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+
+    update_fields = ['updated_at']
+    snap_floor = _latest_finalised_snap_date()
+    earliest_allowed = (snap_floor + timedelta(days=1)) if snap_floor else None
+
+    # stock_on_shelf_date — accept ISO string, empty string (= clear), or absent
+    if 'stock_on_shelf_date' in data:
+        raw = data['stock_on_shelf_date']
+        if raw in (None, ''):
+            new_date = None
+        else:
+            try:
+                new_date = date.fromisoformat(raw)
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': "stock_on_shelf_date must be YYYY-MM-DD or empty.",
+                }, status=400)
+            if earliest_allowed and new_date < earliest_allowed:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f"Stock-on-shelf date must be on or after "
+                        f"{earliest_allowed.isoformat()} (the day after the "
+                        f"most recent finalised snap, "
+                        f"{snap_floor.isoformat()})."
+                    ),
+                }, status=400)
+        bill.stock_on_shelf_date = new_date
+        update_fields.append('stock_on_shelf_date')
+
+    # pm_approved — when toggling on, auto-default the shelf date to
+    # today if the user hasn't entered one yet (matches the spec).
+    if 'pm_approved' in data:
+        new_pm = bool(data['pm_approved'])
+        bill.pm_approved = new_pm
+        update_fields.append('pm_approved')
+        if new_pm and bill.stock_on_shelf_date is None:
+            today = date.today()
+            if earliest_allowed and today < earliest_allowed:
+                # Snap is in the future relative to today → can't auto-default
+                # without violating the lock. Surface a clear error so the UI
+                # can roll the checkbox back instead of silently coercing.
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        "Can't PM-approve while today is on or before the "
+                        f"latest finalised snap ({snap_floor.isoformat()}). "
+                        f"Set stock-on-shelf date to "
+                        f"{earliest_allowed.isoformat()} or later first."
+                    ),
+                }, status=400)
+            bill.stock_on_shelf_date = today
+            if 'stock_on_shelf_date' not in update_fields:
+                update_fields.append('stock_on_shelf_date')
+
+    bill.save(update_fields=update_fields)
+    logger.info(
+        "Updated stocktake bill %s meta: pm_approved=%s, stock_on_shelf_date=%s",
+        bill_pk, bill.pm_approved, bill.stock_on_shelf_date,
+    )
+
+    return JsonResponse({
+        'status': 'success',
+        'pm_approved': bill.pm_approved,
+        'stock_on_shelf_date': bill.stock_on_shelf_date.isoformat() if bill.stock_on_shelf_date else None,
+    })
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def approve_stocktake_bill(request, bill_pk):
-    """
-    Approve a stocktake bill - updates bill status to 2 (approved).
+    """Approve a stocktake bill - updates bill status to 2 (approved).
+
+    Server-side gates (added 2026-05-25 with the two-step approval
+    feature):
+      * `pm_approved` must be True.
+      * `stock_on_shelf_date` must be set.
+      * `stock_on_shelf_date` must be strictly after the most recent
+        finalised snap (shelf-lock invariant).
+
+    These mirror the JS gates in `updateApproveButtonState()`; we
+    enforce them server-side too so a stale tab or a direct API call
+    can't bypass the workflow.
     """
     try:
         from core.models import Bills
-        
+
         try:
             bill = Bills.objects.get(bill_pk=bill_pk)
         except Bills.DoesNotExist:
@@ -484,18 +634,41 @@ def approve_stocktake_bill(request, bill_pk):
                 'status': 'error',
                 'message': f'Bill with pk {bill_pk} not found'
             }, status=404)
-        
+
+        if not bill.pm_approved:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'PM approval is required before this bill can be approved.',
+            }, status=400)
+
+        if bill.stock_on_shelf_date is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Stock-on-shelf date is required before approval.',
+            }, status=400)
+
+        snap_floor = _latest_finalised_snap_date()
+        if snap_floor and bill.stock_on_shelf_date <= snap_floor:
+            return JsonResponse({
+                'status': 'error',
+                'message': (
+                    f"Stock-on-shelf date ({bill.stock_on_shelf_date.isoformat()}) "
+                    f"must be after the most recent finalised snap "
+                    f"({snap_floor.isoformat()})."
+                ),
+            }, status=400)
+
         # Update bill status to approved (2)
         bill.bill_status = Bills.STATUS_APPROVED
         bill.save(update_fields=['bill_status', 'updated_at'])
-        
+
         logger.info(f"Approved stocktake bill {bill_pk}")
-        
+
         return JsonResponse({
             'status': 'success',
             'message': 'Bill approved successfully'
         })
-        
+
     except Exception as e:
         logger.error(f"Error approving stocktake bill: {str(e)}", exc_info=True)
         return JsonResponse({
@@ -1002,9 +1175,19 @@ def get_snap(request, snap_pk):
             if snap_item.item and snap_item.item.project_type:
                 project_type_name = snap_item.item.project_type
             
-            # Get projects that have this item
+            # Get projects that have this item.
+            #
+            # Special case: "Unexpected Line Items" is a universal
+            # contingency line that every execution project carries
+            # (auto-seeded — see Categories.DIVISION_ULI). Even if a
+            # given project somehow lacks the costing (legacy data,
+            # mid-migration), we still want it to be a valid snap
+            # target so the snap can dump variance against ULI.
             item_name = snap_item.item.item if snap_item.item else ''
-            valid_project_pks = item_to_projects.get(item_name, set())
+            if item_name.strip().lower() == 'unexpected line items':
+                valid_project_pks = set(project_lookup.keys())
+            else:
+                valid_project_pks = item_to_projects.get(item_name, set())
             valid_projects = [
                 {'project_pk': pk, 'project_name': project_lookup[pk]}
                 for pk in valid_project_pks

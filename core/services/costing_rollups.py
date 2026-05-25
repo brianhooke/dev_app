@@ -330,20 +330,30 @@ def compute_project_committed_billed(project, tender_or_execution):
         else:
             committed_dict[item.costing_pk] = float(item.contract_budget or 0)
 
-    # For Labour category items (division=-5), calculate committed from StaffHoursAllocations
+    # For Labour (division=-5) AND Unexpected Line Items (division=-15)
+    # category items, fold staff-hour wages into the committed amount.
+    # ULI is treated like Labour for staff-hours purposes (added
+    # 2026-05-25): staff hours can be allocated to the ULI line on
+    # any execution project, and those wages contribute to the ULI
+    # row's committed total just like they do for Labour.
+    #
     # Sum of (hours * applicable pay rate) for each costing item.
     # Per-allocation maths is delegated to ``compute_staff_hours_allocation_amount``
-    # so the Labour branch can't drift away from the every-item Billed branch
+    # so this branch can't drift away from the every-item Billed branch
     # below or the per-item allocations endpoint (audit A.M-H-03 calls out
     # the historical triplication; this module unifies two of the three —
     # the third lives in core/views/staff_hours.py and is a separate cleanup).
-    labour_items = Costing.objects.filter(
+    from core.models import Categories  # local; avoids cycles
+    wages_carrying_items = Costing.objects.filter(
         project=project,
-        category__division=-5,  # Labour category
-        tender_or_execution=tender_or_execution
-    )
+        category__division__in=[
+            Categories.DIVISION_LABOUR,
+            Categories.DIVISION_ULI,
+        ],
+        tender_or_execution=tender_or_execution,
+    ).select_related('category')
 
-    for item in labour_items:
+    for item in wages_carrying_items:
         allocations = StaffHoursAllocations.objects.filter(
             project=project,
             costing=item
@@ -355,16 +365,30 @@ def compute_project_committed_billed(project, tender_or_execution):
             if wages_amount > 0:
                 total_amount += Decimal(str(wages_amount))
 
-        # Set committed amount for Labour items (no qty/rate, just amount)
+        # For Labour we *replace* whatever was in committed_dict (Labour
+        # items don't use quote allocations). For ULI we *add* on top of
+        # the existing quote/snap committed total because the ULI line
+        # can carry quotes/snaps/bills/wages all together.
+        is_labour_item = item.category and item.category.division == Categories.DIVISION_LABOUR
+
         if is_construction:
-            committed_dict[item.costing_pk] = {
-                'qty': None,
-                'rate': None,
-                'amount': float(total_amount),
-                'is_labour': True
-            }
+            existing = committed_dict.get(item.costing_pk)
+            if is_labour_item or not existing:
+                committed_dict[item.costing_pk] = {
+                    'qty': None,
+                    'rate': None,
+                    'amount': float(total_amount),
+                    'is_labour': is_labour_item,
+                }
+            else:
+                # ULI with pre-existing quote/snap committed: add wages.
+                existing['amount'] = float(existing.get('amount') or 0) + float(total_amount)
         else:
-            committed_dict[item.costing_pk] = float(total_amount)
+            existing = committed_dict.get(item.costing_pk, 0)
+            if is_labour_item:
+                committed_dict[item.costing_pk] = float(total_amount)
+            else:
+                committed_dict[item.costing_pk] = float(existing) + float(total_amount)
 
     # Add stocktake snap allocations to committed amounts.
     #

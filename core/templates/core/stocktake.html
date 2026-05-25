@@ -1123,13 +1123,18 @@ Tabs:
                     var pdfUrl = bill.pdf_url || bill.attachment_url || '';
                     var netVal = bill.total_net !== null ? parseFloat(bill.total_net) : 0;
                     var gstVal = bill.total_gst !== null ? parseFloat(bill.total_gst) : 0;
+                    var isApprovedView = window.stocktakeFilterMode === 'approved';
+                    var pmApproved = !!bill.pm_approved;
+                    var shelfDate = bill.stock_on_shelf_date || '';
                     var row = $('<tr>')
                         .attr('data-pk', bill.bill_pk)
                         .attr('data-bill-pk', bill.bill_pk)
                         .attr('data-pdf-url', pdfUrl)
                         .attr('data-total-net', netVal)
                         .attr('data-total-gst', gstVal)
-                        .attr('data-xero-instance-pk', bill.xero_instance_pk || '');
+                        .attr('data-xero-instance-pk', bill.xero_instance_pk || '')
+                        .attr('data-pm-approved', pmApproved ? '1' : '0')
+                        .attr('data-stock-on-shelf-date', shelfDate);
                     
                     row.append($('<td>').text(bill.supplier_name || 'Unknown'));
                     row.append($('<td>').text(bill.xero_instance_name || ''));
@@ -1139,10 +1144,50 @@ Tabs:
                     row.append($('<td>').addClass('gross-cell').text(grossVal ? Utils.formatCurrency(grossVal) : ''));
                     row.append($('<td>').addClass('net-cell').text(bill.total_net !== null ? Utils.formatCurrency(bill.total_net) : ''));
                     row.append($('<td>').addClass('gst-cell').text(bill.total_gst !== null ? Utils.formatCurrency(bill.total_gst) : ''));
-                    
+
+                    // PM Approve checkbox — second-stage gate on Approve being clickable.
+                    // In approved view, render a static tick/dash since the bill is
+                    // already past the workflow.
+                    var pmTd = $('<td>').addClass('col-action').css('text-align', 'center');
+                    if (isApprovedView) {
+                        pmTd.html(pmApproved ? '<i class="fas fa-check text-success"></i>' : '-')
+                            .css('font-size', '12px');
+                    } else {
+                        var pmCheckbox = $('<input>')
+                            .attr('type', 'checkbox')
+                            .addClass('pm-approve-checkbox')
+                            .attr('data-bill-pk', bill.bill_pk)
+                            .prop('checked', pmApproved)
+                            .attr('title', 'PM has approved this stocktake bill');
+                        pmTd.append(pmCheckbox);
+                    }
+                    row.append(pmTd);
+
+                    // Stock-on-shelf date — must be > most-recent finalised snap.
+                    // The min attribute is sourced from
+                    // window.stocktakeShelfDateMin which is refreshed each
+                    // time loadStocktakeBills() runs.
+                    var shelfTd = $('<td>');
+                    if (isApprovedView) {
+                        shelfTd.text(shelfDate ? Utils.formatDateDMY(shelfDate) : '-')
+                               .css('font-size', '11px');
+                    } else {
+                        var shelfInput = $('<input>')
+                            .attr('type', 'date')
+                            .addClass('form-control form-control-sm stock-on-shelf-date-input')
+                            .css('font-size', '11px')
+                            .attr('data-bill-pk', bill.bill_pk)
+                            .val(shelfDate);
+                        if (window.stocktakeShelfDateMin) {
+                            shelfInput.attr('min', window.stocktakeShelfDateMin);
+                        }
+                        shelfTd.append(shelfInput);
+                    }
+                    row.append(shelfTd);
+
                     // Approve button or Approval date
                     var actionTd = $('<td>').addClass('col-action');
-                    if (window.stocktakeFilterMode === 'approved') {
+                    if (isApprovedView) {
                         // Show approval date
                         var approvalDate = bill.updated_at ? Utils.formatDateDMY(bill.updated_at) : '-';
                         actionTd.text(approvalDate).css('font-size', '11px');
@@ -1153,7 +1198,7 @@ Tabs:
                             .css('font-size', '10px')
                             .attr('data-bill-pk', bill.bill_pk)
                             .prop('disabled', true)
-                            .attr('title', 'Approve bill (enabled when fully allocated)');
+                            .attr('title', 'Approve bill (requires PM approval, stock-on-shelf date, and full allocation)');
                         actionTd.append(approveBtn);
                     }
                     row.append(actionTd);
@@ -1527,14 +1572,23 @@ Tabs:
         updateApproveButtonState({ remainingNet: remainingNet, remainingGst: remainingGst });
     }
     
-    // Update approve button state
+    // Update approve button state. Gates (all must hold for the
+    // Approve button to be selectable):
+    //   1. Bill is fully allocated (remaining net + gst < 0.01).
+    //   2. Every allocation row with a non-zero amount has an item.
+    //   3. PM Approve checkbox is ticked.
+    //   4. Stock-on-shelf date is set AND strictly > latest finalised
+    //      snap date.
+    // The two-step approval added 2026-05-25 introduced gates 3+4 to
+    // shut down the retroactive-allocation bug forensicked on the
+    // 50MPa entry.
     function updateApproveButtonState(totals) {
         var selectedRow = $('#stocktakeAllocMainTableBody tr.selected-row');
         if (!selectedRow.length) return;
-        
+
         var approveBtn = selectedRow.find('.approve-stocktake-btn');
         var isFullyAllocated = Math.abs(totals.remainingNet) < 0.01 && Math.abs(totals.remainingGst) < 0.01;
-        
+
         // Check all rows with amounts have an item selected.
         // Use abs() so credit-note rows (negative qty * rate → negative amount)
         // are also required to nominate an item, just like positive rows.
@@ -1545,14 +1599,117 @@ Tabs:
             var amountVal = Utils.parseFloatSafe($(this).find('.' + cls + '-amount-input').val());
             if (Math.abs(amountVal) >= 0.01 && !itemVal) { allItemsSelected = false; return false; }
         });
-        
-        var canApprove = isFullyAllocated && allItemsSelected;
+
+        // PM Approve gate
+        var pmApproved = selectedRow.find('.pm-approve-checkbox').is(':checked');
+
+        // Stock-on-shelf gate: must be set AND strictly after the
+        // latest finalised snap (window.stocktakeShelfDateMin is
+        // already snap_date + 1 day).
+        var shelfVal = selectedRow.find('.stock-on-shelf-date-input').val() ||
+                       selectedRow.attr('data-stock-on-shelf-date');
+        var shelfOk = !!shelfVal;
+        if (shelfOk && window.stocktakeShelfDateMin) {
+            shelfOk = shelfVal >= window.stocktakeShelfDateMin;
+        }
+
+        var canApprove = isFullyAllocated && allItemsSelected && pmApproved && shelfOk;
+        var titleParts = [];
+        if (!isFullyAllocated) titleParts.push('bill not fully allocated');
+        if (!allItemsSelected) titleParts.push('rows missing items');
+        if (!pmApproved) titleParts.push('PM Approve not ticked');
+        if (!shelfOk) titleParts.push('Stock-on-shelf date missing or before latest snap');
+        approveBtn.attr(
+            'title',
+            titleParts.length
+                ? 'Cannot approve: ' + titleParts.join('; ')
+                : 'Approve this stocktake bill'
+        );
+
         if (canApprove) {
             approveBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-success');
         } else {
             approveBtn.prop('disabled', true).removeClass('btn-success').addClass('btn-secondary');
         }
     }
+
+    // Push pm_approved + stock_on_shelf_date for a bill row to the
+    // server. On success, refresh the row's data attributes and the
+    // approve-button gate. On failure (e.g. snap-lock violation),
+    // revert the in-DOM input to the previously-saved value and alert.
+    function saveStocktakeBillMeta(row, payload) {
+        var billPk = row.attr('data-bill-pk');
+        if (!billPk) return;
+        $.ajax({
+            url: '/core/update_stocktake_bill_meta/' + billPk + '/',
+            type: 'POST',
+            headers: { 'X-CSRFToken': Utils.getCSRFToken() },
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(response) {
+                if (response.status === 'success') {
+                    row.attr('data-pm-approved', response.pm_approved ? '1' : '0');
+                    row.attr('data-stock-on-shelf-date', response.stock_on_shelf_date || '');
+                    row.find('.pm-approve-checkbox').prop('checked', !!response.pm_approved);
+                    row.find('.stock-on-shelf-date-input').val(response.stock_on_shelf_date || '');
+                    if (window.stocktakeData && window.stocktakeData.bills) {
+                        var cached = window.stocktakeData.bills.find(function(b) {
+                            return String(b.bill_pk) === String(billPk);
+                        });
+                        if (cached) {
+                            cached.pm_approved = !!response.pm_approved;
+                            cached.stock_on_shelf_date = response.stock_on_shelf_date || null;
+                        }
+                    }
+                    if (row.hasClass('selected-row')) {
+                        updateStocktakeStillToAllocate();
+                    }
+                } else {
+                    alert(response.message || 'Failed to update bill.');
+                    // Revert UI to last saved values from row attrs
+                    row.find('.pm-approve-checkbox').prop('checked', row.attr('data-pm-approved') === '1');
+                    row.find('.stock-on-shelf-date-input').val(row.attr('data-stock-on-shelf-date') || '');
+                    if (row.hasClass('selected-row')) {
+                        updateStocktakeStillToAllocate();
+                    }
+                }
+            },
+            error: function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                    || 'Failed to update bill.';
+                alert(msg);
+                row.find('.pm-approve-checkbox').prop('checked', row.attr('data-pm-approved') === '1');
+                row.find('.stock-on-shelf-date-input').val(row.attr('data-stock-on-shelf-date') || '');
+                if (row.hasClass('selected-row')) {
+                    updateStocktakeStillToAllocate();
+                }
+            }
+        });
+    }
+
+    // Toggle PM Approve. When checking on, send only pm_approved so
+    // the server auto-defaults stock_on_shelf_date to today if empty
+    // (then echoes both back). When unchecking, send only pm_approved.
+    $(document).on('change', '.pm-approve-checkbox', function(e) {
+        e.stopPropagation();
+        var row = $(this).closest('tr');
+        saveStocktakeBillMeta(row, { pm_approved: this.checked });
+    });
+
+    // Edit stock-on-shelf date directly. Browser's `min=` attribute
+    // covers most invalid dates; the server is the authoritative
+    // gate against the snap-lock.
+    $(document).on('change', '.stock-on-shelf-date-input', function(e) {
+        e.stopPropagation();
+        var row = $(this).closest('tr');
+        saveStocktakeBillMeta(row, { stock_on_shelf_date: this.value || '' });
+    });
+
+    // Stop click on the new inputs from selecting the bill row
+    // (AllocationsManager binds row-level click handlers).
+    $(document).on('click', '.pm-approve-checkbox, .stock-on-shelf-date-input', function(e) {
+        e.stopPropagation();
+    });
     
     // Approve stocktake bill
     $(document).on('click', '.approve-stocktake-btn', function() {
@@ -1634,7 +1791,7 @@ Tabs:
                         }
                         // Check if table is now empty
                         if ($('#stocktakeAllocMainTableBody tr').length === 0) {
-                            $('#stocktakeAllocMainTableBody').html('<tr><td colspan="8" style="text-align: center; padding: 40px; color: #6c757d;">No bills found.</td></tr>');
+                            $('#stocktakeAllocMainTableBody').html('<tr><td colspan="10" style="text-align: center; padding: 40px; color: #6c757d;">No bills found.</td></tr>');
                         }
                     });
                 } else {
@@ -1657,10 +1814,40 @@ Tabs:
     // Track filter mode: 'unallocated' (status 0) or 'approved' (status 1,2,3,4)
     window.stocktakeFilterMode = 'unallocated';
     
+    // Refresh the latest finalised snap date so the stock-on-shelf
+    // date inputs render the correct `min` attribute. Stored on
+    // window.stocktakeShelfDateMin (= snap_date + 1 day, ISO).
+    function refreshLatestFinalisedSnap(callback) {
+        $.ajax({
+            url: '/core/stocktake/latest_finalised_snap/',
+            type: 'GET',
+            success: function(response) {
+                if (response && response.status === 'success') {
+                    window.stocktakeShelfDateMin = response.earliest_stock_on_shelf_date || null;
+                    window.stocktakeLatestSnapDate = response.latest_finalised_snap_date || null;
+                }
+                if (callback) callback();
+            },
+            error: function() {
+                // Don't block bill list loading on this failing — the
+                // server is still authoritative on validation.
+                if (callback) callback();
+            }
+        });
+    }
+
     // Load Stocktake bills
     window.loadStocktakeBills = function() {
         if (!$('#stocktakeAllocMainTableBody').length) return;
-        
+
+        // Refresh the snap floor first so newly-rendered rows pick up
+        // the correct `min=` on their stock-on-shelf date inputs.
+        refreshLatestFinalisedSnap(function() {
+            _loadStocktakeBillsInner();
+        });
+    };
+
+    function _loadStocktakeBillsInner() {
         stocktakeAjax('{% url "core:get_bills_list" %}', 'GET', null, function(response) {
             window.stocktakeData = response;
             
@@ -1704,8 +1891,8 @@ Tabs:
                 Utils.initSortableTable('stocktakeAllocMainTable');
             }
         });
-    };
-    
+    }
+
     // Initialize Stocktake Section (called when user clicks Stocktake nav link)
     window.initStocktakeSection = function() {
         initAllocationsManager();

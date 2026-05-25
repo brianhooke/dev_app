@@ -465,9 +465,22 @@ def get_item_quote_allocations(request, item_pk):
     """
     Get individual quote allocations and stocktake snap allocations for a specific item.
     Returns list of allocations with associated quote/contact or snap information.
+
+    Special case for the Unexpected Line Items costing (added 2026-05-25):
+    when ``costing.category.division == DIVISION_ULI`` we also include
+    aggregated staff-hour wages and direct bills, so the user gets a
+    single "Committed" dropdown showing all three commitment sources
+    (quotes/snaps/bills/wages) on the universal contingency line.
+    For non-ULI costings the dropdown stays scoped to its historical
+    sources (quotes + snaps + direct bills) — staff wages remain in
+    the Billed dropdown.
     """
     try:
+        from core.models import Categories  # local; avoids cycles
         costing = get_object_or_404(Costing, pk=item_pk)
+        is_uli_costing = bool(
+            costing.category and costing.category.division == Categories.DIVISION_ULI
+        )
         
         # Get all quote allocations for this item
         allocations = Quote_allocations.objects.filter(
@@ -553,7 +566,37 @@ def get_item_quote_allocations(request, item_pk):
                     'bill_date': bill_date,
                     'type': 'bill',
                 })
-        
+
+        # ULI: also include aggregated staff-hour wages so the
+        # Committed dropdown shows all three commitment sources on the
+        # one ULI costing. Mirrors the wages aggregation in
+        # ``get_item_bill_allocations`` so the two endpoints stay
+        # consistent on what counts as a wages line.
+        if project and is_uli_costing:
+            staff_allocations = StaffHoursAllocations.objects.filter(
+                project=project,
+                costing=costing,
+                allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+            ).select_related('staff_hours__employee')
+
+            staff_total = 0.0
+            for alloc in staff_allocations:
+                staff_total += _compute_staff_hours_allocation_amount(alloc)
+
+            if staff_total > 0:
+                allocations_list.append({
+                    'allocation_pk': None,
+                    'qty': 0,
+                    'rate': 0,
+                    'amount': float(staff_total),
+                    'unit': '',
+                    'notes': '',
+                    'supplier_quote_number': 'Staff Wages',
+                    'contact_name': 'Staff Wages',
+                    'contact_pk': None,
+                    'type': 'wages',
+                })
+
         return JsonResponse({
             'status': 'success',
             'allocations': allocations_list

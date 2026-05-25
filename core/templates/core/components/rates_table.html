@@ -227,6 +227,25 @@
     .rates-flex-category.labour-category:hover {
         background-color: #f8bbd9;
     }
+
+    /* Unexpected Line Items — universal contingency category, locked
+       (added 2026-05-25). Distinct teal/grey palette so it's
+       visually grouped with Internal/Labour as "system" categories.
+       Checkboxes are hidden so the bulk-delete tool can't select
+       the ULI category or its single same-named costing. */
+    .rates-flex-category.uli-category {
+        background-color: #e0f2f1;
+        color: #00695c;
+    }
+
+    .rates-flex-category.uli-category:hover {
+        background-color: #b2dfdb;
+    }
+
+    .rates-flex-category.uli-category .col-checkbox,
+    .rates-flex-item.uli-item .col-checkbox {
+        visibility: hidden;
+    }
     
     .rates-flex-category .col-name {
         width: 170px;
@@ -311,6 +330,10 @@
     
     .rates-flex-item.labour-item {
         color: #c2185b;
+    }
+
+    .rates-flex-item.uli-item {
+        color: #00695c;
     }
     
     .rates-flex-item .col-name {
@@ -1058,15 +1081,21 @@
             // Render category header row
             var isInternal = category.category === 'Internal';
             var isLabour = category.category === 'Labour';
+            // ULI is the universal contingency category (added 2026-05-25).
+            // Treat as a special, undeletable, undraggable, un-add-item-able
+            // category — same handling as Internal/Labour for drag/drop.
+            var isUli = category.division === -15;
             var categoryRow = $('<div></div>')
                 .addClass('rates-flex-category')
                 .attr('data-category-pk', category.categories_pk)
                 .attr('data-category-order', category.order_in_list);
-            
+
             if (isInternal) {
                 categoryRow.addClass('internal-category');
             } else if (isLabour) {
                 categoryRow.addClass('labour-category');
+            } else if (isUli) {
+                categoryRow.addClass('uli-category');
             } else if (allowDrag) {
                 categoryRow.addClass('draggable').attr('draggable', 'true');
             }
@@ -1083,8 +1112,8 @@
                 .text('▶');
             nameCell.append(collapseIndicator);
             
-            // Drag handle (only for non-internal/non-labour and if drag allowed)
-            if (!isInternal && !isLabour && allowDrag) {
+            // Drag handle (only for non-internal/non-labour/non-uli and if drag allowed)
+            if (!isInternal && !isLabour && !isUli && allowDrag) {
                 nameCell.append('<span class="rates-drag-handle">⋮⋮</span>');
             }
             
@@ -1125,16 +1154,20 @@
                     .attr('data-category-pk', category.categories_pk)
                     .attr('data-item-order', item.order_in_list || (itemIndex + 1));
                 
-                if (allowDrag) {
+                if (allowDrag && !isUli) {
                     itemRow.addClass('draggable').attr('draggable', 'true');
                 }
-                
+
                 if (isInternal) {
                     itemRow.addClass('internal-item');
                 }
-                
+
                 if (isLabour) {
                     itemRow.addClass('labour-item');
+                }
+
+                if (isUli) {
+                    itemRow.addClass('uli-item');
                 }
                 
                 // Checkbox cell for item selection

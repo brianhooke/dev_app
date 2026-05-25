@@ -45,6 +45,7 @@ from .views.stocktake import (
     toggle_stocktake_inclusion, toggle_xero_instance_stocktake, update_xero_stocktake_account, update_xero_stocktake_writeoffs_account, get_stocktake_allocations,
     create_stocktake_allocation, update_stocktake_allocation,
     delete_stocktake_allocation, approve_stocktake_bill,
+    update_stocktake_bill_meta, get_latest_finalised_snap_info,
     # Snap APIs
     get_stock_ledger, get_snap_list, create_snap, get_snap,
     update_snap, delete_snap, update_snap_item, create_snap_allocation,
@@ -278,6 +279,8 @@ urlpatterns = [
     path('update_stocktake_allocation/<int:allocation_pk>/', update_stocktake_allocation, name='update_stocktake_allocation'),
     path('delete_stocktake_allocation/<int:allocation_pk>/', delete_stocktake_allocation, name='delete_stocktake_allocation'),
     path('approve_stocktake_bill/<int:bill_pk>/', approve_stocktake_bill, name='approve_stocktake_bill'),
+    path('update_stocktake_bill_meta/<int:bill_pk>/', update_stocktake_bill_meta, name='update_stocktake_bill_meta'),
+    path('stocktake/latest_finalised_snap/', get_latest_finalised_snap_info, name='get_latest_finalised_snap_info'),
     # Stocktake Snap APIs
     path('stocktake/ledger/', get_stock_ledger, name='get_stock_ledger'),
     path('stocktake/snaps/', get_snap_list, name='get_snap_list'),

@@ -111,15 +111,21 @@ def dashboard_view(request):
         for instance in xero_instances
     ])
     
-    # Stocktake table columns
+    # Stocktake table columns. PM Approve + Stock Date columns added
+    # 2026-05-25 to drive the two-step approval / shelf-lock workflow
+    # (see HANDOFF.md). Footer total `colIndex` values in
+    # stocktake.html still resolve to Gross/Net/GST because the new
+    # columns are inserted *after* GST.
     stocktake_main_columns = [
-        {'header': 'Supplier', 'width': '18%', 'sortable': True},
-        {'header': 'Xero Instance', 'width': '12%', 'sortable': True},
-        {'header': 'Bill #', 'width': '12%', 'sortable': True},
-        {'header': '$ Gross', 'width': '13%', 'sortable': True},
-        {'header': '$ Net', 'width': '13%', 'sortable': True},
-        {'header': '$ GST', 'width': '13%', 'sortable': True},
-        {'header': 'Approve', 'width': '10%', 'class': 'col-action'},
+        {'header': 'Supplier', 'width': '14%', 'sortable': True},
+        {'header': 'Xero Instance', 'width': '10%', 'sortable': True},
+        {'header': 'Bill #', 'width': '9%', 'sortable': True},
+        {'header': '$ Gross', 'width': '9%', 'sortable': True},
+        {'header': '$ Net', 'width': '9%', 'sortable': True},
+        {'header': '$ GST', 'width': '9%', 'sortable': True},
+        {'header': 'PM Approve', 'width': '8%', 'class': 'col-action'},
+        {'header': 'Stock Date', 'width': '13%', 'sortable': True},
+        {'header': 'Approve', 'width': '9%', 'class': 'col-action'},
         {'header': 'Return', 'width': '5%', 'class': 'col-action'},
     ]
     stocktake_alloc_columns = [
@@ -468,8 +474,10 @@ def get_project_categories(request, project_pk):
         
         categories = Categories.objects.filter(
             project_id=project_pk
-        ).order_by('order_in_list').values('categories_pk', 'category', 'order_in_list')
-        
+        ).order_by('order_in_list').values(
+            'categories_pk', 'category', 'order_in_list', 'division'
+        )
+
         categories_list = list(categories)
         
         logger.info(f"Retrieved {len(categories_list)} categories for project {project_pk}")
@@ -685,12 +693,21 @@ def create_category(request, project_pk):
                 'message': 'Project not found'
             }, status=404)
         
+        # Block manual creation of "Unexpected Line Items" — auto-seeded
+        # per project; manual creation would either collide or muddy
+        # the divisional invariant.
+        if category_name.strip().lower() == 'unexpected line items':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Cannot create a "Unexpected Line Items" category — it is auto-seeded for every project.',
+            }, status=400)
+
         # Check for duplicate category name (case-insensitive)
         existing_category = Categories.objects.filter(
             project=project,
             category__iexact=category_name
         ).first()
-        
+
         if existing_category:
             return JsonResponse({
                 'status': 'error',
@@ -819,7 +836,15 @@ def create_item(request, project_pk):
                 'status': 'error',
                 'message': 'Category not found for this project'
             }, status=404)
-        
+
+        # Block adding additional costings to the ULI category —
+        # locked to its single same-named costing.
+        if category.division == Categories.DIVISION_ULI:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'New costings cannot be added to the Unexpected Line Items category.',
+            }, status=400)
+
         # Reorder existing items in this category if needed
         # If inserting at position N and there are already items at N or higher, increment them
         items_to_reorder = Costing.objects.filter(

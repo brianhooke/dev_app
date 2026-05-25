@@ -1,6 +1,6 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 24 May 2026 (v250 — first audit-batch deploy that actually reaches the live env)
+**Last updated:** 25 May 2026 (v252 — staged for deploy: stocktake two-step approval + Unexpected Line Items category)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
 
 ---
@@ -9,7 +9,10 @@
 
 - **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
 - **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
-- **Live version**: `v250-audit-and-onyx-import` (deployed 24 May 2026, commit on `main`). Costing-rollup migration + bill-allocation queryset helpers + bill-status filter sweep + A.M-C-01 lock-in + A.M-H-16 dead-Xero-endpoint deletion + A.M-H-01 dead-formulas-cleanup + the `import_onyx_subbie` management command. Code-only, no new migrations.
+- **Live version (currently serving)**: `v251-onyx-builder-overwrite-and-email-fix` (deployed 25 May 2026 — the previous batch).
+- **Local code-state version**: `v252` — staged for next deploy. Two new feature batches on top of v251:
+  1. **Stocktake two-step approval / shelf-lock** (introduces `Bills.pm_approved`, `Bills.stock_on_shelf_date`, `update_stocktake_bill_meta` endpoint, server-side guards in `approve_stocktake_bill`, two new columns in the Allocations tab main table). Migration `0081_bills_pm_approved_stock_on_shelf_date`.
+  2. **Unexpected Line Items category** (`Categories.DIVISION_ULI = -15`, auto-seeded on every project, undeletable, single same-named costing, exposed to staff hours / stocktake snaps for execution projects, Committed dropdown aggregates bills + snaps + wages). Migration `0082_seed_uli_for_existing_projects` backfills 35 categories / 35 tender costings / 7 execution costings on local; production count is similar (verify via SSM probe before deploy).
 - **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `strict-transport-security: max-age=86400`. EB env: `Status=Ready`, `Health=Green`.
 
 ### How to run management commands on the live instance
@@ -168,6 +171,67 @@ while IFS= read -r KEY; do
     --cli-binary-format raw-in-base64-out --payload file:///tmp/event.json /tmp/resp.json
 done < failed_keys.txt
 ```
+
+---
+
+## Stocktake two-step approval / shelf-lock (25 May 2026, v252)
+
+Triggered by the 50MPa retroactive-allocation forensic earlier in the same session — 16 stocktake allocations were entered after 6 Feb with `bill_date <= 6 Feb`, retroactively inflating the historical balance. The 6 Feb snap was also entered weeks late, so it locked in an already-inflated `book_qty`.
+
+To stop that class of bug recurring, every stocktake bill in the Allocations tab now has two new fields and the Approve workflow refuses to accept it without them:
+
+- **`Bills.pm_approved`** (Boolean, default False) — the PM checkbox in the main row of the Allocations tab. Server-side approve guard rejects the bill unless this is True.
+- **`Bills.stock_on_shelf_date`** (DateField, nullable) — the date stock physically landed. Must be **strictly after** the most recent finalised `StocktakeSnap.date`. Once a snap is taken, the shelf is locked for any prior date — bills after the snap must claim a date `≥ snap_date + 1`.
+
+UX flow:
+
+1. User opens Allocations tab → sees PM Approve checkbox + Stock Date input alongside the existing Approve button.
+2. Ticking PM Approve auto-fills today's date if the field is empty (`update_stocktake_bill_meta` does this server-side).
+3. The Approve button only enables when **all four** gates hold: fully allocated, every row has an item, PM Approved, stock-on-shelf set & after latest snap. Tooltip names whichever gate is failing.
+4. `approve_stocktake_bill` re-runs the same gates server-side so a stale tab or direct API call can't bypass them.
+
+JS reads the snap floor (`/core/stocktake/latest_finalised_snap/`) on every Allocations tab refresh, so the date inputs render with the correct `min` attribute.
+
+**Phase 2 follow-up** (NOT done in v252): the stock ledger / snap consumption logic still uses `Bills.bill_date` rather than `stock_on_shelf_date`. The two are equal for newly-approved bills but diverge for legacy bills (which have NULL `stock_on_shelf_date`). Migrating the ledger to use `COALESCE(stock_on_shelf_date, bill_date)` is the natural next step — it lets future snaps consume the right cohort even when a bill was approved with a back-dated `bill_date`. Track as a separate audit item.
+
+---
+
+## Unexpected Line Items category (25 May 2026, v252)
+
+A new universal contingency category auto-seeded on every project. Mirrors the existing pattern of Internal (`-10`) and Labour (`-5`) special divisions:
+
+- **`Categories.DIVISION_ULI = -15`**, name `"Unexpected Line Items"`. Single same-named costing.
+- **`Categories.PROTECTED_DIVISIONS = (-10, -5, -15)`** — used by the new server-side guards (Categories.SPECIAL_CATEGORY_NAMES exists too for the `save()`-time normalisation that already enforces division by name).
+- Auto-seeded on project creation in `core.views.projects.create_project` after the Internal / Labour blocks.
+- Migration `0082_seed_uli_for_existing_projects` runs an **additive backfill** for every existing project — creates the ULI category + tender costing if missing, and the execution costing if missing for any `project_status==2` project. Idempotent. **Never** touches non-ULI rows. Local backfill ran cleanly: 35 ULI categories created, 35 tender costings, 7 execution costings (matches 7 execution-mode projects).
+
+Server-side guards added in v252:
+
+| Endpoint | File | Guard |
+|----------|------|-------|
+| `delete_category` | `core/views/projects.py` | `division == DIVISION_ULI` → 400 |
+| `delete_item` | `core/views/projects.py` | `category.division == DIVISION_ULI` → 400 |
+| `delete_category_or_item` | `core/views/rates.py` | Both branches: same as above |
+| `update_category_name` | `core/views/rates.py` | Existing ULI cannot be renamed; non-ULI cannot be renamed *to* ULI |
+| `update_item_name` | `core/views/rates.py` | ULI costing cannot be renamed |
+| `create_new_category_costing_unit_quantity` | `core/views/rates.py` | Block "category" with name ULI; block "item" under ULI category |
+| `dashboard.create_category` | `core/views/dashboard.py` | Block name == ULI |
+| `dashboard.create_item` | `core/views/dashboard.py` | Block adding under ULI category |
+
+Special integrations:
+
+- **Staff hours**: `get_costings_for_project` returns ULI costings alongside Labour for execution-mode projects. Wages allocated against ULI flow into both:
+  - the ULI row's **committed** total in `_compute_project_committed_billed` (added a `wages_carrying_items` queryset that handles ULI by *adding* wages to existing quote/snap committed, vs Labour which *replaces*).
+  - the ULI Committed dropdown in `contract_budget.html`, via the `is_uli_costing` branch in `get_item_quote_allocations` that aggregates wages exactly the way `get_item_bill_allocations` does for the Billed dropdown.
+- **Stocktake snaps**: `get_snap` now unions all execution projects into `valid_projects` whenever a snap item's name is `"Unexpected Line Items"` — the snap can dump variance against ULI on any project, even if for some reason the project lacks the costing (defensive).
+- **Frontend (rates_table.html)**: `.uli-category` / `.uli-item` CSS classes added (teal palette). Drag handles, item drag, and bulk-delete checkboxes are hidden for ULI. The flag is sourced from the new `division` field in `get_rates_data` and `get_project_categories` payloads.
+- **Contract budget rendering**: ULI rows fall through the existing non-Internal / non-Labour code path (its name doesn't match either), so the Committed cell is clickable and shows the dropdown of bills + snaps + wages.
+
+Notes for whoever picks this up next:
+
+- The audit's recurring `-5` / `-10` literals scattered across `contract_budget.py` / `costing_rollups.py` / `staff_hours.py` are still mostly inline integers (audit `A.M-H-11`). The v252 ULI batch added the constants in `Categories.DIVISION_ULI` / `PROTECTED_DIVISIONS` and uses them in new code, but did **not** sweep existing `-5`/`-10` literals — that's a separate cleanup pass.
+- The C2C export slices in `contract_budget.export_projects_c2c_csv` (Margin/Labour columns) currently treat ULI as a normal cost line (folded into `c2c_incl_margin_and_labour` and `cost_to_complete`). If ULI should get its own export column, that's a separate ask.
+- `fix_contract_budget` (tender → execution clone) duplicates ULI like every other costing — no special handling required there.
 
 ---
 

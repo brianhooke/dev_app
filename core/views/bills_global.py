@@ -1391,6 +1391,13 @@ def get_bills_list(request):
                 'exchange_rate': float(invoice.exchange_rate) if getattr(invoice, 'exchange_rate', None) else None,
                 'is_fx_fixed': getattr(invoice, 'is_fx_fixed', False),
                 'is_fx_bill': getattr(invoice, 'is_fx_bill', False),
+                # Stocktake two-step approval fields (added 2026-05-25). Only
+                # meaningful when is_stocktake=True; null/false otherwise.
+                'pm_approved': bool(getattr(invoice, 'pm_approved', False)),
+                'stock_on_shelf_date': (
+                    invoice.stock_on_shelf_date.isoformat()
+                    if getattr(invoice, 'stock_on_shelf_date', None) else None
+                ),
             }
             bills_data.append(bill)
         except Exception as e:

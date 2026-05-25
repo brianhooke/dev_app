@@ -622,6 +622,23 @@ class Categories(models.Model):
     # core/views/contract_budget.py (Margin/Labour C2C slices) and the admin.
     DIVISION_INTERNAL = -10  # "Internal" category — houses the Margin line
     DIVISION_LABOUR = -5     # "Labour" category — staff-hours allocations
+    DIVISION_ULI = -15       # "Unexpected Line Items" — universal contingency
+                             # (added 2026-05-25). Auto-seeded on every project,
+                             # cannot be deleted or have new costings added,
+                             # and exposes its single same-named costing to
+                             # bills, staff-hour allocations, and stocktake
+                             # snaps for execution-mode projects.
+
+    # Names matched by save() to enforce the division sentinels regardless
+    # of caller. Lower-cased for comparison.
+    SPECIAL_CATEGORY_NAMES = {
+        'labour': DIVISION_LABOUR,
+        'internal': DIVISION_INTERNAL,
+        'unexpected line items': DIVISION_ULI,
+    }
+    # Categories that are auto-managed (auto-seeded, undeletable, single
+    # canonical costing). Used by delete/rename/create-costing guards.
+    PROTECTED_DIVISIONS = (DIVISION_INTERNAL, DIVISION_LABOUR, DIVISION_ULI)
 
     categories_pk = models.AutoField(primary_key=True)
     project = models.ForeignKey('Projects', on_delete=models.CASCADE, null=True, blank=True)
@@ -639,20 +656,18 @@ class Categories(models.Model):
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
     def save(self, *args, **kwargs):
-        # Enforce the division sentinel for the two named categories the
-        # codebase reasons about, regardless of caller. Historically several
-        # creation paths (rates page, dashboard, hc_variations, csv upload,
-        # template-copy) hard-coded division=0 even when the name was
-        # 'Labour' / 'Internal', which made C2C slices and Margin handling
-        # silently miss those projects. This guard makes the invariant a
-        # model-level guarantee instead of a per-caller discipline. Any
-        # other category name is left untouched.
+        # Enforce the division sentinel for the named special categories
+        # the codebase reasons about, regardless of caller. Historically
+        # several creation paths (rates page, dashboard, hc_variations,
+        # csv upload, template-copy) hard-coded division=0 even when the
+        # name was 'Labour' / 'Internal', which made C2C slices and
+        # Margin handling silently miss those projects. This guard makes
+        # the invariant a model-level guarantee instead of a per-caller
+        # discipline. Any non-special category name is left untouched.
         if self.category:
             normalised = self.category.strip().lower()
-            if normalised == 'labour':
-                self.division = self.DIVISION_LABOUR
-            elif normalised == 'internal':
-                self.division = self.DIVISION_INTERNAL
+            if normalised in self.SPECIAL_CATEGORY_NAMES:
+                self.division = self.SPECIAL_CATEGORY_NAMES[normalised]
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -922,7 +937,22 @@ class Bills(models.Model):
     is_fx_fixed = models.BooleanField(default=True)  # False for unfixed FX bills, True once payment confirmed or AUD bill
     fx_fixed_at = models.DateTimeField(null=True, blank=True)  # When FX was fixed (payment confirmed)
     xero_paid_aud = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Actual AUD amount from Xero payment
-    
+
+    # Stocktake two-step approval (added 2026-05-25):
+    # `pm_approved` is the PM-side checkbox in the stocktake Allocations
+    # tab; `approve_stocktake_bill` rejects unless this is True. Always
+    # False for non-stocktake bills (the field is shared with all Bills
+    # rows because Bills is one table; semantics only apply when
+    # is_stocktake=True).
+    pm_approved = models.BooleanField(default=False)
+    # The date the stock physically landed on the shelf. Drives which
+    # bills a stocktake snap consumes (a snap on date D consumes bills
+    # whose stock_on_shelf_date <= D). Must be > the most recent
+    # finalised StocktakeSnap.date — once a snap is taken, the shelf is
+    # locked so the historical balance can't be inflated retroactively
+    # (see HANDOFF.md "50MPa stocktake forensic, 25 May 2026").
+    stock_on_shelf_date = models.DateField(null=True, blank=True)
+
     class Meta:
         db_table = 'core_invoices'  # Keep old table name to avoid migration
         indexes = [

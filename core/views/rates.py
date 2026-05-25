@@ -51,7 +51,7 @@ def get_rates_data(request):
             project__isnull=True,
             project_type__iexact=project_type
         ).order_by('order_in_list').values(
-            'categories_pk', 'category', 'order_in_list'
+            'categories_pk', 'category', 'order_in_list', 'division'
         )
         categories_count = categories.count()
         logger.info(f"[get_rates_data] Found {categories_count} categories")
@@ -91,7 +91,11 @@ def get_rates_data(request):
             {
                 'categories_pk': c['categories_pk'],
                 'category': c['category'],
-                'order_in_list': int(c['order_in_list']) if c['order_in_list'] else 0
+                'order_in_list': int(c['order_in_list']) if c['order_in_list'] else 0,
+                # Exposed so the rates table JS can identify special
+                # categories (Internal=-10, Labour=-5, ULI=-15) without
+                # name matching.
+                'division': c['division'],
             }
             for c in categories
         ]
@@ -220,14 +224,28 @@ def create_new_category_costing_unit_quantity(request):
         
         with transaction.atomic():
             if model_type == 'category':
+                # Block users from manually creating a "Unexpected Line
+                # Items" category — these are auto-seeded per project at
+                # creation, and a manual create here would either
+                # collide (same project) or muddy the divisional
+                # invariant (same name on a template). Other special
+                # names (Internal/Labour) keep their historical
+                # behaviour because users may legitimately re-add them
+                # to a template that's missing them.
+                if name.strip().lower() == 'unexpected line items':
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Cannot create a "Unexpected Line Items" category — it is auto-seeded for every project.',
+                    }, status=400)
+
                 # Build filter for reordering
                 if project:
                     reorder_filter = {'project': project, 'order_in_list__gte': order_in_list}
                 else:
                     reorder_filter = {'project__isnull': True, 'project_type': project_type, 'order_in_list__gte': order_in_list}
-                
+
                 Categories.objects.filter(**reorder_filter).update(order_in_list=F('order_in_list') + 1)
-                
+
                 # Create new category
                 new_entry = Categories.objects.create(
                     category=name,
@@ -251,7 +269,15 @@ def create_new_category_costing_unit_quantity(request):
                     category = Categories.objects.get(categories_pk=category_pk)
                 except Categories.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': 'Category not found'}, status=404)
-                
+
+                # Block adding additional costings to the ULI category —
+                # it's locked to its single same-named costing.
+                if category.division == Categories.DIVISION_ULI:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'New costings cannot be added to the Unexpected Line Items category.',
+                    }, status=400)
+
                 # Get the unit if specified
                 unit_pk = data.get('unit_pk')
                 unit = None
@@ -725,10 +751,32 @@ def update_category_name(request):
             category = Categories.objects.get(categories_pk=pk)
         except Categories.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Category not found'}, status=404)
-        
+
+        # Block rename of the ULI category (added 2026-05-25). The
+        # category and its costing are name-coupled — Categories.save()
+        # restores the division sentinel from the name, so a rename
+        # would silently demote ULI to a normal category.
+        if category.division == Categories.DIVISION_ULI:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The Unexpected Line Items category cannot be renamed',
+            }, status=400)
+
+        # Also block accidentally *creating* ULI by renaming a normal
+        # category to "Unexpected Line Items" — that would yield two
+        # ULI categories on the same project (the seeded one plus the
+        # rename target), violating the single-instance invariant.
+        normalised_new = name.strip().lower()
+        if (normalised_new == 'unexpected line items'
+                and category.division != Categories.DIVISION_ULI):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'A category cannot be renamed to "Unexpected Line Items"',
+            }, status=400)
+
         category.category = name
         category.save()
-        
+
         return JsonResponse({
             'status': 'success',
             'message': 'Category name updated successfully'
@@ -768,10 +816,20 @@ def update_item_name(request):
             item = Costing.objects.get(costing_pk=pk)
         except Costing.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
-        
+
+        # Block rename of the ULI costing (added 2026-05-25). The ULI
+        # category is locked to its single same-named costing; the
+        # contract_budget Committed dropdown and other consumers
+        # reason about it by name.
+        if item.category and item.category.division == Categories.DIVISION_ULI:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The Unexpected Line Items costing cannot be renamed',
+            }, status=400)
+
         item.item = name
         item.save()
-        
+
         return JsonResponse({
             'status': 'success',
             'message': 'Item name updated successfully'
@@ -829,7 +887,7 @@ def delete_category_or_item(request):
                     category = Categories.objects.get(categories_pk=category_pk)
                 except Categories.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': 'Category not found'}, status=404)
-                
+
                 # Verify category belongs to the correct project/project_type
                 if project_pk:
                     if category.project_id != int(project_pk):
@@ -837,7 +895,16 @@ def delete_category_or_item(request):
                 else:
                     if category.project_id is not None or category.project_type != project_type:
                         return JsonResponse({'status': 'error', 'message': 'Category does not belong to this project type'}, status=403)
-                
+
+                # Block deletion of auto-managed special categories (added 2026-05-25
+                # for the ULI feature; mirrors the Internal guard in
+                # core.views.projects.delete_category).
+                if category.division == Categories.DIVISION_ULI:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'The Unexpected Line Items category cannot be deleted',
+                    }, status=400)
+
                 # Delete all costings associated with this category for the same project/project_type
                 if project_pk:
                     deleted_costings = Costing.objects.filter(
@@ -867,7 +934,7 @@ def delete_category_or_item(request):
                     item = Costing.objects.get(costing_pk=item_pk)
                 except Costing.DoesNotExist:
                     return JsonResponse({'status': 'error', 'message': 'Item not found'}, status=404)
-                
+
                 # Verify item belongs to the correct project/project_type
                 if project_pk:
                     if item.project_id != int(project_pk):
@@ -875,7 +942,14 @@ def delete_category_or_item(request):
                 else:
                     if item.project_id is not None or item.project_type != project_type:
                         return JsonResponse({'status': 'error', 'message': 'Item does not belong to this project type'}, status=403)
-                
+
+                # Block deletion of the auto-seeded ULI costing.
+                if item.category and item.category.division == Categories.DIVISION_ULI:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'The Unexpected Line Items costing cannot be deleted',
+                    }, status=400)
+
                 item_name = item.item
                 item.delete()
                 

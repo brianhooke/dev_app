@@ -1806,11 +1806,20 @@ def get_costings_for_project(request):
         if not project_id:
             return JsonResponse({'status': 'error', 'message': 'project_id required'}, status=400)
         
+        # Labour AND ULI costings — staff hours can be allocated to
+        # the auto-seeded "Unexpected Line Items" line of every
+        # project in execution mode (added 2026-05-25). The two
+        # divisions are equivalent for this lookup so we combine
+        # them with an `__in` filter to keep the query single-pass.
+        from core.models import Categories  # local to avoid cycles
         costings = Costing.objects.filter(
             project_id=project_id,
-            category__division=-5,  # Only Labour categories
-            tender_or_execution=2  # Only execution mode costings
-        ).order_by('order_in_list')
+            category__division__in=[
+                Categories.DIVISION_LABOUR,
+                Categories.DIVISION_ULI,
+            ],
+            tender_or_execution=2,
+        ).order_by('category__order_in_list', 'order_in_list')
         
         costings_list = [{
             'id': c.costing_pk,

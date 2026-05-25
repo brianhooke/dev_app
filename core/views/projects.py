@@ -195,7 +195,50 @@ def create_project(request):
             logger.info(f"Created Labour category for project {project.projects_pk}")
         else:
             logger.info(f"Labour category already exists from template for project {project.projects_pk} (pk={existing_labour.categories_pk})")
-        
+
+        # Always create Unexpected Line Items category + matching costing
+        # (added 2026-05-25). This is a special division (-15) like
+        # Internal/Labour: auto-seeded on every project, undeletable,
+        # locked to its single same-named costing. Exposed to staff
+        # hours and stocktake snaps for execution-mode projects, and
+        # the "Committed" dropdown in contract_budget aggregates
+        # bills + snaps + staff wages on this single costing PK.
+        # Idempotent: skip if a ULI category already exists (e.g. from
+        # a partially-completed prior creation or a backfill migration).
+        existing_uli = Categories.objects.filter(
+            project=project, division=Categories.DIVISION_ULI
+        ).first()
+        if not existing_uli:
+            uli_category = Categories.objects.create(
+                project=project,
+                division=Categories.DIVISION_ULI,
+                category='Unexpected Line Items',
+                invoice_category='Unexpected Line Items',
+                order_in_list=-3,  # sorts above Internal (-2) and Labour (-1)
+            )
+            Costing.objects.create(
+                project=project,
+                category=uli_category,
+                item='Unexpected Line Items',
+                order_in_list=1,
+                xero_account_code='',
+                contract_budget=0,
+                uncommitted_amount=0,
+                fixed_on_site=0,
+                sc_invoiced=0,
+                sc_paid=0,
+                tender_or_execution=1,  # tender; execution copy is created
+                                        # by fix_contract_budget like every
+                                        # other costing.
+            )
+            logger.info(
+                f"Created Unexpected Line Items category + costing for project {project.projects_pk}"
+            )
+        else:
+            logger.info(
+                f"ULI category already exists for project {project.projects_pk} (pk={existing_uli.categories_pk})"
+            )
+
         # Return project data
         return JsonResponse({
             'status': 'success',
@@ -501,7 +544,15 @@ def delete_category(request, project_pk, category_pk):
                 'status': 'error',
                 'message': 'The Internal category cannot be deleted'
             }, status=400)
-        
+
+        # Prevent deletion of "Unexpected Line Items" — the auto-seeded
+        # contingency category is fixed for every project (added 2026-05-25).
+        if category.division == Categories.DIVISION_ULI:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The Unexpected Line Items category cannot be deleted'
+            }, status=400)
+
         # Count items to be deleted
         items_count = Costing.objects.filter(category=category).count()
         
@@ -554,7 +605,15 @@ def delete_item(request, project_pk, item_pk):
                 'status': 'error',
                 'message': 'Item not found'
             }, status=404)
-        
+
+        # Prevent deletion of the auto-seeded ULI costing (added 2026-05-25).
+        # The ULI category is locked to its single same-named costing.
+        if item.category and item.category.division == Categories.DIVISION_ULI:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'The Unexpected Line Items costing cannot be deleted',
+            }, status=400)
+
         # Delete the item
         item_name = item.item
         category_name = item.category.category
