@@ -44,29 +44,68 @@ again. That's expected.
 
 ## Step 2 — `EMAIL_API_SECRET_KEY`
 
-Two systems must hold the same value. **Update both before testing.**
+Two systems must hold the same value. **Update both in the same shell
+session, then immediately verify with a test email.** A 25 May 2026
+incident left them out of sync for ~2 days because the rotation only
+touched Django; every emailed bill returned 401 from the webhook.
+
+> **Important env-var name asymmetry:** Django reads
+> `EMAIL_API_SECRET_KEY`; the deployed Lambda code reads
+> `API_SECRET_KEY`. The two values must match but the var names are
+> different — do **not** try to rename the Lambda env var in the same
+> rotation, that requires a Lambda code change + redeploy and is a
+> separate task (tracked below).
 
 ```bash
-# 1. Generate a new value.
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+# 1. Generate a new value (same scheme P-1 used: secrets.token_hex(32)).
+python3 -c "import secrets; print(secrets.token_hex(32))"
 NEW_KEY='<paste-value-here>'
 
-# 2. Update Django (EB env). Django expects the var name EMAIL_API_SECRET_KEY.
-eb setenv EMAIL_API_SECRET_KEY="$NEW_KEY"
+# 2. Update Django (EB env). Django reads EMAIL_API_SECRET_KEY.
+aws elasticbeanstalk update-environment \
+  --application-name dev-app \
+  --environment-name dev-app-prod \
+  --region us-east-1 \
+  --option-settings "Namespace=aws:elasticbeanstalk:application:environment,OptionName=EMAIL_API_SECRET_KEY,Value=$NEW_KEY"
+# (or `eb setenv EMAIL_API_SECRET_KEY="$NEW_KEY"` if the eb CLI is pointed
+# at dev-app-prod / us-east-1 — see HANDOFF.md "Deploy state".)
 
-# 3. Update Lambda. The current code reads `API_SECRET_KEY`. Rename it to
-#    EMAIL_API_SECRET_KEY at the same time so both sides agree.
+# 3. Update Lambda. The deployed Lambda code reads `API_SECRET_KEY` —
+#    keep that var name; only change its value. NOTE: passing
+#    --environment replaces ALL env vars, so include DJANGO_API_URL too.
 aws lambda update-function-configuration \
   --function-name email-processor \
   --region us-east-1 \
-  --environment "Variables={EMAIL_API_SECRET_KEY=$NEW_KEY,DJANGO_API_URL=https://app.mason.build/core/api/receive_email/}"
+  --environment "Variables={API_SECRET_KEY=$NEW_KEY,DJANGO_API_URL=https://app.mason.build/core/api/receive_email/}"
 
-# 4. Edit lambda_function.py:26 to read 'EMAIL_API_SECRET_KEY' (was
-#    'API_SECRET_KEY'), zip it, and `aws lambda update-function-code`.
+# 4. Verify both sides match (length AND value):
+DJANGO_KEY=$(aws elasticbeanstalk describe-configuration-settings \
+  --application-name dev-app --environment-name dev-app-prod --region us-east-1 \
+  --query "ConfigurationSettings[0].OptionSettings[?OptionName=='EMAIL_API_SECRET_KEY'].Value" --output text)
+LAMBDA_KEY=$(aws lambda get-function-configuration \
+  --function-name email-processor --region us-east-1 \
+  --query 'Environment.Variables.API_SECRET_KEY' --output text)
+[ "$DJANGO_KEY" = "$LAMBDA_KEY" ] && echo MATCH || echo MISMATCH
 ```
 
 Once both are updated, send a test email to a `*@mail.mason.build` address
-and confirm it lands in the Bills Inbox.
+and confirm it lands in the Bills Inbox. If anything is stuck, the recovery
+procedure (replay S3 objects through Lambda, idempotent on Django side) is
+documented in HANDOFF.md under "Email pipeline recovery (25 May 2026)".
+
+### Future: rename Lambda env var to match Django (deferred)
+
+Holding `EMAIL_API_SECRET_KEY` on Django and `API_SECRET_KEY` on Lambda
+is brittle — easy to mix up. To unify:
+
+1. Edit `lambda_function.py:26` to read `EMAIL_API_SECRET_KEY` instead of
+   `API_SECRET_KEY`. Push.
+2. Re-zip and `aws lambda update-function-code` to deploy the new code.
+3. Update the Lambda env var name (delete `API_SECRET_KEY`, add
+   `EMAIL_API_SECRET_KEY` with the same value).
+
+Don't try to do this DURING a rotation — split it into a separate
+maintenance window.
 
 ---
 

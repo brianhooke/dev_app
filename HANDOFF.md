@@ -113,6 +113,61 @@ call_command("import_onyx_subbie", commit=True)
 - `start.sh` still does `dumpdata core --natural-foreign --natural-primary` as a "pre-migration backup" but this raises `CommandError: Unable to serialize database: cursor "..." does not exist` on every start (the script swallows it). Either fix the serialiser bug or replace this with a scheduled RDS snapshot job.
 - `health_endpoint` (`core/views/main.py`) is a 200-OK Django view that doesn't actually check the DB. EB Health stays `Grey` because of this. Consider making it `SELECT 1;` against the DB so EB can detect crash loops automatically.
 - Decide whether to terminate the orphan ap-southeast-2 env + RDS to stop accruing cost and to avoid future confusion.
+- Lambda + Django still hold the email-pipeline secret under different env-var names (`API_SECRET_KEY` on Lambda vs `EMAIL_API_SECRET_KEY` on Django). Tracked as a deferred unification step in `docs/SECRET_ROTATION_RUNBOOK.md` Step 2 → "Future: rename Lambda env var".
+
+### Email pipeline recovery (25 May 2026)
+
+**Symptom.** Users reported emails sent to `bills@mail.mason.build` weren't appearing in the Bills Inbox.
+
+**Root cause.** P-1 secret rotation (commit `894ff43`) updated Django's `EMAIL_API_SECRET_KEY` on EB but did **not** update Lambda's matching env var. Worse, the runbook had a wrong instruction (told you to set `EMAIL_API_SECRET_KEY` on Lambda, but the deployed Lambda code at `lambda_function.py:26` reads `API_SECRET_KEY`). So whatever you set under `EMAIL_API_SECRET_KEY` on Lambda was ignored, the Lambda kept signing with its old `API_SECRET_KEY`, and Django returned 401 on every email POST.
+
+CloudWatch evidence (`/aws/lambda/email-processor`):
+
+```
+Error sending to Django API: 401 Client Error: Unauthorized for url: https://app.mason.build/core/api/receive_email/
+```
+
+8 emails were stuck in `s3://dev-app-emails/inbox/` between 24 May 23:12 UTC and 25 May 06:02 UTC.
+
+**Fix applied.**
+
+1. Synced Lambda's `API_SECRET_KEY` to Django's `EMAIL_API_SECRET_KEY` (they're now both the same 64-char hex value):
+
+   ```bash
+   DJANGO_KEY=$(aws elasticbeanstalk describe-configuration-settings \
+     --application-name dev-app --environment-name dev-app-prod --region us-east-1 \
+     --query "ConfigurationSettings[0].OptionSettings[?OptionName=='EMAIL_API_SECRET_KEY'].Value" --output text)
+   aws lambda update-function-configuration \
+     --function-name email-processor --region us-east-1 \
+     --environment "Variables={API_SECRET_KEY=$DJANGO_KEY,DJANGO_API_URL=https://app.mason.build/core/api/receive_email/}"
+   ```
+
+2. Replayed all 8 stuck S3 objects through Lambda manually (`aws lambda invoke` with synthetic S3 events). Lambda's idempotency check on `ReceivedEmail.message_id` would have skipped duplicates; none were duplicates, all 8 created `ReceivedEmail` (pks 576–583) + 8 `Bills` rows at `bill_status=-2`.
+
+3. Rewrote `docs/SECRET_ROTATION_RUNBOOK.md` Step 2 to:
+   - Keep the Lambda env-var name as `API_SECRET_KEY` (matching deployed code); only the value rotates.
+   - Add a verify step at the end (`MATCH` / `MISMATCH` echo).
+   - Note the asymmetric env-var names explicitly so future rotations don't go off-script.
+   - Carve out the rename-Lambda-env-var work as a separate deferred task.
+
+**Recovery snippet for the future** if Lambda → Django ever 401s again:
+
+```bash
+# 1. Find the failed S3 keys from CloudWatch
+aws logs filter-log-events --log-group-name /aws/lambda/email-processor \
+  --region us-east-1 \
+  --start-time $(($(date -u +%s) * 1000 - 7*86400*1000)) \
+  --filter-pattern '"401 Client Error"' \
+  --query 'events[].message' --output text | grep -oE 'inbox/[a-z0-9]+' | sort -u > failed_keys.txt
+
+# 2. After fixing the auth, replay each one (idempotent on Django side via message_id)
+while IFS= read -r KEY; do
+  PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'Records':[{'eventSource':'aws:s3','s3':{'bucket':{'name':'dev-app-emails'},'object':{'key':sys.argv[1]}}}]}))" "$KEY")
+  echo "$PAYLOAD" > /tmp/event.json
+  aws lambda invoke --function-name email-processor --region us-east-1 \
+    --cli-binary-format raw-in-base64-out --payload file:///tmp/event.json /tmp/resp.json
+done < failed_keys.txt
+```
 
 ---
 
