@@ -67,7 +67,7 @@ def create_project(request):
         # Get xero_instance from the project type
         xero_instance = project_type_obj.xero_instance
         
-        # Create project (always starts in tender mode)
+        # Create project (always starts in tender mode, Tendering substatus)
         project = Projects(
             project=project_name,
             project_type=project_type_obj,
@@ -76,7 +76,8 @@ def create_project(request):
             manager=manager,
             manager_email=manager_email,
             contracts_admin_emails=contracts_admin_emails,
-            project_status=1  # 1=tender, 2=execution
+            project_status=1,  # 1=tender, 2=execution
+            tender_substatus=Projects.TENDER_SUBSTATUS_TENDERING,
         )
         
         project.save()
@@ -251,7 +252,8 @@ def create_project(request):
                 'xero_instance_pk': project.xero_instance.xero_instance_pk if project.xero_instance else None,
                 'xero_instance_name': project.xero_instance.xero_name if project.xero_instance else '',
                 'xero_sales_account': project.xero_sales_account or '',
-                'project_status': project.project_status
+                'project_status': project.project_status,
+                'tender_substatus': project.tender_substatus,
             }
         })
         
@@ -308,6 +310,7 @@ def get_projects(request):
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
                 'project_status': project.project_status,
+                'tender_substatus': project.tender_substatus,
                 'is_revenue_project': bool(project.is_revenue_project),
             })
         
@@ -416,6 +419,30 @@ def update_project(request, project_pk):
                     }, status=400)
             project.is_revenue_project = new_value
 
+        # tender_substatus (added 2026-05-26 with v255). Only meaningful
+        # when the project is in tender mode; we still accept the write
+        # for execution-mode rows so a power-user can correct historical
+        # values, but it has no UI effect post-transition.
+        if 'tender_substatus' in request.POST:
+            raw_sub = (request.POST.get('tender_substatus') or '').strip()
+            try:
+                sub_int = int(raw_sub)
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Invalid tender_substatus={raw_sub!r}',
+                }, status=400)
+            valid_subs = {choice for choice, _ in Projects.TENDER_SUBSTATUS_CHOICES}
+            if sub_int not in valid_subs:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f'tender_substatus must be one of {sorted(valid_subs)}, '
+                        f'got {sub_int}'
+                    ),
+                }, status=400)
+            project.tender_substatus = sub_int
+
         project.save()
         
         logger.info(f"Updated project: {project.project} (pk={project.projects_pk})")
@@ -450,6 +477,7 @@ def update_project(request, project_pk):
                 'manager_email': project.manager_email or '',
                 'contracts_admin_emails': project.contracts_admin_emails or '',
                 'project_status': project.project_status,
+                'tender_substatus': project.tender_substatus,
                 'is_revenue_project': bool(project.is_revenue_project),
             }
         })

@@ -509,6 +509,18 @@ class ProjectsQuerySet(models.QuerySet):
 
 
 class Projects(models.Model):
+    # Tender substatus (added 2026-05-26 with v255). Only meaningful when
+    # ``project_status == 1`` (tender). Once a project moves to execution
+    # the value is preserved as a historical marker but the UI ignores it.
+    # Backfill at migration time defaults every existing row to TENDERING
+    # so legacy tender + execution projects retain a sensible value.
+    TENDER_SUBSTATUS_TENDERING = 1
+    TENDER_SUBSTATUS_QUOTED = 2
+    TENDER_SUBSTATUS_CHOICES = [
+        (TENDER_SUBSTATUS_TENDERING, 'Tendering'),
+        (TENDER_SUBSTATUS_QUOTED, 'Quoted'),
+    ]
+
     objects = ProjectsQuerySet.as_manager()
 
     projects_pk = models.AutoField(primary_key=True)
@@ -524,6 +536,11 @@ class Projects(models.Model):
     background = models.ImageField(upload_to='project_backgrounds/', null=True, blank=True)
     archived = models.IntegerField(default=0)  # 0 = active, 1 = archived
     project_status = models.IntegerField(default=1)  # 1=tender, 2=execution
+    tender_substatus = models.IntegerField(
+        default=TENDER_SUBSTATUS_TENDERING,
+        choices=TENDER_SUBSTATUS_CHOICES,
+        help_text='Tender phase substatus: 1=Tendering (default), 2=Quoted. Ignored when project_status=2.',
+    )
     # True = client-billed revenue project (HC claims + HC variations).
     # False = internal/expense-only project (no HC claims; HC variations are
     # surfaced in the UI as "Scope Variations" but use the same model). Can

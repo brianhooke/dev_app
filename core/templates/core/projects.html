@@ -382,6 +382,24 @@
     .project-card .card-status a.project-status-link:hover { background: #1565c0; color: white; }
     .project-card .card-status a.construction-link { background: #e8f5e9; color: #2e7d32; }
     .project-card .card-status a.construction-link:hover { background: #2e7d32; color: white; }
+
+    /* Tender substatus pill rendered next to the Tender link in the
+       card footer. Only shown for project_status=1 projects. Two
+       distinct colours so the at-a-glance tender pipeline view stays
+       readable on the projects grid. */
+    .project-card .tender-substatus-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        margin-left: 6px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        vertical-align: middle;
+    }
+    .project-card .tender-substatus-badge.tendering { background: #fff7e6; color: #b26a00; }
+    .project-card .tender-substatus-badge.quoted    { background: #e8f4ff; color: #0d6efd; }
     
     .project-card .card-actions button {
         padding: 4px 8px;
@@ -610,6 +628,15 @@
                 <option value="2" selected>Execution</option>
                 <option value="all">All</option>
             </select>
+            <!-- Tender substatus subfilter (added 2026-05-26 with v255).
+                 Shown only when the main filter is set to "Tender" (1).
+                 Defaults to Tendering — the subfilter is meaningful only
+                 inside the tender-mode slice. -->
+            <select id="projectTenderSubstatusFilter" class="form-control form-control-sm" style="width: auto; min-width: 130px; height: 31px; display: none;" title="Filter tender-mode projects by substatus">
+                <option value="1" selected>Tendering</option>
+                <option value="2">Quoted</option>
+                <option value="all">All</option>
+            </select>
             <button id="exportC2CBtn" class="btn btn-outline-primary btn-sm" title="Export Working Budget, Revenue Receivable and C2C breakdown (incl. margin / labour slices) for the projects currently visible">
                 <i class="fas fa-file-csv"></i> Export C2C
             </button>
@@ -790,8 +817,22 @@ $(document).ready(function() {
             const typeClass = project.project_type || 'general';
             
             const isRevenue = (project.is_revenue_project !== false);  // default true if missing
+
+            // Tender substatus (added 2026-05-26 with v255). Only
+            // surfaced visually when the project is in tender mode;
+            // execution-mode rows still carry the value but the
+            // footer badge + dropdown row are hidden.
+            const tenderSubstatus = (project.tender_substatus === 2) ? 2 : 1;  // default Tendering
+            const isTender = project.project_status === 1;
+            const tenderBadgeHtml = isTender
+                ? (tenderSubstatus === 2
+                    ? '<span class="tender-substatus-badge quoted">Quoted</span>'
+                    : '<span class="tender-substatus-badge tendering">Tendering</span>')
+                : '';
+            const tenderSubstatusRowStyle = isTender ? '' : 'style="display: none;"';
+
             const card = $(`
-                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}" data-project-status="${project.project_status}" data-is-revenue-project="${isRevenue ? 1 : 0}">
+                <div class="project-card" data-project-pk="${project.projects_pk}" data-project-archived="${project.archived}" data-project-status="${project.project_status}" data-tender-substatus="${tenderSubstatus}" data-is-revenue-project="${isRevenue ? 1 : 0}">
                     <div class="card-header card-toggle">
                         <h5 class="card-title">${project.project}</h5>
                         <i class="fas fa-chevron-down card-chevron"></i>
@@ -845,6 +886,13 @@ $(document).ready(function() {
                                     <option value="0"${!isRevenue ? ' selected' : ''}>No</option>
                                 </select>
                             </div>
+                            <div class="form-group dropdown-tender-substatus-row" ${tenderSubstatusRowStyle}>
+                                <label title="Tender phase substatus. Defaults to Tendering; flip to Quoted once the tender has been issued / quoted.">Tender Substatus</label>
+                                <select class="form-control form-control-sm dropdown-tender-substatus" disabled>
+                                    <option value="1"${tenderSubstatus === 1 ? ' selected' : ''}>Tendering</option>
+                                    <option value="2"${tenderSubstatus === 2 ? ' selected' : ''}>Quoted</option>
+                                </select>
+                            </div>
                             <div class="dropdown-actions">
                                 <button class="btn btn-warning btn-sm dropdown-update-btn">Update</button>
                                 <button class="btn btn-success btn-sm dropdown-save-btn" style="display: none;">Save</button>
@@ -855,7 +903,7 @@ $(document).ready(function() {
                     <div class="card-footer">
                         <div class="card-status">
                             ${project.project_status === 1 
-                                ? '<a href="#" class="project-status-link" data-status="1">Tender</a>'
+                                ? '<a href="#" class="project-status-link" data-status="1">Tender</a>' + tenderBadgeHtml
                                 : '<a href="#" class="construction-link" data-status="2">Execution</a>'
                             }
                         </div>
@@ -877,6 +925,8 @@ $(document).ready(function() {
             card.data('original-contracts-admin-emails', project.contracts_admin_emails || '');
             card.data('original-is-revenue-project', isRevenue ? 1 : 0);
             card.data('is-revenue-project', isRevenue ? 1 : 0);
+            card.data('original-tender-substatus', tenderSubstatus);
+            card.data('tender-substatus', tenderSubstatus);
             card.data('xero-instance-pk', project.xero_instance_pk);
             card.data('project-type', project.project_type);
             card.data('rates-based', project.rates_based || 0);  // 0=not rates-based, 1=rates-based
@@ -892,18 +942,38 @@ $(document).ready(function() {
     // Filter cards in #projectsGrid based on #projectStatusFilter value.
     // Default on page load is 'execution' (status=2). Cards are matched via
     // the data-project-status attribute on each .project-card element.
+    //
+    // When the main filter is set to "Tender" (1) we additionally apply a
+    // substatus filter (#projectTenderSubstatusFilter) — defaults to
+    // Tendering, with Quoted and All as the other options. The substatus
+    // filter is hidden in any other main-filter mode (added 2026-05-26
+    // with v255).
     function applyProjectStatusFilter() {
         const grid = $('#projectsGrid');
         if (!grid.length) return;
 
         const filter = String($('#projectStatusFilter').val() || 'all');
+        const $subFilter = $('#projectTenderSubstatusFilter');
+        const showSubFilter = (filter === '1');
+        $subFilter.toggle(showSubFilter);
+
         const allCards = grid.find('.project-card');
 
         if (filter === 'all') {
             allCards.show();
         } else {
             allCards.hide();
-            grid.find('.project-card[data-project-status="' + filter + '"]').show();
+            const $statusMatched = grid.find('.project-card[data-project-status="' + filter + '"]');
+            if (!showSubFilter) {
+                $statusMatched.show();
+            } else {
+                const sub = String($subFilter.val() || 'all');
+                if (sub === 'all') {
+                    $statusMatched.show();
+                } else {
+                    $statusMatched.filter('[data-tender-substatus="' + sub + '"]').show();
+                }
+            }
         }
 
         // Manage a filter-specific empty state without disturbing the
@@ -923,8 +993,9 @@ $(document).ready(function() {
     // mutating a card's status (e.g. contract budget approval flow)
     window.applyProjectStatusFilter = applyProjectStatusFilter;
 
-    // Re-apply filter when the user changes the dropdown
+    // Re-apply filter when the user changes either dropdown.
     $(document).on('change', '#projectStatusFilter', applyProjectStatusFilter);
+    $(document).on('change', '#projectTenderSubstatusFilter', applyProjectStatusFilter);
 
     // Watch the grid for any card whose data-project-status (or archived)
     // attribute changes during normal use, and re-apply the filter so the
@@ -938,7 +1009,8 @@ $(document).ready(function() {
                 const m = mutations[i];
                 if (m.type === 'attributes' &&
                     (m.attributeName === 'data-project-status' ||
-                     m.attributeName === 'data-project-archived')) {
+                     m.attributeName === 'data-project-archived' ||
+                     m.attributeName === 'data-tender-substatus')) {
                     applyProjectStatusFilter();
                     return;
                 }
@@ -947,7 +1019,11 @@ $(document).ready(function() {
 
         observer.observe(gridEl, {
             attributes: true,
-            attributeFilter: ['data-project-status', 'data-project-archived'],
+            attributeFilter: [
+                'data-project-status',
+                'data-project-archived',
+                'data-tender-substatus',
+            ],
             subtree: true
         });
     })();
@@ -1120,6 +1196,7 @@ $(document).ready(function() {
         dropdown.find('.dropdown-contracts-admin').val(card.data('original-contracts-admin-emails') || '');
         dropdown.find('.dropdown-sales-account').val(card.data('original-sales-account') || '');
         dropdown.find('.dropdown-is-revenue-project').val(String(card.data('original-is-revenue-project')));
+        dropdown.find('.dropdown-tender-substatus').val(String(card.data('original-tender-substatus')));
         
         // Disable inputs
         dropdown.find('input, select').prop('disabled', true);
@@ -1146,6 +1223,7 @@ $(document).ready(function() {
         formData.append('contracts_admin_emails', dropdown.find('.dropdown-contracts-admin').val());
         formData.append('xero_sales_account', dropdown.find('.dropdown-sales-account').val());
         formData.append('is_revenue_project', dropdown.find('.dropdown-is-revenue-project').val());
+        formData.append('tender_substatus', dropdown.find('.dropdown-tender-substatus').val());
         
         $.ajax({
             url: '/core/update_project/' + projectPk + '/',
@@ -1162,6 +1240,7 @@ $(document).ready(function() {
                     // sync if someone bypasses the front-end check).
                     const serverIsRevenue = response.project && response.project.is_revenue_project !== false;
                     const serverIsRevenueInt = serverIsRevenue ? 1 : 0;
+                    const serverTenderSub = (response.project && response.project.tender_substatus === 2) ? 2 : 1;
 
                     // Update card data
                     card.data('original-project', dropdown.find('.dropdown-project-name').val());
@@ -1173,6 +1252,20 @@ $(document).ready(function() {
                     card.data('is-revenue-project', serverIsRevenueInt);
                     card.attr('data-is-revenue-project', serverIsRevenueInt);
                     dropdown.find('.dropdown-is-revenue-project').val(String(serverIsRevenueInt));
+                    card.data('original-tender-substatus', serverTenderSub);
+                    card.data('tender-substatus', serverTenderSub);
+                    card.attr('data-tender-substatus', serverTenderSub);
+                    dropdown.find('.dropdown-tender-substatus').val(String(serverTenderSub));
+
+                    // Refresh the footer pill if the project is in tender mode.
+                    const projectStatusNow = parseInt(card.attr('data-project-status'), 10);
+                    const $cardStatus = card.find('.card-status');
+                    $cardStatus.find('.tender-substatus-badge').remove();
+                    if (projectStatusNow === 1) {
+                        const badgeClass = serverTenderSub === 2 ? 'quoted' : 'tendering';
+                        const badgeLabel = serverTenderSub === 2 ? 'Quoted' : 'Tendering';
+                        $cardStatus.append('<span class="tender-substatus-badge ' + badgeClass + '">' + badgeLabel + '</span>');
+                    }
                     
                     // Update card display
                     card.find('.card-title').text(dropdown.find('.dropdown-project-name').val());
@@ -1190,6 +1283,8 @@ $(document).ready(function() {
                     // the form reflects the rejected state.
                     const orig = card.data('original-is-revenue-project');
                     dropdown.find('.dropdown-is-revenue-project').val(String(orig));
+                    const origSub = card.data('original-tender-substatus');
+                    dropdown.find('.dropdown-tender-substatus').val(String(origSub));
                 }
                 btn.prop('disabled', false).text('Save');
             },

@@ -1,6 +1,6 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 26 May 2026 (v254 — staged for deploy: tender-mode staff hours + bills, cloned at fix_contract_budget)
+**Last updated:** 26 May 2026 (v255 — staged for deploy: project tender_substatus + filter UI)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
 
 ---
@@ -10,9 +10,10 @@
 - **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
 - **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
 - **Live version (currently serving)**: `v252-stocktake-2step-and-uli` (deployed 25 May 2026 — Stocktake two-step approval + ULI category seed). v253 was packaged but superseded by v254 before deploy.
-- **Local code-state version**: `v254` — staged for next deploy. v253 + v254 changes folded into one zip:
+- **Local code-state version**: `v255` — staged for next deploy. v253 + v254 + v255 changes folded into one zip:
   - **v253** (no migration): Stocktake snap dropdown is now a universal project selector with ULI fallback. Allocations dropdown on each snap item lists every active execution project; entries that don't have a costing matching the snap item's name are rendered red and route to that project's "Unexpected Line Items" line. Contract budget ULI Committed/Billed dropdowns and the costing-rollup totals (`compute_project_committed_billed`) all use the new `resolve_snap_allocation_costing_pk` helper. Side-effect fix: pre-A.M-C-13 the rollup gated snap allocations by FK only, which silently skipped every allocation in production (snap_item.item is the project=None master) — totals at the top of the contract budget were chronically lower than the sum of dropdown rows.
   - **v254** (no migration): Tender-mode staff hours + bills, with both kinds of allocation cloned at fix_contract_budget time. See "Tender-mode staff hours + bills (v254)" section below for the full design + manual verification path.
+  - **v255** (migration `0083_projects_tender_substatus`): New `Projects.tender_substatus` IntegerField (1=Tendering default, 2=Quoted) + projects.html UI. Every existing project auto-backfills to `Tendering=1` at migration time. New projects default to `Tendering`. Each project card now carries `data-tender-substatus`, shows a coloured pill in the footer when `project_status=1`, and the dropdown form has a Tender Substatus select that calls `update_project` with `tender_substatus=1|2`. The toolbar gained `#projectTenderSubstatusFilter` — a second dropdown that becomes visible only when the main status filter is set to `Tender`, defaulting to `Tendering` with `Quoted` and `All` selectable. `applyProjectStatusFilter` chains the two filters together; the `MutationObserver` on `#projectsGrid` also reacts to `data-tender-substatus` changes so any future code path that mutates the attribute triggers a re-filter automatically. Server endpoints: `create_project` writes the default explicitly via `Projects.TENDER_SUBSTATUS_TENDERING`, `get_projects` returns the field in the JSON payload, `update_project` accepts and validates it (rejects anything outside the choices set with HTTP 400). No tests added — the change is a single nullable-style integer field plus pure UI; no rollup or allocation logic touches it.
 - **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `strict-transport-security: max-age=86400`. EB env: `Status=Ready`, `Health=Green`.
 
 ### How to run management commands on the live instance
@@ -292,6 +293,52 @@ Used by:
 
 - The HC Claims rollup (`hc_committed_amounts`) still uses FK-only matching. Same helper would apply, but no user complaint yet — defer until needed.
 - v252's `_compute_project_committed_billed` test fixture (`core/tests/test_costing_rollups.py`) uses `snap_item.item = C1` (a project costing) so the FK-direct path covers it. The new name + ULI fallback paths aren't covered by tests yet — add when the F.Q-C-05 SQLite blocker is resolved or when the next test pass adds prod-shape fixtures.
+
+---
+
+## Tender substatus (26 May 2026, v255)
+
+### What changed for users
+
+- Each project that is in tender mode now carries a substatus: **Tendering** (default) or **Quoted**. Execution-mode projects still have the column populated but the UI ignores it.
+- On the projects grid, every tender-mode card shows a small coloured pill next to the "Tender" link in the card footer — orange "Tendering" or blue "Quoted".
+- Each project card's expand-out dropdown form has a new "Tender Substatus" select, visible only for tender-mode projects. Click Update → flip → Save to persist.
+- The toolbar gained a second dropdown next to the main status filter. It is hidden whenever the main filter is anything other than **Tender**. When the user toggles the main filter to Tender, the substatus filter appears with **Tendering** preselected (and **Quoted** + **All** selectable). The grid then narrows to that subset.
+- Default landing state: main filter = **Execution** (unchanged); switching to Tender lands on **Tendering** because that's where new opportunities live.
+
+### Backfill
+
+- Migration `0083_projects_tender_substatus` adds the field with `default=1`, which auto-fills every existing row at apply time. Verified against the local sqlite snapshot: 35/35 projects → `tender_substatus=1`. Production should land the same way (every existing project picks up Tendering on migrate; nothing else changes).
+
+### Server endpoints touched
+
+- `core/views/projects.py::create_project` — explicitly sets `tender_substatus=Projects.TENDER_SUBSTATUS_TENDERING` and returns it in the response.
+- `core/views/projects.py::get_projects` — adds `tender_substatus` to each project dict in the JSON payload.
+- `core/views/projects.py::update_project` — accepts a `tender_substatus` POST parameter, parses to int, validates against `Projects.TENDER_SUBSTATUS_CHOICES` (rejects any other value with HTTP 400), and persists. Returns the updated value back to the client so the card can re-render its pill from authoritative state.
+
+### UI details
+
+- `core/templates/core/projects.html`:
+  - Card root carries `data-tender-substatus="1|2"`.
+  - Footer pill markup is built only when `project_status === 1`; for execution-mode cards the pill is omitted entirely.
+  - Dropdown form has a "Tender Substatus" `<select>` with the row hidden via inline `style="display:none;"` for execution-mode cards (cheaper than two separate templates and keeps the DOM consistent).
+  - Cancel rolls back to `card.data('original-tender-substatus')`; Save re-syncs from `response.project.tender_substatus`.
+  - `applyProjectStatusFilter()` now chains the two dropdowns: when the main filter is set to `1` (Tender) the substatus filter is shown and applied; otherwise it's hidden.
+  - The pre-existing `MutationObserver` was extended to react to `data-tender-substatus` changes so any future flow that mutates the attribute (e.g. an inline action elsewhere) automatically triggers a re-filter.
+
+### Manual verification path (post-deploy)
+
+1. Hard refresh `https://app.mason.build/projects/`.
+2. Confirm v255 appears in the navbar bottom-left.
+3. Toggle the main filter to **Tender** — the second dropdown should appear, default Tendering, and the grid should show only tender-mode projects.
+4. Open one tender card → Update → flip Tender Substatus to **Quoted** → Save. Pill in the footer should refresh to "Quoted" without a full page reload.
+5. Switch the substatus filter to **Quoted** — only the project just flipped should remain visible.
+6. Switch the main filter back to **Execution** — the substatus dropdown should hide; execution cards should appear normally.
+
+### Skipped / explicit non-goals
+
+- `fix_contract_budget` does **not** read or mutate `tender_substatus`. The substatus is a tender-pipeline marker only; once a project transitions to execution the value is preserved as-is for historical record but is irrelevant downstream.
+- No tests were added. The change is a nullable-style int + UI; no rollup, allocation, or reporting logic depends on it.
 
 ---
 
