@@ -14,6 +14,7 @@ https://developer.xero.com/documentation/api/payrollau/employees
 import json
 import logging
 import requests
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -1879,66 +1880,107 @@ def get_employee_pay_rate(employee, target_date):
     return None
 
 
+# Cache TTL for the per-employee Xero super-rate lookup. Super rates change
+# rarely (typically only on July 1 each year when the statutory SG rate
+# moves), so a 5-minute TTL is overwhelmingly safe and pays back massively:
+# Contract Budget rollups call ``compute_staff_hours_allocation_amount``
+# once per StaffHoursAllocations row, and pre-cache that meant a live HTTPS
+# round-trip to Xero with a 15s timeout per allocation. With the cache, the
+# rate is fetched at most once per (xero_instance, employee) per 5-minute
+# window per gunicorn worker — turning what was an N×15s tail latency in
+# the C2C export into a single bounded fetch (audit items A.M-H-04 /
+# B.V-H-03; the 26 May 2026 504-on-execution-export bug was the immediate
+# trigger).
+_EMPLOYEE_SUPER_RATE_CACHE_TTL = 300  # 5 minutes
+
+# Sentinel marker stored when Xero returns no SGC line (or the call fails).
+# We can't store ``None`` directly because ``cache.get`` returns ``None`` to
+# signal a miss. The translation is contained inside
+# ``get_employee_super_rate`` so call sites still receive ``None`` for the
+# "no rate available" case as before.
+_EMPLOYEE_SUPER_RATE_CACHE_NONE = '__none__'
+
+
 def get_employee_super_rate(xero_instance_id, employee_id):
     """
     Get the superannuation contribution percentage for an employee from Xero.
     Returns the SGC (Superannuation Guarantee Contribution) percentage.
-    
+
     SuperMemberships structure from Xero:
     - ContributionType: SGC, SALARYSACRIFICE, EMPLOYERADDITIONAL, etc.
     - CalculationType: PERCENTAGEOFEARNINGS or FIXEDAMOUNT
     - ContributionPercentage: The percentage (e.g., 11.5)
+
+    Result is memoised in the Django default cache (per gunicorn worker
+    LocMemCache out of the box) for ``_EMPLOYEE_SUPER_RATE_CACHE_TTL``
+    seconds. See the module-level constants above for rationale.
     """
+    cache_key = f'super_rate:{xero_instance_id}:{employee_id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        if cached == _EMPLOYEE_SUPER_RATE_CACHE_NONE:
+            return None
+        return cached
+
     try:
         xero_instance, access_token, tenant_id = get_xero_auth(xero_instance_id)
         if not xero_instance:
+            cache.set(cache_key, _EMPLOYEE_SUPER_RATE_CACHE_NONE, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
             return None
-        
+
         headers = {
             'Authorization': f'Bearer {access_token}',
             'Xero-tenant-id': tenant_id,
             'Accept': 'application/json'
         }
-        
+
         # Fetch employee details including SuperMemberships
         url = f'{XERO_PAYROLL_AU_URL}/Employees/{employee_id}'
         response = requests.get(url, headers=headers, timeout=15)
-        
+
         if response.status_code != 200:
             logger.warning(f"Could not fetch employee super details: {response.status_code}")
+            cache.set(cache_key, _EMPLOYEE_SUPER_RATE_CACHE_NONE, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
             return None
-        
+
         data = response.json()
         employees = data.get('Employees', [])
         if not employees:
+            cache.set(cache_key, _EMPLOYEE_SUPER_RATE_CACHE_NONE, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
             return None
-        
+
         # Super details are in PayTemplate.SuperLines
         emp_data = employees[0]
         pay_template = emp_data.get('PayTemplate', {})
         super_lines = pay_template.get('SuperLines', [])
-        
+
         # Find the SGC (Superannuation Guarantee Contribution) rate
         for line in super_lines:
             contribution_type = line.get('ContributionType', '')
             calculation_type = line.get('CalculationType', '')
-            
+
             # Look for SGC contribution
             if contribution_type == 'SGC':
                 if calculation_type == 'PERCENTAGEOFEARNINGS':
                     # Custom percentage set
                     percentage = line.get('Percentage')
                     if percentage is not None:
-                        return float(percentage)
+                        rate = float(percentage)
+                        cache.set(cache_key, rate, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
+                        return rate
                 elif calculation_type == 'STATUTORY':
                     # Statutory rate means current Australian SG rate
                     # As of July 2024: 11.5%, July 2025: 12%
+                    cache.set(cache_key, 11.5, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
                     return 11.5
-        
+
+        cache.set(cache_key, _EMPLOYEE_SUPER_RATE_CACHE_NONE, _EMPLOYEE_SUPER_RATE_CACHE_TTL)
         return None
-        
+
     except Exception as e:
         logger.warning(f"Error fetching employee super rate: {e}")
+        # Don't cache exceptions — next caller gets a fresh attempt. This
+        # avoids a transient Xero outage poisoning the cache for 5 minutes.
         return None
 
 

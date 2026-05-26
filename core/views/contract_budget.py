@@ -384,8 +384,8 @@ def _compute_project_export_totals(project):
 @require_http_methods(["POST"])
 def export_projects_c2c(request):
     """
-    CSV export of project-level Working Budget, Revenue Receivable and the
-    three additive C2C slices.
+    CSV export of project-level Revenue Receivable and the three additive
+    C2C slices.
 
     Body (JSON):
         {"project_pks": [1, 5, 7, ...]}
@@ -395,9 +395,9 @@ def export_projects_c2c(request):
     would show for that project.
 
     Response: text/csv attachment with one row per project in the same
-    order the caller provided. Columns:
+    order the caller provided. Columns (matches the downstream
+    consumer's expected schema as of 2026-05-26 / v256):
         project_name,
-        working_budget,
         revenue_receivable,
         c2c_incl_margin_and_labour,   — full C2C across all in-scope items
         c2c_margin,                   — C2C contribution from Internal-category items
@@ -405,6 +405,11 @@ def export_projects_c2c(request):
     The three C2C columns are additive (the all-inclusive figure contains
     the margin and labour slices), so a margin-and-labour-excluded C2C is
     `c2c_incl_margin_and_labour − c2c_margin − c2c_labour`.
+
+    Note: `working_budget` is still computed in
+    ``_compute_project_export_totals`` (it's a free side-product) but is
+    deliberately not emitted in the CSV — the consuming app does not
+    expect that column.
     """
     try:
         data = json.loads(request.body or '{}')
@@ -421,7 +426,6 @@ def export_projects_c2c(request):
 
     header = [
         'project_name',
-        'working_budget',
         'revenue_receivable',
         'c2c_incl_margin_and_labour',
         'c2c_margin',
@@ -448,7 +452,6 @@ def export_projects_c2c(request):
             continue
         writer.writerow([
             project.project,
-            f"{totals['working_budget']:.2f}",
             f"{totals['revenue_receivable']:.2f}",
             f"{totals['c2c_incl_margin_and_labour']:.2f}",
             f"{totals['c2c_margin']:.2f}",
