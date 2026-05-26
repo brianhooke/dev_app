@@ -59,9 +59,21 @@
     </div>
     
     <!-- Tender navigation buttons -->
-    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         <button class="btn btn-primary tender-nav-btn" data-section="bom">BOM</button>
         <button class="btn btn-primary tender-nav-btn" data-section="quotes">Quotes</button>
+
+        <!-- Tender-mode Bills group (added 2026-05-26). Mirrors the
+             execution-side billsButtonGroup but loads from
+             currentTenderProject and passes tender_or_execution=1 down
+             to the costing picker. Rows allocated here are cloned at
+             fix_contract_budget time. -->
+        <div id="tenderBillsButtonGroup" class="bills-btn-group">
+            <button class="btn btn-primary tender-nav-btn bills-main-btn" data-section="bills">Bills</button>
+            <button class="btn bills-sub-btn tender-bills-sub-btn active" data-subsection="unallocated">Unallocated</button>
+            <button class="btn bills-sub-btn tender-bills-sub-btn" data-subsection="allocated">POs</button>
+        </div>
+
         <button class="btn btn-primary tender-nav-btn" data-section="contract-budget">Contract Budget</button>
         <button class="btn btn-primary tender-nav-btn" data-section="documents">Documents</button>
         
@@ -87,7 +99,8 @@ $(document).ready(function() {
     window.resetTenderViewState = function() {
         // Reset all tender navigation buttons to default state
         $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
-        
+        $('#tenderBillsButtonGroup').removeClass('active');
+
         // Hide all dynamic action buttons
         $('#newQuoteBtn').hide();
         
@@ -285,9 +298,15 @@ $(document).ready(function() {
     $(document).on('click', '.tender-nav-btn', function() {
         const section = $(this).data('section');
         
-        // Remove active class from all buttons
-        $('.tender-nav-btn').removeClass('btn-primary').addClass('btn-outline-primary');
-        
+        // Remove active class from all buttons (except bills main btn which is handled separately)
+        $('.tender-nav-btn:not(.bills-main-btn)').removeClass('btn-primary').addClass('btn-outline-primary');
+
+        // Deactivate tender bills button group if clicking another section
+        if (section !== 'bills') {
+            $('#tenderBillsButtonGroup').removeClass('active');
+            $('#tenderBillsButtonGroup .bills-main-btn').removeClass('btn-primary').addClass('btn-outline-primary');
+        }
+
         // Add active class to clicked button
         $(this).removeClass('btn-outline-primary').addClass('btn-primary');
         
@@ -305,6 +324,13 @@ $(document).ready(function() {
             loadDocumentsSection();
         } else if (section === 'contract-budget') {
             loadContractBudgetSection();
+        } else if (section === 'bills') {
+            // Activate the tender bills button group + sub-buttons
+            $('#tenderBillsButtonGroup').addClass('active');
+            $('#tenderBillsButtonGroup .bills-main-btn').removeClass('btn-outline-primary').addClass('btn-primary');
+            const activeSubBtn = $('.tender-bills-sub-btn.active');
+            const subsection = activeSubBtn.length ? activeSubBtn.data('subsection') : 'unallocated';
+            loadTenderBillsSection(subsection);
         } else {
             // Placeholder for other sections
             $('#tenderContentArea').html(`
@@ -312,6 +338,15 @@ $(document).ready(function() {
                 <p style="color: #6c757d;">Content for ${section} will be implemented next.</p>
             `);
         }
+    });
+
+    // Handle tender Bills sub-menu button clicks
+    $(document).on('click', '.tender-bills-sub-btn', function(e) {
+        e.stopPropagation();  // don't fire the parent .tender-nav-btn handler
+        const subsection = $(this).data('subsection');
+        $('.tender-bills-sub-btn').removeClass('active');
+        $(this).addClass('active');
+        loadTenderBillsSection(subsection);
     });
     
     // ==========================================
@@ -533,6 +568,39 @@ $(document).ready(function() {
             projectObj: window.currentTenderProject,
             contentAreaId: 'tenderContentArea',
             isTender: true  // Tender mode = reduced columns
+        });
+    }
+
+    // Tender-mode Bills section loader (added 2026-05-26). Renders the
+    // same bills_project.html template as the construction view but
+    // bills_project.html keys off currentConstructionProject vs
+    // currentTenderProject to switch the costing-picker tender_or_execution
+    // between 1 and 2.
+    function loadTenderBillsSection(subsection) {
+        var projectPk = window.currentTenderProject ? window.currentTenderProject.pk : null;
+        var templateType = subsection === 'allocated' ? 'allocated' : 'unallocated';
+
+        if (!projectPk) {
+            console.error('[tender bills] currentTenderProject is null');
+            return;
+        }
+
+        $.ajax({
+            url: '{% url "core:bills" %}?project_pk=' + projectPk + '&template=' + templateType,
+            type: 'GET',
+            success: function(response) {
+                $('#tenderContentArea').html(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Failed to load tender bills section:', error);
+                $('#tenderContentArea').html(`
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px;"></i>
+                        <h4>Error Loading Bills</h4>
+                        <p>${error}</p>
+                    </div>
+                `);
+            }
         });
     }
     

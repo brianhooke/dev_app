@@ -325,40 +325,36 @@ class CostingRollupsTests(TestCase):
         self.assertEqual(billed, {self.c1.pk: 850.0})     # 400 + 100 + 200 + 150
 
     def test_compute_project_committed_billed_other_scope_documents_quirk(self):
-        """tender_or_execution=1 — pin the slightly-surprising scoping rules.
+        """tender_or_execution=1 — every scope is now uniformly TE-isolated.
 
-        The function scopes most loops by tender_or_execution but NOT bills:
+        Updated 2026-05-26 with v254: with bills + staff hours now cloned
+        at fix_contract_budget time, ``compute_project_committed_billed``
+        was tightened so EVERY rollup loop respects ``tender_or_execution``
+        — bills included. The old behaviour (bills leaking across the TE
+        boundary) was acceptable when only Costings carried TE, but as
+        soon as a single dollar of bill allocation can exist on both
+        sides of the boundary the asymmetry would double-count.
 
-          * Quotes: scoped (Q1 is execution, so excluded) -> 0
-          * Internal contract_budget: scoped (C2 is execution) -> 0
-          * Labour wages: scoped (C3 is execution) -> 0
-          * Stocktake snaps: gated by project_costing_pks, which is built
-            from scoped costings -> empty set -> snap excluded
-          * Direct-cost bills: NOT scoped by tender_or_execution (Bills
-            and Bill_allocations don't carry that concept). B1's $400
-            allocation to C1 still lands in committed_dict.
+        Fixture has only execution-side costings/bills/quotes/snaps, so
+        calling with TE=1 should produce empty dicts:
 
-        Result: committed = {C1: 400} (just B1).
+          * Quotes: scoped, Q1 is execution -> 0
+          * Internal contract_budget: scoped, C2 is execution -> 0
+          * Labour wages: scoped, C3 is execution -> 0
+          * Stocktake snaps: gated by scoped project_costing_pks -> empty
+          * Direct-cost bills: ``item__tender_or_execution=1`` filter -> 0
+            (was: NOT scoped, so B1's $400 leaked. Pre-v254 quirk.)
+          * All-bill billed loop: same explicit TE filter -> 0
+          * Staff hours billed: ``costing__tender_or_execution=1`` -> 0
 
-        Billed mirrors:
-          * All bill allocations: NOT scoped -> B1 ($400) + B2 ($100+$200)
-          * Snap: gated by project_costing_pks (empty) -> excluded
-          * Staff hours: scoped (costing__tender_or_execution=1) -> 0
-        Result: billed = {C1: 700}.
-
-        Documenting this here because the asymmetry (snap rolls up into
-        billed for in-scope costings only, but bills roll up regardless)
-        is easy to miss when reading the function and is exactly the
-        kind of behaviour that drifts. If a future change tightens
-        bill scoping or loosens snap scoping, this test will fail and
-        force the change to be conscious.
+        Result: both dicts empty.
         """
         committed, billed, is_construction = svc.compute_project_committed_billed(
             self.project, tender_or_execution=1
         )
         self.assertFalse(is_construction)
-        self.assertEqual(committed, {self.c1.pk: 400.0})
-        self.assertEqual(billed,    {self.c1.pk: 700.0})
+        self.assertEqual(committed, {})
+        self.assertEqual(billed, {})
 
     # ------------------------------------------------------------------
     # HC Claims rollups (deliberately narrower scope than Contract Budget).

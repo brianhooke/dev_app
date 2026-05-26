@@ -531,10 +531,23 @@ def compute_project_committed_billed(project, tender_or_execution):
     # Add Bill_allocations for direct-cost bills (types 0 and 1) to committed totals.
     # Progress claims (bill_type=2) are excluded so working budget stays quote/snap-grounded:
     # they still count toward billed/C2C-only via billed_dict below.
+    #
+    # TE filter (added 2026-05-26 with v254): once tender Bill_allocations
+    # are cloned into execution at fix_contract_budget time, the same
+    # bill carries TWO allocation rows for the same dollar — one tender,
+    # one execution. They are functionally isolated by ``item__costing_pk``
+    # (tender + execution costings have distinct PKs), but filtering on
+    # ``item__tender_or_execution`` makes the intent explicit and stops
+    # dead tender rows leaking into the execution-mode dict (and vice
+    # versa).
     bill_allocations_direct = (
         Bill_allocations.objects
         .direct_cost_lines()
-        .filter(bill__project=project, item__isnull=False)
+        .filter(
+            bill__project=project,
+            item__isnull=False,
+            item__tender_or_execution=tender_or_execution,
+        )
         .values('item__costing_pk', 'qty', 'rate', 'amount')
     )
 
@@ -581,7 +594,8 @@ def compute_project_committed_billed(project, tender_or_execution):
 
     all_bill_allocations = Bill_allocations.objects.filter(
         bill__in=all_project_bills,
-        item__isnull=False
+        item__isnull=False,
+        item__tender_or_execution=tender_or_execution,  # 2026-05-26 v254 TE-isolation
     ).values('item__costing_pk').annotate(
         total_billed=Sum('amount')
     )

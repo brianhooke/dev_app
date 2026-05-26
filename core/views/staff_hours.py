@@ -1799,18 +1799,28 @@ def get_projects_for_allocation(request):
 def get_costings_for_project(request):
     """
     Get costing items for a specific project.
+
+    The costing universe returned matches the project's *current* mode:
+    a tender project (project_status=1) returns its tender Costings, an
+    execution project (project_status=2) returns its execution Costings.
+    Staff hours can therefore be allocated to a project in either mode
+    (added 2026-05-26 — see fix_contract_budget for the carry-over).
+    Categories are restricted to Labour + Unexpected Line Items in
+    both modes, mirroring the existing execution behaviour.
     """
     try:
         project_id = request.GET.get('project_id')
-        
+
         if not project_id:
             return JsonResponse({'status': 'error', 'message': 'project_id required'}, status=400)
-        
-        # Labour AND ULI costings — staff hours can be allocated to
-        # the auto-seeded "Unexpected Line Items" line of every
-        # project in execution mode (added 2026-05-25). The two
-        # divisions are equivalent for this lookup so we combine
-        # them with an `__in` filter to keep the query single-pass.
+
+        try:
+            project = Projects.objects.get(projects_pk=project_id)
+        except Projects.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+
+        target_te = 1 if project.project_status == 1 else 2
+
         from core.models import Categories  # local to avoid cycles
         costings = Costing.objects.filter(
             project_id=project_id,
@@ -1818,18 +1828,19 @@ def get_costings_for_project(request):
                 Categories.DIVISION_LABOUR,
                 Categories.DIVISION_ULI,
             ],
-            tender_or_execution=2,
+            tender_or_execution=target_te,
         ).order_by('category__order_in_list', 'order_in_list')
-        
+
         costings_list = [{
             'id': c.costing_pk,
             'item': c.item,
             'category': c.category.category if c.category else None
         } for c in costings]
-        
+
         return JsonResponse({
             'status': 'success',
-            'costings': costings_list
+            'costings': costings_list,
+            'tender_or_execution': target_te,
         })
     except Exception as e:
         logger.error(f"Error getting costings: {str(e)}", exc_info=True)
@@ -2057,6 +2068,33 @@ def save_allocation(request):
         if allocation_type == 1:  # Project
             if not all([xero_instance_id, employee_id, date_str, project_id, costing_id, hours is not None]):
                 return JsonResponse({'status': 'error', 'message': 'Missing required fields for Project allocation'}, status=400)
+
+            # TE guard (added 2026-05-26): the costing must belong to the
+            # project AND its tender_or_execution must match the
+            # project's current status. Stops a stale frontend (or a
+            # post-fix_contract_budget client) from saving allocations
+            # against the wrong scope and creating ghosts in the wrong
+            # rollup view.
+            try:
+                project_obj = Projects.objects.get(projects_pk=project_id)
+                costing_obj = Costing.objects.get(costing_pk=costing_id)
+            except Projects.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+            except Costing.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Costing not found'}, status=404)
+
+            expected_te = 1 if project_obj.project_status == 1 else 2
+            if costing_obj.project_id != project_obj.projects_pk:
+                return JsonResponse({'status': 'error', 'message': 'Costing does not belong to project'}, status=400)
+            if costing_obj.tender_or_execution != expected_te:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f'Costing tender_or_execution={costing_obj.tender_or_execution} does '
+                        f'not match project mode={expected_te}. Refresh the page to load the '
+                        f'correct costings for this project.'
+                    ),
+                }, status=400)
         else:  # Unchargeable or Other Chargeable
             if not all([xero_instance_id, employee_id, date_str, hours is not None]):
                 return JsonResponse({'status': 'error', 'message': 'Missing required fields'}, status=400)
@@ -2664,6 +2702,16 @@ def get_staff_hours_report(request):
                 status=400,
             )
 
+        # 2026-05-26 v254 TE-isolation: with bills + staff hours now
+        # cloned at fix_contract_budget time, each allocation that
+        # existed in tender mode has a sibling execution row pointing
+        # at the cloned execution Costing. Both are real and live; we
+        # need to surface only one of them in the pivot to avoid
+        # double-counting hours and cost. The convention is "show the
+        # row that matches the project's *current* status" — tender
+        # projects show their tender allocations; execution projects
+        # show their execution allocations.
+        from django.db.models import Q
         allocations = (
             StaffHoursAllocations.objects
             .filter(
@@ -2672,6 +2720,11 @@ def get_staff_hours_report(request):
                 staff_hours__employee__xero_instance_id=xero_instance_id,
                 staff_hours__date__gte=date_from,
                 staff_hours__date__lte=date_to,
+            )
+            .filter(
+                Q(costing__isnull=True) |
+                Q(project__project_status=1, costing__tender_or_execution=1) |
+                Q(project__project_status=2, costing__tender_or_execution=2)
             )
             .select_related('staff_hours__employee', 'project')
         )

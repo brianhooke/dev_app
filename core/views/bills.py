@@ -89,6 +89,50 @@ from django.db import transaction
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_bill_allocation_costing_te(bill, item_pk):
+    """Reject a bill allocation whose target Costing isn't in the right
+    tender/execution scope for the bill's project.
+
+    Returns ``None`` on success, a ``JsonResponse`` (400/404) on failure.
+
+    Added 2026-05-26 with the v254 "tender hours + bills" change. The
+    project nav now exposes Bills in tender mode, so a stale frontend
+    (pre-deploy or after a fix_contract_budget transition) could still
+    POST allocations against the wrong scope; this guard makes that
+    impossible at the API layer.
+
+    No-ops when ``item_pk`` is falsy (allocation row may legitimately
+    be saved without a costing yet) or when the bill has no project FK
+    (Direct/stocktake bills aren't tender vs execution).
+    """
+    if not item_pk:
+        return None
+    project = bill.project if bill else None
+    if not project:
+        return None
+    try:
+        costing = Costing.objects.get(costing_pk=item_pk)
+    except Costing.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': f'Costing {item_pk} not found'}, status=404)
+
+    expected_te = 1 if project.project_status == 1 else 2
+    if costing.project_id != project.projects_pk:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Costing does not belong to this bill\'s project',
+        }, status=400)
+    if costing.tender_or_execution != expected_te:
+        return JsonResponse({
+            'status': 'error',
+            'message': (
+                f'Costing tender_or_execution={costing.tender_or_execution} does not match '
+                f'project mode={expected_te}. Refresh the page to load the correct '
+                f'costings for this project.'
+            ),
+        }, status=400)
+    return None
 logger.setLevel(logging.INFO)
 
 # NOTE: archive_bill, return_to_inbox, get_bills_list moved to bills_global.py
@@ -848,12 +892,46 @@ def get_project_bills(request, project_pk):
             })
         
         # Get costing items for this project (include unit_name for construction mode)
-        # Exclude internal category items from allocations
-        # Filter by tender_or_execution if provided (1=tender, 2=execution)
-        tender_or_execution = request.GET.get('tender_or_execution')
-        costing_filter = Costing.objects.filter(project_id=project_pk).exclude(category__category='Internal')
-        if tender_or_execution and tender_or_execution != 'null':
-            costing_filter = costing_filter.filter(tender_or_execution=int(tender_or_execution))
+        # Exclude internal category items from allocations.
+        #
+        # Tender_or_execution handling (updated 2026-05-26 with v254 to
+        # support tender-mode bills):
+        #   - If omitted/null, default to the project's *current* status
+        #     (1 for tender, 2 for execution).
+        #   - If provided, validate it matches the project status; reject
+        #     mismatches so a stale frontend can't silently load the
+        #     wrong scope.
+        project_te = 1 if project.project_status == 1 else 2
+        tender_or_execution_raw = request.GET.get('tender_or_execution')
+        if tender_or_execution_raw and tender_or_execution_raw != 'null':
+            try:
+                requested_te = int(tender_or_execution_raw)
+            except ValueError:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Invalid tender_or_execution={tender_or_execution_raw!r}',
+                }, status=400)
+            if requested_te not in (1, 2):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'tender_or_execution must be 1 or 2, got {requested_te}',
+                }, status=400)
+            if requested_te != project_te:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f'tender_or_execution={requested_te} does not match project '
+                        f'status={project_te}; refresh the page.'
+                    ),
+                }, status=400)
+            tender_or_execution = requested_te
+        else:
+            tender_or_execution = project_te
+
+        costing_filter = (
+            Costing.objects.filter(project_id=project_pk, tender_or_execution=tender_or_execution)
+            .exclude(category__category='Internal')
+        )
         costing_items = list(
             costing_filter.select_related('unit', 'category')
             .order_by('category__order_in_list', 'category__category', 'order_in_list', 'item')
@@ -866,14 +944,11 @@ def get_project_bills(request, project_pk):
                 'order_in_list',
             )
         )
-        
-        quotes_qs = Quotes.objects.filter(project_id=project_pk).exclude(contact_pk__isnull=True)
-        if tender_or_execution and tender_or_execution != 'null':
-            try:
-                te = int(tender_or_execution)
-                quotes_qs = quotes_qs.filter(tender_or_execution=te)
-            except ValueError:
-                pass
+
+        quotes_qs = (
+            Quotes.objects.filter(project_id=project_pk, tender_or_execution=tender_or_execution)
+            .exclude(contact_pk__isnull=True)
+        )
         quote_supplier_pks = list(quotes_qs.values_list('contact_pk_id', flat=True).distinct())
         
         return JsonResponse({
@@ -883,8 +958,9 @@ def get_project_bills(request, project_pk):
             'costing_items': costing_items,
             'project_pk': project_pk,
             'quote_supplier_pks': quote_supplier_pks,
+            'tender_or_execution': tender_or_execution,
         })
-        
+
     except Projects.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
     except Exception as e:
@@ -1008,11 +1084,23 @@ def create_unallocated_invoice_allocation(request):
         
         if not bill_pk:
             return JsonResponse({'status': 'error', 'message': 'bill_pk required'}, status=400)
-        
+
+        # TE guard (added 2026-05-26): the costing must match the bill
+        # project's current tender/execution scope. See
+        # ``_validate_bill_allocation_costing_te``.
+        try:
+            bill_obj = Bills.objects.select_related('project').get(bill_pk=bill_pk)
+        except Bills.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': f'Bill {bill_pk} not found'}, status=404)
+        item_pk = data.get('item_pk') or None
+        te_error = _validate_bill_allocation_costing_te(bill_obj, item_pk)
+        if te_error is not None:
+            return te_error
+
         # Create new allocation with defaults (including construction fields)
         allocation = Bill_allocations.objects.create(
             bill_id=bill_pk,
-            item_id=data.get('item_pk') or None,
+            item_id=item_pk,
             amount=data.get('amount', 0),
             gst_amount=data.get('gst_amount', 0),
             qty=data.get('qty') or None,
@@ -1044,12 +1132,19 @@ def update_unallocated_invoice_allocation(request, allocation_pk):
         logger.info(f'=== update_unallocated_invoice_allocation pk={allocation_pk} ===')
         logger.info(f'Received data: {data}')
         
-        allocation = Bill_allocations.objects.get(bill_allocation_pk=allocation_pk)
+        allocation = Bill_allocations.objects.select_related('bill', 'bill__project').get(bill_allocation_pk=allocation_pk)
         logger.info(f'BEFORE: item_id={allocation.item_id}, amount={allocation.amount}, gst={allocation.gst_amount}, notes={allocation.notes}')
-        
+
         # Update fields if provided
         if 'item_pk' in data:
             item_pk = data['item_pk'] if data['item_pk'] else None
+
+            # TE guard (added 2026-05-26): the new costing must match
+            # the bill project's current tender/execution scope.
+            te_error = _validate_bill_allocation_costing_te(allocation.bill, item_pk)
+            if te_error is not None:
+                return te_error
+
             allocation.item_id = item_pk
             logger.info(f'  Setting item_id to: {allocation.item_id}')
             

@@ -1,6 +1,6 @@
 # Session Handoff — Mason / dev_app
 
-**Last updated:** 26 May 2026 (v253 — staged for deploy: stocktake snap routes orphan allocations to ULI)
+**Last updated:** 26 May 2026 (v254 — staged for deploy: tender-mode staff hours + bills, cloned at fix_contract_budget)
 **Read this first** if you are picking up the audit cleanup work in a new chat.
 
 ---
@@ -9,9 +9,10 @@
 
 - **Live env**: `dev-app` / `dev-app-prod` in **us-east-1**. CNAME `app.mason.build` → `dev-app-prod.eba-pypetq2i.us-east-1.elasticbeanstalk.com`. Account `629256540295`.
 - **Live RDS**: `dev-app-db.crnrbbuoh4sd.us-east-1.rds.amazonaws.com` (PostgreSQL, db `postgres`, user `dbadmin`). Security group `sg-0f70c48a43acf8dce` allows port 5432 only from EB security groups — no CIDR ingress by default.
-- **Live version (currently serving)**: `v252-stocktake-2step-and-uli` (deployed 25 May 2026 — Stocktake two-step approval + ULI category seed).
-- **Local code-state version**: `v253` — staged for next deploy. One bug fix on top of v252:
-  - **Stocktake snap dropdown — universal project selector with ULI fallback** (no migration). The Allocations dropdown on each snap item now lists every active execution project; entries that don't have a costing matching the snap item's name are rendered in red and route to that project's "Unexpected Line Items" line. The contract budget's ULI Committed/Billed dropdowns and the costing-rollup totals (`compute_project_committed_billed`) all use the new `resolve_snap_allocation_costing_pk` helper so the dropdowns and the row-totals stay in lockstep. Side-effect fix: pre-A.M-C-13 the rollup gated snap allocations by FK only, which silently skipped *every* allocation in production (snap_item.item is the project=None master) — totals at the top of the contract budget were chronically lower than the sum of dropdown rows. v253 fixes that as a side-effect of the routing change.
+- **Live version (currently serving)**: `v252-stocktake-2step-and-uli` (deployed 25 May 2026 — Stocktake two-step approval + ULI category seed). v253 was packaged but superseded by v254 before deploy.
+- **Local code-state version**: `v254` — staged for next deploy. v253 + v254 changes folded into one zip:
+  - **v253** (no migration): Stocktake snap dropdown is now a universal project selector with ULI fallback. Allocations dropdown on each snap item lists every active execution project; entries that don't have a costing matching the snap item's name are rendered red and route to that project's "Unexpected Line Items" line. Contract budget ULI Committed/Billed dropdowns and the costing-rollup totals (`compute_project_committed_billed`) all use the new `resolve_snap_allocation_costing_pk` helper. Side-effect fix: pre-A.M-C-13 the rollup gated snap allocations by FK only, which silently skipped every allocation in production (snap_item.item is the project=None master) — totals at the top of the contract budget were chronically lower than the sum of dropdown rows.
+  - **v254** (no migration): Tender-mode staff hours + bills, with both kinds of allocation cloned at fix_contract_budget time. See "Tender-mode staff hours + bills (v254)" section below for the full design + manual verification path.
 - **Verification**: `curl -I https://app.mason.build/` returns `302 → /accounts/login/?next=/` with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `strict-transport-security: max-age=86400`. EB env: `Status=Ready`, `Health=Green`.
 
 ### How to run management commands on the live instance
@@ -291,6 +292,71 @@ Used by:
 
 - The HC Claims rollup (`hc_committed_amounts`) still uses FK-only matching. Same helper would apply, but no user complaint yet — defer until needed.
 - v252's `_compute_project_committed_billed` test fixture (`core/tests/test_costing_rollups.py`) uses `snap_item.item = C1` (a project costing) so the FK-direct path covers it. The new name + ULI fallback paths aren't covered by tests yet — add when the F.Q-C-05 SQLite blocker is resolved or when the next test pass adds prod-shape fixtures.
+
+---
+
+## Tender-mode staff hours + bills (26 May 2026, v254)
+
+### What changed for users
+
+- **Staff hours** can now be allocated to a project while it's still in tender mode. The Allocations tab's project picker behaves identically to execution mode; the Costings dropdown lists the project's tender Labour + ULI costings.
+- **Bills** can now be allocated to tender-mode projects. The tender-side nav now exposes a Bills button group that mirrors the execution view (Unallocated / POs sub-buttons). The same `bills_project.html` template renders for both modes; it switches `tender_or_execution` based on which of `currentTenderProject` / `currentConstructionProject` is active.
+- **At fix_contract_budget** (the "Fix it" / Tender → Execution transition), every tender `StaffHoursAllocations` row + every tender `Bill_allocations` row that points at a tender Costing is duplicated. The clone uses the existing `costing_pk_mapping` to point at the matching execution Costing. The original tender row is preserved so reviewing a project in tender mode after transition still shows the historical commit picture.
+
+### What does NOT get cloned
+
+- `StaffHours` (the per-employee per-day timesheet parent) — `unique_together = ('employee', 'date')`, so we'd violate the constraint. The clone happens at the per-project breakdown level (`StaffHoursAllocations`) only.
+- `Bills` (the supplier invoice itself) — there's still one `bill.project` FK and one supplier ledger row per invoice. Only the per-line `Bill_allocations` are duplicated. The same Bill therefore carries both tender and execution allocations after transition (each pointing at its respective Costing).
+
+### Server-side TE guards
+
+- `staff_hours.save_allocation`: project-typed allocations now reject costings whose `tender_or_execution` doesn't match the project's current `project_status`. Stops a stale frontend (or a post-transition client) from saving in the wrong scope.
+- `bills.create_unallocated_invoice_allocation` / `update_unallocated_invoice_allocation`: same guard via the new `_validate_bill_allocation_costing_te` helper.
+- `bills.get_project_bills`: `tender_or_execution` query param defaults to project status, and a mismatched explicit value is rejected (400) rather than silently coerced. The costing picker in `bills_project.html` therefore can never load the wrong scope.
+
+### Rollup TE-isolation tightened
+
+`costing_rollups.compute_project_committed_billed` previously left bills unscoped (the assumption was that Bill_allocations didn't carry TE because the parent `Bills` table didn't). After v254 cloning that's no longer safe — a bill carries both tender and execution allocations for the same dollar. Two queries were tightened with explicit `item__tender_or_execution=tender_or_execution` filters:
+
+- `bill_allocations_direct` (committed-side, direct-cost bills)
+- `all_bill_allocations` (billed-side, all bill types)
+
+Same-amount sibling rows on the same Bill no longer leak across the boundary. The previous quirk — bills counted in committed regardless of TE — is now flagged in `test_compute_project_committed_billed_other_scope_documents_quirk` as the intentional new behaviour (every loop is now uniformly TE-isolated).
+
+`bills_global.get_bills_list` filters out the cloned-sibling project allocations from the response (only the row matching the bill project's current TE survives) so the global Bills inbox doesn't show duplicate project rows on bills that survived a transition.
+
+`get_staff_hours_report` (the project × employee pivot at `/core/staff_hours_report/`) gates allocation rows by `(project_status, costing__tender_or_execution)` — a tender project shows tender allocations, an execution project shows execution allocations. Without this gate the pivot would double-count hours for any allocation cloned through `fix_contract_budget`.
+
+### Tests
+
+`core/tests/test_fix_contract_budget.py` (new, 5 tests, all passing under the `dev_app.settings.test` shim):
+
+- `FixContractBudgetCloningTests.test_fixture_starts_in_tender_with_known_counts`
+- `FixContractBudgetCloningTests.test_fix_contract_budget_clones_staff_hours_and_bills` — asserts the tender rows are preserved, the same Bill ends up with two allocation rows, and clone counts come out as 2N for both Hours and Bills.
+- `FixContractBudgetCloningTests.test_fix_contract_budget_uli_costing_cloned_no_special_casing` — pins that ULI rides through the same `costing_pk_mapping` loop as everything else.
+- `TenderExecutionRollupIsolationTests.test_committed_billed_te_2_excludes_tender_bill_allocations`
+- `TenderExecutionRollupIsolationTests.test_committed_billed_te_1_excludes_execution_bill_allocations`
+
+`core/tests/test_costing_rollups.py` was updated: `test_compute_project_committed_billed_other_scope_documents_quirk` now expects empty dicts for the tender-side rollup of an execution-only fixture. Was previously asserting `committed = {C1: 400}` (the bill-leakage quirk). The full file (16 tests) still passes.
+
+### Manual verification path post-deploy
+
+1. Pick a tender project. Confirm the BoM nav now shows a Bills group between Quotes and Contract Budget.
+2. Allocate a few staff hours against tender Labour + ULI costings via Staff Hours → Allocations. Confirm they appear on the tender contract budget Committed dropdown for those costings.
+3. Attach a bill to the tender project, allocate it across one or two tender costings. Confirm the tender contract budget Billed dropdown shows the bill.
+4. Run "Fix Contract Budget" on that project (Contract Budget → Fix It). Verify on the live RDS via SSM:
+   - Tender `StaffHoursAllocations` + `Bill_allocations` rows still point at the tender Costing PKs.
+   - New execution copies exist for the same allocations, pointing at the new execution Costing PKs.
+   - The execution contract budget shows those hours + bills via the cloned execution allocations.
+   - Re-opening the tender view (Review Tender) still shows the historical tender allocations.
+5. Edit one execution-side allocation post-transition. Confirm the tender allocation is unchanged.
+
+### Things explicitly NOT in v254
+
+- HC Claims rollup (`hc_committed_amounts`) — still FK-only for snaps; deferred (carried over from v253).
+- Reverse transition (execution → tender) — still not implemented.
+- Schema additions: `StaffHoursAllocations` and `Bill_allocations` do **not** have a `tender_or_execution` column. TE is derived from the linked Costing, which is the canonical TE-bearing model.
+- `StaffHours` parent rows are unchanged.
 
 ---
 

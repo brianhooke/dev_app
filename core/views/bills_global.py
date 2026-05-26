@@ -1313,7 +1313,19 @@ def get_bills_list(request):
     # Get all invoices (frontend will filter by status)
     invoices = Bills.objects.select_related(
         'contact_pk', 'project', 'xero_instance', 'received_email', 'email_attachment'
-    ).prefetch_related('bill_allocations').order_by('-created_at')
+    ).prefetch_related('bill_allocations__item').order_by('-created_at')
+
+    # 2026-05-26 v254: with bill allocations now cloned at
+    # fix_contract_budget time, a bill that was allocated in tender mode
+    # carries TWO project-cost rows after transition (one tender, one
+    # execution) — same dollar amount, different costings. The
+    # global-Bills response is consumed by the Inbox / Direct / Approvals
+    # JS which doesn't care about TE; we therefore filter project-cost
+    # allocation rows down to those whose Costing matches the bill
+    # project's current status. Xero-account-only allocation rows
+    # (``item_id IS NULL``) are unaffected. The bill_pks identified here
+    # are used below in the per-allocation loop to decide what's
+    # surfaced to the frontend.
     
     # Get dropdown options
     xero_instances = XeroInstances.objects.all().values('xero_instance_pk', 'xero_name', 'stocktake')
@@ -1347,9 +1359,21 @@ def get_bills_list(request):
             elif invoice.project and invoice.project.xero_instance_id:
                 xero_instance_id = invoice.project.xero_instance_id
             
-            # Get existing allocations for this invoice
+            # Get existing allocations for this invoice. Filter out
+            # project-cost allocations that don't match the bill project's
+            # current TE — see prefetch comment above.
             allocations = []
+            invoice_project_te = None
+            if invoice.project:
+                invoice_project_te = 1 if invoice.project.project_status == 1 else 2
             for allocation in invoice.bill_allocations.all():
+                if (
+                    invoice_project_te is not None
+                    and allocation.item_id
+                    and getattr(allocation, 'item', None)
+                    and allocation.item.tender_or_execution != invoice_project_te
+                ):
+                    continue  # cloned tender/execution sibling — hide from global view
                 allocations.append({
                     'allocation_pk': allocation.bill_allocation_pk,
                     'amount': float(allocation.amount) if allocation.amount is not None else None,

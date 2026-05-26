@@ -1019,7 +1019,77 @@ def fix_contract_budget(request, project_pk):
                             notes=alloc.notes
                         )
             
-            # Step 5: Set project to execution mode
+            # Step 5: Clone tender StaffHoursAllocations into execution
+            # Each tender allocation row remains intact (it's the historical
+            # tender record). For every project-typed allocation pointing
+            # at a tender Costing in this project, create a sibling row
+            # against the matching execution Costing via costing_pk_mapping.
+            # The shared `staff_hours` parent (one timesheet day per
+            # employee) is reused — we only duplicate the per-project
+            # breakdown row.
+            tender_staff_allocs = StaffHoursAllocations.objects.filter(
+                project=project,
+                allocation_type=StaffHoursAllocations.ALLOCATION_TYPE_PROJECT,
+                costing__tender_or_execution=1,
+            )
+            cloned_staff_count = 0
+            for sa in tender_staff_allocs:
+                new_costing_pk = costing_pk_mapping.get(sa.costing_id)
+                if not new_costing_pk:
+                    logger.warning(
+                        f"[fix_contract_budget] StaffHoursAllocation {sa.allocation_pk} "
+                        f"references tender costing {sa.costing_id} which is missing from "
+                        f"costing_pk_mapping; skipping clone."
+                    )
+                    continue
+                StaffHoursAllocations.objects.create(
+                    staff_hours=sa.staff_hours,
+                    allocation_type=sa.allocation_type,
+                    project=project,
+                    costing_id=new_costing_pk,
+                    hours=sa.hours,
+                    note=sa.note,
+                )
+                cloned_staff_count += 1
+            logger.info(f"[fix_contract_budget] Cloned {cloned_staff_count} StaffHoursAllocations rows into execution mode")
+
+            # Step 6: Clone tender Bill_allocations into execution
+            # Same model: the Bill itself stays as a single supplier
+            # invoice (its FK to Projects follows the project through the
+            # transition), only the per-line allocations are duplicated.
+            # Allocations whose ``item`` is null (Direct/non-project
+            # ledger lines) are not cloned because there's nothing to
+            # remap.
+            tender_bill_allocs = Bill_allocations.objects.filter(
+                bill__project=project,
+                item__tender_or_execution=1,
+            )
+            cloned_bill_count = 0
+            for ba in tender_bill_allocs:
+                new_costing_pk = costing_pk_mapping.get(ba.item_id)
+                if not new_costing_pk:
+                    logger.warning(
+                        f"[fix_contract_budget] Bill_allocation {ba.bill_allocation_pk} "
+                        f"references tender costing {ba.item_id} which is missing from "
+                        f"costing_pk_mapping; skipping clone."
+                    )
+                    continue
+                Bill_allocations.objects.create(
+                    bill=ba.bill,
+                    item_id=new_costing_pk,
+                    amount=ba.amount,
+                    qty=ba.qty,
+                    rate=ba.rate,
+                    unit=ba.unit,
+                    notes=ba.notes,
+                    gst_amount=ba.gst_amount,
+                    allocation_type=ba.allocation_type,
+                    xero_account=ba.xero_account,
+                )
+                cloned_bill_count += 1
+            logger.info(f"[fix_contract_budget] Cloned {cloned_bill_count} Bill_allocations rows into execution mode")
+
+            # Step 7: Set project to execution mode
             project.project_status = 2
             project.save()
         
