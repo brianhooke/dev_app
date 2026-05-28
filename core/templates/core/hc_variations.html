@@ -694,8 +694,11 @@
             return;
         }
         
-        if (amount <= 0) {
-            alert('Please enter an amount greater than 0.');
+        // Allow negative amounts (e.g. removing scope reduces the contract).
+        // Still block exactly $0 — a no-op variation has no business meaning.
+        // Threshold matches the reactive validateNewVariation() check at line ~593.
+        if (Math.abs(amount) < 0.01) {
+            alert('Please enter a non-zero amount. Negative amounts are allowed for scope reductions.');
             return;
         }
         

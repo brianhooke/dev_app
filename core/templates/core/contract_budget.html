@@ -685,7 +685,7 @@ Column Behaviors:
         if (!effectiveIsTender()) {
             // Contract Budget column (execution mode only)
             // Make clickable if item has HC variation allocations
-            var hasHcVariations = (item.hc_variation_amount || 0) > 0;
+            var hasHcVariations = Math.abs(item.hc_variation_amount || 0) >= 0.01;
             var contractBudgetClickableClass = hasHcVariations ? ' contract-budget-clickable' : '';
             var contractBudgetTd = $('<td class="contract-budget-cell' + contractBudgetClickableClass + '" data-item-pk="' + item.costing_pk + '" data-base-budget="' + (item.base_contract_budget || 0) + '" data-hc-variation="' + (item.hc_variation_amount || 0) + '">' + Utils.formatCurrency(item.contract_budget || 0) + '</td>');
             if (hasHcVariations) {
