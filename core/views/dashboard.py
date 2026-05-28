@@ -1498,44 +1498,71 @@ def send_po_email(request, project_pk, supplier_pk):
         # Check if construction project - use rates_based flag
         is_construction = (project.project_type and project.project_type.rates_based == 1)
         
+        # Order both branches deterministically by
+        # (category.order_in_list, costing.order_in_list, costing_pk) so
+        # the rendered PDF lines up with the contract budget *and* with
+        # the supplier-facing payment schedule on /po/<unique_id>/. Without
+        # this both ends rely on PG's row order which is undefined without
+        # ORDER BY (the symptom users hit was the input rows in opposite
+        # order to the embedded PO PDF).
+        def _alloc_sort_key(allocation):
+            it = allocation.item
+            if not it:
+                return (10**9, 10**9, 0)
+            cat_order = it.category.order_in_list if it.category else 10**9
+            item_order = it.order_in_list or 10**9
+            return (cat_order, item_order, it.costing_pk)
+
+        all_allocations = []
+        for quote in quotes:
+            for allocation in quote.quote_allocations.select_related(
+                'item', 'item__category', 'item__unit'
+            ).all():
+                all_allocations.append((quote, allocation))
+        all_allocations.sort(key=lambda pair: _alloc_sort_key(pair[1]))
+
         if is_construction:
             # Construction: Keep individual allocations with qty/unit/rate
             items = []
-            for quote in quotes:
-                for allocation in quote.quote_allocations.all():
-                    # Get unit name from costing item
-                    unit_name = ''
-                    if allocation.item and allocation.item.unit:
-                        unit_name = allocation.item.unit.unit_name if hasattr(allocation.item.unit, 'unit_name') else str(allocation.item.unit)
-                    
-                    items.append({
-                        'description': allocation.item.item,
-                        'unit': unit_name,
-                        'qty': float(allocation.qty) if allocation.qty else None,
-                        'rate': float(allocation.rate) if allocation.rate else None,
-                        'amount': float(allocation.amount),
-                        'quote_number': quote.supplier_quote_number or ''
-                    })
+            for quote, allocation in all_allocations:
+                # Get unit name from costing item
+                unit_name = ''
+                if allocation.item and allocation.item.unit:
+                    unit_name = allocation.item.unit.unit_name if hasattr(allocation.item.unit, 'unit_name') else str(allocation.item.unit)
+
+                items.append({
+                    'description': allocation.item.item if allocation.item else '',
+                    'unit': unit_name,
+                    'qty': float(allocation.qty) if allocation.qty else None,
+                    'rate': float(allocation.rate) if allocation.rate else None,
+                    'amount': float(allocation.amount),
+                    'quote_number': quote.supplier_quote_number or ''
+                })
         else:
-            # Non-construction: Group allocations by item
-            from collections import defaultdict
-            items_map = defaultdict(lambda: {'amount': Decimal('0'), 'quote_numbers': []})
-            
-            for quote in quotes:
-                for allocation in quote.quote_allocations.all():
-                    item_name = allocation.item.item
-                    items_map[item_name]['amount'] += allocation.amount
-                    if quote.supplier_quote_number and quote.supplier_quote_number not in items_map[item_name]['quote_numbers']:
-                        items_map[item_name]['quote_numbers'].append(quote.supplier_quote_number)
-            
-            # Convert to list
+            # Non-construction: Group allocations by item, preserving the
+            # sorted iteration order via dict (insertion order = dict order
+            # in Python 3.7+).
+            grouped = {}
+            for quote, allocation in all_allocations:
+                if not allocation.item:
+                    continue
+                item_name = allocation.item.item
+                if item_name not in grouped:
+                    grouped[item_name] = {
+                        'amount': Decimal('0'),
+                        'quote_numbers': [],
+                    }
+                grouped[item_name]['amount'] += allocation.amount or Decimal('0')
+                if quote.supplier_quote_number and quote.supplier_quote_number not in grouped[item_name]['quote_numbers']:
+                    grouped[item_name]['quote_numbers'].append(quote.supplier_quote_number)
+
             items = [
                 {
                     'description': item_name,
                     'amount': float(data['amount']),
                     'quote_numbers': ', '.join(data['quote_numbers'])
                 }
-                for item_name, data in items_map.items()
+                for item_name, data in grouped.items()
             ]
         
         # Calculate total
@@ -1572,23 +1599,25 @@ def send_po_email(request, project_pk, supplier_pk):
             unique_id = po_order.unique_id
 
             # Refresh line items from the supplier's current quote allocations.
-            for quote in quotes:
-                for allocation in quote.quote_allocations.all():
-                    if not allocation.item:
-                        continue
-                    Po_order_detail.objects.create(
-                        po_order_pk=po_order,
-                        date=date.today(),
-                        costing=allocation.item,
-                        quote=quote,
-                        amount=allocation.amount,
-                        qty=allocation.qty if allocation.qty else None,
-                        # Costing.unit is a Units FK; coerce to its string
-                        # representation since Po_order_detail.unit is a CharField (B22).
-                        unit=str(allocation.item.unit) if allocation.item.unit else None,
-                        rate=allocation.rate if allocation.rate else None,
-                        variation_note=None,
-                    )
+            # Iterate in the same (category, item) order used to build the
+            # PDF/items list so DB row order matches the PDF/landing-page
+            # row order (auto-incrementing PKs reflect the sort).
+            for quote, allocation in all_allocations:
+                if not allocation.item:
+                    continue
+                Po_order_detail.objects.create(
+                    po_order_pk=po_order,
+                    date=date.today(),
+                    costing=allocation.item,
+                    quote=quote,
+                    amount=allocation.amount,
+                    qty=allocation.qty if allocation.qty else None,
+                    # Costing.unit is a Units FK; coerce to its string
+                    # representation since Po_order_detail.unit is a CharField (B22).
+                    unit=str(allocation.item.unit) if allocation.item.unit else None,
+                    rate=allocation.rate if allocation.rate else None,
+                    variation_note=None,
+                )
 
         logger.info(
             f"Po_order pk={po_order.po_order_pk} now has "

@@ -652,23 +652,33 @@ var AllocationsManager = (function() {
      */
     function loadAllocations(sectionId, itemPk) {
         var cfg = configs[sectionId];
-        
+
         if (!cfg.api.loadAllocations) {
             return;
         }
-        
+
         var url = cfg.api.loadAllocations;
         if (typeof url === 'function') {
             url = url(itemPk);
         } else {
             url = url.replace('{pk}', itemPk);
         }
-        
+
         $.ajax({
             url: url,
             type: 'GET',
             success: function(response) {
-                if (response.status === 'success' || response.allocations) {
+                // Treat anything that arrived with an `allocations` array
+                // (or an explicit success status) as a valid payload — even
+                // an empty allocations array is meaningful, it means
+                // "render the empty-state row". Previously the success
+                // gate was `response.status === 'success' || response.allocations`,
+                // which is fine, but we now log every branch so issue-2-style
+                // "saved allocations don't show" reports are debuggable from
+                // the browser console alone.
+                var hasAllocsField = Object.prototype.hasOwnProperty.call(response || {}, 'allocations');
+                var isSuccess = response && (response.status === 'success' || hasAllocsField);
+                if (isSuccess) {
                     // Only set currentItem from response if not already set by onRowSelect
                     // This preserves values like total_net/total_gst from the main table row
                     var responseItem = response.item || response.quote || response.invoice || response.bill;
@@ -682,19 +692,49 @@ var AllocationsManager = (function() {
                             }
                         });
                     }
-                    cfg.data.currentAllocations = response.allocations || [];
-                    populateAllocationsTable(sectionId, cfg.data.currentAllocations);
-                    
+                    cfg.data.currentAllocations = Array.isArray(response.allocations)
+                        ? response.allocations
+                        : [];
+                    console.log(
+                        '[AllocationsManager] loadAllocations OK',
+                        'section=' + sectionId,
+                        'pk=' + itemPk,
+                        'count=' + cfg.data.currentAllocations.length
+                    );
+                    try {
+                        populateAllocationsTable(sectionId, cfg.data.currentAllocations);
+                    } catch (renderErr) {
+                        // Don't let a renderer exception leave the table in
+                        // a half-rendered state with no error visible (the
+                        // jQuery $.ajax success handler swallows throws).
+                        console.error(
+                            '[AllocationsManager] populateAllocationsTable threw for ' + sectionId,
+                            renderErr
+                        );
+                    }
+
                     // Call onAllocationsLoaded callback if provided
                     if (cfg.mainTable && cfg.mainTable.onAllocationsLoaded) {
                         cfg.mainTable.onAllocationsLoaded(sectionId, cfg.data.currentAllocations);
                     }
                 } else {
-                    console.error('AllocationsManager: Error loading allocations:', response.message);
+                    console.error(
+                        '[AllocationsManager] loadAllocations response NOT recognised',
+                        'section=' + sectionId,
+                        'pk=' + itemPk,
+                        response
+                    );
                 }
             },
             error: function(xhr, status, error) {
-                console.error('AllocationsManager: Failed to load allocations:', error);
+                console.error(
+                    '[AllocationsManager] loadAllocations HTTP error',
+                    'section=' + sectionId,
+                    'pk=' + itemPk,
+                    'status=' + (xhr && xhr.status),
+                    'error=' + error,
+                    'body=' + (xhr && xhr.responseText)
+                );
             }
         });
     }

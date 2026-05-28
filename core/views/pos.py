@@ -37,6 +37,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from ._helpers import api_public, api_login_required, json_ok, json_err
 
 from ..models import (
@@ -115,6 +116,13 @@ def view_po_by_unique_id(request, unique_id):
         # different categories can't silently collapse into one row,
         # and so the costing_pk we send to the supplier always
         # round-trips back to the right Costing on submit (B13).
+        #
+        # Order rows by `category.order_in_list` then `costing.order_in_list`
+        # so the supplier-facing payment schedule mirrors the contract budget
+        # *and* the PO PDF, regardless of the order quote allocations were
+        # entered. Without this, both ends rely on PG's row order which is
+        # undefined without ORDER BY (the symptom users hit was the input
+        # rows appearing in the opposite order to the embedded PO PDF).
         if is_construction:
             items_map = defaultdict(lambda: {
                 'contract_sum': Decimal('0'),
@@ -122,11 +130,16 @@ def view_po_by_unique_id(request, unique_id):
                 'quote_numbers': [],
                 'description': None,
                 'unit': None,
+                'sort_key': (10**9, 10**9, 0),
             })
 
             po_details = Po_order_detail.objects.select_related(
-                'costing', 'costing__unit', 'quote'
-            ).filter(po_order_pk=po_order)
+                'costing', 'costing__category', 'costing__unit', 'quote'
+            ).filter(po_order_pk=po_order).order_by(
+                'costing__category__order_in_list',
+                'costing__order_in_list',
+                'costing__costing_pk',
+            )
             logger.info(
                 f"PO Public URL - PO pk={po_order.po_order_pk}, "
                 f"found {po_details.count()} Po_order_detail records"
@@ -141,6 +154,10 @@ def view_po_by_unique_id(request, unique_id):
                 bucket['unit'] = (
                     str(detail.costing.unit) if detail.costing.unit else '-'
                 )
+                cat_order = (detail.costing.category.order_in_list
+                             if detail.costing.category else 10**9)
+                item_order = detail.costing.order_in_list or 10**9
+                bucket['sort_key'] = (cat_order, item_order, detail.costing.costing_pk)
                 if detail.qty and detail.rate:
                     bucket['contract_sum'] += detail.qty * detail.rate
                     bucket['contract_qty'] += detail.qty
@@ -156,15 +173,22 @@ def view_po_by_unique_id(request, unique_id):
                 'amount': Decimal('0'),
                 'quote_numbers': [],
                 'description': None,
+                'sort_key': (10**9, 10**9, 0),
             })
 
             for quote in quotes:
-                for allocation in quote.quote_allocations.all():
+                for allocation in quote.quote_allocations.select_related(
+                    'item', 'item__category'
+                ).all():
                     if not allocation.item:
                         continue
                     key = allocation.item.costing_pk
                     bucket = items_map[key]
                     bucket['description'] = allocation.item.item
+                    cat_order = (allocation.item.category.order_in_list
+                                 if allocation.item.category else 10**9)
+                    item_order = allocation.item.order_in_list or 10**9
+                    bucket['sort_key'] = (cat_order, item_order, allocation.item.costing_pk)
                     bucket['amount'] += allocation.amount or Decimal('0')
 
                     if quote.supplier_quote_number and quote.supplier_quote_number not in bucket['quote_numbers']:
@@ -240,8 +264,19 @@ def view_po_by_unique_id(request, unique_id):
                 if alloc.item:
                     approved_claims_by_costing[alloc.item.costing_pk] = float(alloc.amount)
         
+        # Sort costings by (category.order_in_list, costing.order_in_list,
+        # costing_pk) so the supplier-facing table renders in the same order
+        # as the contract budget *and* the PO PDF. Without this both ends
+        # rely on PG's row order which is undefined without ORDER BY (the
+        # symptom: input rows in opposite order to the embedded PDF).
+        sorted_costing_pks = sorted(
+            items_map.keys(),
+            key=lambda pk: items_map[pk]['sort_key'],
+        )
+
         items = []
-        for costing_pk, data in items_map.items():
+        for costing_pk in sorted_costing_pks:
+            data = items_map[costing_pk]
             if is_construction:
                 contract_sum = float(data['contract_sum'])
                 contract_qty = float(data['contract_qty'])
@@ -632,45 +667,49 @@ def submit_po_claim(request, unique_id):
         is_resubmission = False
         invoice = None
 
-        # Check if updating an existing pending invoice or creating a new one.
-        if pending_bill_pk:
-            try:
-                invoice = Bills.objects.select_for_update().get(
-                    bill_pk=pending_bill_pk,
-                    project=project,
-                    contact_pk=supplier,
-                    bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
-                )
-                is_resubmission = True
-            except Bills.DoesNotExist:
-                # Stale pending_bill_pk (already approved or different project) —
-                # fall through to the lookup below so we don't accidentally
-                # create a second pending row for the same supplier (B15).
-                invoice = None
-
-        # If the client didn't pass a pending_bill_pk, or the one it passed
-        # has already moved on, look up any existing pending row for this
-        # supplier+project before creating a new one.
-        if not invoice:
-            invoice = (
-                Bills.objects
-                .select_for_update()
-                .filter(
-                    project=project,
-                    contact_pk=supplier,
-                    bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
-                )
-                .order_by('-bill_pk')
-                .first()
-            )
-            if invoice is not None:
-                is_resubmission = True
-
-        # Atomically replace allocations on the existing pending invoice,
-        # or create a fresh one if no pending row exists. The whole
-        # delete + recreate runs inside transaction.atomic() so a mid-way
-        # failure can't leave the supplier with no allocations (B14).
+        # `select_for_update()` MUST run inside an active atomic block,
+        # otherwise Django raises TransactionManagementError. Previously the
+        # lookups below sat outside the transaction, which 500'd every
+        # submit attempt for users (the symptom: "Internal error" + a 500
+        # from /po/<id>/submit/ in the browser console). The whole
+        # find-or-create + delete + recreate flow now lives inside one
+        # atomic block — also ensures a mid-way failure can't leave the
+        # supplier with no allocations (B14).
         with transaction.atomic():
+            # Check if updating an existing pending invoice or creating a new one.
+            if pending_bill_pk:
+                try:
+                    invoice = Bills.objects.select_for_update().get(
+                        bill_pk=pending_bill_pk,
+                        project=project,
+                        contact_pk=supplier,
+                        bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
+                    )
+                    is_resubmission = True
+                except Bills.DoesNotExist:
+                    # Stale pending_bill_pk (already approved or different project) —
+                    # fall through to the lookup below so we don't accidentally
+                    # create a second pending row for the same supplier (B15).
+                    invoice = None
+
+            # If the client didn't pass a pending_bill_pk, or the one it passed
+            # has already moved on, look up any existing pending row for this
+            # supplier+project before creating a new one.
+            if not invoice:
+                invoice = (
+                    Bills.objects
+                    .select_for_update()
+                    .filter(
+                        project=project,
+                        contact_pk=supplier,
+                        bill_status=Bills.STATUS_PO_PROGRESS_SUBMITTED,
+                    )
+                    .order_by('-bill_pk')
+                    .first()
+                )
+                if invoice is not None:
+                    is_resubmission = True
+
             if invoice is None:
                 invoice = Bills.objects.create(
                     project=project,
@@ -958,10 +997,20 @@ This is an automated notification from the Mason Build platform.
         return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
 
 
+@xframe_options_sameorigin
 def view_po_pdf_by_unique_id(request, unique_id):
     """
     Serve the saved PDF for a PO by unique_id.
     Used in iframe on the public landing page.
+
+    `@xframe_options_sameorigin` is required because production sets
+    `X_FRAME_OPTIONS = 'DENY'` (settings/production_aws.py). DENY blocks
+    *every* iframe embed, including same-origin, so the PDF viewer on
+    `/po/<unique_id>/` could not embed `/po/<unique_id>/pdf/` and the
+    contractor saw a "broken link" icon. The decorator overrides the
+    response header to `SAMEORIGIN` for this view only, which is exactly
+    the policy we want: the parent landing page is on the same origin,
+    arbitrary third-party sites still cannot frame the PDF.
 
     Now that send_po_email upserts a single canonical Po_orders row per
     (project, supplier), we just serve that one row's PDF (B9/B10).
@@ -1058,7 +1107,10 @@ def get_po_table_data_for_invoice(request, bill_pk):
         ).prefetch_related('quote_allocations')
         
         # Group by costing_pk (B13) — see view_po_by_unique_id for the
-        # rationale.
+        # rationale. Also tracks a sort_key so the staff-facing allocated
+        # invoice view orders rows by (category.order_in_list,
+        # costing.order_in_list, costing_pk), matching both the contract
+        # budget and the PO PDF.
         if is_construction:
             items_map = defaultdict(lambda: {
                 'contract_sum': Decimal('0'),
@@ -1066,11 +1118,16 @@ def get_po_table_data_for_invoice(request, bill_pk):
                 'quote_numbers': [],
                 'description': None,
                 'unit': None,
+                'sort_key': (10**9, 10**9, 0),
             })
 
             po_details = Po_order_detail.objects.select_related(
-                'costing', 'costing__unit', 'quote'
-            ).filter(po_order_pk=po_order)
+                'costing', 'costing__category', 'costing__unit', 'quote'
+            ).filter(po_order_pk=po_order).order_by(
+                'costing__category__order_in_list',
+                'costing__order_in_list',
+                'costing__costing_pk',
+            )
 
             for detail in po_details:
                 if not detail.costing:
@@ -1081,6 +1138,10 @@ def get_po_table_data_for_invoice(request, bill_pk):
                 bucket['unit'] = (
                     str(detail.costing.unit) if detail.costing.unit else '-'
                 )
+                cat_order = (detail.costing.category.order_in_list
+                             if detail.costing.category else 10**9)
+                item_order = detail.costing.order_in_list or 10**9
+                bucket['sort_key'] = (cat_order, item_order, detail.costing.costing_pk)
                 if detail.qty and detail.rate:
                     bucket['contract_sum'] += detail.qty * detail.rate
                     bucket['contract_qty'] += detail.qty
@@ -1096,15 +1157,22 @@ def get_po_table_data_for_invoice(request, bill_pk):
                 'amount': Decimal('0'),
                 'quote_numbers': [],
                 'description': None,
+                'sort_key': (10**9, 10**9, 0),
             })
 
             for quote in quotes:
-                for allocation in quote.quote_allocations.all():
+                for allocation in quote.quote_allocations.select_related(
+                    'item', 'item__category'
+                ).all():
                     if not allocation.item:
                         continue
                     key = allocation.item.costing_pk
                     bucket = items_map[key]
                     bucket['description'] = allocation.item.item
+                    cat_order = (allocation.item.category.order_in_list
+                                 if allocation.item.category else 10**9)
+                    item_order = allocation.item.order_in_list or 10**9
+                    bucket['sort_key'] = (cat_order, item_order, allocation.item.costing_pk)
                     bucket['amount'] += allocation.amount or Decimal('0')
 
                     if quote.supplier_quote_number and quote.supplier_quote_number not in bucket['quote_numbers']:
@@ -1145,8 +1213,14 @@ def get_po_table_data_for_invoice(request, bill_pk):
             individual_claims.append(claim_data)
             claim_number += 1
 
+        sorted_costing_pks = sorted(
+            items_map.keys(),
+            key=lambda pk: items_map[pk]['sort_key'],
+        )
+
         items = []
-        for costing_pk, data in items_map.items():
+        for costing_pk in sorted_costing_pks:
+            data = items_map[costing_pk]
             if is_construction:
                 contract_sum = float(data['contract_sum'])
                 contract_qty = float(data['contract_qty'])

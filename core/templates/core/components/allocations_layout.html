@@ -184,6 +184,23 @@ Optional context variables:
         box-shadow: inset 0 -1px 0 black;
         border: none;
     }
+
+    /* Keep header in view while scrolling the bounded allocations body */
+    #{{ section_id }}AllocationsTable thead {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--color-bg-default, #fff);
+    }
+    #{{ section_id }}AllocationsTable thead th {
+        background: var(--color-bg-default, #fff);
+    }
+
+    /* Webkit scrollbar styling for the bounded allocations wrapper */
+    #{{ section_id }}AllocationsScroll::-webkit-scrollbar { width: 8px; display: block; }
+    #{{ section_id }}AllocationsScroll::-webkit-scrollbar-track { background: var(--color-bg-muted); }
+    #{{ section_id }}AllocationsScroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+    #{{ section_id }}AllocationsScroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
     
     /* Allow col-action-first left border to show on allocations table */
     #{{ section_id }}AllocationsTable thead th.col-action-first,
@@ -370,9 +387,17 @@ Optional context variables:
             <div class="{{ section_id }}-section-divider">
                 <div class="{{ section_id }}-table-title" id="{{ section_id }}AllocationsTitle">{{ allocations_title }}</div>
                 <!-- Allocations section -->
-                <div id="{{ section_id }}AllocationsSection" class="{{ section_id }}-table-container reusable-table-container" style="display: flex; flex-direction: column;">
-                    <!-- Scrollable table container -->
-                    <div style="display: flex; flex-direction: column; overflow: hidden;">
+                <div id="{{ section_id }}AllocationsSection" class="{{ section_id }}-table-container reusable-table-container" style="display: flex; flex-direction: column; min-height: 0;">
+                    <!--
+                      Scrollable table wrapper.
+                      max-height bounds how tall the body can grow before scrolling
+                      kicks in; the footer (Add Row / Still to Allocate) lives
+                      OUTSIDE this wrapper so it always stays visible. Without
+                      this constraint, adding many allocation rows pushes the
+                      wrapper past the parent flex bounds and rows below the
+                      visible area become unreachable (no scrollbar).
+                    -->
+                    <div id="{{ section_id }}AllocationsScroll" style="display: flex; flex-direction: column; overflow-y: auto; max-height: 240px; min-height: 0;">
                         <table id="{{ section_id }}AllocationsTable" class="reusable-table" style="margin-bottom: 0; table-layout: fixed; width: 100%;">
                             <colgroup>
                                 {% for col in allocations_columns %}
