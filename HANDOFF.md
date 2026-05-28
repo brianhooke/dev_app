@@ -120,6 +120,67 @@ call_command("import_onyx_subbie", commit=True)
 - Decide whether to terminate the orphan ap-southeast-2 env + RDS to stop accruing cost and to avoid future confusion.
 - Lambda + Django still hold the email-pipeline secret under different env-var names (`API_SECRET_KEY` on Lambda vs `EMAIL_API_SECRET_KEY` on Django). Tracked as a deferred unification step in `docs/SECRET_ROTATION_RUNBOOK.md` Step 2 → "Future: rename Lambda env var".
 
+### Email pipeline incident #2 (28 May 2026) — Lambda timeout + stale code
+
+Two days after the secret-rotation fix, users reported bills weren't appearing
+again. **NOT the same bug.** Keys were still in sync (Lambda
+`API_SECRET_KEY` and Django `EMAIL_API_SECRET_KEY` both `…7cf6ed0e`); every
+invocation that *reached* Django returned 200. Two genuinely new failure modes
+had emerged:
+
+**Bug A — 60s Lambda timeout on a 30 MB email (27 May 01:53 UTC).** A user
+forwarded `for onyx subbie` with **15 PDFs** totalling 30 MB. The Lambda was
+configured at `Timeout=60s, Memory=256MB` and ran out of both time and memory
+just walking the multipart payload (max RAM observed post-fix: 336 MB). S3
+async-invocation auto-retried 3× — all 3 hit the wall. After the 3rd retry
+S3 stops trying. That email sat dead in `s3://dev-app-emails/inbox/`.
+
+**Bug B — `application/octet-stream` PDF rejected (27 May 23:58 UTC).** A
+Bunnings forwarded email had its PDF declared as `application/octet-stream`.
+The deployed Lambda (last modified 25 May 06:18) didn't have the
+`xero_attachment_types::resolve_attachment_content_type` filename-fallback —
+the local repo did, but it had never been deployed. Symptom in logs:
+`Skipping attachment application/octet-stream - not a valid invoice type`
+(an error string that doesn't even exist in the local repo anymore).
+
+**Fix applied 28 May 2026.**
+
+1. **Bumped Lambda config**: `Timeout 60s → 300s`, `Memory 256MB → 1024MB`.
+   ```bash
+   aws lambda update-function-configuration \
+     --function-name email-processor --region us-east-1 \
+     --timeout 300 --memory-size 1024
+   ```
+   Memory bump matters: Lambda CPU/network scale linearly with memory, so
+   1024 MB ≈ 4× the throughput of 256 MB.
+
+2. **Re-deployed the Lambda code** (zipped `lambda_function.py` + `xero_attachment_types.py` plus `requests`/`urllib3`/`certifi`/`charset_normalizer`/`idna` from a clean
+   `pip install --platform manylinux2014_x86_64 --target ... --only-binary=:all: requests`). New code includes the octet-stream→filename mimetype fallback.
+   ```bash
+   aws lambda update-function-code \
+     --function-name email-processor --region us-east-1 \
+     --zip-file fileb://lambda_email_processor.zip
+   ```
+
+3. **Re-invoked the Lambda** manually for the two stranded S3 keys (the
+   30 MB onyx-subbie one and the Bunnings one). Both processed cleanly —
+   onyx-subbie in 4.4 s peak 336 MB, Bunnings in 0.3 s. **27 new Bills rows
+   landed** (`bill_pk=786..812`).
+
+**Verification path for future sessions.** If users report a similar gap:
+
+1. Check key sync first (`API_SECRET_KEY` last 8 vs `EMAIL_API_SECRET_KEY` last 8) — if it's auth, this'll show it instantly.
+2. Check Lambda CloudWatch metrics: `Invocations` vs `Errors` and `Duration` (per-day). If errors > 0 or duration is at the timeout ceiling, it's a Lambda-side issue, not a Django one.
+3. Look at the most recent S3 object timestamps in `dev-app-emails/inbox/` and check whether each one has a `Successfully sent to Django: 200` log line. The Lambda log group is `/aws/lambda/email-processor`.
+4. If a specific email is stranded, re-invoke with the canonical event shape:
+   ```bash
+   echo '{"Records":[{"eventVersion":"2.1","eventSource":"aws:s3","awsRegion":"us-east-1","s3":{"bucket":{"name":"dev-app-emails"},"object":{"key":"inbox/<KEY>"}}}]}' \
+     | base64 \
+     | xargs -I {} aws lambda invoke --function-name email-processor --region us-east-1 \
+         --payload {} /tmp/r.json
+   cat /tmp/r.json
+   ```
+
 ### Email pipeline recovery (25 May 2026)
 
 **Symptom.** Users reported emails sent to `bills@mail.mason.build` weren't appearing in the Bills Inbox.
