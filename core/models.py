@@ -1102,6 +1102,40 @@ class Bill_allocations(models.Model):
         return f"Bill Allocation - PK: {self.bill_allocation_pk}, Bill PK: {self.bill.pk}, Item: {self.item}, Amount: {self.amount}, Notes: {self.notes}, Allocation Type: {self.allocation_type}"
 
 
+class ProgressClaimDocs(models.Model):
+    """
+    Supporting documents for a PO progress claim (1:1 with the Bills row).
+
+    The supplier invoice lives on Bills.pdf; this model holds the NSW
+    Subcontractor's Statement (JSON + rendered PDF) and the Worker's Comp
+    Certificate of Currency upload.
+    """
+    claim_docs_pk = models.AutoField(primary_key=True)
+    bill = models.OneToOneField(
+        Bills,
+        on_delete=models.CASCADE,
+        related_name='claim_docs',
+    )
+    workers_comp_coc = models.FileField(
+        upload_to='claim_docs/workers_comp/',
+        null=True,
+        blank=True,
+    )
+    declaration_data = models.JSONField(null=True, blank=True)
+    declaration_pdf = models.FileField(
+        upload_to='claim_docs/declarations/',
+        null=True,
+        blank=True,
+    )
+    declaration_signed_name = models.CharField(max_length=200, blank=True, default='')
+    declaration_signed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+
+    def __str__(self):
+        return f"ProgressClaimDocs for bill {self.bill_id}"
+
+
 # SERVICE: stocktake
 class StocktakeAllocations(models.Model):
     """

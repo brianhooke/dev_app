@@ -59,8 +59,18 @@ $(document).ready(function() {
         console.error('PO section: No project_pk provided');
         return;
     }
-    
-    
+
+    // This partial (script included) is re-injected via .html() every time the
+    // POs tab is opened (see loadSharedPOSection in project_buttons_switching.html).
+    // Its click handlers are delegated on `document`, so replacing the content
+    // node does NOT remove them — without this they stack up, and the Email
+    // button fires one confirm dialog + one send per prior injection (MA-12:
+    // triple confirm -> duplicate supplier emails). Tear down any handlers this
+    // partial bound on a previous load before re-binding below. Every
+    // document-level handler in this file MUST use the `.poSection` namespace
+    // so this single off() catches it.
+    $(document).off('.poSection');
+
     // Store for callbacks
     var poStatus = {};
     
@@ -209,7 +219,7 @@ $(document).ready(function() {
     var editingRow = null;
     
     // Update button handler - convert row to editable inputs
-    $(document).on('click', '.po-update-btn', function(e) {
+    $(document).on('click.poSection', '.po-update-btn', function(e) {
         e.stopPropagation();
         var button = $(this);
         var row = button.closest('tr');
@@ -240,7 +250,7 @@ $(document).ready(function() {
     });
     
     // Click away from editing row - cancel edit
-    $(document).on('click', function(e) {
+    $(document).on('click.poSection', function(e) {
         if (!editingRow) return;
         
         var target = $(e.target);
@@ -257,14 +267,14 @@ $(document).ready(function() {
     });
     
     // Cancel button handler
-    $(document).on('click', '.po-cancel-btn', function(e) {
+    $(document).on('click.poSection', '.po-cancel-btn', function(e) {
         e.stopPropagation();
         editingRow = null;
         loadPOSuppliers();
     });
     
     // Save button handler
-    $(document).on('click', '.po-save-btn', function(e) {
+    $(document).on('click.poSection', '.po-save-btn', function(e) {
         e.stopPropagation();
         var button = $(this);
         var row = button.closest('tr');
@@ -338,7 +348,7 @@ $(document).ready(function() {
     });
     
     // Email button handler
-    $(document).on('click', '.po-email-btn', function(e) {
+    $(document).on('click.poSection', '.po-email-btn', function(e) {
         e.stopPropagation();
         var emailBtn = $(this);
         var row = emailBtn.closest('tr');
@@ -383,7 +393,7 @@ $(document).ready(function() {
     });
     
     // Download button handler
-    $(document).on('click', '#downloadPOBtn', function() {
+    $(document).on('click.poSection', '#downloadPOBtn', function() {
         var button = $(this);
         var supplierPk = button.data('supplierPk');
         

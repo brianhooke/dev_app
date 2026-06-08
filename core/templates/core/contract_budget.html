@@ -331,10 +331,244 @@ Column Behaviors:
         font-size: 12px;
         color: #6c757d;
     }
+
+    /* ---------- Slide-out Bill Viewer (MA-14) ---------- */
+    /* When the user clicks a bill row inside a Billed dropdown, the
+       contract-budget left panel transitions from 100% to 67.5% width
+       and this viewer fills the remaining 32.5% — same split as the
+       bills_project.html iviewer.
+
+       The left panel transition is driven by the
+       .has-bill-viewer-open class added to .contractBudget-container. */
+    .contractBudget-container .contractBudget-left-panel {
+        transition: width 0.3s ease;
+    }
+    .contractBudget-container.has-bill-viewer-open .contractBudget-left-panel {
+        width: 67.5% !important;
+        padding-right: 12px !important;
+    }
+
+    .contract-budget-bill-viewer {
+        box-sizing: border-box;
+        width: 0;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 0;
+        overflow: hidden;
+        transition: width 0.3s ease, padding 0.3s ease;
+    }
+    .contractBudget-container.has-bill-viewer-open .contract-budget-bill-viewer {
+        width: 32.5%;
+        padding: 6px 0 6px 6px;
+    }
+
+    .contract-budget-bill-viewer-inner {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--color-bg-muted);
+        min-width: 0;
+    }
+
+    .contract-budget-bill-viewer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 10px;
+        background: var(--color-bg-default, #fff);
+        border-bottom: 1px solid var(--color-border);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+        flex-shrink: 0;
+    }
+
+    .contract-budget-bill-viewer-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .contract-budget-bill-viewer-close {
+        background: none;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-text-muted);
+        flex-shrink: 0;
+        padding: 0;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .contract-budget-bill-viewer-close:hover {
+        background: var(--color-bg-muted);
+        color: var(--color-text);
+    }
+    .contract-budget-bill-viewer-close i {
+        font-size: 12px;
+    }
+
+    .contract-budget-bill-viewer-body {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: var(--color-bg-muted);
+        min-height: 0;
+    }
+
+    #contractBudgetBillPdfViewer {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: none;
+    }
+
+    .contract-budget-bill-viewer-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--color-text-muted);
+        padding: 24px;
+    }
+    .contract-budget-bill-viewer-placeholder i {
+        font-size: 48px;
+        margin-bottom: 8px;
+        opacity: 0.5;
+    }
+    .contract-budget-bill-viewer-placeholder p {
+        margin: 0;
+        font-size: 13px;
+    }
+
+    .contract-budget-bill-viewer-allocations {
+        flex-shrink: 0;
+        max-height: 35%;
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-bg-default, #fff);
+    }
+    .contract-budget-bill-viewer-allocations-title {
+        padding: 6px 10px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-muted);
+    }
+    .contract-budget-bill-viewer-allocations-scroll {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    .contract-budget-bill-viewer-allocations table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .contract-budget-bill-viewer-allocations thead th {
+        position: sticky;
+        top: 0;
+        background: var(--color-bg-default, #fff);
+        text-align: left;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--color-border);
+        z-index: 1;
+    }
+    .contract-budget-bill-viewer-allocations tbody td {
+        padding: 4px 8px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+        vertical-align: top;
+    }
+    .contract-budget-bill-viewer-allocations tbody tr.focused-allocation {
+        background-color: #fff7c2;
+    }
+    .contract-budget-bill-viewer-allocations tbody tr.focused-allocation td {
+        background-color: #fff7c2;
+    }
+
+    /* Clickable bill row in the Billed dropdown */
+    .contractBudget-container .committed-details-table tbody tr.bill-row-clickable {
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    .contractBudget-container .committed-details-table tbody tr.bill-row-clickable:hover td {
+        background-color: rgba(40, 167, 69, 0.12);
+    }
+    .contractBudget-container .committed-details-table tbody tr.bill-row-clickable.bill-row-active td {
+        background-color: rgba(40, 167, 69, 0.18);
+        font-weight: 600;
+    }
 </style>
 
 <!-- Include the reusable allocations layout -->
 {% include 'core/components/allocations_layout.html' %}
+
+<!--
+  Slide-out Bill Viewer (MA-14)
+  =============================
+  Lives as a sibling of .contractBudget-left-panel inside the inner flex
+  row. We move this node into that row at DOM-ready (because the include
+  is opaque to us). When a user clicks a bill row inside a Billed
+  dropdown, the contract budget panel transitions from 100% to 67.5%
+  width and this viewer animates from 0 to 32.5% width — same split the
+  bills_project.html iviewer uses.
+-->
+<div id="contractBudgetBillViewer" class="contract-budget-bill-viewer" style="display: none;">
+    <div class="contract-budget-bill-viewer-inner">
+        <div class="contract-budget-bill-viewer-header">
+            <div class="contract-budget-bill-viewer-title" id="contractBudgetBillViewerTitle">Bill</div>
+            <button type="button"
+                    class="contract-budget-bill-viewer-close"
+                    id="contractBudgetBillViewerCloseBtn"
+                    title="Collapse bill viewer"
+                    aria-label="Collapse bill viewer">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <div class="contract-budget-bill-viewer-body">
+            <iframe id="contractBudgetBillPdfViewer" allow="fullscreen" src=""></iframe>
+            <div id="contractBudgetBillViewerPlaceholder" class="contract-budget-bill-viewer-placeholder">
+                <i class="fas fa-file-pdf"></i>
+                <p>Select a bill to view the PDF</p>
+            </div>
+        </div>
+        <div class="contract-budget-bill-viewer-allocations">
+            <div class="contract-budget-bill-viewer-allocations-title">Bill Allocations</div>
+            <div class="contract-budget-bill-viewer-allocations-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Item</th>
+                            <th style="width: 25%; text-align: right;">Amount</th>
+                            <th style="width: 25%;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contractBudgetBillViewerAllocationsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Fix Contract Budget Section will be injected via JavaScript -->
 
@@ -1427,6 +1661,26 @@ Column Behaviors:
         var tbody = $('<tbody></tbody>');
         allocations.forEach(function(alloc) {
             var tr = $('<tr></tr>');
+            // Only Bill_allocations rows are clickable — snap/wages
+            // entries don't map to a single bill PDF, so it doesn't
+            // make sense to open the slide-out viewer for them.
+            if (alloc.type === 'bill' && alloc.bill_pk) {
+                tr.addClass('bill-row-clickable');
+                tr.attr('data-bill-pk', alloc.bill_pk);
+                tr.attr('data-allocation-pk', alloc.allocation_pk || '');
+                tr.attr('data-pdf-url', alloc.pdf_url || '');
+                tr.on('click', function() {
+                    openBillViewer({
+                        billPk: alloc.bill_pk,
+                        allocationPk: alloc.allocation_pk,
+                        pdfUrl: alloc.pdf_url || '',
+                        contactName: alloc.contact_name,
+                        billNumber: alloc.bill_number,
+                    });
+                    box.find('tr.bill-row-clickable').removeClass('bill-row-active');
+                    tr.addClass('bill-row-active');
+                });
+            }
             tr.append('<td>' + Utils.escapeHtml(alloc.contact_name) + '</td>');
             tr.append('<td>' + Utils.escapeHtml(alloc.bill_number) + '</td>');
             tr.append('<td>' + Utils.escapeHtml(alloc.bill_type_display) + '</td>');
@@ -1442,6 +1696,132 @@ Column Behaviors:
         
         itemRow.after(detailsRow);
     }
+
+    // ---------------- Slide-out Bill Viewer (MA-14) ----------------
+    /**
+     * Move the static viewer scaffold (#contractBudgetBillViewer) into
+     * the inner flex row that lives inside the .contractBudget-container
+     * so the existing left panel and the new viewer animate together.
+     * Idempotent: safe to call repeatedly.
+     */
+    function ensureBillViewerMounted() {
+        var $viewer = $('#contractBudgetBillViewer');
+        if (!$viewer.length) return null;
+        var $leftPanel = $('.contractBudget-left-panel').first();
+        if (!$leftPanel.length) return $viewer;
+        var $flexRow = $leftPanel.parent();
+        if (!$flexRow.length) return $viewer;
+        // If the viewer isn't already a sibling of the left panel, move it.
+        if ($viewer.parent().get(0) !== $flexRow.get(0)) {
+            $viewer.appendTo($flexRow);
+        }
+        $viewer.css('display', '');
+        return $viewer;
+    }
+
+    /**
+     * Open the slide-out viewer for a specific bill / allocation.
+     * - billPk + allocationPk identify which row to highlight in the
+     *   bottom strip.
+     * - pdfUrl is what came back on the dropdown (used immediately so
+     *   the iframe loads without waiting for the bill detail call).
+     */
+    function openBillViewer(options) {
+        if (!options || !options.billPk) return;
+        var $viewer = ensureBillViewerMounted();
+        if (!$viewer) return;
+
+        $('.contractBudget-container').addClass('has-bill-viewer-open');
+
+        var titleParts = [];
+        if (options.contactName) titleParts.push(options.contactName);
+        if (options.billNumber) titleParts.push(options.billNumber);
+        $('#contractBudgetBillViewerTitle').text(titleParts.join(' — ') || 'Bill');
+
+        var $iframe = $('#contractBudgetBillPdfViewer');
+        var $placeholder = $('#contractBudgetBillViewerPlaceholder');
+        if (options.pdfUrl) {
+            $iframe.attr('src', options.pdfUrl).show();
+            $placeholder.hide();
+        } else {
+            $iframe.attr('src', '').hide();
+            $placeholder.html('<i class="fas fa-file-pdf"></i><p>No PDF attached to this bill</p>').show();
+        }
+
+        // Show a placeholder row immediately, then replace it with the
+        // real allocations when the request comes back.
+        var $tbody = $('#contractBudgetBillViewerAllocationsBody');
+        $tbody.html('<tr><td colspan="3" style="text-align:center; color: var(--color-text-muted); padding: 8px;">Loading…</td></tr>');
+
+        $.ajax({
+            url: '/core/get_bill_for_viewer/' + options.billPk + '/',
+            type: 'GET',
+            success: function(response) {
+                if (!response || response.status !== 'success') {
+                    $tbody.html('<tr><td colspan="3" style="text-align:center; color: var(--color-danger); padding: 8px;">Failed to load bill allocations</td></tr>');
+                    return;
+                }
+                renderBillViewerAllocations(response.allocations || [], options.allocationPk);
+                // If the dropdown didn't supply a pdf_url, fall back to
+                // whatever the detail endpoint resolved.
+                if (!options.pdfUrl && response.bill && response.bill.pdf_url) {
+                    $iframe.attr('src', response.bill.pdf_url).show();
+                    $placeholder.hide();
+                }
+                if (response.bill) {
+                    var resolved = [];
+                    if (response.bill.contact_name) resolved.push(response.bill.contact_name);
+                    if (response.bill.bill_number) resolved.push(response.bill.bill_number);
+                    if (resolved.length) {
+                        $('#contractBudgetBillViewerTitle').text(resolved.join(' — '));
+                    }
+                }
+            },
+            error: function() {
+                $tbody.html('<tr><td colspan="3" style="text-align:center; color: var(--color-danger); padding: 8px;">Failed to load bill allocations</td></tr>');
+            }
+        });
+    }
+
+    function renderBillViewerAllocations(allocations, focusedAllocationPk) {
+        var $tbody = $('#contractBudgetBillViewerAllocationsBody');
+        $tbody.empty();
+        if (!allocations.length) {
+            $tbody.append('<tr><td colspan="3" style="text-align:center; color: var(--color-text-muted); padding: 8px;">No allocations on this bill</td></tr>');
+            return;
+        }
+        // Coerce so a string PK from the dropdown still matches the
+        // numeric PK that comes back from the detail endpoint.
+        var focusedKey = (focusedAllocationPk == null || focusedAllocationPk === '') ? null : String(focusedAllocationPk);
+        allocations.forEach(function(alloc) {
+            var $tr = $('<tr></tr>');
+            if (focusedKey !== null && String(alloc.allocation_pk) === focusedKey) {
+                $tr.addClass('focused-allocation');
+            }
+            $tr.append($('<td></td>').text(alloc.item_name || '-'));
+            $tr.append($('<td style="text-align:right; white-space:nowrap;"></td>').text(Utils.formatCurrency(alloc.amount || 0)));
+            $tr.append($('<td></td>').text(alloc.notes || '-'));
+            $tbody.append($tr);
+        });
+    }
+
+    function closeBillViewer() {
+        $('.contractBudget-container').removeClass('has-bill-viewer-open');
+        $('#contractBudgetBillPdfViewer').attr('src', '').hide();
+        $('#contractBudgetBillViewerPlaceholder').show();
+        $('#contractBudgetBillViewerAllocationsBody').empty();
+        $('.committed-details-table tr.bill-row-clickable').removeClass('bill-row-active');
+    }
+
+    // Wire the close icon. Use the document so it survives any later
+    // re-rendering of the surrounding chrome.
+    $(document).off('click.contractBudgetBillViewer')
+        .on('click.contractBudgetBillViewer', '#contractBudgetBillViewerCloseBtn', function() {
+            closeBillViewer();
+        });
+
+    // Mount the viewer as soon as the include's DOM is in place.
+    setTimeout(ensureBillViewerMounted, 0);
     
     // Toggle contract budget details row - shows base budget and HC variation allocations
     function toggleContractBudgetDetailsRow(itemPk) {

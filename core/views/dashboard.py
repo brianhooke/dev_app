@@ -1466,23 +1466,82 @@ def preview_po(request, project_pk, supplier_pk):
         return HttpResponse(f'<html><body style="font-family: Arial; padding: 20px; color: red; text-align: center;"><p>Error: {str(e)}</p></body></html>', status=500)
 
 
+# Server-side debounce for PO sends (MA-12 belt-and-braces). The frontend fix
+# (namespaced, de-duplicated handlers in po.html) is the primary guarantee
+# against the "stacked handler -> duplicate supplier email" bug. This window is
+# a secondary safety net: if a PO for the same (project, supplier) was already
+# *successfully* sent within this many seconds, a near-duplicate request is
+# treated as a no-op instead of emailing the supplier again. A deliberate
+# re-send after the window proceeds normally, and a `force` flag bypasses it
+# entirely. Failed sends never mark the PO as sent, so post-failure retries are
+# not blocked.
+PO_RESEND_DEBOUNCE_SECONDS = 15
+
+
 @csrf_exempt
 def send_po_email(request, project_pk, supplier_pk):
     """
     Generate PO PDF and send email to supplier.
     Reuses existing email configuration (invoices@mason.build).
+
+    Idempotency: re-sending the same (project, supplier) PO within
+    PO_RESEND_DEBOUNCE_SECONDS of a successful send is suppressed (returns
+    success with duplicate_suppressed=True) unless the request body sets
+    {"force": true}.
     """
     if request.method != 'POST':
         return JsonResponse({
             'status': 'error',
             'message': 'Only POST method is allowed'
         }, status=405)
-    
+
+    # Optional {"force": true} bypasses the resend debounce for deliberate
+    # re-sends. Body may be empty/non-JSON (the frontend sends no body), so
+    # parse best-effort and default to non-forced.
+    force_resend = False
+    if request.body:
+        try:
+            force_resend = bool(json.loads(request.body).get('force', False))
+        except (ValueError, AttributeError):
+            force_resend = False
+
     try:
         # Get project and supplier details
         project = Projects.objects.get(projects_pk=project_pk)
         supplier = Contacts.objects.get(contact_pk=supplier_pk)
-        
+
+        # Idempotency guard (MA-12): suppress a near-duplicate send of a PO
+        # that was already successfully sent moments ago. select_for_update
+        # serialises concurrent requests on the PO row. status==STATUS_SENT is
+        # only set after a successful email (see end of this view), so a failed
+        # send doesn't trip this and retries stay possible.
+        if not force_resend:
+            with transaction.atomic():
+                recent_po = (
+                    Po_orders.objects
+                    .select_for_update()
+                    .filter(po_supplier=supplier, project=project)
+                    .first()
+                )
+                if (recent_po is not None
+                        and recent_po.status == Po_orders.STATUS_SENT
+                        and recent_po.updated_at is not None
+                        and (timezone.now() - recent_po.updated_at).total_seconds()
+                        < PO_RESEND_DEBOUNCE_SECONDS):
+                    logger.info(
+                        "Suppressed duplicate PO send for project=%s supplier=%s "
+                        "(sent %.1fs ago, within %ss debounce)",
+                        project_pk, supplier_pk,
+                        (timezone.now() - recent_po.updated_at).total_seconds(),
+                        PO_RESEND_DEBOUNCE_SECONDS,
+                    )
+                    return JsonResponse({
+                        'status': 'success',
+                        'message': f'Purchase order already sent to {supplier.email}',
+                        'pdf_url': recent_po.pdf.url if recent_po.pdf else None,
+                        'duplicate_suppressed': True,
+                    })
+
         # Get all quotes for this project and supplier
         quotes = Quotes.objects.filter(
             project=project,

@@ -11,11 +11,12 @@ Public PO Pages (Supplier-Facing):
 
 Progress Claims:
 - submit_po_claim   -- Supplier submits/updates a progress claim
-                       (creates a Bills row with status 100).
+                       (creates a Bills row with status 100, requires
+                       invoice + declaration + worker's comp CoC).
 - approve_po_claim  -- Principal approves a pending progress claim
-                       (100 -> 101). Login-required.
-- upload_bill_pdf   -- Supplier uploads the invoice PDF for an approved
-                       claim (101 -> 102).
+                       (100 -> 102). Login-required.
+- upload_bill_pdf   -- Legacy endpoint for post-approval invoice upload
+                       (101 -> 102); superseded by upfront submission.
 
 Internal Read APIs:
 - get_po_table_data_for_invoice -- Pivot the PO/claims data for an
@@ -31,22 +32,72 @@ import logging
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
+from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.template.loader import render_to_string
+from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
+from xhtml2pdf import pisa
 from ._helpers import api_public, api_login_required, json_ok, json_err
 
 from ..models import (
     Bill_allocations, Bills, Contacts, Costing,
-    Po_orders, Po_order_detail, Projects, Quotes,
+    Po_orders, Po_order_detail, ProgressClaimDocs, Projects, Quotes,
 )
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+CLAIM_DOC_MAX_BYTES = 15 * 1024 * 1024
+ALLOWED_CLAIM_DOC_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp'}
+
+
+class _ClaimSubmissionError(Exception):
+    """
+    Raised inside ``submit_po_claim``'s atomic block when a validation
+    step fails after we have already started mutating state (creating
+    the bill, deleting old allocations, etc.). Raising — instead of
+    returning a JsonResponse from inside ``transaction.atomic()`` —
+    is what triggers the rollback. The outer ``try/except`` converts
+    this back into the ``{'status': 'error', ...}`` response the
+    supplier UI expects.
+    """
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _validate_claim_upload_file(uploaded_file, field_label):
+    if not uploaded_file:
+        return None
+    name = uploaded_file.name.lower()
+    if not any(name.endswith(ext) for ext in ALLOWED_CLAIM_DOC_EXTENSIONS):
+        return f'{field_label} must be a PDF or image file.'
+    if uploaded_file.size > CLAIM_DOC_MAX_BYTES:
+        return f'{field_label} must be smaller than 15 MB.'
+    return None
+
+
+def _render_declaration_pdf(declaration_data):
+    html = render_to_string(
+        'core/subcontractor_declaration_pdf.html',
+        declaration_data,
+    )
+    pdf_buffer = BytesIO()
+    pisa_status = pisa.CreatePDF(html, dest=pdf_buffer)
+    if pisa_status.err:
+        return None
+    pdf_buffer.seek(0)
+    return pdf_buffer.read()
 
 
 def po_view(request):
@@ -263,6 +314,32 @@ def view_po_by_unique_id(request, unique_id):
             for alloc in Bill_allocations.objects.filter(bill=approved_invoice):
                 if alloc.item:
                     approved_claims_by_costing[alloc.item.costing_pk] = float(alloc.amount)
+
+        claim_docs = None
+        if pending_invoice:
+            try:
+                claim_docs = pending_invoice.claim_docs
+            except ProgressClaimDocs.DoesNotExist:
+                claim_docs = None
+
+        has_existing_invoice = bool(
+            pending_invoice and pending_invoice.pdf and pending_invoice.pdf.name
+        )
+        has_existing_declaration = bool(
+            claim_docs and claim_docs.declaration_pdf and claim_docs.declaration_pdf.name
+        )
+        has_existing_workers_comp = bool(
+            claim_docs and claim_docs.workers_comp_coc and claim_docs.workers_comp_coc.name
+        )
+        existing_invoice_url = (
+            pending_invoice.pdf.url if has_existing_invoice else None
+        )
+        existing_declaration_url = (
+            claim_docs.declaration_pdf.url if has_existing_declaration else None
+        )
+        existing_workers_comp_url = (
+            claim_docs.workers_comp_coc.url if has_existing_workers_comp else None
+        )
         
         # Sort costings by (category.order_in_list, costing.order_in_list,
         # costing_pk) so the supplier-facing table renders in the same order
@@ -342,6 +419,17 @@ def view_po_by_unique_id(request, unique_id):
             'previous_claims_count': len(individual_claims),
             'previous_claims_range': range(1, len(individual_claims) + 1),
             'individual_claims': individual_claims,
+            'head_contractor_name': settings.HEAD_CONTRACTOR_NAME,
+            'head_contractor_abn': settings.HEAD_CONTRACTOR_ABN,
+            'supplier_name': supplier.name,
+            'supplier_abn': supplier.tax_number or '',
+            'contract_identifier': unique_id,
+            'has_existing_invoice': has_existing_invoice,
+            'has_existing_declaration': has_existing_declaration,
+            'has_existing_workers_comp': has_existing_workers_comp,
+            'existing_invoice_url': existing_invoice_url,
+            'existing_declaration_url': existing_declaration_url,
+            'existing_workers_comp_url': existing_workers_comp_url,
             # Only Mason staff (`is_staff=True`) can approve / edit a supplier's
             # claim. Authenticated-but-not-staff is *not* enough: the app
             # has supplier accounts with logins, and they must not see the
@@ -363,7 +451,7 @@ def view_po_by_unique_id(request, unique_id):
 def approve_po_claim(request, unique_id):
     """
     Approve a pending progress claim for a PO.
-    Updates bill_status from 100 to 101.
+    Updates bill_status from 100 to 102 (invoice attached at submission).
     If claim was edited before approval, updates allocations and sends comparison email.
     """
     if request.method != 'POST':
@@ -454,7 +542,7 @@ def approve_po_claim(request, unique_id):
             invoice.total_net = totals['total_net'] or Decimal('0')
             invoice.total_gst = totals['total_gst'] or Decimal('0')
 
-            invoice.bill_status = Bills.STATUS_PO_APPROVED_NO_BILL
+            invoice.bill_status = Bills.STATUS_PO_APPROVED_BILL_UPLOADED
             invoice.save()
         
         logger.info(f"Updated invoice {invoice.bill_pk} totals: net={invoice.total_net}, gst={invoice.total_gst}")
@@ -646,7 +734,8 @@ Regards,
 def submit_po_claim(request, unique_id):
     """
     Submit or update a progress claim for a PO.
-    Creates/updates Invoice with status=100 and Bill_allocations.
+    Creates/updates Invoice with status=100, Bill_allocations, and required
+    supporting documents (invoice, declaration, worker's comp CoC).
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
@@ -656,13 +745,40 @@ def submit_po_claim(request, unique_id):
         supplier = po_order.po_supplier
         project = po_order.project
 
-        data = json.loads(request.body)
-        claims = data.get('claims', [])
-        pending_bill_pk = data.get('pending_bill_pk')
-        
+        try:
+            claims = json.loads(request.POST.get('claims', '[]'))
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid claims data'}, status=400)
+
+        pending_bill_pk = request.POST.get('pending_bill_pk') or None
+        if pending_bill_pk:
+            try:
+                pending_bill_pk = int(pending_bill_pk)
+            except (ValueError, TypeError):
+                pending_bill_pk = None
+
+        declaration_raw = request.POST.get('declaration')
+        invoice_file = request.FILES.get('invoice')
+        workers_comp_file = request.FILES.get('workers_comp_coc')
+
+        for uploaded, label in (
+            (invoice_file, 'Invoice'),
+            (workers_comp_file, "Worker's Comp CoC"),
+        ):
+            err = _validate_claim_upload_file(uploaded, label)
+            if err:
+                return JsonResponse({'status': 'error', 'message': err}, status=400)
+
         if not claims:
             return JsonResponse({'status': 'error', 'message': 'No claims provided'}, status=400)
-        
+
+        declaration_data = None
+        if declaration_raw:
+            try:
+                declaration_data = json.loads(declaration_raw)
+            except (ValueError, TypeError):
+                return JsonResponse({'status': 'error', 'message': 'Invalid declaration data'}, status=400)
+
         # Track if this is a resubmission.
         is_resubmission = False
         invoice = None
@@ -755,8 +871,64 @@ def submit_po_claim(request, unique_id):
 
             invoice.total_net = total_net
             invoice.total_gst = Decimal('0.00')
+
+            try:
+                claim_docs = ProgressClaimDocs.objects.select_for_update().get(bill=invoice)
+            except ProgressClaimDocs.DoesNotExist:
+                claim_docs = ProgressClaimDocs(bill=invoice)
+
+            has_invoice = bool(invoice_file) or bool(invoice.pdf and invoice.pdf.name)
+            has_workers_comp = bool(workers_comp_file) or bool(
+                claim_docs.workers_comp_coc and claim_docs.workers_comp_coc.name
+            )
+            has_declaration = bool(declaration_data) or bool(
+                claim_docs.declaration_pdf and claim_docs.declaration_pdf.name
+            )
+
+            # Raise (don't return) so the atomic block rolls back the
+            # bill create / allocations delete that we did above. Returning
+            # JsonResponse here would commit the half-mutated state,
+            # leaving an orphan status-100 row or an empty pending bill.
+            if not has_invoice:
+                raise _ClaimSubmissionError('Invoice attachment is required')
+            if not has_workers_comp:
+                raise _ClaimSubmissionError(
+                    "Worker's Comp Certificate of Currency is required"
+                )
+            if not has_declaration:
+                raise _ClaimSubmissionError(
+                    "Subcontractor's Declaration is required"
+                )
+
+            if invoice_file:
+                invoice.pdf.save(invoice_file.name, invoice_file, save=False)
+
+            if workers_comp_file:
+                claim_docs.workers_comp_coc.save(
+                    workers_comp_file.name, workers_comp_file, save=False,
+                )
+
+            if declaration_data:
+                signature_name = (declaration_data.get('signature_name') or '').strip()
+                if not signature_name:
+                    raise _ClaimSubmissionError('Declaration signature is required')
+                pdf_bytes = _render_declaration_pdf(declaration_data)
+                if not pdf_bytes:
+                    raise _ClaimSubmissionError(
+                        'Failed to render declaration PDF', status=500,
+                    )
+                claim_docs.declaration_data = declaration_data
+                claim_docs.declaration_signed_name = signature_name
+                claim_docs.declaration_signed_at = timezone.now()
+                claim_docs.declaration_pdf.save(
+                    f'declaration_{invoice.bill_pk}.pdf',
+                    ContentFile(pdf_bytes),
+                    save=False,
+                )
+
+            claim_docs.save()
             invoice.save()
-        
+
         logger.info(f"Progress claim submitted for PO {unique_id}, Invoice {invoice.bill_pk}")
         
         # Send notification emails to contracts admin team
@@ -853,6 +1025,11 @@ This is an automated notification from the Mason Build platform.
         
     except Po_orders.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'PO not found'}, status=404)
+    except _ClaimSubmissionError as e:
+        return JsonResponse(
+            {'status': 'error', 'message': e.message},
+            status=e.status,
+        )
     except Exception as e:
         logger.error(f'Error submitting claim: {e}', exc_info=True)
         return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)

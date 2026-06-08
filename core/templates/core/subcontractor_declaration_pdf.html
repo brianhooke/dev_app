@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.35; color: #000; }
+        h1 { font-size: 13pt; text-align: center; margin: 0 0 4px 0; }
+        h2 { font-size: 11pt; text-align: center; margin: 0 0 12px 0; font-weight: normal; }
+        .intro { font-size: 9pt; margin-bottom: 12px; }
+        .section-title { font-weight: bold; margin: 10px 0 6px 0; }
+        .field-row { margin: 6px 0; }
+        .label { font-weight: bold; }
+        .value { border-bottom: 1px solid #000; display: inline-block; min-width: 200px; padding: 0 4px 1px 4px; }
+        .value-wide { min-width: 420px; }
+        .checkbox { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12pt; }
+        .signature-block { margin-top: 16px; }
+        .footer-note { font-size: 8pt; margin-top: 14px; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>New South Wales</h1>
+    <h1>SUBCONTRACTOR'S STATEMENT</h1>
+    <h2>REGARDING WORKER'S COMPENSATION, PAYROLL TAX AND REMUNERATION</h2>
+
+    <p class="intro">
+        For the purposes of this Statement a "subcontractor" is a person (or other legal entity) that has entered into a
+        contract with a "principal contractor" to carry out work.
+    </p>
+
+    <div class="section-title">SUBCONTRACTOR'S STATEMENT</div>
+
+    <div class="field-row">
+        Subcontractor: <span class="value value-wide">{{ subcontractor_name }}</span>
+        ABN: <span class="value">{{ subcontractor_abn }}</span>
+    </div>
+    <div class="field-row">
+        of <span class="value value-wide">{{ subcontractor_address }}</span>
+    </div>
+    <div class="field-row">
+        has entered into a contract with <span class="value value-wide">{{ principal_contractor_name }}</span>
+        ABN: <span class="value">{{ principal_contractor_abn }}</span>
+    </div>
+    <div class="field-row">
+        Contract number/identifier <span class="value value-wide">{{ contract_identifier }}</span>
+    </div>
+    <div class="field-row">
+        This Statement applies for work between:
+        <span class="value">{{ work_period_from }}</span> and <span class="value">{{ work_period_to }}</span> inclusive,
+    </div>
+    <div class="field-row">
+        subject of the payment claim dated: <span class="value">{{ payment_claim_date }}</span>
+    </div>
+
+    <p style="margin-top: 10px;">
+        I, <span class="value value-wide">{{ declarant_name }}</span> a Director or a person authorised by the Subcontractor
+        on whose behalf this declaration is made, hereby declare that I am in a position to know the truth of the
+        matters which are contained in this Subcontractor's Statement and declare the following to the best of my
+        knowledge and belief:
+    </p>
+
+    <div class="field-row">
+        (a) Workers/subcontractors involved:
+        {% if workers_involved %}
+        <span class="checkbox">&#9745;</span> Yes &nbsp;
+        <span class="checkbox">&#9744;</span> Exempt employer
+        {% else %}
+        <span class="checkbox">&#9744;</span> Yes &nbsp;
+        <span class="checkbox">&#9745;</span> Exempt employer
+        {% endif %}
+    </div>
+
+    {% if workers_involved %}
+    <div class="field-row">
+        (b) All workers compensation insurance premiums payable have been paid. Certificate of Currency attached, dated
+        <span class="value">{{ coc_date }}</span>
+    </div>
+    <div class="field-row">(c) All remuneration payable to relevant employees has been paid.</div>
+    <div class="field-row">(d) All payroll tax due in respect of employees has been paid.</div>
+    <div class="field-row">(e) Written Subcontractor's Statements received from subcontractor(s) for the period stated.</div>
+    {% else %}
+    <div class="field-row">(f) and (g) completed below.</div>
+    {% endif %}
+
+    <div class="signature-block">
+        <div class="field-row">
+            (f) Signature <span class="value value-wide">{{ signature_name }}</span>
+            Full name <span class="value value-wide">{{ signature_name }}</span>
+        </div>
+        <div class="field-row">
+            (g) Position/Title <span class="value value-wide">{{ position_title }}</span>
+            Date <span class="value">{{ sign_date }}</span>
+        </div>
+    </div>
+
+    <p class="footer-note">
+        NOTE: Where required above, this Statement must be accompanied by the relevant Certificate of Currency to
+        comply with section 175B of the Workers Compensation Act 1987.
+    </p>
+</body>
+</html>

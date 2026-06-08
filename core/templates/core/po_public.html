@@ -382,6 +382,150 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4);
         }
+
+        .doc-requirements {
+            margin: 24px 0 12px 0;
+            padding: 18px;
+            background: #f8f9fb;
+            border: 1px solid #dce3ea;
+            border-radius: 8px;
+        }
+
+        .doc-requirements h3 {
+            margin: 0 0 14px 0;
+            font-size: 15px;
+            color: #2c3e50;
+        }
+
+        .doc-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e8edf2;
+        }
+
+        .doc-row:last-child {
+            border-bottom: none;
+        }
+
+        .doc-row-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .doc-row-title {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .doc-row-status {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+
+        .doc-row-status.complete {
+            color: #27ae60;
+        }
+
+        .btn-doc {
+            background: #ecf0f1;
+            color: #2c3e50;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-doc:hover {
+            background: #dfe6eb;
+        }
+
+        .btn-doc.complete {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+        }
+
+        .declaration-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .declaration-modal.open {
+            display: flex;
+        }
+
+        .declaration-modal-content {
+            background: white;
+            width: 100%;
+            max-width: 760px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .declaration-modal-content h2 {
+            font-size: 18px;
+            margin-bottom: 6px;
+            color: #2c3e50;
+        }
+
+        .declaration-modal-content h3 {
+            font-size: 14px;
+            font-weight: normal;
+            color: #555;
+            margin-bottom: 16px;
+        }
+
+        .decl-field {
+            margin-bottom: 10px;
+        }
+
+        .decl-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 4px;
+        }
+
+        .decl-field input,
+        .decl-field select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccd6dd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .decl-inline-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .decl-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid #e8edf2;
+        }
         
         .total-row {
             font-weight: 700;
@@ -650,6 +794,39 @@
                         {% endif %}
                     </tbody>
                 </table>
+
+                <div class="doc-requirements" id="docRequirementsSection">
+                    <h3>Required documents before submission</h3>
+                    <div class="doc-row">
+                        <div class="doc-row-info">
+                            <div class="doc-row-title">Attach Invoice</div>
+                            <div class="doc-row-status" id="invoiceStatusText">PDF or image required</div>
+                        </div>
+                        <button type="button" class="btn-doc" id="attachInvoiceBtn">
+                            <i class="fas fa-paperclip"></i> Attach Invoice
+                        </button>
+                        <input type="file" id="invoiceFileInput" accept=".pdf,image/*" style="display: none;">
+                    </div>
+                    <div class="doc-row">
+                        <div class="doc-row-info">
+                            <div class="doc-row-title">Subcontractor's Declaration</div>
+                            <div class="doc-row-status" id="declarationStatusText">Complete the NSW Subcontractor's Statement</div>
+                        </div>
+                        <button type="button" class="btn-doc" id="completeDeclarationBtn">
+                            <i class="fas fa-file-signature"></i> Complete Declaration
+                        </button>
+                    </div>
+                    <div class="doc-row">
+                        <div class="doc-row-info">
+                            <div class="doc-row-title">Worker's Comp CoC</div>
+                            <div class="doc-row-status" id="workersCompStatusText">PDF or image required</div>
+                        </div>
+                        <button type="button" class="btn-doc" id="attachWorkersCompBtn">
+                            <i class="fas fa-upload"></i> Worker's Comp CoC
+                        </button>
+                        <input type="file" id="workersCompFileInput" accept=".pdf,image/*" style="display: none;">
+                    </div>
+                </div>
                 
                 <div class="actions">
                     <button class="btn btn-secondary" id="editUnapprovedBtn">
@@ -669,22 +846,12 @@
                     </button>
                 </div>
                 
-                <!-- Upload Bill Section (shown when claim approved but bill not uploaded) -->
-                <div class="upload-bill-section" id="uploadBillSection" style="display: none; margin-top: 20px; padding: 20px; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
-                    <div style="text-align: center;">
-                        <p style="margin: 0 0 15px 0; color: #155724; font-weight: 600; font-size: 16px;">
-                            <i class="fas fa-check-circle"></i> Your claim has been approved!
-                        </p>
-                        <p style="margin: 0 0 20px 0; color: #155724;">
-                            Please upload your bill PDF to complete the process.
-                        </p>
-                        <input type="file" id="billPdfInput" accept=".pdf" style="display: none;">
-                        <button class="btn btn-success" id="uploadBillBtn" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%);">
-                            <i class="fas fa-upload"></i> Upload Bill PDF
-                        </button>
-                    </div>
+                {% if has_approved_claim %}
+                <div style="margin-top: 20px; padding: 16px; background: #d4edda; border: 1px solid #28a745; border-radius: 8px; color: #155724; text-align: center;">
+                    <i class="fas fa-check-circle"></i> Your claim has been approved. If you still need to provide an invoice, please contact the project team.
                 </div>
-                
+                {% endif %}
+
                 <div class="footer">
                     If you have any questions, please contact us directly.
                 </div>
@@ -698,6 +865,90 @@
             </div>
             <div class="pdf-viewer">
                 <iframe src="/po/{{ po_order.unique_id }}/pdf/" title="Purchase Order PDF"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="declaration-modal" id="declarationModal">
+        <div class="declaration-modal-content">
+            <h2>Subcontractor's Statement</h2>
+            <h3>Regarding Worker's Compensation, Payroll Tax and Remuneration (NSW)</h3>
+
+            <div class="decl-field">
+                <label>Subcontractor (business name)</label>
+                <input type="text" id="declSubcontractorName" value="{{ supplier_name }}">
+            </div>
+            <div class="decl-inline-row">
+                <div class="decl-field">
+                    <label>Subcontractor ABN</label>
+                    <input type="text" id="declSubcontractorAbn" value="{{ supplier_abn }}">
+                </div>
+                <div class="decl-field">
+                    <label>Contract number/identifier</label>
+                    <input type="text" id="declContractId" value="{{ contract_identifier }}">
+                </div>
+            </div>
+            <div class="decl-field">
+                <label>Subcontractor address</label>
+                <input type="text" id="declSubcontractorAddress">
+            </div>
+            <div class="decl-inline-row">
+                <div class="decl-field">
+                    <label>Principal contractor (business name)</label>
+                    <input type="text" id="declPrincipalName" value="{{ head_contractor_name }}">
+                </div>
+                <div class="decl-field">
+                    <label>Principal contractor ABN</label>
+                    <input type="text" id="declPrincipalAbn" value="{{ head_contractor_abn }}">
+                </div>
+            </div>
+            <div class="decl-inline-row">
+                <div class="decl-field">
+                    <label>Work period from (DD/MM/YYYY)</label>
+                    <input type="text" id="declWorkFrom" placeholder="DD/MM/YYYY">
+                </div>
+                <div class="decl-field">
+                    <label>Work period to (DD/MM/YYYY)</label>
+                    <input type="text" id="declWorkTo" placeholder="DD/MM/YYYY">
+                </div>
+            </div>
+            <div class="decl-field">
+                <label>Payment claim date (DD/MM/YYYY)</label>
+                <input type="text" id="declPaymentClaimDate" placeholder="DD/MM/YYYY">
+            </div>
+            <div class="decl-field">
+                <label>Workers/subcontractors involved during this period?</label>
+                <select id="declWorkersInvolved">
+                    <option value="yes">Yes — complete sections (b) to (g)</option>
+                    <option value="no">No / exempt employer — complete (f) and (g) only</option>
+                </select>
+            </div>
+            <div class="decl-field" id="declCocDateField">
+                <label>Certificate of Currency date (DD/MM/YYYY)</label>
+                <input type="text" id="declCocDate" placeholder="DD/MM/YYYY">
+            </div>
+            <div class="decl-field">
+                <label>Declarant name (Director or authorised person)</label>
+                <input type="text" id="declDeclarantName">
+            </div>
+            <div class="decl-inline-row">
+                <div class="decl-field">
+                    <label>Signature (type full name)</label>
+                    <input type="text" id="declSignatureName">
+                </div>
+                <div class="decl-field">
+                    <label>Position/Title</label>
+                    <input type="text" id="declPositionTitle">
+                </div>
+            </div>
+            <div class="decl-field">
+                <label>Date signed (DD/MM/YYYY)</label>
+                <input type="text" id="declSignDate" placeholder="DD/MM/YYYY">
+            </div>
+
+            <div class="decl-modal-actions">
+                <button type="button" class="btn btn-cancel" id="cancelDeclarationBtn" style="display: inline-flex;">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveDeclarationBtn">Submit Declaration</button>
             </div>
         </div>
     </div>
@@ -716,11 +967,23 @@
         // and the Edit-Unapproved buttons. Server-side, /approve/ also
         // requires login (B7).
         const isAdmin = {{ is_admin|yesno:"true,false" }};
+        const hasExistingInvoice = {{ has_existing_invoice|yesno:"true,false" }};
+        const hasExistingDeclaration = {{ has_existing_declaration|yesno:"true,false" }};
+        const hasExistingWorkersComp = {{ has_existing_workers_comp|yesno:"true,false" }};
+        const existingInvoiceUrl = '{{ existing_invoice_url|default:""|escapejs }}';
+        const existingDeclarationUrl = '{{ existing_declaration_url|default:""|escapejs }}';
+        const existingWorkersCompUrl = '{{ existing_workers_comp_url|default:""|escapejs }}';
         let isEditMode = false;  // Track if user clicked "Edit Unapproved"
         let isEditClaimMode = false;  // Track if user clicked "Edit Claim"
         let claimsExpanded = false;  // Track if individual claims are expanded
         let currentDocType = 'po';  // Track which document is currently shown
         let savedClaimValues = [];  // Store original claim values for cancel/restore
+        let invoiceFile = null;
+        let workersCompFile = null;
+        let declarationData = null;
+        let invoiceSatisfied = hasExistingInvoice;
+        let declarationSatisfied = hasExistingDeclaration;
+        let workersCompSatisfied = hasExistingWorkersComp;
         
         // Show Purchase Order in the viewer
         function showPurchaseOrder() {
@@ -916,10 +1179,125 @@
             return totalThisClaim;
         }
         
+        function docsRequirementsMet() {
+            return invoiceSatisfied && declarationSatisfied && workersCompSatisfied;
+        }
+
+        function updateDocRequirementUI() {
+            const invoiceBtn = document.getElementById('attachInvoiceBtn');
+            const declarationBtn = document.getElementById('completeDeclarationBtn');
+            const workersCompBtn = document.getElementById('attachWorkersCompBtn');
+            const invoiceStatus = document.getElementById('invoiceStatusText');
+            const declarationStatus = document.getElementById('declarationStatusText');
+            const workersCompStatus = document.getElementById('workersCompStatusText');
+
+            if (invoiceSatisfied) {
+                invoiceBtn.classList.add('complete');
+                invoiceBtn.innerHTML = '<i class="fas fa-check"></i> Invoice attached';
+                invoiceStatus.textContent = invoiceFile
+                    ? invoiceFile.name
+                    : (existingInvoiceUrl ? 'Previously attached' : 'Attached');
+                invoiceStatus.classList.add('complete');
+            } else {
+                invoiceBtn.classList.remove('complete');
+                invoiceBtn.innerHTML = '<i class="fas fa-paperclip"></i> Attach Invoice';
+                invoiceStatus.textContent = 'PDF or image required';
+                invoiceStatus.classList.remove('complete');
+            }
+
+            if (declarationSatisfied) {
+                declarationBtn.classList.add('complete');
+                declarationBtn.innerHTML = '<i class="fas fa-check"></i> Declaration complete';
+                const signedName = declarationData
+                    ? declarationData.signature_name
+                    : 'Previously completed';
+                declarationStatus.textContent = 'Signed by ' + signedName;
+                declarationStatus.classList.add('complete');
+            } else {
+                declarationBtn.classList.remove('complete');
+                declarationBtn.innerHTML = '<i class="fas fa-file-signature"></i> Complete Declaration';
+                declarationStatus.textContent = "Complete the NSW Subcontractor's Statement";
+                declarationStatus.classList.remove('complete');
+            }
+
+            if (workersCompSatisfied) {
+                workersCompBtn.classList.add('complete');
+                workersCompBtn.innerHTML = "<i class=\"fas fa-check\"></i> CoC attached";
+                workersCompStatus.textContent = workersCompFile
+                    ? workersCompFile.name
+                    : (existingWorkersCompUrl ? 'Previously attached' : 'Attached');
+                workersCompStatus.classList.add('complete');
+            } else {
+                workersCompBtn.classList.remove('complete');
+                workersCompBtn.innerHTML = "<i class=\"fas fa-upload\"></i> Worker's Comp CoC";
+                workersCompStatus.textContent = 'PDF or image required';
+                workersCompStatus.classList.remove('complete');
+            }
+        }
+
+        function updateDocSectionVisibility() {
+            const section = document.getElementById('docRequirementsSection');
+            if (hasApprovedClaim || (hasPendingClaim && !isEditMode)) {
+                section.style.display = 'none';
+            } else {
+                section.style.display = 'block';
+            }
+        }
+
+        function isAllowedClaimFile(file) {
+            const name = file.name.toLowerCase();
+            return name.endsWith('.pdf')
+                || name.endsWith('.jpg')
+                || name.endsWith('.jpeg')
+                || name.endsWith('.png')
+                || name.endsWith('.webp');
+        }
+
+        function collectDeclarationFromForm() {
+            return {
+                subcontractor_name: document.getElementById('declSubcontractorName').value.trim(),
+                subcontractor_abn: document.getElementById('declSubcontractorAbn').value.trim(),
+                subcontractor_address: document.getElementById('declSubcontractorAddress').value.trim(),
+                principal_contractor_name: document.getElementById('declPrincipalName').value.trim(),
+                principal_contractor_abn: document.getElementById('declPrincipalAbn').value.trim(),
+                contract_identifier: document.getElementById('declContractId').value.trim(),
+                work_period_from: document.getElementById('declWorkFrom').value.trim(),
+                work_period_to: document.getElementById('declWorkTo').value.trim(),
+                payment_claim_date: document.getElementById('declPaymentClaimDate').value.trim(),
+                workers_involved: document.getElementById('declWorkersInvolved').value === 'yes',
+                coc_date: document.getElementById('declCocDate').value.trim(),
+                declarant_name: document.getElementById('declDeclarantName').value.trim(),
+                signature_name: document.getElementById('declSignatureName').value.trim(),
+                position_title: document.getElementById('declPositionTitle').value.trim(),
+                sign_date: document.getElementById('declSignDate').value.trim(),
+            };
+        }
+
+        function populateDeclarationForm(data) {
+            if (!data) return;
+            document.getElementById('declSubcontractorName').value = data.subcontractor_name || '';
+            document.getElementById('declSubcontractorAbn').value = data.subcontractor_abn || '';
+            document.getElementById('declSubcontractorAddress').value = data.subcontractor_address || '';
+            document.getElementById('declPrincipalName').value = data.principal_contractor_name || '';
+            document.getElementById('declPrincipalAbn').value = data.principal_contractor_abn || '';
+            document.getElementById('declContractId').value = data.contract_identifier || '';
+            document.getElementById('declWorkFrom').value = data.work_period_from || '';
+            document.getElementById('declWorkTo').value = data.work_period_to || '';
+            document.getElementById('declPaymentClaimDate').value = data.payment_claim_date || '';
+            document.getElementById('declWorkersInvolved').value = data.workers_involved ? 'yes' : 'no';
+            document.getElementById('declCocDate').value = data.coc_date || '';
+            document.getElementById('declDeclarantName').value = data.declarant_name || '';
+            document.getElementById('declSignatureName').value = data.signature_name || '';
+            document.getElementById('declPositionTitle').value = data.position_title || '';
+            document.getElementById('declSignDate').value = data.sign_date || '';
+            document.getElementById('declCocDateField').style.display = data.workers_involved ? 'block' : 'none';
+        }
+
         // Validate submit button state
         function validateSubmitButton() {
             const totalThisClaim = calculateTotals();
             const submitBtn = document.getElementById('submitForApprovalBtn');
+            const allDocsReady = docsRequirementsMet();
             
             if (hasPendingClaim && !isEditMode) {
                 // Pending claim, not in edit mode
@@ -931,20 +1309,12 @@
                 // In edit mode (resubmit)
                 submitBtn.innerHTML = '<i class="fas fa-check"></i> Resubmit for Approval';
                 submitBtn.classList.remove('pending');
-                if (totalThisClaim > 0) {
-                    submitBtn.disabled = false;
-                } else {
-                    submitBtn.disabled = true;
-                }
+                submitBtn.disabled = !(totalThisClaim > 0 && allDocsReady);
             } else {
                 // Normal mode (first submit)
                 submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit for Approval';
                 submitBtn.classList.remove('pending');
-                if (totalThisClaim > 0) {
-                    submitBtn.disabled = false;
-                } else {
-                    submitBtn.disabled = true;
-                }
+                submitBtn.disabled = !(totalThisClaim > 0 && allDocsReady);
             }
         }
         
@@ -968,6 +1338,8 @@
             
             // Initial calculations
             calculateTotals();
+            updateDocRequirementUI();
+            updateDocSectionVisibility();
             validateSubmitButton();
             
             // Set up claims expand/collapse toggle
@@ -986,14 +1358,86 @@
                 // Save current claim values for potential restore
                 saveCurrentClaimValues();
             } else if (hasApprovedClaim) {
-                // Approved claim: show upload section, hide all other buttons
-                document.getElementById('uploadBillSection').style.display = 'block';
                 document.getElementById('submitForApprovalBtn').style.display = 'none';
                 document.getElementById('editUnapprovedBtn').style.display = 'none';
                 document.getElementById('editClaimBtn').style.display = 'none';
                 document.getElementById('approveBtn').style.display = 'none';
                 document.getElementById('cancelEditBtn').style.display = 'none';
             }
+
+            document.getElementById('attachInvoiceBtn').addEventListener('click', function() {
+                document.getElementById('invoiceFileInput').click();
+            });
+
+            document.getElementById('invoiceFileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!isAllowedClaimFile(file)) {
+                    alert('Please select a PDF or image file.');
+                    this.value = '';
+                    return;
+                }
+                invoiceFile = file;
+                invoiceSatisfied = true;
+                updateDocRequirementUI();
+                validateSubmitButton();
+            });
+
+            document.getElementById('attachWorkersCompBtn').addEventListener('click', function() {
+                document.getElementById('workersCompFileInput').click();
+            });
+
+            document.getElementById('workersCompFileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!isAllowedClaimFile(file)) {
+                    alert('Please select a PDF or image file.');
+                    this.value = '';
+                    return;
+                }
+                workersCompFile = file;
+                workersCompSatisfied = true;
+                updateDocRequirementUI();
+                validateSubmitButton();
+            });
+
+            document.getElementById('completeDeclarationBtn').addEventListener('click', function() {
+                if (declarationData) {
+                    populateDeclarationForm(declarationData);
+                }
+                document.getElementById('declarationModal').classList.add('open');
+            });
+
+            document.getElementById('cancelDeclarationBtn').addEventListener('click', function() {
+                document.getElementById('declarationModal').classList.remove('open');
+            });
+
+            document.getElementById('declWorkersInvolved').addEventListener('change', function() {
+                document.getElementById('declCocDateField').style.display =
+                    this.value === 'yes' ? 'block' : 'none';
+            });
+
+            document.getElementById('saveDeclarationBtn').addEventListener('click', function() {
+                const data = collectDeclarationFromForm();
+                if (!data.signature_name) {
+                    alert('Please type your full name in the signature field.');
+                    return;
+                }
+                if (!data.declarant_name) {
+                    data.declarant_name = data.signature_name;
+                }
+                declarationData = data;
+                declarationSatisfied = true;
+                document.getElementById('declarationModal').classList.remove('open');
+                updateDocRequirementUI();
+                validateSubmitButton();
+            });
+
+            document.getElementById('declarationModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('open');
+                }
+            });
         });
         
         // Save current claim values for restore on cancel
@@ -1366,18 +1810,34 @@
                 this.innerHTML = originalText;
                 return;
             }
+
+            if (!docsRequirementsMet()) {
+                alert("Please attach your invoice, complete the Subcontractor's Declaration, and upload your Worker's Comp CoC.");
+                this.disabled = false;
+                this.innerHTML = originalText;
+                return;
+            }
             
             // Submit to backend
             try {
+                const formData = new FormData();
+                formData.append('claims', JSON.stringify(claims));
+                if (pendingBillPk) {
+                    formData.append('pending_bill_pk', pendingBillPk);
+                }
+                if (invoiceFile) {
+                    formData.append('invoice', invoiceFile);
+                }
+                if (workersCompFile) {
+                    formData.append('workers_comp_coc', workersCompFile);
+                }
+                if (declarationData) {
+                    formData.append('declaration', JSON.stringify(declarationData));
+                }
+
                 const response = await fetch(`/po/${uniqueId}/submit/`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        claims: claims,
-                        pending_bill_pk: pendingBillPk
-                    })
+                    body: formData
                 });
                 
                 const data = await response.json();
@@ -1414,6 +1874,7 @@
             });
             
             // Update submit button state
+            updateDocSectionVisibility();
             validateSubmitButton();
             
             // Hide edit buttons, show cancel, keep submit visible
@@ -1469,9 +1930,9 @@
             document.getElementById('approveBtn').classList.add('show');
             document.getElementById('cancelEditBtn').classList.remove('show');
             document.getElementById('submitForApprovalBtn').style.display = 'inline-block';
-            
-            // Disable submit button since we're back to pending state
-            document.getElementById('submitForApprovalBtn').disabled = true;
+
+            updateDocSectionVisibility();
+            validateSubmitButton();
         });
         
         // Approve button
@@ -1565,63 +2026,6 @@
             }
         });
         
-        // Upload Bill button handler
-        document.getElementById('uploadBillBtn').addEventListener('click', function() {
-            document.getElementById('billPdfInput').click();
-        });
-        
-        // Handle file selection
-        document.getElementById('billPdfInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            // Validate file type
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                alert('Please select a PDF file');
-                this.value = '';
-                return;
-            }
-            
-            // Confirm upload
-            if (!confirm(`Upload bill: ${file.name}?`)) {
-                this.value = '';
-                return;
-            }
-            
-            // Show uploading state
-            const uploadBtn = document.getElementById('uploadBillBtn');
-            uploadBtn.disabled = true;
-            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-            
-            try {
-                const formData = new FormData();
-                formData.append('invoice_pdf', file);
-
-                const response = await fetch(`/po/${uniqueId}/upload-invoice/`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    alert('Bill uploaded successfully!');
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                    uploadBtn.disabled = false;
-                    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Bill PDF';
-                }
-            } catch (error) {
-                console.error('Error uploading bill:', error);
-                alert('Error uploading bill. Please try again.');
-                uploadBtn.disabled = false;
-                uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Bill PDF';
-            }
-            
-            // Clear file input
-            this.value = '';
-        });
     </script>
 </body>
 </html>

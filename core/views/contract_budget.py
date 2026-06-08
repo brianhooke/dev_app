@@ -695,7 +695,7 @@ def get_item_bill_allocations(request, item_pk):
             bill_allocations = Bill_allocations.objects.filter(
                 item=costing,
                 bill__project=project
-            ).select_related('bill', 'bill__contact_pk')
+            ).select_related('bill', 'bill__contact_pk', 'bill__email_attachment')
 
             for bill_alloc in bill_allocations:
                 bill = bill_alloc.bill
@@ -706,6 +706,23 @@ def get_item_bill_allocations(request, item_pk):
                     else 'Progress Claim' if bill and bill.bill_type == 2
                     else 'Other'
                 )
+
+                # Resolve PDF URL the same way bills_project.html does:
+                # prefer the explicit upload, fall back to the email
+                # attachment so the slide-out viewer can show whatever
+                # source the bill was created from.
+                pdf_url = ''
+                if bill:
+                    if getattr(bill, 'pdf', None):
+                        try:
+                            pdf_url = bill.pdf.url
+                        except Exception:
+                            pdf_url = ''
+                    if not pdf_url and getattr(bill, 'email_attachment_id', None):
+                        try:
+                            pdf_url = bill.email_attachment.get_download_url() or ''
+                        except Exception:
+                            pdf_url = ''
 
                 allocations_list.append({
                     'allocation_pk': bill_alloc.bill_allocation_pk,
@@ -721,6 +738,7 @@ def get_item_bill_allocations(request, item_pk):
                     'bill_date': bill_date,
                     'bill_type': bill.bill_type if bill else 0,
                     'bill_type_display': bill_type_display,
+                    'pdf_url': pdf_url,
                     'type': 'bill',
                 })
 
@@ -843,6 +861,83 @@ def get_item_bill_allocations(request, item_pk):
             'status': 'error',
             'message': 'Error getting bill allocations'
         }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_bill_for_viewer(request, bill_pk):
+    """
+    Return the data the Contract Budget slide-out viewer needs to render
+    a single bill: its PDF URL plus every Bill_allocations row attached
+    to it (item name + amount + notes), so the strip below the iframe
+    can highlight whichever allocation the user came in on.
+
+    Mirrors the PDF-resolution logic used by ``bills_project.html``
+    (``invoice.pdf`` first, fall back to ``email_attachment``) so this
+    viewer behaves identically regardless of how the bill was created.
+    """
+    try:
+        bill = (
+            Bills.objects
+            .select_related('contact_pk', 'email_attachment', 'project')
+            .prefetch_related('bill_allocations__item')
+            .get(bill_pk=bill_pk)
+        )
+    except Bills.DoesNotExist:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Bill not found'},
+            status=404,
+        )
+
+    pdf_url = ''
+    if getattr(bill, 'pdf', None):
+        try:
+            pdf_url = bill.pdf.url
+        except Exception:
+            pdf_url = ''
+    if not pdf_url and getattr(bill, 'email_attachment_id', None):
+        try:
+            pdf_url = bill.email_attachment.get_download_url() or ''
+        except Exception:
+            pdf_url = ''
+
+    allocations = []
+    for alloc in bill.bill_allocations.all():
+        item = alloc.item
+        allocations.append({
+            'allocation_pk': alloc.bill_allocation_pk,
+            'item_pk': item.costing_pk if item else None,
+            'item_name': item.item if item else '-',
+            'qty': float(alloc.qty) if alloc.qty else 0,
+            'rate': float(alloc.rate) if alloc.rate else 0,
+            'amount': float(alloc.amount) if alloc.amount else 0,
+            'unit': alloc.unit or '',
+            'notes': alloc.notes or '',
+        })
+
+    contact = bill.contact_pk
+    bill_date = bill.bill_date.strftime('%d-%b-%y') if bill.bill_date else ''
+    bill_type_display = (
+        'Direct Cost' if bill.bill_type == 1
+        else 'Progress Claim' if bill.bill_type == 2
+        else 'Other'
+    )
+
+    return JsonResponse({
+        'status': 'success',
+        'bill': {
+            'bill_pk': bill.bill_pk,
+            'bill_number': bill.supplier_bill_number or f'Bill #{bill.bill_pk}',
+            'bill_date': bill_date,
+            'bill_type': bill.bill_type,
+            'bill_type_display': bill_type_display,
+            'contact_name': contact.name if contact else 'Unknown',
+            'contact_pk': contact.contact_pk if contact else None,
+            'total_net': float(bill.total_net) if bill.total_net else 0,
+            'total_gst': float(bill.total_gst) if bill.total_gst else 0,
+            'pdf_url': pdf_url,
+        },
+        'allocations': allocations,
+    })
 
 
 @require_http_methods(["GET"])

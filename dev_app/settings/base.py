@@ -181,5 +181,10 @@ EMAIL_USE_TLS = True
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 
+# Principal contractor identity stamped onto the NSW Subcontractor's Statement
+# on the supplier-facing PO progress-claim form. Override via env in prod.
+HEAD_CONTRACTOR_NAME = os.environ.get('HEAD_CONTRACTOR_NAME', '')
+HEAD_CONTRACTOR_ABN = os.environ.get('HEAD_CONTRACTOR_ABN', '')
+
 #to be deleted pre production:
 
